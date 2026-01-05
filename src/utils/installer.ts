@@ -404,11 +404,21 @@ ${workflow.description}
       if (platform !== 'win32') {
         await fs.chmod(destBinary, 0o755)
       }
-      result.binPath = binDir
-      result.binInstalled = true
+
+      // Verify installation by running --version
+      try {
+        const { execSync } = await import('node:child_process')
+        execSync(`"${destBinary}" --version`, { stdio: 'pipe' })
+        result.binPath = binDir
+        result.binInstalled = true
+      }
+      catch (verifyError) {
+        result.errors.push(`Binary verification failed: ${verifyError}`)
+        result.success = false
+      }
     }
     else {
-      result.errors.push(`Binary not found: ${binaryName}`)
+      result.errors.push(`Binary not found in package: ${binaryName}`)
       result.success = false
     }
   }

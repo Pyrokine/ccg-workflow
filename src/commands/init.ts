@@ -259,6 +259,15 @@ export async function init(options: InitOptions = {}): Promise<void> {
       })
     }
 
+    // Show errors if any
+    if (result.errors.length > 0) {
+      console.log()
+      console.log(ansis.red(`  ⚠ ${i18n.t('init:installationErrors')}`))
+      result.errors.forEach((error) => {
+        console.log(`    ${ansis.red('✗')} ${error}`)
+      })
+    }
+
     // Show binary installation result and configure PATH
     if (result.binInstalled && result.binPath) {
       console.log()
