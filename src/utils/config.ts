@@ -45,7 +45,7 @@ export function createDefaultConfig(options: {
 }): CcgConfig {
   return {
     general: {
-      version: '1.0.0',
+      version: '1.3.2',
       language: options.language,
       createdAt: new Date().toISOString(),
     },
@@ -57,6 +57,18 @@ export function createDefaultConfig(options: {
       commands: join(homedir(), '.claude', 'commands', 'ccg'),
       prompts: join(homedir(), '.claude', 'prompts', 'ccg'),
       backup: join(CCG_DIR, 'backup'),
+    },
+    mcp: {
+      provider: 'ace-tool',
+      setup_url: 'https://linux.do/t/topic/284963',
+      tools: {
+        code_search_ace: 'mcp__ace-tool__search_context',
+        code_search_auggie: 'mcp__auggie-mcp__codebase-retrieval',
+        prompt_enhance_ace: 'mcp__ace-tool__enhance_prompt',
+        prompt_enhance_auggie: '',
+        query_param_ace: 'query',
+        query_param_auggie: 'information_request',
+      },
     },
   }
 }
