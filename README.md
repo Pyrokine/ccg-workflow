@@ -679,7 +679,9 @@ npx ccg-workflow
 <details>
 <summary><strong>更多问题？</strong></summary>
 
-查看完整 Q&A：[POST_DRAFT.md](POST_DRAFT.md) 包含 11 个常见问题的详细解答。
+查看完整讨论和 Q&A：
+- [linux.do 社区讨论帖](https://linux.do/t/topic/1405588) - 包含 11 个常见问题的详细解答
+- [GitHub Issues](https://github.com/fengshao1227/ccg-workflow/issues) - 提交问题和建议
 </details>
 
 ---
