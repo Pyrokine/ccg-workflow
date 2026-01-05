@@ -39,9 +39,7 @@ strategy = "parallel"
 ### 基础模式
 ```bash
 codeagent-wrapper --backend <MODEL> - $PROJECT_DIR <<'EOF'
-<ROLE>
-{{读取 ~/.claude/prompts/ccg/<model>/<role>.md 注入}}
-</ROLE>
+ROLE_FILE: ~/.claude/prompts/ccg/<model>/<role>.md
 
 <TASK>
 {{任务描述}}
@@ -53,6 +51,8 @@ Context:
 OUTPUT: {{输出格式}}
 EOF
 ```
+
+**说明**: 使用 `ROLE_FILE:` 指定提示词文件路径，让子进程自己读取，避免消耗主会话 token。
 
 ### 角色映射
 | 任务类型 | Codex 角色 | Gemini 角色 | Claude 角色 |

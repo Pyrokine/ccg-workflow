@@ -92,9 +92,7 @@ strategy = "parallel"
 ```bash
 # 后端模型分析示例
 codeagent-wrapper --backend codex - $PROJECT_DIR <<'EOF'
-<ROLE>
-{{读取 ~/.claude/prompts/ccg/codex/analyzer.md 内容}}
-</ROLE>
+ROLE_FILE: ~/.claude/prompts/ccg/codex/analyzer.md
 
 <TASK>
 分析需求: {{增强后的需求}}
@@ -122,9 +120,7 @@ EOF
 ```bash
 # Codex 后端原型示例
 codeagent-wrapper --backend codex - $PROJECT_DIR <<'EOF'
-<ROLE>
-{{读取 ~/.claude/prompts/ccg/codex/architect.md 内容}}
-</ROLE>
+ROLE_FILE: ~/.claude/prompts/ccg/codex/architect.md
 
 <TASK>
 生成原型: {{功能需求}}
@@ -169,9 +165,7 @@ EOF
 ```bash
 # Codex 代码审查示例
 codeagent-wrapper --backend codex - $PROJECT_DIR <<'EOF'
-<ROLE>
-{{读取 ~/.claude/prompts/ccg/codex/reviewer.md 内容}}
-</ROLE>
+ROLE_FILE: ~/.claude/prompts/ccg/codex/reviewer.md
 
 <TASK>
 审查代码: {{实施的代码变更}}
