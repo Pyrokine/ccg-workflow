@@ -207,12 +207,12 @@ export async function init(options: InitOptions = {}): Promise<void> {
       installedWorkflows: selectedWorkflows,
     })
 
+    // Save config FIRST - ensure it's created even if installation fails
+    await writeCcgConfig(config)
+
     // Install workflows and commands
     const installDir = options.installDir || join(homedir(), '.claude')
     const result = await installWorkflows(selectedWorkflows, installDir, options.force)
-
-    // Save config
-    await writeCcgConfig(config)
 
     // Install ace-tool MCP if baseUrl or token was provided
     if (aceToolBaseUrl || aceToolToken) {
