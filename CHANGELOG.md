@@ -7,6 +7,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4.4] - 2026-01-06
+
+### 🐛 修复
+
+**Windows 多用户路径问题**：彻底解决 Windows 下不同用户无法读取配置文件的问题。
+
+#### 问题描述
+
+在 Windows 多用户环境中，当 Administrator 运行 `npx ccg init` 后，普通用户（如 `li`、`yao`）无法使用命令：
+
+```
+Administrator 安装:
+  C:\Users\USER\.claude\.ccg\config.toml
+  模板中硬编码: ROLE_FILE: ~/.claude/.ccg/prompts/codex/analyzer.md
+
+用户 li 运行命令:
+  homedir() 解析到: C:\Users\USER
+  尝试读取: C:\Users\USER\.claude\.ccg\prompts\codex\analyzer.md
+  结果: 文件不存在 ❌
+```
+
+#### 解决方案
+
+**安装时固化绝对路径**：安装时将模板中的 `~` 路径替换为当前用户的绝对路径。
+
+修改前（模板）：
+```markdown
+ROLE_FILE: ~/.claude/.ccg/prompts/codex/analyzer.md
+```
+
+修改后（用户 li 安装后）：
+```markdown
+ROLE_FILE: C:\Users\USER\.claude\.ccg\prompts\codex\analyzer.md
+```
+
+#### 修改文件
+
+- `src/utils/installer.ts`:
+  - 新增 `replaceHomePathsInTemplate()` 函数
+  - 修改 `installWorkflows()` - 命令模板、agents、prompts、shared-config 安装时替换路径
+  - 将 `fs.copy()` 改为 `fs.readFile()` + 路径替换 + `fs.writeFile()`
+
+#### 影响范围
+
+- ✅ 命令模板 (`templates/commands/*.md`)
+- ✅ Agent 文件 (`templates/commands/agents/*.md`)
+- ✅ Prompt 文件 (`templates/prompts/**/*.md`)
+- ✅ 共享配置 (`templates/config/shared-config.md`)
+
+#### 使用说明
+
+每个 Windows 用户需要独立运行安装：
+
+```bash
+# 用户 Administrator
+C:\Users\USER> npx ccg init
+
+# 用户 li
+C:\Users\USER> npx ccg init
+
+# 用户 yao
+C:\Users\USER> npx ccg init
+```
+
+每个用户将拥有独立的配置和路径，互不干扰。
+
+---
+
 ## [1.4.2] - 2026-01-06
 
 ### ✨ 新特性

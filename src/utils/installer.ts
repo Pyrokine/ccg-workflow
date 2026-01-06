@@ -244,6 +244,24 @@ export function getWorkflowById(id: string): WorkflowConfig | undefined {
   return WORKFLOW_CONFIGS.find(w => w.id === id)
 }
 
+/**
+ * Replace ~ paths in template content with absolute paths
+ * This fixes Windows multi-user path resolution issues
+ */
+function replaceHomePathsInTemplate(content: string, installDir: string): string {
+  // Get absolute paths for replacement
+  const userHome = homedir()
+  const ccgDir = join(installDir, '.ccg')
+
+  // Replace all instances of ~/.claude/.ccg with absolute path
+  let processed = content.replace(/~\/\.claude\/\.ccg/g, ccgDir)
+
+  // Replace other ~/ patterns with user home (if any)
+  processed = processed.replace(/~\//g, `${userHome}/`)
+
+  return processed
+}
+
 export async function installWorkflows(
   workflowIds: string[],
   installDir: string,
@@ -283,7 +301,10 @@ export async function installWorkflows(
       try {
         if (await fs.pathExists(srcFile)) {
           if (force || !(await fs.pathExists(destFile))) {
-            await fs.copy(srcFile, destFile)
+            // Read template content, replace ~ paths, then write
+            const templateContent = await fs.readFile(srcFile, 'utf-8')
+            const processedContent = replaceHomePathsInTemplate(templateContent, installDir)
+            await fs.writeFile(destFile, processedContent, 'utf-8')
             result.installedCommands.push(cmd)
           }
         }
@@ -315,7 +336,10 @@ ${workflow.description}
   const sharedConfigDestFile = join(ccgConfigDir, 'shared-config.md')
   if (await fs.pathExists(sharedConfigSrcFile)) {
     if (force || !(await fs.pathExists(sharedConfigDestFile))) {
-      await fs.copy(sharedConfigSrcFile, sharedConfigDestFile)
+      // Read template content, replace ~ paths, then write
+      const templateContent = await fs.readFile(sharedConfigSrcFile, 'utf-8')
+      const processedContent = replaceHomePathsInTemplate(templateContent, installDir)
+      await fs.writeFile(sharedConfigDestFile, processedContent, 'utf-8')
     }
   }
 
@@ -331,7 +355,10 @@ ${workflow.description}
           const srcFile = join(agentsSrcDir, file)
           const destFile = join(agentsDestDir, file)
           if (force || !(await fs.pathExists(destFile))) {
-            await fs.copy(srcFile, destFile)
+            // Read template content, replace ~ paths, then write
+            const templateContent = await fs.readFile(srcFile, 'utf-8')
+            const processedContent = replaceHomePathsInTemplate(templateContent, installDir)
+            await fs.writeFile(destFile, processedContent, 'utf-8')
           }
         }
       }
@@ -359,7 +386,10 @@ ${workflow.description}
               const srcFile = join(srcModelDir, file)
               const destFile = join(destModelDir, file)
               if (force || !(await fs.pathExists(destFile))) {
-                await fs.copy(srcFile, destFile)
+                // Read template content, replace ~ paths, then write
+                const templateContent = await fs.readFile(srcFile, 'utf-8')
+                const processedContent = replaceHomePathsInTemplate(templateContent, installDir)
+                await fs.writeFile(destFile, processedContent, 'utf-8')
                 result.installedPrompts.push(`${model}/${file.replace('.md', '')}`)
               }
             }
