@@ -500,7 +500,7 @@ npx ccg-workflow
 - **[UfoMiao/zcf](https://github.com/UfoMiao/zcf)** - Git 工具 + **MCP 跨平台配置逻辑**（v1.4.2）
 - **[GudaStudio/skills](https://github.com/GuDaStudio/skills)** - 智能路由设计理念
 - **[ace-tool MCP](https://linux.do/t/topic/1344562)** - 轻量级代码检索和 Prompt 增强方案
-- **[linux.do 社区](https://linux.do/)** - 活跃的 Claude Code 中文社区
+- **[linux.do 社区](https://linux.do/)** - 活跃的 Vibe Coding 大型技术交流社区
 
 ---
 

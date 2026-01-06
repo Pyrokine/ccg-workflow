@@ -68,11 +68,11 @@ function customizeHelp(sections: any[]): any[] {
 export async function setupCommands(cli: CAC): Promise<void> {
   try {
     const config = await readCcgConfig()
-    const defaultLang = config?.general?.language || 'en'
+    const defaultLang = config?.general?.language || 'zh-CN'
     await initI18n(defaultLang)
   }
   catch {
-    await initI18n('en')
+    await initI18n('zh-CN')
   }
 
   // Default command - show menu
