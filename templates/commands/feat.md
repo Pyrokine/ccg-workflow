@@ -27,7 +27,7 @@ $ARGUMENTS
 **如果 ace-tool MCP 可用**，调用 `mcp__ace-tool__enhance_prompt`：
 - 输入原始任务描述
 - 获取增强后的详细需求
-- 用增强后的需求进行后续规划
+- **用增强结果替代原始 $ARGUMENTS，后续调用 Codex/Gemini 时传入增强后的需求**
 
 #### 2.1 上下文检索
 
@@ -85,24 +85,36 @@ $ARGUMENTS
 
 #### 3.3 多模型路由实施
 
-**参考 `multi-model-collaboration` skill 调用外部模型**
+**调用语法**：
+
+```
+Bash({
+  command: "~/.claude/bin/codeagent-wrapper --backend <codex|gemini> - \"$PWD\" <<'EOF'
+ROLE_FILE: <角色提示词路径>
+<TASK>
+需求：<增强后的需求（如未增强则用 $ARGUMENTS）>
+上下文：<计划文件内容、项目上下文>
+</TASK>
+OUTPUT: 生产级代码
+EOF",
+  run_in_background: true,
+  timeout: 3600000,
+  description: "简短描述"
+})
+```
 
 **前端任务 → Gemini**：
-- 使用 `codeagent-wrapper --backend gemini`
 - 角色提示词：`~/.claude/.ccg/prompts/gemini/frontend.md`
 - 输出：前端组件代码
 
 **后端任务 → Codex**：
-- 使用 `codeagent-wrapper --backend codex`
 - 角色提示词：`~/.claude/.ccg/prompts/codex/architect.md`
 - 输出：后端 API 代码
 
-**全栈任务 → 并行调用**：
-**执行步骤**：
-1. 在**同一个 Bash 调用**中启动两个后台进程（不加 wait，立即返回）：
-   - Codex 后端 + Gemini 前端同时运行
+**全栈任务 → 并行调用**（`run_in_background: true`）：
+1. Codex 后端 + Gemini 前端同时运行
 2. 使用 `TaskOutput` 监控并获取结果
-3. **⚠️ 强制规则：必须等待 TaskOutput 返回两个模型的完整结果后才能进入下一阶段，禁止跳过或提前继续！**
+3. **⚠️ 强制规则：必须等待 TaskOutput 返回两个模型的完整结果后才能进入下一阶段**
 
 #### 3.4 实施后验证
 
