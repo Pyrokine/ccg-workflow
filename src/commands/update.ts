@@ -37,37 +37,24 @@ export async function update(): Promise<void> {
     console.log(`最新版本: ${ansis.green(`v${latestVersion}`)}`)
     console.log()
 
-    if (!hasUpdate) {
-      console.log(ansis.green('✅ 已是最新版本！'))
+    // Always ask if user wants to update (even if same version)
+    const message = hasUpdate
+      ? `确认要更新到 v${latestVersion} 吗？（先下载最新包 → 删除旧工作流 → 安装新工作流）`
+      : '当前已是最新版本。要重新安装吗？（先下载最新包 → 删除旧工作流 → 安装新工作流）'
 
-      // Ask if user wants to force reinstall
-      const { forceReinstall } = await inquirer.prompt([{
-        type: 'confirm',
-        name: 'forceReinstall',
-        message: '要强制重新安装当前版本吗？（可修复损坏的文件）',
-        default: false,
-      }])
+    const { confirmUpdate } = await inquirer.prompt([{
+      type: 'confirm',
+      name: 'confirmUpdate',
+      message,
+      default: hasUpdate,
+    }])
 
-      if (!forceReinstall) {
-        return
-      }
-    }
-    else {
-      // Confirm update
-      const { confirmUpdate } = await inquirer.prompt([{
-        type: 'confirm',
-        name: 'confirmUpdate',
-        message: `确认要更新到 v${latestVersion} 吗？`,
-        default: true,
-      }])
-
-      if (!confirmUpdate) {
-        console.log(ansis.gray('已取消更新'))
-        return
-      }
+    if (!confirmUpdate) {
+      console.log(ansis.gray('已取消更新'))
+      return
     }
 
-    await performUpdate(currentVersion, latestVersion || currentVersion)
+    await performUpdate(currentVersion, latestVersion || currentVersion, hasUpdate)
   }
   catch (error) {
     spinner.stop()
@@ -163,18 +150,31 @@ async function askReconfigureRouting(currentRouting?: ModelRouting): Promise<Mod
 /**
  * Perform the actual update process
  */
-async function performUpdate(fromVersion: string, toVersion: string): Promise<void> {
+async function performUpdate(fromVersion: string, toVersion: string, isNewVersion: boolean): Promise<void> {
   console.log()
   console.log(ansis.yellow.bold('⚙️  开始更新...'))
   console.log()
 
-  // Ask if user wants to reconfigure routing
+  // Step 1: Download latest package
+  let spinner = ora('正在下载最新版本...').start()
+
+  try {
+    // Download latest package using npx with --yes flag
+    await execAsync(`npx --yes ccg-workflow@latest --version`, { timeout: 60000 })
+    spinner.succeed('最新版本下载完成')
+  }
+  catch (error) {
+    spinner.fail('下载最新版本失败')
+    console.log(ansis.red(`错误: ${error}`))
+    return
+  }
+
+  // Step 2: Ask if user wants to reconfigure routing
   const config = await readCcgConfig()
   const newRouting = await askReconfigureRouting(config?.routing)
 
-  // We don't need to install globally - just use the templates from current package
-  // The templates are always bundled with the package when user runs npx ccg-workflow
-  const spinner = ora('更新命令模板和提示词...').start()
+  // Step 3: Delete old workflows and install new ones
+  spinner = ora('正在删除旧工作流并安装新工作流...').start()
 
   try {
     const workflows = config?.workflows?.installed || []
@@ -185,7 +185,7 @@ async function performUpdate(fromVersion: string, toVersion: string): Promise<vo
     }) // force = true
 
     if (result.success) {
-      spinner.succeed('命令模板和提示词更新成功')
+      spinner.succeed('工作流更新成功')
 
       console.log()
       console.log(ansis.cyan(`已更新 ${result.installedCommands.length} 个命令:`))
@@ -225,6 +225,11 @@ async function performUpdate(fromVersion: string, toVersion: string): Promise<vo
   console.log()
   console.log(ansis.green.bold('✅ 更新完成！'))
   console.log()
-  console.log(ansis.gray(`从 v${fromVersion} 升级到 v${toVersion}`))
+  if (isNewVersion) {
+    console.log(ansis.gray(`从 v${fromVersion} 升级到 v${toVersion}`))
+  }
+  else {
+    console.log(ansis.gray(`重新安装了 v${toVersion}`))
+  }
   console.log()
 }
