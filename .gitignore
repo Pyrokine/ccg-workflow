@@ -2,6 +2,9 @@
 codeagent-wrapper/codeagent-wrapper
 codeagent-wrapper/*.exe
 *.exe
+
+# 但是允许 bin/ 目录下的预编译二进制文件
+!bin/*.exe
 dist/
 node_modules/
 

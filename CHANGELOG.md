@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.7.16] - 2026-01-10
+
+### 🐛 Bug 修复
+
+**修复 Windows 二进制文件缺失问题**
+
+#### 问题背景
+
+用户在 Windows 系统上通过 `npx ccg-workflow` 更新时遇到错误：
+```
+Binary not found in package: codeagent-wrapper-windows-amd64.exe
+```
+
+**根本原因**：
+- `.gitignore` 忽略了所有 `.exe` 文件（包括 `bin/` 目录下的预编译二进制文件）
+- Windows 二进制文件未被 Git 跟踪，导致发布的 npm 包中缺失这些文件
+- macOS/Linux 二进制文件正常（无 `.exe` 扩展名，未被忽略）
+
+#### 核心修复
+
+1. **修改 `.gitignore`**：添加例外规则 `!bin/*.exe`
+   - 忽略构建过程中的 `.exe` 文件
+   - 但允许 `bin/` 目录下的预编译二进制文件被跟踪
+
+2. **提交 Windows 二进制文件到 Git**：
+   - `bin/codeagent-wrapper-windows-amd64.exe` ✅
+   - `bin/codeagent-wrapper-windows-arm64.exe` ✅
+
+3. **发布新版本到 npm**：确保 Windows 用户能正常安装和更新
+
+#### 影响范围
+
+- ✅ **修复前**：Windows 用户无法安装或更新（二进制文件缺失）
+- ✅ **修复后**：所有平台（macOS、Linux、Windows）均可正常使用
+
+---
+
 ## [1.7.15] - 2026-01-10
 
 ### 🐛 Bug 修复
