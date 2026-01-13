@@ -91,11 +91,10 @@ export function applyPlatformCommand(config: McpServerConfig): void {
 
     // Only modify if command needs Windows wrapper (cmd /c)
     if (mcpCmd[0] === 'cmd') {
-      const originalCommand = config.command
       const originalArgs = config.args || []
-
       config.command = mcpCmd[0] // 'cmd'
-      config.args = [...mcpCmd.slice(1), originalCommand, ...originalArgs] // ['/c', 'npx', ...originalArgs]
+      // getMcpCommand 已返回 ['cmd', '/c', 'npx']，slice(1) = ['/c', 'npx']
+      config.args = [...mcpCmd.slice(1), ...originalArgs]
     }
   }
 }
