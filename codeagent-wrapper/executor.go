@@ -1098,6 +1098,10 @@ func runCodexTaskWithContext(parentCtx context.Context, taskSpec TaskSpec, backe
 		terminated           bool
 		messageSeenObserved  bool
 		completeSeenObserved bool
+		// Fallback exit timer: ensures loop exits even if waitCh never returns
+		// This handles Windows edge case where child processes hold stdout handles
+		fallbackExitTimer   *time.Timer
+		fallbackExitTimerCh <-chan time.Time
 	)
 
 waitLoop:
@@ -1132,9 +1136,20 @@ waitLoop:
 					terminated = true
 				}
 			}
-			// Do NOT block here waiting for waitCh - let the loop continue
-			// This is critical for Windows where process termination may fail silently
-			// The next iteration will catch waitCh if the process exits
+			// Start fallback exit timer: if waitCh doesn't return within forceKillDelay + 2 seconds,
+			// force exit the loop. This handles Windows edge case where child processes hold handles
+			// and cmd.Wait() blocks forever even after the main process is killed.
+			if fallbackExitTimer == nil {
+				fallbackDelay := time.Duration(forceKillDelay.Load()+2) * time.Second
+				fallbackExitTimer = time.NewTimer(fallbackDelay)
+				fallbackExitTimerCh = fallbackExitTimer.C
+				logWarnFn(fmt.Sprintf("Fallback exit timer started: %v", fallbackDelay))
+			}
+		case <-fallbackExitTimerCh:
+			// Fallback exit: waitCh didn't return in time, force exit
+			logWarnFn("Fallback exit timer fired: forcing loop exit (waitCh blocked)")
+			forcedAfterComplete = true
+			break waitLoop
 		case <-completeSeen:
 			completeSeenObserved = true
 			if messageTimer != nil {
@@ -1144,6 +1159,16 @@ waitLoop:
 			messageTimerCh = messageTimer.C
 		case <-messageSeen:
 			messageSeenObserved = true
+		}
+	}
+
+	// Clean up fallback exit timer
+	if fallbackExitTimer != nil {
+		if !fallbackExitTimer.Stop() {
+			select {
+			case <-fallbackExitTimer.C:
+			default:
+			}
 		}
 	}
 
