@@ -6,7 +6,7 @@ import ora from 'ora'
 import { homedir } from 'node:os'
 import { join } from 'pathe'
 import { i18n } from '../i18n'
-import { createDefaultConfig, ensureCcgDir, getCcgDir, writeCcgConfig } from '../utils/config'
+import { createDefaultConfig, ensureCcgDir, getCcgDir, readCcgConfig, writeCcgConfig } from '../utils/config'
 import { getAllCommandIds, installAceTool, installWorkflows } from '../utils/installer'
 import { migrateToV1_4_0, needsMigration } from '../utils/migration'
 
@@ -32,8 +32,14 @@ export async function init(options: InitOptions = {}): Promise<void> {
   let aceToolToken = ''
 
   // Skip MCP configuration if --skip-mcp is passed (used during update)
+  // Also preserve existing liteMode setting from config
   if (options.skipMcp) {
     mcpProvider = 'skip'
+    // Read existing config to preserve liteMode setting
+    const existingConfig = await readCcgConfig()
+    if (existingConfig?.performance?.liteMode !== undefined) {
+      liteMode = existingConfig.performance.liteMode
+    }
   }
   else if (!options.skipPrompt) {
     console.log()
