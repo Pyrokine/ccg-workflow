@@ -323,8 +323,8 @@ export async function init(options: InitOptions = {}): Promise<void> {
           const currentPath = execSync('powershell -Command "[System.Environment]::GetEnvironmentVariable(\'PATH\', \'User\')"', { encoding: 'utf-8' }).trim()
 
           if (!currentPath.includes(windowsPath) && !currentPath.includes('.claude\\bin')) {
-            // Add to user PATH
-            execSync(`powershell -Command "[System.Environment]::SetEnvironmentVariable('PATH', '$env:PATH;${windowsPath}', 'User')"`, { stdio: 'pipe' })
+            // Add to user PATH (must read current user PATH first, not $env:PATH which is process-level)
+            execSync(`powershell -Command "$currentPath = [System.Environment]::GetEnvironmentVariable('PATH', 'User'); [System.Environment]::SetEnvironmentVariable('PATH', \\"$currentPath;${windowsPath}\\", 'User')"`, { stdio: 'pipe' })
             console.log(`    ${ansis.green('✓')} PATH ${ansis.gray('→ 用户环境变量')}`)
           }
         }
