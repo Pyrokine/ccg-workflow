@@ -193,7 +193,16 @@ async function performUpdate(fromVersion: string, toVersion: string, isNewVersio
   // Check if installed globally via npm
   const isGlobalInstall = await checkIfGlobalInstall()
 
-  if (isGlobalInstall) {
+  // If globally installed and only workflow needs update (package is already latest)
+  if (isGlobalInstall && !isNewVersion) {
+    console.log(ansis.cyan('ℹ️  检测到你是通过 npm 全局安装的'))
+    console.log()
+    console.log(ansis.green('✓ 当前包版本已是最新 (v' + toVersion + ')'))
+    console.log(ansis.yellow('⚙️  仅需更新工作流文件'))
+    console.log()
+    // Continue to update workflows only
+  }
+  else if (isGlobalInstall && isNewVersion) {
     console.log(ansis.yellow('⚠️  检测到你是通过 npm 全局安装的'))
     console.log()
     console.log('推荐的更新方式：')

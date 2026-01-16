@@ -1,16 +1,16 @@
 import ansis from 'ansis'
 import inquirer from 'inquirer'
 import { i18n } from '../i18n'
-import { installAceTool, uninstallAceTool } from '../utils/installer'
+import { installAceTool, installAceToolRs, uninstallAceTool } from '../utils/installer'
 
 /**
- * Configure ace-tool MCP after installation
+ * Configure ace-tool or ace-tool-rs MCP after installation
  *
- * This command allows users to configure ace-tool Token if they skipped it during initial installation.
+ * This command allows users to configure ace-tool/ace-tool-rs Token if they skipped it during initial installation.
  */
 export async function configMcp(): Promise<void> {
   console.log()
-  console.log(ansis.cyan.bold(`  配置 ace-tool MCP`))
+  console.log(ansis.cyan.bold(`  配置 MCP 工具`))
   console.log()
 
   const { action } = await inquirer.prompt([{
@@ -18,8 +18,9 @@ export async function configMcp(): Promise<void> {
     name: 'action',
     message: '选择操作',
     choices: [
-      { name: `${ansis.green('➜')} 安装/更新 ace-tool MCP`, value: 'install' },
-      { name: `${ansis.red('✕')} 卸载 ace-tool MCP`, value: 'uninstall' },
+      { name: `${ansis.green('➜')} 安装/更新 ace-tool MCP ${ansis.gray('(Node.js 实现)')}`, value: 'install-ace-tool' },
+      { name: `${ansis.green('➜')} 安装/更新 ace-tool-rs MCP ${ansis.yellow('(推荐)')} ${ansis.gray('(Rust 实现)')}`, value: 'install-ace-tool-rs' },
+      { name: `${ansis.red('✕')} 卸载 MCP 配置`, value: 'uninstall' },
       new inquirer.Separator(),
       { name: `${ansis.gray('返回')}`, value: 'cancel' },
     ],
@@ -34,9 +35,12 @@ export async function configMcp(): Promise<void> {
     return
   }
 
-  // Install/Update ace-tool
+  // Install/Update ace-tool or ace-tool-rs
+  const isAceToolRs = action === 'install-ace-tool-rs'
+  const toolName = isAceToolRs ? 'ace-tool-rs' : 'ace-tool'
+
   console.log()
-  console.log(ansis.cyan(`📖 获取 ace-tool 访问方式：`))
+  console.log(ansis.cyan(`📖 获取 ${toolName} 访问方式：`))
   console.log(`   ${ansis.gray('•')} ${ansis.cyan('官方服务')}: ${ansis.underline('https://augmentcode.com/')}`)
   console.log(`   ${ansis.gray('•')} ${ansis.cyan('中转服务')} ${ansis.yellow('(无需注册)')}: ${ansis.underline('https://linux.do/t/topic/1291730')}`)
   console.log()
@@ -56,16 +60,17 @@ export async function configMcp(): Promise<void> {
   ])
 
   console.log()
-  console.log(ansis.yellow('⏳ 正在配置 ace-tool MCP...'))
+  console.log(ansis.yellow(`⏳ 正在配置 ${toolName} MCP...`))
   console.log()
 
-  const result = await installAceTool({
+  const installFn = isAceToolRs ? installAceToolRs : installAceTool
+  const result = await installFn({
     baseUrl: aceAnswers.baseUrl?.trim() || undefined,
     token: aceAnswers.token.trim(),
   })
 
   if (result.success) {
-    console.log(ansis.green('✓ ace-tool MCP 配置成功！'))
+    console.log(ansis.green(`✓ ${toolName} MCP 配置成功！`))
     if (result.configPath) {
       console.log(ansis.gray(`  配置文件: ${result.configPath}`))
     }
@@ -75,7 +80,7 @@ export async function configMcp(): Promise<void> {
     console.log(ansis.gray('  2. 运行 /ccg:dev 命令测试 MCP 功能'))
   }
   else {
-    console.log(ansis.red('✗ ace-tool MCP 配置失败'))
+    console.log(ansis.red(`✗ ${toolName} MCP 配置失败`))
     console.log(ansis.gray(`  错误信息: ${result.message}`))
   }
 

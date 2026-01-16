@@ -17,6 +17,7 @@ export {
   getWorkflowById,
   installWorkflows,
   installAceTool,
+  installAceToolRs,
   uninstallWorkflows,
   uninstallAceTool,
 } from './utils/installer'

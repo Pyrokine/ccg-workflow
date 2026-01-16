@@ -846,3 +846,75 @@ export async function installAceTool(config: AceToolConfig): Promise<{ success: 
     }
   }
 }
+
+/**
+ * Install and configure ace-tool-rs MCP for Claude Code
+ * ace-tool-rs is a Rust implementation of ace-tool, more lightweight and faster
+ */
+export async function installAceToolRs(config: AceToolConfig): Promise<{ success: boolean, message: string, configPath?: string }> {
+  const { baseUrl, token } = config
+
+  try {
+    // Read existing config or create new one
+    let existingConfig = await readClaudeCodeConfig()
+
+    if (!existingConfig) {
+      existingConfig = { mcpServers: {} }
+    }
+
+    // Backup before modifying (if config exists)
+    if (existingConfig.mcpServers && Object.keys(existingConfig.mcpServers).length > 0) {
+      const backupPath = await backupClaudeCodeConfig()
+      if (backupPath) {
+        console.log(`  ✓ Backup created: ${backupPath}`)
+      }
+    }
+
+    // Build args array for ace-tool-rs
+    const args = ['ace-tool-rs']
+    if (baseUrl) {
+      args.push('--base-url', baseUrl)
+    }
+    if (token) {
+      args.push('--token', token)
+    }
+
+    // Create base ace-tool-rs MCP server config
+    const aceToolRsConfig = buildMcpServerConfig({
+      type: 'stdio' as const,
+      command: 'npx',
+      args,
+      env: {
+        RUST_LOG: 'info',
+      },
+    })
+
+    // Merge new server into existing config
+    let mergedConfig = mergeMcpServers(existingConfig, {
+      'ace-tool': aceToolRsConfig,
+    })
+
+    // Apply Windows fixes if needed
+    if (isWindows()) {
+      mergedConfig = fixWindowsMcpConfig(mergedConfig)
+      console.log('  ✓ Applied Windows MCP configuration fixes')
+    }
+
+    // Write config back (preserve all other fields)
+    await writeClaudeCodeConfig(mergedConfig)
+
+    return {
+      success: true,
+      message: isWindows()
+        ? 'ace-tool-rs MCP configured successfully with Windows compatibility'
+        : 'ace-tool-rs MCP configured successfully',
+      configPath: join(homedir(), '.claude.json'),
+    }
+  }
+  catch (error) {
+    return {
+      success: false,
+      message: `Failed to configure ace-tool-rs: ${error}`,
+    }
+  }
+}

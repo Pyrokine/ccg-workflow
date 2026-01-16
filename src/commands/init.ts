@@ -7,7 +7,7 @@ import { homedir } from 'node:os'
 import { join } from 'pathe'
 import { i18n } from '../i18n'
 import { createDefaultConfig, ensureCcgDir, getCcgDir, readCcgConfig, writeCcgConfig } from '../utils/config'
-import { getAllCommandIds, installAceTool, installWorkflows } from '../utils/installer'
+import { getAllCommandIds, installAceTool, installAceToolRs, installWorkflows } from '../utils/installer'
 import { migrateToV1_4_0, needsMigration } from '../utils/migration'
 
 export async function init(options: InitOptions = {}): Promise<void> {
@@ -43,27 +43,34 @@ export async function init(options: InitOptions = {}): Promise<void> {
     const { selectedMcp } = await inquirer.prompt([{
       type: 'list',
       name: 'selectedMcp',
-      message: '是否安装 ace-tool MCP？',
+      message: '选择 MCP 工具',
       choices: [
         {
-          name: `安装 ace-tool ${ansis.gray('(推荐) - 一键安装，含 Prompt 增强 + 代码检索')}`,
+          name: `ace-tool ${ansis.gray('(Node.js 实现) - 一键安装，含 Prompt 增强 + 代码检索')}`,
           value: 'ace-tool',
+        },
+        {
+          name: `ace-tool-rs ${ansis.green('(推荐)')} ${ansis.gray('(Rust 实现) - 更轻量、更快速')}`,
+          value: 'ace-tool-rs',
         },
         {
           name: `跳过 ${ansis.gray('- 稍后手动配置（可选 auggie 等其他 MCP）')}`,
           value: 'skip',
         },
       ],
-      default: 'ace-tool',
+      default: 'ace-tool-rs',
     }])
 
     mcpProvider = selectedMcp
 
-    // Configure ace-tool if selected
-    if (selectedMcp === 'ace-tool') {
+    // Configure ace-tool or ace-tool-rs if selected
+    if (selectedMcp === 'ace-tool' || selectedMcp === 'ace-tool-rs') {
+      const toolName = selectedMcp === 'ace-tool-rs' ? 'ace-tool-rs' : 'ace-tool'
+      const toolDesc = selectedMcp === 'ace-tool-rs' ? i18n.t('init:aceToolRs.description') : i18n.t('init:aceTool.description')
+
       console.log()
-      console.log(ansis.cyan.bold(`  🔧 ace-tool MCP 配置`))
-      console.log(ansis.gray(`     ${i18n.t('init:aceTool.description')}`))
+      console.log(ansis.cyan.bold(`  🔧 ${toolName} MCP 配置`))
+      console.log(ansis.gray(`     ${toolDesc}`))
       console.log()
 
       const { skipToken } = await inquirer.prompt([{
@@ -246,27 +253,31 @@ export async function init(options: InitOptions = {}): Promise<void> {
       liteMode,
     })
 
-    // Install ace-tool MCP if token was provided
-    if (mcpProvider === 'ace-tool' && aceToolToken) {
-      spinner.text = i18n.t('init:aceTool.installing')
-      const aceResult = await installAceTool({
+    // Install ace-tool or ace-tool-rs MCP if token was provided
+    if ((mcpProvider === 'ace-tool' || mcpProvider === 'ace-tool-rs') && aceToolToken) {
+      const toolName = mcpProvider === 'ace-tool-rs' ? 'ace-tool-rs' : 'ace-tool'
+      const installFn = mcpProvider === 'ace-tool-rs' ? installAceToolRs : installAceTool
+
+      spinner.text = mcpProvider === 'ace-tool-rs' ? i18n.t('init:aceToolRs.installing') : i18n.t('init:aceTool.installing')
+      const aceResult = await installFn({
         baseUrl: aceToolBaseUrl,
         token: aceToolToken,
       })
       if (aceResult.success) {
         spinner.succeed(ansis.green(i18n.t('init:installSuccess')))
         console.log()
-        console.log(`    ${ansis.green('✓')} ace-tool MCP ${ansis.gray(`→ ${aceResult.configPath}`)}`)
+        console.log(`    ${ansis.green('✓')} ${toolName} MCP ${ansis.gray(`→ ${aceResult.configPath}`)}`)
       }
       else {
-        spinner.warn(ansis.yellow(i18n.t('init:aceTool.failed')))
+        spinner.warn(ansis.yellow(mcpProvider === 'ace-tool-rs' ? i18n.t('init:aceToolRs.failed') : i18n.t('init:aceTool.failed')))
         console.log(ansis.gray(`      ${aceResult.message}`))
       }
     }
-    else if (mcpProvider === 'ace-tool' && !aceToolToken) {
+    else if ((mcpProvider === 'ace-tool' || mcpProvider === 'ace-tool-rs') && !aceToolToken) {
+      const toolName = mcpProvider === 'ace-tool-rs' ? 'ace-tool-rs' : 'ace-tool'
       spinner.succeed(ansis.green(i18n.t('init:installSuccess')))
       console.log()
-      console.log(`    ${ansis.yellow('⚠')} ace-tool MCP 未安装 ${ansis.gray('(Token 未提供)')}`)
+      console.log(`    ${ansis.yellow('⚠')} ${toolName} MCP 未安装 ${ansis.gray('(Token 未提供)')}`)
       console.log(`    ${ansis.gray('→')} 稍后运行 ${ansis.cyan('npx ccg config mcp')} 完成配置`)
     }
     else {

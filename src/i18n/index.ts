@@ -128,6 +128,16 @@ const zhCN = {
       installing: '正在配置 ace-tool MCP...',
       failed: 'ace-tool 配置失败（可稍后手动配置）',
     },
+    aceToolRs: {
+      title: 'ace-tool-rs MCP 配置',
+      description: 'Rust 实现的 ace-tool，更轻量、更快速',
+      getToken: '获取 Token',
+      configure: '是否配置 ace-tool-rs MCP？',
+      baseUrl: 'API Base URL:',
+      token: 'API Token:',
+      installing: '正在配置 ace-tool-rs MCP...',
+      failed: 'ace-tool-rs 配置失败（可稍后手动配置）',
+    },
   },
   menu: {
     title: 'CCG 主菜单',
@@ -288,6 +298,16 @@ const en = {
       token: 'API Token:',
       installing: 'Configuring ace-tool MCP...',
       failed: 'ace-tool configuration failed (can be configured manually later)',
+    },
+    aceToolRs: {
+      title: 'ace-tool-rs MCP Configuration',
+      description: 'Rust implementation of ace-tool, more lightweight and faster',
+      getToken: 'Get Token',
+      configure: 'Configure ace-tool-rs MCP?',
+      baseUrl: 'API Base URL:',
+      token: 'API Token:',
+      installing: 'Configuring ace-tool-rs MCP...',
+      failed: 'ace-tool-rs configuration failed (can be configured manually later)',
     },
   },
   menu: {
