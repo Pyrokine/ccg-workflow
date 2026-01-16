@@ -120,7 +120,7 @@ func buildGeminiArgs(cfg *Config, targetArg string) []string {
 	if cfg == nil {
 		return nil
 	}
-	args := []string{"-o", "stream-json", "-y"}
+	args := []string{"--output-format", "stream-json", "-y"}
 
 	if cfg.Mode == "resume" {
 		if cfg.SessionID != "" {
