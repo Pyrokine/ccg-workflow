@@ -41,6 +41,34 @@ npx ccg-workflow
 | `/ccg:worktree` | Worktree 管理 |
 | `/ccg:init` | 初始化 CLAUDE.md |
 | `/ccg:enhance` | Prompt 增强 |
+| `/ccg:spec-init` | 初始化 OpenSpec 环境 |
+| `/ccg:spec-research` | 需求 → 约束集 |
+| `/ccg:spec-plan` | 约束 → 零决策计划 |
+| `/ccg:spec-impl` | 按计划执行 + 归档 |
+| `/ccg:spec-review` | 双模型交叉审查 |
+
+### OpenSpec 规范驱动（v1.7.48）
+
+集成 [OpenSpec](https://github.com/fission-ai/openspec)，把需求变成约束，让 AI 没法自由发挥：
+
+```bash
+# 初始化
+/ccg:spec-init
+
+# 研究需求 → 输出约束集
+/ccg:spec-research 实现用户认证
+
+# 并行分析 → 零决策计划
+/ccg:spec-plan
+
+# 按计划执行
+/ccg:spec-impl
+
+# 独立审查（随时可用）
+/ccg:spec-review
+```
+
+每阶段之间可 `/clear`，状态存在 `openspec/` 目录，不怕上下文爆。
 
 ### 规划与执行分离
 
@@ -157,4 +185,4 @@ MIT
 
 ---
 
-v1.7.47 | [Issues](https://github.com/fengshao1227/ccg-workflow/issues)
+v1.7.48 | [Issues](https://github.com/fengshao1227/ccg-workflow/issues)

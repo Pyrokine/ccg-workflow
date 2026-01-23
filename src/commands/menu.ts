@@ -13,45 +13,55 @@ import { update } from './update'
 const execAsync = promisify(exec)
 
 export async function showMainMenu(): Promise<void> {
-  console.log()
-  console.log(ansis.cyan.bold(`  CCG - Claude + Codex + Gemini`))
-  console.log(ansis.gray('  Multi-Model Collaboration System'))
-  console.log()
+  while (true) {
+    console.log()
+    console.log(ansis.cyan.bold(`  CCG - Claude + Codex + Gemini`))
+    console.log(ansis.gray('  Multi-Model Collaboration System'))
+    console.log()
 
-  const { action } = await inquirer.prompt([{
-    type: 'list',
-    name: 'action',
-    message: i18n.t('menu:title'),
-    choices: [
-      { name: `${ansis.green('➜')} ${i18n.t('menu:options.init')}`, value: 'init' },
-      { name: `${ansis.blue('➜')} ${i18n.t('menu:options.update')}`, value: 'update' },
-      { name: `${ansis.cyan('⚙')} 配置 MCP`, value: 'config-mcp' },
-      { name: `${ansis.magenta('➜')} ${i18n.t('menu:options.uninstall')}`, value: 'uninstall' },
-      { name: `${ansis.yellow('?')} ${i18n.t('menu:options.help')}`, value: 'help' },
-      new inquirer.Separator(),
-      { name: `${ansis.red('✕')} ${i18n.t('menu:options.exit')}`, value: 'exit' },
-    ],
-  }])
+    const { action } = await inquirer.prompt([{
+      type: 'list',
+      name: 'action',
+      message: i18n.t('menu:title'),
+      choices: [
+        { name: `${ansis.green('➜')} ${i18n.t('menu:options.init')}`, value: 'init' },
+        { name: `${ansis.blue('➜')} ${i18n.t('menu:options.update')}`, value: 'update' },
+        { name: `${ansis.cyan('⚙')} 配置 MCP`, value: 'config-mcp' },
+        { name: `${ansis.magenta('➜')} ${i18n.t('menu:options.uninstall')}`, value: 'uninstall' },
+        { name: `${ansis.yellow('?')} ${i18n.t('menu:options.help')}`, value: 'help' },
+        new inquirer.Separator(),
+        { name: `${ansis.red('✕')} ${i18n.t('menu:options.exit')}`, value: 'exit' },
+      ],
+    }])
 
-  switch (action) {
-    case 'init':
-      await init()
-      break
-    case 'update':
-      await update()
-      break
-    case 'config-mcp':
-      await configMcp()
-      break
-    case 'uninstall':
-      await uninstall()
-      break
-    case 'help':
-      showHelp()
-      break
-    case 'exit':
-      console.log(ansis.gray('Goodbye!'))
-      break
+    switch (action) {
+      case 'init':
+        await init()
+        break
+      case 'update':
+        await update()
+        break
+      case 'config-mcp':
+        await configMcp()
+        break
+      case 'uninstall':
+        await uninstall()
+        break
+      case 'help':
+        showHelp()
+        break
+      case 'exit':
+        console.log(ansis.gray('Goodbye!'))
+        return // 退出循环和函数
+    }
+
+    // 操作完成后暂停，让用户看到结果
+    console.log()
+    await inquirer.prompt([{
+      type: 'input',
+      name: 'continue',
+      message: ansis.gray('按 Enter 返回主菜单...'),
+    }])
   }
 }
 
@@ -59,14 +69,44 @@ function showHelp(): void {
   console.log()
   console.log(ansis.cyan.bold(i18n.t('menu:help.title')))
   console.log()
-  console.log(`  ${ansis.green('/ccg:dev')}         ${i18n.t('menu:help.descriptions.dev')}`)
+
+  // Development Workflows
+  console.log(ansis.yellow.bold('  开发工作流:'))
+  console.log(`  ${ansis.green('/ccg:workflow')}    完整6阶段开发工作流`)
+  console.log(`  ${ansis.green('/ccg:plan')}        多模型协作规划（Phase 1-2）`)
+  console.log(`  ${ansis.green('/ccg:execute')}     多模型协作执行（Phase 3-5）`)
   console.log(`  ${ansis.green('/ccg:frontend')}    ${i18n.t('menu:help.descriptions.frontend')}`)
   console.log(`  ${ansis.green('/ccg:backend')}     ${i18n.t('menu:help.descriptions.backend')}`)
-  console.log(`  ${ansis.green('/ccg:review')}      ${i18n.t('menu:help.descriptions.review')}`)
+  console.log(`  ${ansis.green('/ccg:feat')}        智能功能开发`)
   console.log(`  ${ansis.green('/ccg:analyze')}     ${i18n.t('menu:help.descriptions.analyze')}`)
+  console.log(`  ${ansis.green('/ccg:debug')}       问题诊断 + 修复`)
+  console.log(`  ${ansis.green('/ccg:optimize')}    性能优化`)
+  console.log(`  ${ansis.green('/ccg:test')}        测试生成`)
+  console.log(`  ${ansis.green('/ccg:review')}      ${i18n.t('menu:help.descriptions.review')}`)
+  console.log()
+
+  // OpenSpec Workflows
+  console.log(ansis.yellow.bold('  OpenSpec 规范驱动:'))
+  console.log(`  ${ansis.green('/ccg:spec-init')}      初始化 OpenSpec 环境`)
+  console.log(`  ${ansis.green('/ccg:spec-research')} 需求研究 → 约束集`)
+  console.log(`  ${ansis.green('/ccg:spec-plan')}     多模型分析 → 零决策计划`)
+  console.log(`  ${ansis.green('/ccg:spec-impl')}     规范驱动实现`)
+  console.log(`  ${ansis.green('/ccg:spec-review')}   归档前双模型审查`)
+  console.log()
+
+  // Git Tools
+  console.log(ansis.yellow.bold('  Git 工具:'))
   console.log(`  ${ansis.green('/ccg:commit')}      ${i18n.t('menu:help.descriptions.commit')}`)
   console.log(`  ${ansis.green('/ccg:rollback')}    ${i18n.t('menu:help.descriptions.rollback')}`)
+  console.log(`  ${ansis.green('/ccg:clean-branches')} 清理已合并分支`)
+  console.log(`  ${ansis.green('/ccg:worktree')}    Git Worktree 管理`)
   console.log()
+
+  // Project Init
+  console.log(ansis.yellow.bold('  项目管理:'))
+  console.log(`  ${ansis.green('/ccg:init')}        初始化项目 CLAUDE.md`)
+  console.log()
+
   console.log(ansis.gray(i18n.t('menu:help.hint')))
   console.log()
 }

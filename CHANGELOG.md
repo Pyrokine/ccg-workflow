@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.7.48] - 2026-01-23
+
+### ✨ 新功能
+
+**集成 OpenSpec 规范驱动开发**
+
+新增 5 个 `/ccg:spec-*` 命令，把需求变成约束，让 AI 没法自由发挥：
+
+| 命令 | 说明 |
+|------|------|
+| `/ccg:spec-init` | 初始化 OpenSpec 环境 + 验证多模型 MCP 工具 |
+| `/ccg:spec-research` | 需求 → 约束集（并行探索 + OpenSpec 提案） |
+| `/ccg:spec-plan` | 多模型分析 → 消除歧义 → 零决策可执行计划 |
+| `/ccg:spec-impl` | 按规范执行 + 多模型协作 + 归档 |
+| `/ccg:spec-review` | 双模型交叉审查（独立工具，随时可用） |
+
+**核心理念**：
+- 约束集 vs 信息堆砌：输出明确约束（如 "JWT TTL=15min"），而不是一堆背景知识
+- 零决策计划：Plan 阶段消除所有歧义，Impl 阶段纯机械执行
+- 分阶段执行：每阶段之间可 `/clear`，状态存在 `openspec/` 目录，不怕上下文爆
+
+### 🔧 改进
+
+- 菜单支持循环返回：执行完操作后按 Enter 返回主菜单，不再直接退出
+- 多模型并行调用指令加强：明确要求"一条消息两个 Bash 调用"，避免串行执行
+
+---
+
 ## [1.7.47] - 2026-01-21
 
 ### 🐛 Bug 修复

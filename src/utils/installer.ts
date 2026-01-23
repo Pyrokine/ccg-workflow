@@ -23,7 +23,7 @@ function findPackageRoot(startDir: string): string {
 
 const PACKAGE_ROOT = findPackageRoot(__dirname)
 
-// All available commands (16 total after adding plan/execute)
+// All available commands (20 total after adding spec commands)
 const ALL_COMMANDS = [
   'workflow', // 完整6阶段开发工作流
   'plan', // 多模型协作规划（Phase 1-2）
@@ -41,6 +41,11 @@ const ALL_COMMANDS = [
   'rollback', // Git 回滚
   'clean-branches', // Git 清理分支
   'worktree', // Git Worktree
+  'spec-init', // OpenSpec 初始化
+  'spec-research', // 需求研究 → 约束集
+  'spec-plan', // 多模型分析 → 零决策计划
+  'spec-impl', // 多模型协作实现
+  'spec-review', // 归档前多模型审查
 ] as const
 
 // Workflow configurations (for compatibility with existing code)
@@ -232,6 +237,61 @@ const WORKFLOW_CONFIGS: WorkflowConfig[] = [
     description: '管理 Git worktree',
     descriptionEn: 'Manage Git worktree',
   },
+  {
+    id: 'spec-init',
+    name: 'OpenSpec 初始化',
+    nameEn: 'OpenSpec Init',
+    category: 'spec',
+    commands: ['spec-init'],
+    defaultSelected: true,
+    order: 30,
+    description: '初始化 OpenSpec 环境 + 验证多模型 MCP 工具',
+    descriptionEn: 'Initialize OpenSpec environment with multi-model MCP validation',
+  },
+  {
+    id: 'spec-research',
+    name: '需求研究',
+    nameEn: 'Spec Research',
+    category: 'spec',
+    commands: ['spec-research'],
+    defaultSelected: true,
+    order: 31,
+    description: '需求 → 约束集（并行探索 + OpenSpec 提案）',
+    descriptionEn: 'Transform requirements into constraint sets via parallel exploration',
+  },
+  {
+    id: 'spec-plan',
+    name: '零决策规划',
+    nameEn: 'Spec Plan',
+    category: 'spec',
+    commands: ['spec-plan'],
+    defaultSelected: true,
+    order: 32,
+    description: '多模型分析 → 消除歧义 → 零决策可执行计划',
+    descriptionEn: 'Refine proposals into zero-decision executable plans',
+  },
+  {
+    id: 'spec-impl',
+    name: '规范驱动实现',
+    nameEn: 'Spec Implementation',
+    category: 'spec',
+    commands: ['spec-impl'],
+    defaultSelected: true,
+    order: 33,
+    description: '按规范执行 + 多模型协作 + 归档',
+    descriptionEn: 'Execute changes via multi-model collaboration with spec compliance',
+  },
+  {
+    id: 'spec-review',
+    name: '归档前审查',
+    nameEn: 'Spec Review',
+    category: 'spec',
+    commands: ['spec-review'],
+    defaultSelected: true,
+    order: 34,
+    description: '双模型交叉审查 → Critical 必须修复 → 允许归档',
+    descriptionEn: 'Multi-model compliance review before archiving',
+  },
 ]
 
 export function getWorkflowConfigs(): WorkflowConfig[] {
@@ -258,8 +318,8 @@ export const WORKFLOW_PRESETS = {
   full: {
     name: '完整',
     nameEn: 'Full',
-    description: '全部命令（17个）',
-    descriptionEn: 'All commands (17)',
+    description: '全部命令（21个）',
+    descriptionEn: 'All commands (21)',
     workflows: WORKFLOW_CONFIGS.map(w => w.id),
   },
 }
