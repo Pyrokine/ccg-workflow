@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.7.54] - 2026-01-26
+
+### 🐛 紧急修复
+
+**修正 OpenSpec 安装包名称错误**
+
+- ✅ 修复 `spec-init.md` 中的错误安装包名称
+- ✅ 正确的包名：`@fission-ai/openspec@latest`（而非错误的 `@opsx/cli`）
+- ✅ 说明：OPSX 是 OpenSpec v0.23.0+ 的实验性工作流功能，不是独立包
+- ✅ `/opsx:` 命令通过安装 `@fission-ai/openspec` 获得
+
+**修改文件**：
+- `templates/commands/spec-init.md` - 修正安装命令和说明文本
+- `CHANGELOG.md` - 添加修复说明
+
+**技术说明**：
+- OPSX = OpenSpec eXperimental workflow
+- 包名保持：`@fission-ai/openspec`
+- 命令格式：`/opsx:*` (实验性工作流) 和传统 OpenSpec 命令
+
+---
+
 ## [1.7.53] - 2026-01-26
 
 ### 🔧 修复
@@ -22,8 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `openspec validate <id>` → `/opsx:validate <id>`
   - `openspec diff <id>` → `/opsx:diff <id>`
   - `openspec workflow schemas` → `/opsx:schemas`
-- ✅ 更新安装包引用：`@fission-ai/openspec` → `@opsx/cli`
-- ✅ 修复 v1.7.52 中未完全更新的 OpenSpec CLI 遗留引用
+- ⚠️ **已知问题**：错误地将安装包写为 `@opsx/cli`（应为 `@fission-ai/openspec`）- 已在 v1.7.54 修复
 
 **修改文件**：
 - `templates/commands/spec-impl.md` - 完整替换所有 openspec 命令为 /opsx 命令

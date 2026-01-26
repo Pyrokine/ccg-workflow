@@ -18,11 +18,11 @@ description: '初始化 OpenSpec (OPSX) 环境 + 验证多模型 MCP 工具'
    - Identify OS using `uname -s` (Unix) or environment variables (Windows).
    - Inform user which OS was detected.
 
-2. **Check and Install OPSX**
+2. **Check and Install OpenSpec (OPSX)**
    - Verify if OPSX commands are available: `/opsx:version`
    - If not installed or not found:
      ```bash
-     npm install -g @opsx/cli@latest
+     npm install -g @fission-ai/openspec@latest
      ```
    - **Path Verification**:
      - If `/opsx:version` command is not found after installation:
@@ -66,7 +66,7 @@ description: '初始化 OpenSpec (OPSX) 环境 + 验证多模型 MCP 工具'
    ```
    Component                 Status
    ─────────────────────────────────
-   OPSX CLI                  ✓/✗
+   OpenSpec (OPSX) CLI       ✓/✗
    Project initialized       ✓/✗
    OPSX Skills               ✓/✗
    codeagent-wrapper         ✓/✗
@@ -84,8 +84,8 @@ description: '初始化 OpenSpec (OPSX) 环境 + 验证多模型 MCP 工具'
    - Code Review: `/ccg:spec-review` (Independent dual-model review)
 
 **Reference**
-- OPSX CLI: `/opsx:help`
+- OpenSpec (OPSX) CLI: `/opsx:help`
 - CCG Workflow: `npx ccg-workflow`
 - Codex/Gemini MCP: Bundled with codeagent-wrapper
-- Node.js >= 18.x required for OPSX
+- Node.js >= 18.x required for OpenSpec
 <!-- CCG:SPEC:INIT:END -->
