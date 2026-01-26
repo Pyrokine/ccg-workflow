@@ -43,34 +43,36 @@ npx ccg-workflow
 | `/ccg:worktree` | Worktree 管理 |
 | `/ccg:init` | 初始化 CLAUDE.md |
 | `/ccg:enhance` | Prompt 增强 |
-| `/ccg:spec-init` | 初始化 OpenSpec 环境 |
-| `/ccg:spec-research` | 需求 → 约束集 |
-| `/ccg:spec-plan` | 约束 → 零决策计划 |
-| `/ccg:spec-impl` | 按计划执行 + 归档 |
-| `/ccg:spec-review` | 双模型交叉审查 |
 
-### OpenSpec 规范驱动（v1.7.48）
+**注意**：v1.7.52 起，`/ccg:spec-*` 命令已迁移到 OPSX 架构。请使用 `/opsx:*` 命令代替：
+- `/opsx:init` - 初始化 OPSX 环境
+- `/opsx:research` - 需求 → 约束集
+- `/opsx:plan` - 约束 → 零决策计划
+- `/opsx:impl` - 按计划执行 + 归档
+- `/opsx:review` - 双模型交叉审查
 
-集成 [OpenSpec](https://github.com/fission-ai/openspec)，把需求变成约束，让 AI 没法自由发挥：
+### OPSX 规范驱动（v1.7.52+）
+
+集成 [OPSX 架构](https://github.com/fission-ai/opsx)，把需求变成约束，让 AI 没法自由发挥：
 
 ```bash
 # 初始化
-/ccg:spec-init
+/opsx:init
 
 # 研究需求 → 输出约束集
-/ccg:spec-research 实现用户认证
+/opsx:research 实现用户认证
 
 # 并行分析 → 零决策计划
-/ccg:spec-plan
+/opsx:plan
 
 # 按计划执行
-/ccg:spec-impl
+/opsx:impl
 
 # 独立审查（随时可用）
-/ccg:spec-review
+/opsx:review
 ```
 
-每阶段之间可 `/clear`，状态存在 `openspec/` 目录，不怕上下文爆。
+**重要**：v1.7.52 起，旧的 `/ccg:spec-*` 命令已废弃，请使用 `/opsx:*` 命令。每阶段之间可 `/clear`，状态存在 `opsx/` 目录，不怕上下文爆。
 
 ### 规划与执行分离
 
@@ -187,4 +189,4 @@ MIT
 
 ---
 
-v1.7.48 | [Issues](https://github.com/fengshao1227/ccg-workflow/issues)
+v1.7.52 | [Issues](https://github.com/fengshao1227/ccg-workflow/issues)

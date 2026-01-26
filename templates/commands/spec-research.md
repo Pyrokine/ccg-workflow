@@ -31,8 +31,12 @@ description: '需求 → 约束集（并行探索 + OPSX 提案）'
    - Use enhanced prompt for ALL subsequent steps.
 
 1. **Generate OPSX Change**
-   - The agent will automatically initialize a new change or continue an existing one using OpenSpec skills.
+   - Create a new change using OPSX command:
+     ```bash
+     /opsx:new "<brief-descriptive-name>"
+     ```
    - This scaffolds `openspec/changes/<name>/` with proposal.md.
+   - If change already exists, use `/opsx:list` to find it and continue.
 
 2. **Initial Codebase Assessment**
    - Use `mcp__ace-tool__search_context` to scan codebase.
@@ -94,7 +98,7 @@ description: '需求 → 约束集（并行探索 + OPSX 提案）'
    - If approaching 80K tokens, suggest: "Run `/clear` and continue with `/ccg:spec-plan`"
 
 **Reference**
-- OPSX CLI: `openspec status`, `openspec show`
+- OPSX CLI: `/opsx:status`, `/opsx:show`
 - Check prior research: `ls openspec/changes/*/`
 - Use `AskUserQuestion` for ANY ambiguity—never assume or guess
 <!-- CCG:SPEC:RESEARCH:END -->

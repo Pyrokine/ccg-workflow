@@ -18,26 +18,26 @@ description: '初始化 OpenSpec (OPSX) 环境 + 验证多模型 MCP 工具'
    - Identify OS using `uname -s` (Unix) or environment variables (Windows).
    - Inform user which OS was detected.
 
-2. **Check and Install OpenSpec**
-   - Verify if `openspec` CLI is installed: `openspec --version`
+2. **Check and Install OPSX**
+   - Verify if OPSX commands are available: `/opsx:version`
    - If not installed or not found:
      ```bash
-     npm install -g @fission-ai/openspec@latest
+     npm install -g @opsx/cli@latest
      ```
    - **Path Verification**:
-     - If `openspec` command is not found after installation:
-       1. Find npm global bin: `npm bin -g`
-       2. Add to PATH temporarily for this session: `export PATH=$PATH:$(npm bin -g)`
-       3. **CRITICAL**: Instruct user to add this path to their shell profile (e.g., `~/.zshrc`, `~/.bashrc`, or Windows Environment Variables) to make it permanent.
-   - Confirm installation success by running `openspec --version` again.
+     - If `/opsx:version` command is not found after installation:
+       1. Ensure Claude Code commands are properly loaded
+       2. Restart Claude Code session if needed
+       3. Check if OPSX skills are installed in `.claude/skills/`
+   - Confirm installation success by running `/opsx:version` again.
 
-3. **Initialize OpenSpec (OPSX) for Current Project**
+3. **Initialize OPSX for Current Project**
    - Run:
      ```bash
-     openspec init --tools claude
+     /opsx:init --tools claude
      ```
    - Verify `openspec/` directory structure is created.
-   - Verify `.claude/skills/` contains `openspec-*` skills.
+   - Verify `.claude/skills/` contains `opsx-*` skills.
    - Report any errors with remediation steps.
 
 4. **Validate Multi-Model MCP Tools**
@@ -66,7 +66,7 @@ description: '初始化 OpenSpec (OPSX) 环境 + 验证多模型 MCP 工具'
    ```
    Component                 Status
    ─────────────────────────────────
-   OpenSpec CLI              ✓/✗
+   OPSX CLI                  ✓/✗
    Project initialized       ✓/✗
    OPSX Skills               ✓/✗
    codeagent-wrapper         ✓/✗
@@ -84,8 +84,8 @@ description: '初始化 OpenSpec (OPSX) 环境 + 验证多模型 MCP 工具'
    - Code Review: `/ccg:spec-review` (Independent dual-model review)
 
 **Reference**
-- OpenSpec CLI: `openspec --help`
+- OPSX CLI: `/opsx:help`
 - CCG Workflow: `npx ccg-workflow`
 - Codex/Gemini MCP: Bundled with codeagent-wrapper
-- Node.js >= 18.x required for OpenSpec
+- Node.js >= 18.x required for OPSX
 <!-- CCG:SPEC:INIT:END -->

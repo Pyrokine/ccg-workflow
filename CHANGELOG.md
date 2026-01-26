@@ -7,6 +7,67 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.7.53] - 2026-01-26
+
+### 🔧 修复
+
+**完善 OPSX 命令迁移**
+
+- ✅ 完整更新所有 5 个 `spec-*.md` 模板文件中的 OpenSpec CLI 命令为 OPSX 命令
+- ✅ 更新命令映射：
+  - `openspec list` → `/opsx:list`
+  - `openspec show <id>` → `/opsx:show <id>`
+  - `openspec status --change <id>` → `/opsx:status <id>`
+  - `openspec new change` → `/opsx:new`
+  - `openspec validate <id>` → `/opsx:validate <id>`
+  - `openspec diff <id>` → `/opsx:diff <id>`
+  - `openspec workflow schemas` → `/opsx:schemas`
+- ✅ 更新安装包引用：`@fission-ai/openspec` → `@opsx/cli`
+- ✅ 修复 v1.7.52 中未完全更新的 OpenSpec CLI 遗留引用
+
+**修改文件**：
+- `templates/commands/spec-impl.md` - 完整替换所有 openspec 命令为 /opsx 命令
+- `templates/commands/spec-init.md` - 更新安装包和初始化命令
+- `templates/commands/spec-plan.md` - 更新状态检查和冲突检测命令
+- `templates/commands/spec-research.md` - 更新变更创建和查询命令
+- `templates/commands/spec-review.md` - 更新审查和差异对比命令
+
+---
+
+## [1.7.52] - 2026-01-26
+
+### 🚀 架构升级
+
+**迁移到 OPSX 架构**
+
+- 废弃 `/ccg:spec-*` 命令（基于旧的 OpenSpec 集成）
+- 启用 `/opsx:*` 命令（新的 OPSX 架构）
+- 更新所有 spec 相关命令模板以支持新架构
+
+**修改文件**：
+- `templates/commands/spec-init.md` - 更新为 OPSX 初始化流程
+- `templates/commands/spec-research.md` - 更新为 OPSX 研究流程
+- `templates/commands/spec-plan.md` - 更新为 OPSX 规划流程
+- `templates/commands/spec-impl.md` - 更新为 OPSX 实施流程
+- `CLAUDE.md` - 更新变更记录和架构说明
+- `package.json` - 版本号升级到 1.7.52
+
+### 🔧 改进
+
+**更新工作流优化**
+
+- 改进 `src/commands/update.ts` 更新逻辑
+- 优化版本检测和更新流程
+
+### 🗑️ 清理
+
+**移除过时内容**
+
+- 清理旧的 OpenSpec 指导块
+- 移除 `skills-v2` 和根目录的过时 OpenSpec 文档引用
+
+---
+
 ## [1.7.51] - 2026-01-25
 
 ### 🐛 修复
