@@ -47,7 +47,11 @@ description: '需求 → 约束集（并行探索 + OPSX 提案）'
    - Each boundary should be self-contained: no cross-communication needed.
 
 4. **Parallel Multi-Model Exploration**
-   - Dispatch Explore subagents with unified output template:
+   - **CRITICAL**: You MUST launch BOTH Codex AND Gemini in a SINGLE message with TWO Bash tool calls.
+   - **DO NOT** call one model first and wait. Launch BOTH simultaneously with `run_in_background: true`.
+   - **工作目录**：`{{WORKDIR}}` 替换为目标工作目录的绝对路径。如果用户通过 `/add-dir` 添加了多个工作区，先确定任务相关的工作区。
+
+   **Output Template** (instruct both models to use this format):
    ```json
    {
      "module_name": "context boundary explored",
@@ -60,7 +64,34 @@ description: '需求 → 约束集（并行探索 + OPSX 提案）'
      "success_criteria_hints": ["observable success behaviors"]
    }
    ```
-   - Run Codex for backend boundaries, Gemini for frontend boundaries.
+
+   **Step 4.1**: In ONE message, make TWO parallel Bash calls:
+
+   **FIRST Bash call (Codex — backend boundaries)**:
+   ```
+   Bash({
+     command: "~/.claude/bin/codeagent-wrapper --backend codex - \"{{WORKDIR}}\" <<'EOF'\nExplore backend context boundaries for <change description>:\n- Existing structures and patterns\n- Conventions in use\n- Hard constraints limiting solution space\n- Dependencies and risks\nOUTPUT: JSON using the output template above\nEOF",
+     run_in_background: true,
+     timeout: 300000,
+     description: "Codex: backend boundary exploration"
+   })
+   ```
+
+   **SECOND Bash call (Gemini — frontend boundaries) - IN THE SAME MESSAGE**:
+   ```
+   Bash({
+     command: "~/.claude/bin/codeagent-wrapper --backend gemini --gemini-model gemini-3.1-pro-preview - \"{{WORKDIR}}\" <<'EOF'\nExplore frontend context boundaries for <change description>:\n- Existing structures and patterns\n- Conventions in use\n- Hard constraints limiting solution space\n- Dependencies and risks\nOUTPUT: JSON using the output template above\nEOF",
+     run_in_background: true,
+     timeout: 300000,
+     description: "Gemini: frontend boundary exploration"
+   })
+   ```
+
+   **Step 4.2**: After BOTH Bash calls return task IDs, wait for results with TWO TaskOutput calls:
+   ```
+   TaskOutput({ task_id: "<codex_task_id>", block: true, timeout: 600000 })
+   TaskOutput({ task_id: "<gemini_task_id>", block: true, timeout: 600000 })
+   ```
 
 5. **Aggregate and Synthesize**
    - Collect all subagent outputs.

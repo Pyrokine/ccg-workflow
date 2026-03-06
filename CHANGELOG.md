@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.7.66] - 2026-03-06
+
+### 🐛 修复
+
+- **spec-research 并行调用缺失**：补全 Step 4 多模型并行探索模板，添加 `run_in_background: true` 指令和完整的 Bash 并行调用示例（Codex + Gemini），与 `spec-plan` / `spec-impl` 保持一致
+
+---
+
 ## [1.7.65] - 2026-03-01
 
 ### 🐛 修复
