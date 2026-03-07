@@ -21,8 +21,11 @@ description: '按规范执行 + 多模型协作 + 归档'
    - Run `openspec status --change "<change_id>" --json` to review tasks.
 
 2. **Apply OPSX Change**
-   - Use `/ccg:spec-impl` (which uses OpenSpec skills internally) to enter implementation mode.
-   - This skill will guide you through the tasks defined in `tasks.md`.
+   - Call `/opsx:apply` to enter implementation mode:
+     ```
+     /opsx:apply
+     ```
+   - This will load the change context and guide you through the tasks defined in `tasks.md`.
 
 3. **Identify Minimal Verifiable Phase**
    - Review `tasks.md` and identify the **smallest verifiable phase**.
@@ -109,7 +112,10 @@ description: '按规范执行 + 多模型协作 + 归档'
 
 10. **Archive on Completion**
     - When ALL tasks in `tasks.md` are marked `[x]`:
-    - The agent will use OpenSpec skills to archive the change.
+    - Call `/opsx:archive` to archive the change:
+      ```
+      /opsx:archive
+      ```
     - This merges spec deltas to `openspec/specs/` and moves change to archive.
 
 **Reference**

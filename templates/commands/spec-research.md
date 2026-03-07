@@ -110,15 +110,31 @@ description: '需求 → 约束集（并行探索 + OPSX 提案）'
    - Capture responses as additional constraints.
 
 7. **Finalize OPSX Proposal**
-   - Transform constraint sets into OPSX format:
-     * **Context**: User need + discovered constraints
-     * **Requirements**: Each constraint becomes requirement with scenario
-     * **Success Criteria**: Derived from hints and user confirmations
-   - Ensure proposal includes:
-     * All discovered constraints as requirements
-     * Verifiable scenarios for each requirement
-     * Clear dependencies and sequencing
-     * Risk mitigation strategies
+   - **BEFORE calling `/opsx:continue`**, output a structured summary for OPSX context:
+     ```markdown
+     ## Research Summary for OPSX
+
+     **Discovered Constraints**:
+     - [List all hard and soft constraints from Step 5]
+
+     **Dependencies**:
+     - [List cross-module dependencies]
+
+     **Risks & Mitigations**:
+     - [List identified risks and mitigation strategies]
+
+     **Success Criteria**:
+     - [List verifiable success behaviors]
+
+     **User Confirmations**:
+     - [List all user decisions from Step 6]
+     ```
+
+   - Then call `/opsx:continue` to generate proposal artifact:
+     ```
+     /opsx:continue
+     ```
+   - The OPSX skill will use the above summary to write proposal.md.
 
 8. **Context Checkpoint**
    - Report current context usage.

@@ -70,16 +70,7 @@ description: '初始化 OpenSpec (OPSX) 环境 + 验证多模型 MCP 工具'
      ```
    - For each unavailable tool, display warning with installation instructions.
 
-5. **Validate Context Retrieval MCP** (Optional)
-   - **Check Active Tool**: Is `{{MCP_SEARCH_TOOL}}` available in the current session?
-   - **Check Configuration**: If tool is missing, check `~/.claude.json` (or `%APPDATA%\Claude\claude.json` on Windows) for `"ace-tool"` or `"ace-tool-rs"` in `mcpServers`.
-   - **Diagnosis**:
-     - If tool available: Mark as "✓ Active".
-     - If config exists but tool missing: Mark as "⚠️ Configured but inactive (Try restarting Claude)".
-     - If neither: Mark as "○ Not installed (Optional)".
-   - If not installed/configured, suggest: "Run `npx ccg-workflow` and select ace-tool MCP option."
-
-6. **Summary Report**
+5. **Summary Report**
    Display status table:
    ```
    Component                 Status
@@ -90,7 +81,6 @@ description: '初始化 OpenSpec (OPSX) 环境 + 验证多模型 MCP 工具'
    codeagent-wrapper         ✓/✗
    Codex backend             ✓/✗
    Gemini backend            ✓/✗
-   ace-tool MCP              ✓/✗ (optional)
    ```
 
    **Next Steps (Use CCG Encapsulated Commands)**

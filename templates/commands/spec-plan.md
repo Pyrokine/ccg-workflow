@@ -84,11 +84,33 @@ description: '多模型分析 → 消除歧义 → 零决策可执行计划'
    - **Bounds**: Value ranges, size limits, rate constraints
 
 5. **Update OPSX Artifacts**
-   - The agent will use OpenSpec skills to generate/update:
-     * specs (Requirements + PBT)
-     * design (Technical decisions)
-     * tasks (Zero-decision implementation plan)
-   - Ensure all resolved constraints and PBT properties are included in the generated artifacts.
+   - **BEFORE calling `/opsx:continue`**, output a structured summary for OPSX context:
+     ```markdown
+     ## Planning Summary for OPSX
+
+     **Multi-Model Analysis Results**:
+     - Codex (Backend): [Key findings and recommendations]
+     - Gemini (Frontend): [Key findings and recommendations]
+     - Consolidated Approach: [Selected implementation strategy]
+
+     **Resolved Constraints**:
+     - [All explicit constraints from Step 3]
+
+     **PBT Properties**:
+     - [All extracted properties from Step 4 with falsification strategies]
+
+     **Technical Decisions**:
+     - [All finalized technology choices, algorithms, configurations]
+
+     **Implementation Tasks**:
+     - [High-level task breakdown ready for tasks.md]
+     ```
+
+   - Then call `/opsx:continue` to generate next artifacts:
+     ```
+     /opsx:continue
+     ```
+   - The OPSX skill will use the above summary to create specs.md, design.md, and tasks.md.
 
 6. **Context Checkpoint**
    - Report current context usage.

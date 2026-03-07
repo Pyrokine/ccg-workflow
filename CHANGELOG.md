@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.7.67] - 2026-03-07
+
+### 🐛 修复
+
+- **spec 工作流完全对齐 OPSX**：修复状态持久化问题，确保用户切换上下文后可以正确恢复
+  - `spec-research`：Step 7 添加结构化总结 + 明确调用 `/opsx:continue` 生成 proposal
+  - `spec-plan`：Step 5 添加结构化总结 + 明确调用 `/opsx:continue` 生成 specs/design/tasks
+  - `spec-impl`：Step 2 调用 `/opsx:apply` 进入实施模式，Step 10 调用 `/opsx:archive` 归档
+  - `spec-init`：移除 ace-tool MCP 检查（非必需）
+
+### 🔄 变更
+
+- **多模型协作成果采纳**：在调用 OPSX 前输出结构化总结，确保 Codex/Gemini 的分析结果被正确传递给 OPSX
+
+---
+
 ## [1.7.66] - 2026-03-06
 
 ### 🐛 修复
