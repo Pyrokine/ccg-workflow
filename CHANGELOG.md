@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.7.68] - 2026-03-09
+
+### 🐛 修复
+
+- **update 命令全局安装死循环**：npm 全局安装用户在本地工作流版本过旧时，`update` 错误推荐 `npm install -g`（包版本已最新），导致死循环。修复 `performUpdate` 的 `isNewVersion` 参数，仅在 npm registry 有新版本时才推荐 npm 更新
+
+### ✅ 测试
+
+- **测试覆盖率 38 → 130**（+242%），新增 4 个测试文件：
+  - `version.test.ts`（14）：`compareVersions` 全场景覆盖，含 update bug 回归用例
+  - `config.test.ts`（14）：`createDefaultConfig` + `createDefaultRouting` 纯函数测试
+  - `platform.test.ts`（10）：平台检测、`getMcpCommand`、路径分隔符
+  - `installer.test.ts`（54）：注册表一致性、路由/liteMode 注入、模板变量完整性、contextweaver E2E、卸载 E2E、二进制安装、prompts 安装
+
+---
+
 ## [1.7.67] - 2026-03-07
 
 ### 🐛 修复
