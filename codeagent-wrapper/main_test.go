@@ -900,6 +900,9 @@ func TestRunCodexTask_ContextTimeout(t *testing.T) {
 }
 
 func TestRunCodexTask_ForcesStopAfterCompletion(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping timing-sensitive integration test in short mode")
+	}
 	defer resetTestHooks()
 	forceKillDelay.Store(0)
 
@@ -936,6 +939,9 @@ func TestRunCodexTask_ForcesStopAfterCompletion(t *testing.T) {
 }
 
 func TestRunCodexTask_DoesNotTerminateBeforeThreadCompleted(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping timing-sensitive integration test in short mode")
+	}
 	defer resetTestHooks()
 	forceKillDelay.Store(0)
 
