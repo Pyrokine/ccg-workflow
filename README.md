@@ -317,9 +317,17 @@ Looking for a place to start? Check out issues labeled [`good first issue`](http
 
 ## Contributors
 
-<a href="https://github.com/fengshao1227/ccg-workflow/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=fengshao1227/ccg-workflow" />
-</a>
+<!-- readme: contributors,claude/-,bots/- -start -->
+<table>
+<tr>
+    <td align="center"><a href="https://github.com/fengshao1227"><img src="https://avatars.githubusercontent.com/fengshao1227?v=4&s=100" width="100;" alt="fengshao1227"/><br /><sub><b>fengshao1227</b></sub></a></td>
+    <td align="center"><a href="https://github.com/RebornQ"><img src="https://avatars.githubusercontent.com/RebornQ?v=4&s=100" width="100;" alt="RebornQ"/><br /><sub><b>RebornQ</b></sub></a></td>
+    <td align="center"><a href="https://github.com/23q3"><img src="https://avatars.githubusercontent.com/23q3?v=4&s=100" width="100;" alt="23q3"/><br /><sub><b>23q3</b></sub></a></td>
+    <td align="center"><a href="https://github.com/MrNine-666"><img src="https://avatars.githubusercontent.com/MrNine-666?v=4&s=100" width="100;" alt="MrNine-666"/><br /><sub><b>MrNine-666</b></sub></a></td>
+    <td align="center"><a href="https://github.com/GGzili"><img src="https://avatars.githubusercontent.com/GGzili?v=4&s=100" width="100;" alt="GGzili"/><br /><sub><b>GGzili</b></sub></a></td>
+</tr>
+</table>
+<!-- readme: contributors,claude/-,bots/- -end -->
 
 ## Credits
 
