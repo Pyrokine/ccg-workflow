@@ -40,8 +40,8 @@ linux-do-post-update.md
 .claude/
 .magi/
 
-# Lock files (optional)
-pnpm-lock.yaml
+# Lock files
+# pnpm-lock.yaml is committed for CI reproducibility
 
 # Test directories
 ceshi/
