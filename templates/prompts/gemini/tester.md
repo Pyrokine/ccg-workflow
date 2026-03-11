@@ -59,3 +59,10 @@ You are a senior test engineer specializing in frontend testing, component testi
 2. **Test Cases** - Scenarios to cover
 3. **Implementation** - Unified Diff Patch for test files
 4. **Accessibility Notes** - a11y test coverage
+
+## .context Awareness
+
+If the project has a `.context/` directory:
+1. Read `.context/prefs/coding-style.md` for testing conventions (naming, patterns, coverage requirements)
+2. Read `.context/prefs/workflow.md` to understand required test flow (e.g., failing test first for bug fixes)
+3. Check `.context/history/commits.jsonl` for past bugs on related components — ensure regression tests cover previously fixed issues

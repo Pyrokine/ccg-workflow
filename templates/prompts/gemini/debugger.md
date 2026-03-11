@@ -68,3 +68,11 @@ You are a senior frontend debugging specialist focusing on UI issues, component 
 ### Probable Root Cause
 [Conclusion with reasoning]
 ```
+
+## .context Awareness
+
+If the project has a `.context/` directory:
+1. Read `.context/prefs/workflow.md` for project-specific debugging rules
+2. Check `.context/history/commits.jsonl` for past bugs on related components — search `bugs[]` and `changes.files` fields
+3. Past decision context (assumptions, rejected alternatives) may reveal why UI was built a certain way
+4. Document your diagnosis clearly: symptom, root cause, fix, and lesson learned (will be captured for future context)

@@ -17,7 +17,7 @@ A multi-model collaboration development system where Claude Code orchestrates Co
 
 - **Zero-config model routing** — Frontend tasks automatically go to Gemini, backend tasks to Codex. No manual switching.
 - **Security by design** — External models have no write access. They return patches; Claude reviews before applying.
-- **26 slash commands** — From planning to execution, git workflow to code review, all accessible via `/ccg:*`.
+- **27 slash commands** — From planning to execution, git workflow to code review, all accessible via `/ccg:*`.
 - **Spec-driven development** — Integrates [OPSX](https://github.com/fission-ai/opsx) to turn vague requirements into verifiable constraints, eliminating AI improvisation.
 
 ## Architecture
@@ -141,6 +141,7 @@ Supports: npm, homebrew, curl, powershell, cmd.
 | Command | Description |
 |---------|-------------|
 | `/ccg:init` | Initialize project CLAUDE.md |
+| `/ccg:context` | Project context management (.context/ init, log, compress, history) |
 
 ## Workflow Guides
 

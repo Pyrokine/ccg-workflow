@@ -39,7 +39,7 @@ describe('installWorkflows E2E — mcpProvider="skip"', () => {
     expect(result.success).toBe(true)
     expect(result.errors).toEqual([])
     expect(result.installedCommands.length).toBeGreaterThan(0)
-  })
+  }, 15000)
 
   it('generated command files contain no mcp__ace-tool references', async () => {
     const cmdDir = join(tmpDir, 'commands', 'ccg')

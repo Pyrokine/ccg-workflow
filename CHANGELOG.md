@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.7.80] - 2026-03-11
+
+### ✨ 新功能
+
+- **`/ccg:context` 命令**：第 27 个斜杠命令，项目上下文管理（`.context/` 目录初始化、决策日志记录、压缩归档、历史查看）
+- **`.context` 上下文工程体系**：为 LLM 全面自动化提供决策审计链 — 记录 WHY（为什么改）、WHAT（考虑了什么替代方案）、BUG（遇到了什么坑）
+- **ContextEntry Schema v1.0.0**：JSONL canonical store + Markdown 人类视图，UUIDv7 主键（rebase-safe），`.gitattributes merge=union` 减少冲突
+- **`/ccg:commit` Context Compress Phase**：提交时自动压缩 session.log → 脱敏 → 追加 history/commits.jsonl → 添加 `Context-Id` commit trailer
+- **13 个角色提示词 `.context Awareness` 注入**：Codex 6 个 + Gemini 7 个角色提示词增加 `.context/prefs/` 读取指令，外部模型自动遵守项目规范
+- **Quality Gate Rules 全局规则**：安装时自动写入 `~/.claude/rules/ccg-skills.md`，定义 5 个质量关卡的自动触发条件（新建模块/代码变更>30行/安全变更/重构）
+
+### 🔧 修复
+
+- **E2E 测试超时**：`installWorkflows` 测试从 5s 提升到 15s，适应命令数量增长
+
+---
+
 ## [1.7.79] - 2026-03-11
 
 ### 🐛 修复

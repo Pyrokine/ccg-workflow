@@ -810,6 +810,14 @@ export async function init(options: InitOptions = {}): Promise<void> {
       console.log(ansis.gray('       → ~/.claude/skills/'))
     }
 
+    // Show installed rules
+    if (result.installedRules) {
+      console.log()
+      console.log(ansis.cyan('  Rules:'))
+      console.log(`    ${ansis.green('✓')} quality gate auto-trigger rules`)
+      console.log(ansis.gray('       → ~/.claude/rules/ccg-skills.md'))
+    }
+
     // Show errors if any
     if (result.errors.length > 0) {
       console.log()

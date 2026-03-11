@@ -1,6 +1,6 @@
 {
   "name": "ccg-workflow",
-  "version": "1.7.79",
+  "version": "1.7.80",
   "description": "Claude + Codex + Gemini multi-model collaboration system - smart routing development workflow",
   "type": "module",
   "packageManager": "pnpm@10.17.1",
@@ -54,6 +54,7 @@
     "templates/commands/team-exec.md",
     "templates/commands/team-review.md",
     "templates/commands/codex-exec.md",
+    "templates/commands/context.md",
     "templates/commands/agents/",
     "templates/prompts/codex/",
     "templates/prompts/gemini/analyzer.md",
@@ -65,7 +66,8 @@
     "templates/prompts/gemini/tester.md",
     "templates/prompts/claude/",
     "templates/output-styles/",
-    "templates/skills/"
+    "templates/skills/",
+    "templates/rules/"
   ],
   "scripts": {
     "dev": "tsx src/cli.ts",

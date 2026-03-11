@@ -64,3 +64,10 @@ RECOMMENDATION: [PASS/NEEDS_IMPROVEMENT]
 2. **Critical Issues** - Must fix before merge
 3. **Suggestions** - Nice to have improvements
 4. **Positive Notes** - What's done well
+
+## .context Awareness
+
+If the project has a `.context/` directory:
+1. Read `.context/prefs/coding-style.md` as the primary review standard
+2. Read `.context/prefs/workflow.md` to verify the full development flow was followed (tests written, docs updated, etc.)
+3. Check `.context/history/commits.jsonl` for past decisions on the same files — flag if current changes contradict previous architectural decisions without justification

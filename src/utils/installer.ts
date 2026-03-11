@@ -110,6 +110,7 @@ const ALL_COMMANDS = [
   'team-exec', // Agent Teams 并行实施（spawn Builders 并行写代码）
   'team-review', // Agent Teams 审查（双模型交叉审查并行产出）
   'codex-exec', // 读取计划文件，Codex 全权执行 + 多模型审核
+  'context', // 项目上下文管理（.context 目录初始化/日志/压缩/历史）
 ] as const
 
 // Workflow configurations (for compatibility with existing code)
@@ -410,6 +411,17 @@ const WORKFLOW_CONFIGS: WorkflowConfig[] = [
     order: 3,
     description: '读取 /ccg:plan 计划文件，Codex 全权执行 + 多模型审核',
     descriptionEn: 'Read plan file from /ccg:plan, Codex executes + multi-model review',
+  },
+  {
+    id: 'context',
+    name: '项目上下文管理',
+    nameEn: 'Project Context Manager',
+    category: 'development',
+    commands: ['context'],
+    defaultSelected: true,
+    order: 4,
+    description: '初始化 .context 目录、记录决策日志、压缩归档、查看历史',
+    descriptionEn: 'Init .context dir, log decisions, compress, view history',
   },
 ]
 
@@ -845,6 +857,31 @@ ${workflow.description}
     }
   }
 
+  // Install rules (quality gate auto-trigger → ~/.claude/rules/ccg-skills.md)
+  const rulesTemplateDir = join(templateDir, 'rules')
+  const rulesDestDir = join(installDir, 'rules')
+  if (await fs.pathExists(rulesTemplateDir)) {
+    try {
+      await fs.ensureDir(rulesDestDir)
+      const rulesFiles = await fs.readdir(rulesTemplateDir)
+      for (const file of rulesFiles) {
+        if (file.endsWith('.md')) {
+          const srcFile = join(rulesTemplateDir, file)
+          const destFile = join(rulesDestDir, file)
+          if (force || !(await fs.pathExists(destFile))) {
+            const templateContent = await fs.readFile(srcFile, 'utf-8')
+            const processedContent = replaceHomePathsInTemplate(templateContent, installDir)
+            await fs.writeFile(destFile, processedContent, 'utf-8')
+          }
+        }
+      }
+      result.installedRules = true
+    }
+    catch (error) {
+      result.errors.push(`Failed to install rules: ${error}`)
+    }
+  }
+
   // Install codeagent-wrapper binary
   try {
     const binDir = join(installDir, 'bin')
@@ -915,6 +952,7 @@ export interface UninstallResult {
   removedPrompts: string[]
   removedAgents: string[]
   removedSkills: string[]
+  removedRules: boolean
   removedBin: boolean
   errors: string[]
 }
@@ -929,6 +967,7 @@ export async function uninstallWorkflows(installDir: string): Promise<UninstallR
     removedPrompts: [],
     removedAgents: [],
     removedSkills: [],
+    removedRules: false,
     removedBin: false,
     errors: [],
   }
@@ -937,6 +976,7 @@ export async function uninstallWorkflows(installDir: string): Promise<UninstallR
   const promptsDir = join(installDir, '.ccg', 'prompts')
   const agentsDir = join(installDir, 'agents', 'ccg')
   const skillsDir = join(installDir, 'skills', 'ccg')
+  const rulesDir = join(installDir, 'rules')
   const binDir = join(installDir, 'bin')
   const ccgConfigDir = join(installDir, '.ccg')
 
@@ -1005,6 +1045,23 @@ export async function uninstallWorkflows(installDir: string): Promise<UninstallR
     catch (error) {
       result.errors.push(`Failed to remove skills: ${error}`)
       result.success = false
+    }
+  }
+
+  // Remove CCG rules files (rules/ccg-skills.md, rules/ccg-grok-search.md)
+  if (await fs.pathExists(rulesDir)) {
+    try {
+      const ccgRuleFiles = ['ccg-skills.md', 'ccg-grok-search.md']
+      for (const ruleFile of ccgRuleFiles) {
+        const rulePath = join(rulesDir, ruleFile)
+        if (await fs.pathExists(rulePath)) {
+          await fs.remove(rulePath)
+          result.removedRules = true
+        }
+      }
+    }
+    catch (error) {
+      result.errors.push(`Failed to remove rules: ${error}`)
     }
   }
 
