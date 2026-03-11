@@ -8,6 +8,7 @@ import { join } from 'pathe'
 import { i18n, initI18n } from '../i18n'
 import { createDefaultConfig, ensureCcgDir, getCcgDir, readCcgConfig, writeCcgConfig } from '../utils/config'
 import { getAllCommandIds, installAceTool, installAceToolRs, installContextWeaver, installMcpServer, installWorkflows, syncMcpToCodex } from '../utils/installer'
+import { isWindows } from '../utils/platform'
 import { migrateToV1_4_0, needsMigration } from '../utils/migration'
 
 /**
@@ -25,15 +26,50 @@ async function checkJqAvailable(): Promise<boolean> {
 }
 
 /**
- * Install codeagent-wrapper auto-approve hook into settings.json
+ * Auto-approve codeagent-wrapper Bash commands in settings.json.
+ *
+ * - Windows: uses permissions.allow (Hook depends on jq/grep/true which don't exist on Windows)
+ * - macOS/Linux: uses PreToolUse Hook (more precise, only matches codeagent-wrapper)
  */
-async function installHook(settingsPath: string): Promise<void> {
+async function installHook(settingsPath: string): Promise<'hook' | 'permission'> {
   let settings: Record<string, any> = {}
   if (await fs.pathExists(settingsPath)) {
     settings = await fs.readJSON(settingsPath)
   }
 
-  // Build hook config
+  // ── Windows: permissions.allow approach ──
+  if (isWindows()) {
+    // Remove old Hook if it exists (migration from ≤v1.7.75)
+    if (settings.hooks?.PreToolUse) {
+      const hookIdx = settings.hooks.PreToolUse.findIndex(
+        (h: any) => h.matcher === 'Bash' && h.hooks?.some((hh: any) => hh.command?.includes('codeagent-wrapper')),
+      )
+      if (hookIdx >= 0) {
+        settings.hooks.PreToolUse.splice(hookIdx, 1)
+        // Clean up empty arrays/objects
+        if (settings.hooks.PreToolUse.length === 0)
+          delete settings.hooks.PreToolUse
+        if (settings.hooks && Object.keys(settings.hooks).length === 0)
+          delete settings.hooks
+      }
+    }
+
+    // Add permissions.allow entry
+    if (!settings.permissions)
+      settings.permissions = {}
+    if (!settings.permissions.allow)
+      settings.permissions.allow = []
+
+    const permEntry = 'Bash(codeagent-wrapper*)'
+    if (!settings.permissions.allow.includes(permEntry)) {
+      settings.permissions.allow.push(permEntry)
+    }
+
+    await fs.writeJSON(settingsPath, settings, { spaces: 2 })
+    return 'permission'
+  }
+
+  // ── macOS/Linux: Hook approach ──
   if (!settings.hooks)
     settings.hooks = {}
   if (!settings.hooks.PreToolUse)
@@ -67,6 +103,8 @@ async function installHook(settingsPath: string): Promise<void> {
     })
     await fs.writeJSON(settingsPath, settings, { spaces: 2 })
   }
+
+  return 'hook'
 }
 
 /**
@@ -660,10 +698,15 @@ export async function init(options: InitOptions = {}): Promise<void> {
       console.log(`    ${ansis.green('✓')} API ${ansis.gray(`→ ${settingsPath}`)}`)
     }
 
-    // Always install codeagent-wrapper auto-approve hook
-    await installHook(settingsPath)
+    // Always install codeagent-wrapper auto-approve (Hook on Unix, permissions.allow on Windows)
+    const hookMethod = await installHook(settingsPath)
     console.log()
-    console.log(`    ${ansis.green('✓')} ${i18n.t('init:hooks.installed')}`)
+    if (hookMethod === 'permission') {
+      console.log(`    ${ansis.green('✓')} ${i18n.t('init:hooks.installed')} ${ansis.gray('(permissions.allow)')}`)
+    }
+    else {
+      console.log(`    ${ansis.green('✓')} ${i18n.t('init:hooks.installed')}`)
+    }
 
     // Install grok-search MCP if requested
     if (wantGrokSearch && (tavilyKey || firecrawlKey || grokApiUrl || grokApiKey)) {
@@ -722,16 +765,17 @@ export async function init(options: InitOptions = {}): Promise<void> {
       }
     }
 
-    // Check jq availability and warn if missing
-    const hasJq = await checkJqAvailable()
-    if (!hasJq) {
-      console.log()
-      console.log(ansis.yellow(`    ⚠ ${i18n.t('init:hooks.jqNotFound')}`))
-      console.log()
-      console.log(ansis.cyan(`    📖 ${i18n.t('init:hooks.jqInstallHint')}:`))
-      console.log(ansis.gray(`       ${i18n.t('init:hooks.jqMac')}`))
-      console.log(ansis.gray(`       ${i18n.t('init:hooks.jqLinux')}`))
-      console.log(ansis.gray(`       ${i18n.t('init:hooks.jqWindows')}`))
+    // Check jq availability and warn if missing (only needed on Unix where Hook is used)
+    if (hookMethod === 'hook') {
+      const hasJq = await checkJqAvailable()
+      if (!hasJq) {
+        console.log()
+        console.log(ansis.yellow(`    ⚠ ${i18n.t('init:hooks.jqNotFound')}`))
+        console.log()
+        console.log(ansis.cyan(`    📖 ${i18n.t('init:hooks.jqInstallHint')}:`))
+        console.log(ansis.gray(`       ${i18n.t('init:hooks.jqMac')}`))
+        console.log(ansis.gray(`       ${i18n.t('init:hooks.jqLinux')}`))
+      }
     }
 
     // Show result summary

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.7.78] - 2026-03-11
+
+### 🐛 修复
+
+- **Windows Hook exit 255 修复**：Windows 用户 codeagent-wrapper 自动授权从 Hook（依赖 jq/grep/true）改为 `permissions.allow`，彻底消除 `failed with non-blocking status code 255` 报错
+- **升级自动迁移**：Windows 用户更新时自动清理旧 Hook，无需手动操作
+
+---
+
 ## [1.7.77] - 2026-03-10
 
 ### 🏗 架构
