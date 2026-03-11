@@ -1388,7 +1388,7 @@ func TestRunShouldUseStdin(t *testing.T) {
 }
 
 func TestRunBuildCodexArgs_NewMode(t *testing.T) {
-	const key = "CODEX_BYPASS_SANDBOX"
+	const key = "CODEX_REQUIRE_APPROVAL"
 	t.Cleanup(func() { os.Unsetenv(key) })
 	os.Unsetenv(key)
 
@@ -1396,6 +1396,7 @@ func TestRunBuildCodexArgs_NewMode(t *testing.T) {
 	args := buildCodexArgs(cfg, "my task")
 	expected := []string{
 		"e",
+		"--dangerously-bypass-approvals-and-sandbox",
 		"--skip-git-repo-check",
 		"-C", "/test/dir",
 		"--json",
@@ -1412,7 +1413,7 @@ func TestRunBuildCodexArgs_NewMode(t *testing.T) {
 }
 
 func TestRunBuildCodexArgs_ResumeMode(t *testing.T) {
-	const key = "CODEX_BYPASS_SANDBOX"
+	const key = "CODEX_REQUIRE_APPROVAL"
 	t.Cleanup(func() { os.Unsetenv(key) })
 	os.Unsetenv(key)
 
@@ -1420,6 +1421,7 @@ func TestRunBuildCodexArgs_ResumeMode(t *testing.T) {
 	args := buildCodexArgs(cfg, "-")
 	expected := []string{
 		"e",
+		"--dangerously-bypass-approvals-and-sandbox",
 		"--skip-git-repo-check",
 		"--json",
 		"resume",
@@ -1437,13 +1439,13 @@ func TestRunBuildCodexArgs_ResumeMode(t *testing.T) {
 }
 
 func TestRunBuildCodexArgs_ResumeMode_EmptySessionHandledGracefully(t *testing.T) {
-	const key = "CODEX_BYPASS_SANDBOX"
+	const key = "CODEX_REQUIRE_APPROVAL"
 	t.Cleanup(func() { os.Unsetenv(key) })
 	os.Unsetenv(key)
 
 	cfg := &Config{Mode: "resume", SessionID: "   ", WorkDir: "/test/dir"}
 	args := buildCodexArgs(cfg, "task")
-	expected := []string{"e", "--skip-git-repo-check", "-C", "/test/dir", "--json", "task"}
+	expected := []string{"e", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "-C", "/test/dir", "--json", "task"}
 	if len(args) != len(expected) {
 		t.Fatalf("len mismatch")
 	}
@@ -1454,40 +1456,15 @@ func TestRunBuildCodexArgs_ResumeMode_EmptySessionHandledGracefully(t *testing.T
 	}
 }
 
-func TestRunBuildCodexArgs_BypassSandboxEnvTrue(t *testing.T) {
-	defer resetTestHooks()
-	tempDir := t.TempDir()
-	t.Setenv("TMPDIR", tempDir)
-
-	logger, err := NewLogger()
-	if err != nil {
-		t.Fatalf("NewLogger() error = %v", err)
-	}
-	setLogger(logger)
-	defer closeLogger()
-
-	t.Setenv("CODEX_BYPASS_SANDBOX", "true")
+func TestRunBuildCodexArgs_RequireApprovalDisablesBypass(t *testing.T) {
+	t.Setenv("CODEX_REQUIRE_APPROVAL", "true")
 
 	cfg := &Config{Mode: "new", WorkDir: "/test/dir"}
 	args := buildCodexArgs(cfg, "my task")
-	found := false
 	for _, arg := range args {
 		if arg == "--dangerously-bypass-approvals-and-sandbox" {
-			found = true
-			break
+			t.Fatalf("bypass flag should NOT be present when CODEX_REQUIRE_APPROVAL=true, got %v", args)
 		}
-	}
-	if !found {
-		t.Fatalf("expected bypass flag in args, got %v", args)
-	}
-
-	logger.Flush()
-	data, err := os.ReadFile(logger.Path())
-	if err != nil {
-		t.Fatalf("failed to read log file: %v", err)
-	}
-	if !strings.Contains(string(data), "CODEX_BYPASS_SANDBOX=true") {
-		t.Fatalf("expected bypass warning log, got: %s", string(data))
 	}
 }
 
@@ -1548,6 +1525,7 @@ func TestBackendBuildArgs_CodexBackend(t *testing.T) {
 	got := backend.BuildArgs(cfg, "task")
 	want := []string{
 		"e",
+		"--dangerously-bypass-approvals-and-sandbox",
 		"--skip-git-repo-check",
 		"-C", "/test/dir",
 		"--json",

@@ -257,7 +257,7 @@ func TestExecutorHelperCoverage(t *testing.T) {
 	})
 
 	t.Run("generateFinalOutputAndArgs", func(t *testing.T) {
-		const key = "CODEX_BYPASS_SANDBOX"
+		const key = "CODEX_REQUIRE_APPROVAL"
 		t.Cleanup(func() { os.Unsetenv(key) })
 		os.Unsetenv(key)
 
