@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.7.90] - 2026-03-23
+
+### ✨ 新功能
+
+- **`--progress` 进度输出**：codeagent-wrapper 新增 `--progress` 参数，后台执行时向 stderr 输出 `[PROGRESS]` 精简进度行（session_started / reasoning / message / cmd_done / mcp_call / turn_completed），告别黑箱等待（PR #112 by @puyialeng233-spec）
+- **CJK 安全截断**：progress 文本使用 `[]rune` 切片，中文内容不会断在多字节字符中间
+
+### 🐛 修复
+
+- **全模板 `--progress` 覆盖**：所有 20+ 个命令模板的 codeagent-wrapper 调用均添加 `--progress`，包括补漏的 `debug.md`、`spec-review.md`、`codex-exec.md` review 调用
+
+---
+
 ## [1.7.89] - 2026-03-20
 
 ### 🐛 修复
