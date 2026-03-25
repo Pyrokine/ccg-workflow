@@ -400,9 +400,17 @@ async function performUpdate(fromVersion: string, toVersion: string, isNewVersio
       catch { /* non-critical: stale backup files */ }
     }
 
-    // Verify binary exists and is functional
+    // Verify binary exists, is functional, AND version matches
     if (!(await verifyBinary(installDir))) {
       showBinaryDownloadWarning(join(installDir, 'bin'))
+    }
+    else {
+      // Binary exists and runs, but check version
+      const { verifyBinaryVersion } = await import('../utils/installer')
+      const versionOk = await verifyBinaryVersion(installDir)
+      if (!versionOk) {
+        showBinaryDownloadWarning(join(installDir, 'bin'))
+      }
     }
   }
   else {

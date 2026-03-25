@@ -82,10 +82,10 @@ interface InstallContext {
 const GITHUB_REPO = 'fengshao1227/ccg-workflow'
 const RELEASE_TAG = 'preset'
 
-/** Download sources: GitHub (global) + Cloudflare R2 (China-friendly mirror) */
+/** Download sources: R2 first (China-friendly) → GitHub fallback (global) */
 const BINARY_SOURCES = [
-  { name: 'GitHub Release', url: `https://github.com/${GITHUB_REPO}/releases/download/${RELEASE_TAG}`, timeoutMs: 8_000 },
-  { name: 'Cloudflare R2', url: 'https://pub-29270440a0854a49bf1589cd3662c067.r2.dev/preset', timeoutMs: 60_000 },
+  { name: 'Cloudflare R2', url: 'https://pub-29270440a0854a49bf1589cd3662c067.r2.dev/preset', timeoutMs: 15_000 },
+  { name: 'GitHub Release', url: `https://github.com/${GITHUB_REPO}/releases/download/${RELEASE_TAG}`, timeoutMs: 60_000 },
 ]
 
 /**
@@ -440,6 +440,26 @@ export async function verifyBinary(installDir: string): Promise<boolean> {
     const { execSync } = await import('node:child_process')
     execSync(`"${wrapperPath}" --version`, { stdio: 'pipe' })
     return true
+  }
+  catch {
+    return false
+  }
+}
+
+/**
+ * Check if installed binary version matches expected version.
+ * Returns true if version matches, false if outdated or unreadable.
+ */
+export async function verifyBinaryVersion(installDir: string): Promise<boolean> {
+  const binDir = join(installDir, 'bin')
+  const wrapperName = process.platform === 'win32' ? 'codeagent-wrapper.exe' : 'codeagent-wrapper'
+  const wrapperPath = join(binDir, wrapperName)
+
+  try {
+    const { execSync } = await import('node:child_process')
+    const output = execSync(`"${wrapperPath}" --version`, { stdio: 'pipe' }).toString().trim()
+    const version = output.replace(/^.*version\s*/, '')
+    return version === EXPECTED_BINARY_VERSION
   }
   catch {
     return false
