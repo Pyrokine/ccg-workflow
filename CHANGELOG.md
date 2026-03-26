@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.7.98] - 2026-03-26
+
+### 🐛 修复
+
+- **Gemini `resume latest` 模板修正**：Gemini CLI stream-json 不输出 SESSION_ID，所有模板改为 Gemini 用 `resume latest`、Codex 用 `resume <SESSION_ID>`
+
+---
+
 ## [1.7.97] - 2026-03-26
 
 ### 🐛 修复
