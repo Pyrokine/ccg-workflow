@@ -201,7 +201,7 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
    - Gemini：处理前端部分
    - Codex：处理后端部分
 2. 用 `TaskOutput` 等待两个模型的完整结果
-3. 各自使用计划中对应的 `SESSION_ID` 进行 `resume`（若缺失则创建新会话）
+3. Codex 用 `resume <CODEX_SESSION>`，Gemini 用 `resume latest`（若缺失则创建新会话）
 
 **务必遵循上方 `多模型调用规范` 的 `重要` 指示**
 
