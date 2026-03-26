@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.7.99] - 2026-03-26
+
+### 🐛 修复
+
+- **Gemini `resume latest` 全模板修正**：Gemini CLI stream-json 不输出 SESSION_ID，所有涉及 Gemini resume 的模板（frontend/workflow/execute/feat/plan/spec-impl/codex-exec）统一改为 `resume latest`，Codex 保持 `resume <SESSION_ID>`
+- **spec-impl 跨阶段会话复用**：Step 4 原型 → Step 7 审查现在复用会话（Codex resume SESSION_ID / Gemini resume latest），审查阶段带有原型上下文
+
+---
+
 ## [1.7.98] - 2026-03-26
 
 ### 🐛 修复
