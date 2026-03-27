@@ -20,7 +20,7 @@ description: 'Agent Teams 审查 - 双模型交叉审查并行实施的产出，
 
 2. **多模型审查（PARALLEL）**
    - **CRITICAL**: 必须在一条消息中同时发起两个 Bash 调用。
-   - **工作目录**：`{{WORKDIR}}` 替换为目标工作目录的绝对路径。
+   - **工作目录**：`{{WORKDIR}}` **必须通过 Bash 执行 `pwd`（Unix）或 `cd`（Windows CMD）获取当前工作目录的绝对路径**，禁止从 `$HOME` 或环境变量推断。
 
    **FIRST Bash call (Codex)**:
    ```

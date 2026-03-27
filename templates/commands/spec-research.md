@@ -51,7 +51,7 @@ description: '需求 → 约束集（并行探索 + OPSX 提案）'
 4. **Parallel Multi-Model Exploration**
    - **CRITICAL**: You MUST launch BOTH Codex AND Gemini in a SINGLE message with TWO Bash tool calls.
    - **DO NOT** call one model first and wait. Launch BOTH simultaneously with `run_in_background: true`.
-   - **工作目录**：`{{WORKDIR}}` 替换为目标工作目录的绝对路径。如果用户通过 `/add-dir` 添加了多个工作区，先确定任务相关的工作区。
+   - **工作目录**：`{{WORKDIR}}` **必须通过 Bash 执行 `pwd`（Unix）或 `cd`（Windows CMD）获取当前工作目录的绝对路径**，禁止从 `$HOME` 或环境变量推断。如果用户通过 `/add-dir` 添加了多个工作区，先确定任务相关的工作区。
 
    **Output Template** (instruct both models to use this format):
    ```json

@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.1] - 2026-03-27
+
+### 🐛 修复
+
+- **WORKDIR 路径推断修复**：20 个命令模板的 `{{WORKDIR}}` 规则从"替换为绝对路径"改为"必须通过 `pwd`/`cd` 获取，禁止从 `$HOME` 推断"，修复沙箱/云端环境下工作目录错误问题
+- **spec-init 目录防御**：Step 3 新增禁止 `cd` 到其他路径的提示，防止 Claude 自行推断错误目录
+- **Windows 兼容**：WORKDIR 获取指令支持 `pwd`（Unix）和 `cd`（Windows CMD）双写
+
+---
+
 ## [1.8.0] - 2026-03-26
 
 ### 🐛 修复

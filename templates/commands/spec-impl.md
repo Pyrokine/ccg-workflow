@@ -43,7 +43,7 @@ description: '按规范执行 + 多模型协作 + 归档'
    - **Route A: Gemini** — Frontend/UI/styling (CSS, React, Vue, HTML, components)
    - **Route B: Codex** — Backend/logic/algorithm (API, data processing, business logic)
 
-   **工作目录**：`{{WORKDIR}}` 替换为目标工作目录的绝对路径。如果用户通过 `/add-dir` 添加了多个工作区，先确定任务相关的工作区。
+   **工作目录**：`{{WORKDIR}}` **必须通过 Bash 执行 `pwd`（Unix）或 `cd`（Windows CMD）获取当前工作目录的绝对路径**，禁止从 `$HOME` 或环境变量推断。如果用户通过 `/add-dir` 添加了多个工作区，先确定任务相关的工作区。
 
    For each task:
    ```

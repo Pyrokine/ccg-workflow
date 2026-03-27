@@ -42,10 +42,9 @@ $ARGUMENTS
 ## 多模型调用规范
 
 **工作目录**：
-- `{{WORKDIR}}`：替换为目标工作目录的**绝对路径**
+- `{{WORKDIR}}`：**必须通过 Bash 执行 `pwd`（Unix）或 `cd`（Windows CMD）获取当前工作目录的绝对路径**，禁止从 `$HOME` 或环境变量推断
 - 如果用户通过 `/add-dir` 添加了多个工作区，先用 Glob/Grep 确定任务相关的工作区
 - 如果无法确定，用 `AskUserQuestion` 询问用户选择目标工作区
-- 默认使用当前工作目录
 
 **Codex 执行调用语法**：
 
