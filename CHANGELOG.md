@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.2] - 2026-03-27
+
+### 🐛 修复
+
+- **Windows ccline 状态栏修复**：`%USERPROFILE%\\.claude\\ccline\\ccline.exe` 改为 `~/.claude/ccline/ccline.exe`，Claude Code 统一支持 `~` 展开
+
+---
+
 ## [1.8.1] - 2026-03-27
 
 ### 🐛 修复

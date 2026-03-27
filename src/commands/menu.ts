@@ -783,7 +783,7 @@ async function installCCometixLine(): Promise<void> {
     settings.statusLine = {
       type: 'command',
       command: isWindows()
-        ? '%USERPROFILE%\\.claude\\ccline\\ccline.exe'
+        ? '~/.claude/ccline/ccline.exe'
         : '~/.claude/ccline/ccline',
       padding: 0,
     }
