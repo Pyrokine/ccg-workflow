@@ -191,11 +191,22 @@ export async function init(options: InitOptions = {}): Promise<void> {
     await initI18n(language)
   }
 
-  // Fixed configuration
-  const frontendModels: ModelType[] = ['gemini']
-  const backendModels: ModelType[] = ['codex']
+  // Model routing configuration (user-selectable since v2.1.0)
+  let frontendModels: ModelType[] = ['gemini']
+  let backendModels: ModelType[] = ['codex']
+  let geminiModel = 'gemini-3.1-pro-preview'
   const mode: CollaborationMode = 'smart'
   const selectedWorkflows = getAllCommandIds()
+
+  // Non-interactive mode: preserve existing config
+  if (options.skipPrompt) {
+    const existingConfig = await readCcgConfig()
+    if (existingConfig?.routing) {
+      frontendModels = existingConfig.routing.frontend?.models || ['gemini']
+      backendModels = existingConfig.routing.backend?.models || ['codex']
+      geminiModel = existingConfig.routing.geminiModel || 'gemini-3.1-pro-preview'
+    }
+  }
 
   // Performance mode selection
   let liteMode = false
@@ -225,7 +236,7 @@ export async function init(options: InitOptions = {}): Promise<void> {
   // ═══════════════════════════════════════════════════════
   if (!options.skipPrompt) {
     console.log()
-    console.log(ansis.cyan.bold(`  🔑 Step 1/3 — ${i18n.t('init:api.title')}`))
+    console.log(ansis.cyan.bold(`  🔑 Step 1/4 — ${i18n.t('init:api.title')}`))
     console.log()
 
     const { apiProvider } = await inquirer.prompt([{
@@ -261,14 +272,78 @@ export async function init(options: InitOptions = {}): Promise<void> {
   }
 
   // ═══════════════════════════════════════════════════════
-  // Step 2/3: MCP Tools (checkbox multi-select)
+  // Step 2/4: Model Routing
+  // ═══════════════════════════════════════════════════════
+  if (!options.skipPrompt) {
+    const existingConfig = await readCcgConfig()
+
+    console.log()
+    console.log(ansis.cyan.bold(`  🧠 Step 2/4 — ${i18n.t('init:model.title')}`))
+    console.log()
+
+    const { selectedFrontend } = await inquirer.prompt([{
+      type: 'list',
+      name: 'selectedFrontend',
+      message: i18n.t('init:model.selectFrontend'),
+      choices: [
+        { name: `Gemini ${ansis.green(`(${i18n.t('init:model.recommended')})`)}`, value: 'gemini' as ModelType },
+        { name: 'Codex', value: 'codex' as ModelType },
+      ],
+      default: existingConfig?.routing?.frontend?.primary || 'gemini',
+    }])
+
+    const { selectedBackend } = await inquirer.prompt([{
+      type: 'list',
+      name: 'selectedBackend',
+      message: i18n.t('init:model.selectBackend'),
+      choices: [
+        { name: 'Gemini', value: 'gemini' as ModelType },
+        { name: `Codex ${ansis.green(`(${i18n.t('init:model.recommended')})`)}`, value: 'codex' as ModelType },
+      ],
+      default: existingConfig?.routing?.backend?.primary || 'codex',
+    }])
+
+    frontendModels = [selectedFrontend]
+    backendModels = [selectedBackend]
+
+    // Ask for Gemini model name if Gemini is selected for any role
+    if (selectedFrontend === 'gemini' || selectedBackend === 'gemini') {
+      const { selectedGeminiModel } = await inquirer.prompt([{
+        type: 'list',
+        name: 'selectedGeminiModel',
+        message: i18n.t('init:model.selectGeminiModel'),
+        choices: [
+          { name: `gemini-3.1-pro-preview ${ansis.green(`(${i18n.t('init:model.recommended')})`)}`, value: 'gemini-3.1-pro-preview' },
+          { name: 'gemini-2.5-flash', value: 'gemini-2.5-flash' },
+          { name: `${i18n.t('init:model.custom')}`, value: 'custom' },
+        ],
+        default: existingConfig?.routing?.geminiModel || 'gemini-3.1-pro-preview',
+      }])
+
+      if (selectedGeminiModel === 'custom') {
+        const { customModel } = await inquirer.prompt([{
+          type: 'input',
+          name: 'customModel',
+          message: i18n.t('init:model.enterCustomModel'),
+          validate: (v: string) => v.trim() !== '' || i18n.t('init:model.enterCustomModel'),
+        }])
+        geminiModel = customModel.trim()
+      }
+      else {
+        geminiModel = selectedGeminiModel
+      }
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // Step 3/4: MCP Tools (checkbox multi-select)
   // ═══════════════════════════════════════════════════════
   if (options.skipMcp) {
     mcpProvider = 'skip'
   }
   else if (!options.skipPrompt) {
     console.log()
-    console.log(ansis.cyan.bold(`  🔧 Step 2/3 — ${i18n.t('init:mcp.title')}`))
+    console.log(ansis.cyan.bold(`  🔧 Step 3/4 — ${i18n.t('init:mcp.title')}`))
     console.log()
 
     const { selectedTools } = await inquirer.prompt([{
@@ -432,7 +507,7 @@ export async function init(options: InitOptions = {}): Promise<void> {
     const currentLiteMode = existingConfig?.performance?.liteMode || false
 
     console.log()
-    console.log(ansis.cyan.bold(`  ⚡ Step 3/3 — ${i18n.t('init:perf.title')}`))
+    console.log(ansis.cyan.bold(`  ⚡ Step 4/4 — ${i18n.t('init:perf.title')}`))
     console.log()
 
     const { perfMode } = await inquirer.prompt([{
@@ -456,23 +531,24 @@ export async function init(options: InitOptions = {}): Promise<void> {
     }
   }
 
-  // Build routing config (fixed: Gemini frontend, Codex backend)
+  // Build routing config (user-selectable since v2.1.0)
   const routing: ModelRouting = {
     frontend: {
       models: frontendModels,
-      primary: 'gemini',
+      primary: frontendModels[0],
       strategy: 'fallback',
     },
     backend: {
       models: backendModels,
-      primary: 'codex',
+      primary: backendModels[0],
       strategy: 'fallback',
     },
     review: {
-      models: ['codex', 'gemini'],
+      models: [...new Set([...frontendModels, ...backendModels])],
       strategy: 'parallel',
     },
     mode,
+    geminiModel,
   }
 
   // Show summary
@@ -480,7 +556,9 @@ export async function init(options: InitOptions = {}): Promise<void> {
   console.log(ansis.yellow('━'.repeat(50)))
   console.log(ansis.bold(`  ${i18n.t('init:summary.title')}`))
   console.log()
-  console.log(`  ${ansis.cyan(i18n.t('init:summary.modelRouting'))}  ${ansis.green('Gemini')} (Frontend) + ${ansis.blue('Codex')} (Backend)`)
+  const fmName = frontendModels[0].charAt(0).toUpperCase() + frontendModels[0].slice(1)
+  const bmName = backendModels[0].charAt(0).toUpperCase() + backendModels[0].slice(1)
+  console.log(`  ${ansis.cyan(i18n.t('init:summary.modelRouting'))}  ${ansis.green(fmName)} (Frontend) + ${ansis.blue(bmName)} (Backend)`)
   console.log(`  ${ansis.cyan(i18n.t('init:summary.commandCount'))}  ${ansis.yellow(selectedWorkflows.length.toString())}`)
   const mcpSummary = (() => {
     if (mcpProvider === 'fast-context') return ansis.green('fast-context')

@@ -27,6 +27,7 @@ export interface ModelRouting {
     strategy: 'parallel'
   }
   mode: CollaborationMode
+  geminiModel?: string // Gemini 具体型号（默认 gemini-3.1-pro-preview）
 }
 
 // CCG 配置

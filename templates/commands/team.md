@@ -54,8 +54,8 @@ TaskUpdate({ taskId: "1", owner: "architect" })
 | 📜 Dev × N | Agent Teams teammates | `Agent(team_name=T, name="dev-1")` | Sonnet | 并行编码，文件隔离 |
 | 🧪 QA | Agent Teams teammate | `Agent(team_name=T, name="qa")` | Sonnet | 写测试、跑测试、lint、typecheck |
 | 🔬 Reviewer | Agent Teams teammate | `Agent(team_name=T, name="reviewer")` | Sonnet | 综合审查，分级判决 |
-| 🔥 Codex | 外部模型（非 teammate） | Bash + codeagent-wrapper | Codex | 后端分析/审查（Phase 2, 6） |
-| 🔮 Gemini | 外部模型（非 teammate） | Bash + codeagent-wrapper | Gemini | 前端分析/审查（Phase 2, 6） |
+| 🔥 {{BACKEND_PRIMARY}} | 外部模型（非 teammate） | Bash + codeagent-wrapper | {{BACKEND_PRIMARY}} | 后端分析/审查（Phase 2, 6） |
+| 🔮 {{FRONTEND_PRIMARY}} | 外部模型（非 teammate） | Bash + codeagent-wrapper | {{FRONTEND_PRIMARY}} | 前端分析/审查（Phase 2, 6） |
 
 **8 阶段流水线**
 
@@ -139,26 +139,26 @@ Phase 8: INTEGRATION   → Lead 全量验证 + 报告 + 清理
 
 1. **Team 已在 Phase 0 创建**，直接使用已有的 team_name。
 
-2. **Codex + Gemini 并行分析（PARALLEL）**
+2. **{{BACKEND_PRIMARY}} + {{FRONTEND_PRIMARY}} 并行分析（PARALLEL）**
    - **CRITICAL**: 必须在一条消息中同时发起两个 Bash 调用，`run_in_background: true`。
 
-   **FIRST Bash call (Codex)**:
+   **FIRST Bash call ({{BACKEND_PRIMARY}})**:
    ```
    Bash({
-     command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend codex - \"{{WORKDIR}}\" <<'EOF'\nROLE_FILE: ~/.claude/.ccg/prompts/codex/architect.md\n<TASK>\n需求：<PRD 内容>\n请分析后端架构：模块边界、API 设计、数据模型、依赖关系、实施建议。\n</TASK>\nEOF",
+     command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend {{BACKEND_PRIMARY}} {{GEMINI_MODEL_FLAG}}- \"{{WORKDIR}}\" <<'EOF'\nROLE_FILE: ~/.claude/.ccg/prompts/codex/architect.md\n<TASK>\n需求：<PRD 内容>\n请分析后端架构：模块边界、API 设计、数据模型、依赖关系、实施建议。\n</TASK>\nEOF",
      run_in_background: true,
      timeout: 3600000,
-     description: "Codex 后端架构分析"
+     description: "{{BACKEND_PRIMARY}} 后端架构分析"
    })
    ```
 
-   **SECOND Bash call (Gemini) - IN THE SAME MESSAGE**:
+   **SECOND Bash call ({{FRONTEND_PRIMARY}}) - IN THE SAME MESSAGE**:
    ```
    Bash({
-     command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend gemini {{GEMINI_MODEL_FLAG}}- \"{{WORKDIR}}\" <<'EOF'\nROLE_FILE: ~/.claude/.ccg/prompts/gemini/architect.md\n<TASK>\n需求：<PRD 内容>\n请分析前端架构：组件拆分、状态管理、路由设计、UI/UX 要点、实施建议。\n</TASK>\nEOF",
+     command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend {{FRONTEND_PRIMARY}} {{GEMINI_MODEL_FLAG}}- \"{{WORKDIR}}\" <<'EOF'\nROLE_FILE: ~/.claude/.ccg/prompts/gemini/architect.md\n<TASK>\n需求：<PRD 内容>\n请分析前端架构：组件拆分、状态管理、路由设计、UI/UX 要点、实施建议。\n</TASK>\nEOF",
      run_in_background: true,
      timeout: 3600000,
-     description: "Gemini 前端架构分析"
+     description: "{{FRONTEND_PRIMARY}} 前端架构分析"
    })
    ```
 
@@ -300,26 +300,26 @@ Phase 8: INTEGRATION   → Lead 全量验证 + 报告 + 清理
 1. **运行 git diff 获取变更**
    - `Bash: git diff` 获取完整变更内容。
 
-2. **Codex + Gemini 并行审查（PARALLEL）**
+2. **{{BACKEND_PRIMARY}} + {{FRONTEND_PRIMARY}} 并行审查（PARALLEL）**
    - 模式与 Phase 2 相同，使用 reviewer prompt：
 
-   **FIRST Bash call (Codex)**:
+   **FIRST Bash call ({{BACKEND_PRIMARY}})**:
    ```
    Bash({
-     command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend codex - \"{{WORKDIR}}\" <<'EOF'\nROLE_FILE: ~/.claude/.ccg/prompts/codex/reviewer.md\n<TASK>\n审查以下变更：\n<git diff 输出或变更文件列表>\n</TASK>\nOUTPUT (JSON):\n{\n  \"findings\": [{\"severity\": \"Critical|Warning|Info\", \"dimension\": \"logic|security|performance|error_handling\", \"file\": \"path\", \"line\": N, \"description\": \"描述\", \"fix_suggestion\": \"修复建议\"}],\n  \"passed_checks\": [\"检查项\"],\n  \"summary\": \"总体评估\"\n}\nEOF",
+     command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend {{BACKEND_PRIMARY}} {{GEMINI_MODEL_FLAG}}- \"{{WORKDIR}}\" <<'EOF'\nROLE_FILE: ~/.claude/.ccg/prompts/codex/reviewer.md\n<TASK>\n审查以下变更：\n<git diff 输出或变更文件列表>\n</TASK>\nOUTPUT (JSON):\n{\n  \"findings\": [{\"severity\": \"Critical|Warning|Info\", \"dimension\": \"logic|security|performance|error_handling\", \"file\": \"path\", \"line\": N, \"description\": \"描述\", \"fix_suggestion\": \"修复建议\"}],\n  \"passed_checks\": [\"检查项\"],\n  \"summary\": \"总体评估\"\n}\nEOF",
      run_in_background: true,
      timeout: 3600000,
-     description: "Codex 后端审查"
+     description: "{{BACKEND_PRIMARY}} 后端审查"
    })
    ```
 
-   **SECOND Bash call (Gemini) - IN THE SAME MESSAGE**:
+   **SECOND Bash call ({{FRONTEND_PRIMARY}}) - IN THE SAME MESSAGE**:
    ```
    Bash({
-     command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend gemini {{GEMINI_MODEL_FLAG}}- \"{{WORKDIR}}\" <<'EOF'\nROLE_FILE: ~/.claude/.ccg/prompts/gemini/reviewer.md\n<TASK>\n审查以下变更：\n<git diff 输出或变更文件列表>\n</TASK>\nOUTPUT (JSON):\n{\n  \"findings\": [{\"severity\": \"Critical|Warning|Info\", \"dimension\": \"patterns|maintainability|accessibility|ux|frontend_security\", \"file\": \"path\", \"line\": N, \"description\": \"描述\", \"fix_suggestion\": \"修复建议\"}],\n  \"passed_checks\": [\"检查项\"],\n  \"summary\": \"总体评估\"\n}\nEOF",
+     command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend {{FRONTEND_PRIMARY}} {{GEMINI_MODEL_FLAG}}- \"{{WORKDIR}}\" <<'EOF'\nROLE_FILE: ~/.claude/.ccg/prompts/gemini/reviewer.md\n<TASK>\n审查以下变更：\n<git diff 输出或变更文件列表>\n</TASK>\nOUTPUT (JSON):\n{\n  \"findings\": [{\"severity\": \"Critical|Warning|Info\", \"dimension\": \"patterns|maintainability|accessibility|ux|frontend_security\", \"file\": \"path\", \"line\": N, \"description\": \"描述\", \"fix_suggestion\": \"修复建议\"}],\n  \"passed_checks\": [\"检查项\"],\n  \"summary\": \"总体评估\"\n}\nEOF",
      run_in_background: true,
      timeout: 3600000,
-     description: "Gemini 前端审查"
+     description: "{{FRONTEND_PRIMARY}} 前端审查"
    })
    ```
 

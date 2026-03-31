@@ -1,5 +1,5 @@
 ---
-description: '前端专项工作流（研究→构思→计划→执行→优化→评审），Gemini 主导'
+description: '前端专项工作流（研究→构思→计划→执行→优化→评审），{{FRONTEND_PRIMARY}} 主导'
 ---
 
 # Frontend - 前端专项开发
@@ -13,7 +13,7 @@ description: '前端专项工作流（研究→构思→计划→执行→优化
 ## 上下文
 
 - 前端任务：$ARGUMENTS
-- Gemini 主导，Codex 辅助参考
+- {{FRONTEND_PRIMARY}} 主导，{{BACKEND_PRIMARY}} 辅助参考
 - 适用：组件设计、响应式布局、UI 动画、样式优化
 
 ## 你的角色
@@ -21,8 +21,8 @@ description: '前端专项工作流（研究→构思→计划→执行→优化
 你是**前端编排者**，协调多模型完成 UI/UX 任务（研究 → 构思 → 计划 → 执行 → 优化 → 评审），用中文协助用户。
 
 **协作模型**：
-- **Gemini** – 前端 UI/UX（**前端权威，可信赖**）
-- **Codex** – 后端视角（**前端意见仅供参考**）
+- **{{FRONTEND_PRIMARY}}** – 前端 UI/UX（**前端权威，可信赖**）
+- **{{BACKEND_PRIMARY}}** – 后端视角（**前端意见仅供参考**）
 - **Claude (自己)** – 编排、计划、执行、交付
 
 ---
@@ -39,7 +39,7 @@ description: '前端专项工作流（研究→构思→计划→执行→优化
 ```
 # 新会话调用
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend gemini --gemini-model gemini-3.1-pro-preview - \"{{WORKDIR}}\" <<'EOF'
+  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend {{FRONTEND_PRIMARY}} {{GEMINI_MODEL_FLAG}}- \"{{WORKDIR}}\" <<'EOF'
 ROLE_FILE: <角色提示词路径>
 <TASK>
 需求：<增强后的需求（如未增强则用 $ARGUMENTS）>
@@ -54,7 +54,7 @@ EOF",
 
 # 复用会话调用
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend gemini --gemini-model gemini-3.1-pro-preview resume <GEMINI_SESSION> - \"{{WORKDIR}}\" <<'EOF'
+  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend {{FRONTEND_PRIMARY}} {{GEMINI_MODEL_FLAG}}resume <GEMINI_SESSION> - \"{{WORKDIR}}\" <<'EOF'
 ROLE_FILE: <角色提示词路径>
 <TASK>
 需求：<增强后的需求（如未增强则用 $ARGUMENTS）>
@@ -105,7 +105,7 @@ EOF",
 
 ### 💡 阶段 2：构思
 
-`[模式：构思]` - Gemini 主导分析
+`[模式：构思]` - {{FRONTEND_PRIMARY}} 主导分析
 
 **⚠️ 必须调用 Gemini**（参照上方调用规范）：
 - ROLE_FILE: `~/.claude/.ccg/prompts/gemini/analyzer.md`
@@ -119,7 +119,7 @@ EOF",
 
 ### 📋 阶段 3：计划
 
-`[模式：计划]` - Gemini 主导规划
+`[模式：计划]` - {{FRONTEND_PRIMARY}} 主导规划
 
 **⚠️ 必须调用 Gemini**（使用 `resume <GEMINI_SESSION>` 复用会话）：
 - ROLE_FILE: `~/.claude/.ccg/prompts/gemini/architect.md`
@@ -139,7 +139,7 @@ Claude 综合规划，请求用户批准后存入 `.claude/plan/任务名.md`
 
 ### 🚀 阶段 5：优化
 
-`[模式：优化]` - Gemini 主导审查
+`[模式：优化]` - {{FRONTEND_PRIMARY}} 主导审查
 
 **⚠️ 必须调用 Gemini**（参照上方调用规范）：
 - ROLE_FILE: `~/.claude/.ccg/prompts/gemini/reviewer.md`
@@ -161,7 +161,7 @@ Claude 综合规划，请求用户批准后存入 `.claude/plan/任务名.md`
 
 ## 关键规则
 
-1. **Gemini 前端意见可信赖**
-2. **Codex 前端意见仅供参考**
+1. **{{FRONTEND_PRIMARY}} 前端意见可信赖**
+2. **{{BACKEND_PRIMARY}} 前端意见仅供参考**
 3. 外部模型对文件系统**零写入权限**
 4. Claude 负责所有代码写入和文件操作

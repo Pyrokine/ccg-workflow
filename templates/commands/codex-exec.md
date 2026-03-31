@@ -1,5 +1,5 @@
 ---
-description: 'Codex 全权执行计划 - 读取 /ccg:plan 产出的计划文件，Codex 承担 MCP 搜索 + 代码实现 + 测试，多模型审核'
+description: '{{BACKEND_PRIMARY}} 全权执行计划 - 读取 /ccg:plan 产出的计划文件，{{BACKEND_PRIMARY}} 承担 MCP 搜索 + 代码实现 + 测试，多模型审核'
 ---
 
 # Codex-Exec - Codex 全权执行计划
@@ -24,8 +24,8 @@ $ARGUMENTS
 
 | 维度 | `/ccg:execute` | `/ccg:codex-exec` |
 |------|---------------|-------------------|
-| 代码实现 | Claude 重构 Codex/Gemini 的 Diff | **Codex 直接实现** |
-| MCP 搜索 | Claude 调用 MCP | **Codex 调用 MCP** |
+| 代码实现 | Claude 重构 {{BACKEND_PRIMARY}}/{{FRONTEND_PRIMARY}} 的 Diff | **{{BACKEND_PRIMARY}} 直接实现** |
+| MCP 搜索 | Claude 调用 MCP | **{{BACKEND_PRIMARY}} 调用 MCP** |
 | Claude 上下文 | 高（搜索结果 + 代码全进来） | **极低（只看摘要 + diff）** |
 | Claude token | 大量消耗 | **极少消耗** |
 | 审核 | 多模型审查 | **多模型审查（不变）** |
@@ -46,11 +46,11 @@ $ARGUMENTS
 - 如果用户通过 `/add-dir` 添加了多个工作区，先用 Glob/Grep 确定任务相关的工作区
 - 如果无法确定，用 `AskUserQuestion` 询问用户选择目标工作区
 
-**Codex 执行调用语法**：
+**{{BACKEND_PRIMARY}} 执行调用语法**：
 
 ```
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend codex - \"{{WORKDIR}}\" <<'EXEC_EOF'
+  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend {{BACKEND_PRIMARY}} {{GEMINI_MODEL_FLAG}}- \"{{WORKDIR}}\" <<'EXEC_EOF'
 <TASK>
 <指令内容>
 </TASK>
@@ -61,11 +61,11 @@ EXEC_EOF",
 })
 ```
 
-**Codex 复用会话调用**：
+**{{BACKEND_PRIMARY}} 复用会话调用**：
 
 ```
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend codex resume <SESSION_ID> - \"{{WORKDIR}}\" <<'EXEC_EOF'
+  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend {{BACKEND_PRIMARY}} {{GEMINI_MODEL_FLAG}}resume <SESSION_ID> - \"{{WORKDIR}}\" <<'EXEC_EOF'
 <TASK>
 <指令内容>
 </TASK>
@@ -75,15 +75,12 @@ EXEC_EOF",
   description: "简短描述"
 })
 ```
-
-**模型参数说明**：
-- `{{GEMINI_MODEL_FLAG}}`：当使用 `--backend gemini` 时，替换为 `--gemini-model gemini-3.1-pro-preview `（注意末尾空格）；使用 codex 时替换为空字符串
 
 **审核调用语法**（Codex ∥ Gemini 并行审查）：
 
 ```
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend <codex|gemini> {{GEMINI_MODEL_FLAG}}- \"{{WORKDIR}}\" <<'REVIEW_EOF'
+  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend <{{BACKEND_PRIMARY}}|{{FRONTEND_PRIMARY}}> {{GEMINI_MODEL_FLAG}}- \"{{WORKDIR}}\" <<'REVIEW_EOF'
 ROLE_FILE: <角色提示词路径>
 <TASK>
 Scope: Audit the code changes made by Codex.
@@ -170,7 +167,7 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 
 ```
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend codex resume <CODEX_SESSION> - \"{{WORKDIR}}\" <<'EXEC_EOF'
+  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend {{BACKEND_PRIMARY}} {{GEMINI_MODEL_FLAG}}resume <CODEX_SESSION> - \"{{WORKDIR}}\" <<'EXEC_EOF'
 <TASK>
 You are a full-stack execution agent. Implement the following plan end-to-end.
 
@@ -270,7 +267,7 @@ EXEC_EOF",
 
 ```
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend codex resume <CODEX_EXEC_SESSION> - \"{{WORKDIR}}\" <<'FIXEOF'
+  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend {{BACKEND_PRIMARY}} {{GEMINI_MODEL_FLAG}}resume <CODEX_EXEC_SESSION> - \"{{WORKDIR}}\" <<'FIXEOF'
 <TASK>
 The implementation needs corrections:
 
@@ -309,12 +306,12 @@ FIXEOF",
 
 2. **并行调用**（`run_in_background: true`）：
 
-   - **Codex 审查**：
+   - **{{BACKEND_PRIMARY}} 审查**：
      - ROLE_FILE: `~/.claude/.ccg/prompts/codex/reviewer.md`
      - 输入：变更 Diff + 计划文件内容
      - 关注：安全性、性能、错误处理、逻辑正确性
 
-   - **Gemini 审查**：
+   - **{{FRONTEND_PRIMARY}} 审查**：
      - ROLE_FILE: `~/.claude/.ccg/prompts/gemini/reviewer.md`
      - 输入：变更 Diff + 计划文件内容
      - 关注：代码可读性、设计一致性、可维护性
@@ -373,7 +370,7 @@ FIXEOF",
 ## 关键规则
 
 1. **Claude 极简原则** — Claude 不调用 MCP、不做代码检索。只读计划、指挥 Codex、审核结果。
-2. **Codex 全权执行** — MCP 搜索、文档查询、代码检索、实现、测试全由 Codex 完成。
+2. **{{BACKEND_PRIMARY}} 全权执行** — MCP 搜索、文档查询、代码检索、实现、测试全由 {{BACKEND_PRIMARY}} 完成。
 3. **多模型审核不变** — 审核阶段仍然 Codex ∥ Gemini 交叉审查，保证质量。
 4. **信任规则** — 后端以 Codex 为准，前端以 Gemini 为准。
 5. **一次性下发** — 尽量一次给 Codex 完整指令 + 完整计划，减少来回通信。

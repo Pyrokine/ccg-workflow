@@ -1,5 +1,5 @@
 ---
-description: '多模型性能优化：Codex 后端优化 + Gemini 前端优化'
+description: '多模型性能优化：{{BACKEND_PRIMARY}} 后端优化 + {{FRONTEND_PRIMARY}} 前端优化'
 ---
 
 # Optimize - 多模型性能优化
@@ -21,8 +21,8 @@ description: '多模型性能优化：Codex 后端优化 + Gemini 前端优化'
 ## 你的角色
 
 你是**性能工程师**，编排多模型优化流程：
-- **Codex** – 后端性能优化（**后端权威**）
-- **Gemini** – 前端性能优化（**前端权威**）
+- **{{BACKEND_PRIMARY}}** – 后端性能优化（**后端权威**）
+- **{{FRONTEND_PRIMARY}}** – 前端性能优化（**前端权威**）
 - **Claude (自己)** – 综合优化、实施变更
 
 ---
@@ -38,7 +38,7 @@ description: '多模型性能优化：Codex 后端优化 + Gemini 前端优化'
 
 ```
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend <codex|gemini> {{GEMINI_MODEL_FLAG}}- \"{{WORKDIR}}\" <<'EOF'
+  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend <{{BACKEND_PRIMARY}}|{{FRONTEND_PRIMARY}}> {{GEMINI_MODEL_FLAG}}- \"{{WORKDIR}}\" <<'EOF'
 ROLE_FILE: <角色提示词路径>
 <TASK>
 需求：<增强后的需求（如未增强则用 $ARGUMENTS）>
@@ -51,9 +51,6 @@ EOF",
   description: "简短描述"
 })
 ```
-
-**模型参数说明**：
-- `{{GEMINI_MODEL_FLAG}}`：当使用 `--backend gemini` 时，替换为 `--gemini-model gemini-3.1-pro-preview `（注意末尾空格）；使用 codex 时替换为空字符串
 
 **角色提示词**：
 
@@ -107,12 +104,12 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 
 **⚠️ 必须发起两个并行 Bash 调用**（参照上方调用规范）：
 
-1. **Codex 后端分析**：`Bash({ command: "...--backend codex...", run_in_background: true })`
+1. **{{BACKEND_PRIMARY}} 后端分析**：`Bash({ command: "...--backend {{BACKEND_PRIMARY}}...", run_in_background: true })`
    - ROLE_FILE: `~/.claude/.ccg/prompts/codex/optimizer.md`
    - 需求：分析后端性能问题（$ARGUMENTS）
    - OUTPUT：性能瓶颈列表、优化方案、预期收益
 
-2. **Gemini 前端分析**：`Bash({ command: "...--backend gemini...", run_in_background: true })`
+2. **{{FRONTEND_PRIMARY}} 前端分析**：`Bash({ command: "...--backend {{FRONTEND_PRIMARY}}...", run_in_background: true })`
    - ROLE_FILE: `~/.claude/.ccg/prompts/gemini/optimizer.md`
    - 需求：分析前端性能问题（Core Web Vitals）
    - OUTPUT：性能瓶颈列表、优化方案、预期收益

@@ -1,5 +1,6 @@
 import ansis from 'ansis'
 import inquirer from 'inquirer'
+import ora from 'ora'
 import { exec, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
 import { homedir } from 'node:os'
@@ -11,7 +12,7 @@ import { version } from '../../package.json'
 import { configMcp } from './config-mcp'
 import { i18n } from '../i18n'
 import { uninstallWorkflows } from '../utils/installer'
-import { readCcgConfig } from '../utils/config'
+import { readCcgConfig, writeCcgConfig } from '../utils/config'
 import { init } from './init'
 import { update } from './update'
 import { isWindows } from '../utils/platform'
@@ -165,6 +166,7 @@ export async function showMainMenu(): Promise<void> {
         item('3', i18n.t('menu:options.configMcp'), isZh ? '代码检索 MCP 工具' : 'Code retrieval MCP tool'),
         item('4', i18n.t('menu:options.configApi'), isZh ? '自定义 API 端点' : 'Custom API endpoint'),
         item('5', i18n.t('menu:options.configStyle'), isZh ? '选择输出人格' : 'Choose output personality'),
+        item('6', i18n.t('menu:options.configModel'), isZh ? '前端/后端模型切换' : 'Switch frontend/backend models'),
 
         groupSep(isZh ? '其他工具' : 'Tools'),
         item('T', i18n.t('menu:options.tools'), 'ccusage, CCometixLine'),
@@ -194,6 +196,9 @@ export async function showMainMenu(): Promise<void> {
         break
       case '5':
         await configOutputStyle()
+        break
+      case '6':
+        await configModelRouting()
         break
       case 'T':
         await handleTools()
@@ -422,6 +427,131 @@ const OUTPUT_STYLES = [
   { id: 'abyss-command', nameKey: 'menu:style.abyssCommand', descKey: 'menu:style.abyssCommandDesc' },
   { id: 'abyss-ritual', nameKey: 'menu:style.abyssRitual', descKey: 'menu:style.abyssRitualDesc' },
 ]
+
+// ═══════════════════════════════════════════════════════
+// Model Routing Configuration
+// ═══════════════════════════════════════════════════════
+
+async function configModelRouting(): Promise<void> {
+  const config = await readCcgConfig()
+  const isZh = (config?.general?.language || 'zh-CN') === 'zh-CN'
+
+  console.log()
+  console.log(ansis.cyan.bold(`  ${i18n.t('init:model.title')}`))
+  console.log()
+
+  // Show current routing
+  const currentFrontend = config?.routing?.frontend?.primary || 'gemini'
+  const currentBackend = config?.routing?.backend?.primary || 'codex'
+  const currentGeminiModel = config?.routing?.geminiModel || 'gemini-3.1-pro-preview'
+
+  console.log(ansis.gray(`  ${i18n.t('init:model.currentRouting')}:`))
+  console.log(`  ${ansis.cyan('Frontend:')} ${ansis.green(currentFrontend)}`)
+  console.log(`  ${ansis.cyan('Backend:')}  ${ansis.blue(currentBackend)}`)
+  if (currentFrontend === 'gemini' || currentBackend === 'gemini') {
+    console.log(`  ${ansis.cyan('Gemini:')}   ${ansis.gray(currentGeminiModel)}`)
+  }
+  console.log()
+
+  // Frontend model selection
+  const { selectedFrontend } = await inquirer.prompt([{
+    type: 'list',
+    name: 'selectedFrontend',
+    message: i18n.t('init:model.selectFrontend'),
+    choices: [
+      { name: `Gemini ${ansis.green(`(${i18n.t('init:model.recommended')})`)}`, value: 'gemini' },
+      { name: 'Codex', value: 'codex' },
+    ],
+    default: currentFrontend,
+  }])
+
+  // Backend model selection
+  const { selectedBackend } = await inquirer.prompt([{
+    type: 'list',
+    name: 'selectedBackend',
+    message: i18n.t('init:model.selectBackend'),
+    choices: [
+      { name: 'Gemini', value: 'gemini' },
+      { name: `Codex ${ansis.green(`(${i18n.t('init:model.recommended')})`)}`, value: 'codex' },
+    ],
+    default: currentBackend,
+  }])
+
+  // Gemini model name (if gemini is selected for any role)
+  let geminiModel = currentGeminiModel
+  if (selectedFrontend === 'gemini' || selectedBackend === 'gemini') {
+    const { selectedGeminiModel } = await inquirer.prompt([{
+      type: 'list',
+      name: 'selectedGeminiModel',
+      message: i18n.t('init:model.selectGeminiModel'),
+      choices: [
+        { name: `gemini-3.1-pro-preview ${ansis.green(`(${i18n.t('init:model.recommended')})`)}`, value: 'gemini-3.1-pro-preview' },
+        { name: 'gemini-2.5-flash', value: 'gemini-2.5-flash' },
+        { name: `${i18n.t('init:model.custom')}`, value: 'custom' },
+      ],
+      default: currentGeminiModel,
+    }])
+
+    if (selectedGeminiModel === 'custom') {
+      const { customModel } = await inquirer.prompt([{
+        type: 'input',
+        name: 'customModel',
+        message: i18n.t('init:model.enterCustomModel'),
+        validate: (v: string) => v.trim() !== '' || i18n.t('init:model.enterCustomModel'),
+      }])
+      geminiModel = customModel.trim()
+    }
+    else {
+      geminiModel = selectedGeminiModel
+    }
+  }
+
+  // Check if anything changed
+  if (selectedFrontend === currentFrontend && selectedBackend === currentBackend && geminiModel === currentGeminiModel) {
+    console.log(ansis.gray(`  ${i18n.t('common:configNotModified')}`))
+    return
+  }
+
+  // Update config.toml
+  if (config) {
+    config.routing.frontend = {
+      models: [selectedFrontend as any],
+      primary: selectedFrontend as any,
+      strategy: 'fallback',
+    }
+    config.routing.backend = {
+      models: [selectedBackend as any],
+      primary: selectedBackend as any,
+      strategy: 'fallback',
+    }
+    config.routing.review = {
+      models: [...new Set([selectedFrontend, selectedBackend])] as any,
+      strategy: 'parallel',
+    }
+    config.routing.geminiModel = geminiModel
+    await writeCcgConfig(config)
+  }
+
+  console.log()
+  console.log(ansis.green(`  ✓ ${i18n.t('init:model.routingUpdated')}`))
+
+  // Reinstall templates with new config
+  const spinner = ora(i18n.t('init:model.reinstalling')).start()
+  try {
+    const { execSync } = await import('node:child_process')
+    execSync('npx --yes ccg-workflow init --force --skip-prompt --skip-mcp', {
+      timeout: 300000,
+      stdio: 'pipe',
+      env: { ...process.env, CCG_UPDATE_MODE: 'true' },
+    })
+    spinner.succeed(i18n.t('init:model.reinstallDone'))
+  }
+  catch {
+    spinner.fail(i18n.t('init:model.reinstallFailed'))
+  }
+
+  console.log(ansis.gray(`  ${i18n.t('common:restartToApply')}`))
+}
 
 async function configOutputStyle(): Promise<void> {
   console.log()

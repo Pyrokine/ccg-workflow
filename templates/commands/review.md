@@ -28,7 +28,7 @@ description: '多模型代码审查：无参数时自动审查 git diff，双模
 
 ```
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend <codex|gemini> {{GEMINI_MODEL_FLAG}}- \"{{WORKDIR}}\" <<'EOF'
+  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend <{{BACKEND_PRIMARY}}|{{FRONTEND_PRIMARY}}> {{GEMINI_MODEL_FLAG}}- \"{{WORKDIR}}\" <<'EOF'
 ROLE_FILE: <角色提示词路径>
 <TASK>
 审查以下代码变更：
@@ -41,9 +41,6 @@ EOF",
   description: "简短描述"
 })
 ```
-
-**模型参数说明**：
-- `{{GEMINI_MODEL_FLAG}}`：当使用 `--backend gemini` 时，替换为 `--gemini-model gemini-3.1-pro-preview `（注意末尾空格）；使用 codex 时替换为空字符串
 
 **角色提示词**：
 
@@ -87,12 +84,12 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 
 **⚠️ 必须发起两个并行 Bash 调用**（参照上方调用规范）：
 
-1. **Codex 后端审查**：`Bash({ command: "...--backend codex...", run_in_background: true })`
+1. **{{BACKEND_PRIMARY}} 后端审查**：`Bash({ command: "...--backend {{BACKEND_PRIMARY}}...", run_in_background: true })`
    - ROLE_FILE: `~/.claude/.ccg/prompts/codex/reviewer.md`
    - 需求：审查代码变更（git diff 内容）
    - OUTPUT：按 Critical/Major/Minor/Suggestion 分类列出安全性、性能、错误处理问题
 
-2. **Gemini 前端审查**：`Bash({ command: "...--backend gemini...", run_in_background: true })`
+2. **{{FRONTEND_PRIMARY}} 前端审查**：`Bash({ command: "...--backend {{FRONTEND_PRIMARY}}...", run_in_background: true })`
    - ROLE_FILE: `~/.claude/.ccg/prompts/gemini/reviewer.md`
    - 需求：审查代码变更（git diff 内容）
    - OUTPUT：按 Critical/Major/Minor/Suggestion 分类列出可访问性、响应式、设计一致性问题

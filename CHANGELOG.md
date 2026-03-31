@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.1.0] - 2026-03-31
+
+### ✨ 新功能
+
+- **模型路由可配置**（Issue #121）：用户可在 init 和 menu 中选择前端/后端使用的模型（gemini/codex/claude），不再硬编码
+- **Gemini 型号可选**：支持选择 gemini-3.1-pro-preview、gemini-2.5-flash 或自定义型号
+- **菜单新增模型路由配置**：`6. 配置模型路由`，切换后自动重装模板
+- **`{{GEMINI_MODEL_FLAG}}` 安装时替换**：不再留给 Claude 运行时解释，减少歧义
+
+### 🔄 变更
+
+- **init 步骤 3→4**：新增 Step 2/4 模型路由选择
+- **20+ 模板去硬编码**：所有命令模板中的 `--backend gemini`/`--backend codex` 替换为 `{{FRONTEND_PRIMARY}}`/`{{BACKEND_PRIMARY}}` 模板变量
+- **update 保留模型配置**：`--skip-prompt` 模式从 config.toml 读取现有路由，不再回退到硬编码默认值
+
+---
+
 ## [2.0.0] - 2026-03-31
 
 ### ✨ 新功能

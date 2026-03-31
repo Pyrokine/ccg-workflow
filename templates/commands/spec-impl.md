@@ -47,15 +47,13 @@ description: '按规范执行 + 多模型协作 + 归档'
 
    For each task:
    ```
-   codeagent-wrapper --progress --backend <codex|gemini> --gemini-model gemini-3.1-pro-preview - "{{WORKDIR}}" <<'EOF'
+   codeagent-wrapper --progress --backend <{{BACKEND_PRIMARY}}|{{FRONTEND_PRIMARY}}> {{GEMINI_MODEL_FLAG}}- "{{WORKDIR}}" <<'EOF'
    TASK: <task description from tasks.md>
    CONTEXT: <relevant code context>
    CONSTRAINTS: <constraints from spec>
    OUTPUT: Unified Diff Patch format ONLY
    EOF
    ```
-
-   Note: `--gemini-model` parameter is only used when `--backend gemini` is specified.
 
    **会话复用**：保存返回的 `SESSION_ID:`（Codex → `CODEX_PROTO_SESSION`，Gemini → `GEMINI_PROTO_SESSION`），Step 7 审查时复用。
 
@@ -82,23 +80,23 @@ description: '按规范执行 + 多模型协作 + 归档'
 
    **Step 7.1**: In ONE message, make TWO parallel Bash calls:
 
-   **FIRST Bash call (Codex)**:
+   **FIRST Bash call ({{BACKEND_PRIMARY}})**:
    ```
    Bash({
-     command: "~/.claude/bin/codeagent-wrapper --progress --backend codex resume <CODEX_PROTO_SESSION> - \"{{WORKDIR}}\" <<'EOF'\nReview the implementation changes:\n- Correctness: logic errors, edge cases\n- Security: injection, auth issues\n- Spec compliance: constraints satisfied\nOUTPUT: JSON with findings\nEOF",
+     command: "~/.claude/bin/codeagent-wrapper --progress --backend {{BACKEND_PRIMARY}} {{GEMINI_MODEL_FLAG}}resume <CODEX_PROTO_SESSION> - \"{{WORKDIR}}\" <<'EOF'\nReview the implementation changes:\n- Correctness: logic errors, edge cases\n- Security: injection, auth issues\n- Spec compliance: constraints satisfied\nOUTPUT: JSON with findings\nEOF",
      run_in_background: true,
      timeout: 300000,
-     description: "Codex: correctness/security review"
+     description: "{{BACKEND_PRIMARY}}: correctness/security review"
    })
    ```
 
-   **SECOND Bash call (Gemini) - IN THE SAME MESSAGE**:
+   **SECOND Bash call ({{FRONTEND_PRIMARY}}) - IN THE SAME MESSAGE**:
    ```
    Bash({
-     command: "~/.claude/bin/codeagent-wrapper --progress --backend gemini --gemini-model gemini-3.1-pro-preview resume <GEMINI_PROTO_SESSION> - \"{{WORKDIR}}\" <<'EOF'\nReview the implementation changes:\n- Maintainability: readability, complexity\n- Patterns: consistency with project style\n- Integration: cross-module impacts\nOUTPUT: JSON with findings\nEOF",
+     command: "~/.claude/bin/codeagent-wrapper --progress --backend {{FRONTEND_PRIMARY}} {{GEMINI_MODEL_FLAG}}resume <GEMINI_PROTO_SESSION> - \"{{WORKDIR}}\" <<'EOF'\nReview the implementation changes:\n- Maintainability: readability, complexity\n- Patterns: consistency with project style\n- Integration: cross-module impacts\nOUTPUT: JSON with findings\nEOF",
      run_in_background: true,
      timeout: 300000,
-     description: "Gemini: maintainability/patterns review"
+     description: "{{FRONTEND_PRIMARY}}: maintainability/patterns review"
    })
    ```
 

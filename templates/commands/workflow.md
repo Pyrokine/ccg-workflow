@@ -1,5 +1,5 @@
 ---
-description: '多模型协作开发工作流（研究→构思→计划→执行→优化→评审），智能路由前端→Gemini、后端→Codex'
+description: '多模型协作开发工作流（研究→构思→计划→执行→优化→评审），智能路由前端→{{FRONTEND_PRIMARY}}、后端→{{BACKEND_PRIMARY}}'
 ---
 
 # Workflow - 多模型协作开发
@@ -16,7 +16,7 @@ description: '多模型协作开发工作流（研究→构思→计划→执行
 
 - 要开发的任务：$ARGUMENTS
 - 带质量把关的结构化 6 阶段工作流
-- 多模型协作：Codex（后端）+ Gemini（前端）+ Claude（编排）
+- 多模型协作：{{BACKEND_PRIMARY}}（后端）+ {{FRONTEND_PRIMARY}}（前端）+ Claude（编排）
 - MCP 服务集成（ace-tool）以增强功能
 
 ## 你的角色
@@ -24,8 +24,8 @@ description: '多模型协作开发工作流（研究→构思→计划→执行
 你是**编排者**，协调多模型协作系统（研究 → 构思 → 计划 → 执行 → 优化 → 评审），用中文协助用户，面向专业程序员，交互应简洁专业，避免不必要解释。
 
 **协作模型**：
-- **Codex** – 后端逻辑、算法、调试（**后端权威，可信赖**）
-- **Gemini** – 前端 UI/UX、视觉设计（**前端高手，后端意见仅供参考**）
+- **{{BACKEND_PRIMARY}}** – 后端逻辑、算法、调试（**后端权威，可信赖**）
+- **{{FRONTEND_PRIMARY}}** – 前端 UI/UX、视觉设计（**前端高手，后端意见仅供参考**）
 - **Claude (自己)** – 编排、计划、执行、交付
 
 ---
@@ -42,7 +42,7 @@ description: '多模型协作开发工作流（研究→构思→计划→执行
 ```
 # 新会话调用
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend <codex|gemini> {{GEMINI_MODEL_FLAG}}- \"{{WORKDIR}}\" <<'EOF'
+  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend <{{BACKEND_PRIMARY}}|{{FRONTEND_PRIMARY}}> {{GEMINI_MODEL_FLAG}}- \"{{WORKDIR}}\" <<'EOF'
 ROLE_FILE: <角色提示词路径>
 <TASK>
 需求：<增强后的需求（如未增强则用 $ARGUMENTS）>
@@ -57,7 +57,7 @@ EOF",
 
 # 复用会话调用
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend <codex|gemini> {{GEMINI_MODEL_FLAG}}resume <SESSION_ID> - \"{{WORKDIR}}\" <<'EOF'
+  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend <{{BACKEND_PRIMARY}}|{{FRONTEND_PRIMARY}}> {{GEMINI_MODEL_FLAG}}resume <SESSION_ID> - \"{{WORKDIR}}\" <<'EOF'
 ROLE_FILE: <角色提示词路径>
 <TASK>
 需求：<增强后的需求（如未增强则用 $ARGUMENTS）>
@@ -70,9 +70,6 @@ EOF",
   description: "简短描述"
 })
 ```
-
-**模型参数说明**：
-- `{{GEMINI_MODEL_FLAG}}`：当使用 `--backend gemini` 时，替换为 `--gemini-model gemini-3.1-pro-preview `（注意末尾空格）；使用 codex 时替换为空字符串
 
 **角色提示词**：
 

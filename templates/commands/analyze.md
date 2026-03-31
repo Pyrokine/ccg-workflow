@@ -1,5 +1,5 @@
 ---
-description: '多模型技术分析（并行执行）：Codex 后端视角 + Gemini 前端视角，交叉验证后综合见解'
+description: '多模型技术分析（并行执行）：{{BACKEND_PRIMARY}} 后端视角 + {{FRONTEND_PRIMARY}} 前端视角，交叉验证后综合见解'
 ---
 
 # Analyze - 多模型技术分析
@@ -16,8 +16,8 @@ description: '多模型技术分析（并行执行）：Codex 后端视角 + Gem
 
 你是**分析协调者**，编排多模型分析流程：
 - **ace-tool** – 代码上下文检索
-- **Codex** – 后端/系统视角（**后端权威**）
-- **Gemini** – 前端/用户视角（**前端权威**）
+- **{{BACKEND_PRIMARY}}** – 后端/系统视角（**后端权威**）
+- **{{FRONTEND_PRIMARY}}** – 前端/用户视角（**前端权威**）
 - **Claude (自己)** – 综合见解
 
 ---
@@ -33,7 +33,7 @@ description: '多模型技术分析（并行执行）：Codex 后端视角 + Gem
 
 ```
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend <codex|gemini> {{GEMINI_MODEL_FLAG}}- \"{{WORKDIR}}\" <<'EOF'
+  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend <{{BACKEND_PRIMARY}}|{{FRONTEND_PRIMARY}}> {{GEMINI_MODEL_FLAG}}- \"{{WORKDIR}}\" <<'EOF'
 ROLE_FILE: <角色提示词路径>
 <TASK>
 需求：<增强后的需求（如未增强则用 $ARGUMENTS）>
@@ -46,9 +46,6 @@ EOF",
   description: "简短描述"
 })
 ```
-
-**模型参数说明**：
-- `{{GEMINI_MODEL_FLAG}}`：当使用 `--backend gemini` 时，替换为 `--gemini-model gemini-3.1-pro-preview `（注意末尾空格）；使用 codex 时替换为空字符串
 
 **角色提示词**：
 
@@ -96,11 +93,11 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 
 **⚠️ 必须发起两个并行 Bash 调用**（参照上方调用规范）：
 
-1. **Codex 后端分析**：`Bash({ command: "...--backend codex...", run_in_background: true })`
+1. **{{BACKEND_PRIMARY}} 后端分析**：`Bash({ command: "...--backend {{BACKEND_PRIMARY}}...", run_in_background: true })`
    - ROLE_FILE: `~/.claude/.ccg/prompts/codex/analyzer.md`
    - OUTPUT：技术可行性、架构影响、性能考量
 
-2. **Gemini 前端分析**：`Bash({ command: "...--backend gemini...", run_in_background: true })`
+2. **{{FRONTEND_PRIMARY}} 前端分析**：`Bash({ command: "...--backend {{FRONTEND_PRIMARY}}...", run_in_background: true })`
    - ROLE_FILE: `~/.claude/.ccg/prompts/gemini/analyzer.md`
    - OUTPUT：UI/UX 影响、用户体验、视觉设计考量
 

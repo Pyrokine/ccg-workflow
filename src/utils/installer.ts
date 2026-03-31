@@ -70,6 +70,7 @@ interface InstallConfig {
     frontend: { models: string[], primary: string }
     backend: { models: string[], primary: string }
     review: { models: string[] }
+    geminiModel?: string
   }
   liteMode: boolean
   mcpProvider: string

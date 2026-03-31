@@ -67,6 +67,7 @@ export function injectConfigVariables(content: string, config: {
     frontend?: { models?: string[], primary?: string }
     backend?: { models?: string[], primary?: string }
     review?: { models?: string[] }
+    geminiModel?: string
   }
   liteMode?: boolean
   mcpProvider?: string
@@ -95,6 +96,14 @@ export function injectConfigVariables(content: string, config: {
   // Routing mode
   const routingMode = routing.mode || 'smart'
   processed = processed.replace(/\{\{ROUTING_MODE\}\}/g, routingMode)
+
+  // Gemini model flag — inject at install time
+  // When gemini is used for any role, pass --gemini-model <name>
+  // The codeagent-wrapper gracefully ignores this flag for non-gemini backends
+  const geminiModel = routing.geminiModel || 'gemini-3.1-pro-preview'
+  const usesGemini = frontendPrimary === 'gemini' || backendPrimary === 'gemini'
+  const geminiModelFlag = usesGemini ? `--gemini-model ${geminiModel} ` : ''
+  processed = processed.replace(/\{\{GEMINI_MODEL_FLAG\}\}/g, geminiModelFlag)
 
   // Lite mode flag for codeagent-wrapper
   // If liteMode is true, inject "--lite" flag

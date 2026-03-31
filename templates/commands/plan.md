@@ -29,7 +29,7 @@ $ARGUMENTS
 
 ```
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend <codex|gemini> {{GEMINI_MODEL_FLAG}}- \"{{WORKDIR}}\" <<'EOF'
+  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend <{{BACKEND_PRIMARY}}|{{FRONTEND_PRIMARY}}> {{GEMINI_MODEL_FLAG}}- \"{{WORKDIR}}\" <<'EOF'
 ROLE_FILE: <角色提示词路径>
 <TASK>
 需求：<增强后的需求>
@@ -42,9 +42,6 @@ EOF",
   description: "简短描述"
 })
 ```
-
-**模型参数说明**：
-- `{{GEMINI_MODEL_FLAG}}`：当使用 `--backend gemini` 时，替换为 `--gemini-model gemini-3.1-pro-preview `（注意末尾空格）；使用 codex 时替换为空字符串
 
 **角色提示词**：
 
@@ -118,12 +115,12 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 
 将**原始需求**（不带预设观点）分发给两个模型：
 
-1. **Codex 后端分析**：
+1. **{{BACKEND_PRIMARY}} 后端分析**：
    - ROLE_FILE: `~/.claude/.ccg/prompts/codex/analyzer.md`
    - 关注：技术可行性、架构影响、性能考量、潜在风险
    - OUTPUT: 多角度解决方案 + 优劣势分析
 
-2. **Gemini 前端分析**：
+2. **{{FRONTEND_PRIMARY}} 前端分析**：
    - ROLE_FILE: `~/.claude/.ccg/prompts/gemini/analyzer.md`
    - 关注：UI/UX 影响、用户体验、视觉设计
    - OUTPUT: 多角度解决方案 + 优劣势分析
@@ -143,11 +140,11 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 
 为降低 Claude 合成计划的遗漏风险，可并行让两个模型输出“计划草案”（仍然**不允许**修改文件）：
 
-1. **Codex 计划草案**（后端权威）：
+1. **{{BACKEND_PRIMARY}} 计划草案**（后端权威）：
    - ROLE_FILE: `~/.claude/.ccg/prompts/codex/architect.md`
    - OUTPUT: Step-by-step plan + pseudo-code（重点：数据流/边界条件/错误处理/测试策略）
 
-2. **Gemini 计划草案**（前端权威）：
+2. **{{FRONTEND_PRIMARY}} 计划草案**（前端权威）：
    - ROLE_FILE: `~/.claude/.ccg/prompts/gemini/architect.md`
    - OUTPUT: Step-by-step plan + pseudo-code（重点：信息架构/交互/可访问性/视觉一致性）
 

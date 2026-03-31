@@ -63,11 +63,11 @@ description: '初始化 OpenSpec (OPSX) 环境 + 验证多模型 MCP 工具'
    - **工作目录**：`{{WORKDIR}}` **必须通过 Bash 执行 `pwd`（Unix）或 `cd`（Windows CMD）获取当前工作目录的绝对路径**，禁止从 `$HOME` 或环境变量推断。如果用户通过 `/add-dir` 添加了多个工作区，先确定任务相关的工作区。
    - Test Codex backend:
      ```bash
-     echo "echo test" | ~/.claude/bin/codeagent-wrapper --backend codex - "{{WORKDIR}}"
+     echo "echo test" | ~/.claude/bin/codeagent-wrapper --backend {{BACKEND_PRIMARY}} {{GEMINI_MODEL_FLAG}}- "{{WORKDIR}}"
      ```
-   - Test Gemini backend:
+   - Test {{FRONTEND_PRIMARY}} backend:
      ```bash
-     echo "echo test" | ~/.claude/bin/codeagent-wrapper --backend gemini --gemini-model gemini-3.1-pro-preview - "{{WORKDIR}}"
+     echo "echo test" | ~/.claude/bin/codeagent-wrapper --backend {{FRONTEND_PRIMARY}} {{GEMINI_MODEL_FLAG}}- "{{WORKDIR}}"
      ```
    - For each unavailable tool, display warning with installation instructions.
 

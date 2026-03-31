@@ -1,5 +1,5 @@
 ---
-description: '后端专项工作流（研究→构思→计划→执行→优化→评审），Codex 主导'
+description: '后端专项工作流（研究→构思→计划→执行→优化→评审），{{BACKEND_PRIMARY}} 主导'
 ---
 
 # Backend - 后端专项开发
@@ -13,7 +13,7 @@ description: '后端专项工作流（研究→构思→计划→执行→优化
 ## 上下文
 
 - 后端任务：$ARGUMENTS
-- Codex 主导，Gemini 辅助参考
+- {{BACKEND_PRIMARY}} 主导，{{FRONTEND_PRIMARY}} 辅助参考
 - 适用：API 设计、算法实现、数据库优化、业务逻辑
 
 ## 你的角色
@@ -21,8 +21,8 @@ description: '后端专项工作流（研究→构思→计划→执行→优化
 你是**后端编排者**，协调多模型完成服务端任务（研究 → 构思 → 计划 → 执行 → 优化 → 评审），用中文协助用户。
 
 **协作模型**：
-- **Codex** – 后端逻辑、算法（**后端权威，可信赖**）
-- **Gemini** – 前端视角（**后端意见仅供参考**）
+- **{{BACKEND_PRIMARY}}** – 后端逻辑、算法（**后端权威，可信赖**）
+- **{{FRONTEND_PRIMARY}}** – 前端视角（**后端意见仅供参考**）
 - **Claude (自己)** – 编排、计划、执行、交付
 
 ---
@@ -39,7 +39,7 @@ description: '后端专项工作流（研究→构思→计划→执行→优化
 ```
 # 新会话调用
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend codex - \"{{WORKDIR}}\" <<'EOF'
+  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend {{BACKEND_PRIMARY}} {{GEMINI_MODEL_FLAG}}- \"{{WORKDIR}}\" <<'EOF'
 ROLE_FILE: <角色提示词路径>
 <TASK>
 需求：<增强后的需求（如未增强则用 $ARGUMENTS）>
@@ -54,7 +54,7 @@ EOF",
 
 # 复用会话调用
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend codex resume <SESSION_ID> - \"{{WORKDIR}}\" <<'EOF'
+  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend {{BACKEND_PRIMARY}} {{GEMINI_MODEL_FLAG}}resume <SESSION_ID> - \"{{WORKDIR}}\" <<'EOF'
 ROLE_FILE: <角色提示词路径>
 <TASK>
 需求：<增强后的需求（如未增强则用 $ARGUMENTS）>
@@ -105,7 +105,7 @@ EOF",
 
 ### 💡 阶段 2：构思
 
-`[模式：构思]` - Codex 主导分析
+`[模式：构思]` - {{BACKEND_PRIMARY}} 主导分析
 
 **⚠️ 必须调用 Codex**（参照上方调用规范）：
 - ROLE_FILE: `~/.claude/.ccg/prompts/codex/analyzer.md`
@@ -119,7 +119,7 @@ EOF",
 
 ### 📋 阶段 3：计划
 
-`[模式：计划]` - Codex 主导规划
+`[模式：计划]` - {{BACKEND_PRIMARY}} 主导规划
 
 **⚠️ 必须调用 Codex**（使用 `resume <CODEX_SESSION>` 复用会话）：
 - ROLE_FILE: `~/.claude/.ccg/prompts/codex/architect.md`
@@ -139,7 +139,7 @@ Claude 综合规划，请求用户批准后存入 `.claude/plan/任务名.md`
 
 ### 🚀 阶段 5：优化
 
-`[模式：优化]` - Codex 主导审查
+`[模式：优化]` - {{BACKEND_PRIMARY}} 主导审查
 
 **⚠️ 必须调用 Codex**（参照上方调用规范）：
 - ROLE_FILE: `~/.claude/.ccg/prompts/codex/reviewer.md`
@@ -161,7 +161,7 @@ Claude 综合规划，请求用户批准后存入 `.claude/plan/任务名.md`
 
 ## 关键规则
 
-1. **Codex 后端意见可信赖**
-2. **Gemini 后端意见仅供参考**
+1. **{{BACKEND_PRIMARY}} 后端意见可信赖**
+2. **{{FRONTEND_PRIMARY}} 后端意见仅供参考**
 3. 外部模型对文件系统**零写入权限**
 4. Claude 负责所有代码写入和文件操作
