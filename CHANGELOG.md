@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.1.12] - 2026-04-03
+
+### ✨ 新功能
+
+- **302.AI 赞助商集成**（#126）：init Step 1/4 和菜单 API 配置新增 302.AI 选项，自动填入 baseUrl，用户仅需输入 API Key
+- **README 赞助商 Banner**：中英文 README 顶部新增 302.AI 可点击 Banner + 产品介绍
+
+---
+
 ## [2.1.11] - 2026-03-31
 
 ### 🐛 修复
