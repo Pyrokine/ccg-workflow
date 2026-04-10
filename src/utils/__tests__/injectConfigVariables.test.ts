@@ -226,3 +226,144 @@ describe('integration: real templates with skip mode', () => {
     })
   }
 })
+
+// ─────────────────────────────────────────────────────────────
+// E. GEMINI_MODEL_FLAG line-aware substitution (issue #130, v2.1.15)
+// ─────────────────────────────────────────────────────────────
+describe('GEMINI_MODEL_FLAG line-aware substitution', () => {
+  const geminiFrontendCodexBackend = {
+    routing: {
+      frontend: { primary: 'gemini' },
+      backend: { primary: 'codex' },
+      geminiModel: 'gemini-3.1-pro-preview',
+    },
+  }
+
+  it('keeps flag on lines with hard-coded gemini backend', () => {
+    const input = '--backend gemini {{GEMINI_MODEL_FLAG}}- "/workdir"'
+    const result = injectConfigVariables(input, geminiFrontendCodexBackend)
+    expect(result).toBe('--backend gemini --gemini-model gemini-3.1-pro-preview - "/workdir"')
+  })
+
+  it('strips flag on lines with hard-coded codex backend (issue #130)', () => {
+    // This is the exact bug: `backend.md` / `codex-exec.md` hard-code
+    // `--backend codex` but were getting `--gemini-model` injected.
+    const input = '--backend {{BACKEND_PRIMARY}} {{GEMINI_MODEL_FLAG}}- "/workdir"'
+    const result = injectConfigVariables(input, geminiFrontendCodexBackend)
+    expect(result).toBe('--backend codex - "/workdir"')
+    expect(result).not.toContain('--gemini-model')
+  })
+
+  it('strips flag on lines with hard-coded claude backend', () => {
+    const input = '--backend claude {{GEMINI_MODEL_FLAG}}- "/workdir"'
+    const result = injectConfigVariables(input, geminiFrontendCodexBackend)
+    expect(result).toBe('--backend claude - "/workdir"')
+  })
+
+  it('keeps flag on conditional lines (runtime AI choice)', () => {
+    const input = '--backend <{{BACKEND_PRIMARY}}|{{FRONTEND_PRIMARY}}> {{GEMINI_MODEL_FLAG}}- "/workdir"'
+    const result = injectConfigVariables(input, geminiFrontendCodexBackend)
+    // Conditional lines keep the flag — AI picks a backend at runtime
+    expect(result).toContain('--backend <codex|gemini>')
+    expect(result).toContain('--gemini-model gemini-3.1-pro-preview')
+  })
+
+  it('handles frontend.md style (--backend {{FRONTEND_PRIMARY}})', () => {
+    const input = '--backend {{FRONTEND_PRIMARY}} {{GEMINI_MODEL_FLAG}}- "/workdir"'
+    const result = injectConfigVariables(input, geminiFrontendCodexBackend)
+    // FRONTEND_PRIMARY=gemini → flag kept
+    expect(result).toBe('--backend gemini --gemini-model gemini-3.1-pro-preview - "/workdir"')
+  })
+
+  it('strips flag on frontend codex + backend gemini edge case', () => {
+    const config = {
+      routing: {
+        frontend: { primary: 'codex' },
+        backend: { primary: 'gemini' },
+        geminiModel: 'gemini-3.1-pro-preview',
+      },
+    }
+    const input = [
+      '--backend {{FRONTEND_PRIMARY}} {{GEMINI_MODEL_FLAG}}- "/w"', // codex → strip
+      '--backend {{BACKEND_PRIMARY}} {{GEMINI_MODEL_FLAG}}- "/w"',  // gemini → keep
+    ].join('\n')
+    const result = injectConfigVariables(input, config)
+    const lines = result.split('\n')
+    expect(lines[0]).toBe('--backend codex - "/w"')
+    expect(lines[0]).not.toContain('--gemini-model')
+    expect(lines[1]).toBe('--backend gemini --gemini-model gemini-3.1-pro-preview - "/w"')
+  })
+
+  it('strips all flags when neither frontend nor backend uses gemini', () => {
+    const config = {
+      routing: {
+        frontend: { primary: 'claude' },
+        backend: { primary: 'codex' },
+      },
+    }
+    const input = [
+      '--backend codex {{GEMINI_MODEL_FLAG}}- "/w"',
+      '--backend <codex|claude> {{GEMINI_MODEL_FLAG}}- "/w"',
+    ].join('\n')
+    const result = injectConfigVariables(input, config)
+    expect(result).not.toContain('--gemini-model')
+    expect(result).not.toContain('{{GEMINI_MODEL_FLAG}}')
+  })
+
+  it('uses default gemini-3.1-pro-preview when geminiModel not specified', () => {
+    const input = '--backend gemini {{GEMINI_MODEL_FLAG}}- "/w"'
+    const result = injectConfigVariables(input, {
+      routing: { frontend: { primary: 'gemini' }, backend: { primary: 'codex' } },
+    })
+    expect(result).toContain('--gemini-model gemini-3.1-pro-preview')
+  })
+
+  it('respects custom gemini model name', () => {
+    const input = '--backend gemini {{GEMINI_MODEL_FLAG}}- "/w"'
+    const result = injectConfigVariables(input, {
+      routing: {
+        frontend: { primary: 'gemini' },
+        backend: { primary: 'codex' },
+        geminiModel: 'gemini-3-flash-preview',
+      },
+    })
+    expect(result).toContain('--gemini-model gemini-3-flash-preview')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────
+// F. Integration: no dead --gemini-model on hard-coded codex lines
+// ─────────────────────────────────────────────────────────────
+describe('integration: real templates with gemini+codex config', () => {
+  const config = {
+    routing: {
+      frontend: { primary: 'gemini' },
+      backend: { primary: 'codex' },
+      geminiModel: 'gemini-3.1-pro-preview',
+    },
+  }
+
+  // Templates where the bug manifested: they hard-code `--backend codex`
+  // (via `--backend {{BACKEND_PRIMARY}}`) on lines that also contain
+  // `{{GEMINI_MODEL_FLAG}}`.
+  const expectedCleanTemplates = [
+    'commands/backend.md',
+    'commands/codex-exec.md',
+  ]
+
+  for (const rel of expectedCleanTemplates) {
+    it(`${rel}: no --gemini-model on lines with hard-coded --backend codex`, () => {
+      const content = readFileSync(join(PACKAGE_ROOT, 'templates', rel), 'utf-8')
+      const result = injectConfigVariables(content, config)
+
+      // Scan each line: if it contains `--backend codex` (non-conditional),
+      // it must NOT contain `--gemini-model`.
+      const offendingLines = result.split('\n').filter((line) => {
+        const hardCodedCodex = /--backend\s+codex(?:\s|$)/.test(line)
+        const hasGeminiFlag = line.includes('--gemini-model')
+        return hardCodedCodex && hasGeminiFlag
+      })
+      expect(offendingLines).toEqual([])
+    })
+  }
+})

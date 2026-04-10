@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.1.15] - 2026-04-10
+
+### 🐛 修复
+
+- **`--gemini-model` 注入到纯 codex 调用行**（#130）：`injectConfigVariables()` 全局替换 `{{GEMINI_MODEL_FLAG}}`，不区分当前行的后端硬编码。导致用户配置 `Frontend: gemini + Backend: codex` 后，`/ccg:backend`、`/ccg:codex-exec` 等纯 codex 调用被注入 `--gemini-model gemini-3.1-pro-preview` 冗余参数。虽然 `codeagent-wrapper` 有兜底 warn + ignore 不影响执行，但命令看起来混乱且有误导性。改为**行级感知替换**：硬编码 `--backend gemini` 或条件行 `--backend <codex|gemini>` 保留 flag，纯 `--backend codex/claude` 行清除。
+- **新增 11 个单元测试**：覆盖 codex-only / gemini-only / 条件行 / 前后端交叉 / 无 gemini / 默认模型 / 自定义模型 / 真实模板集成测试
+
+---
+
 ## [2.1.14] - 2026-04-07
 
 ### 🐛 修复

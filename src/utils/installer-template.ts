@@ -97,13 +97,47 @@ export function injectConfigVariables(content: string, config: {
   const routingMode = routing.mode || 'smart'
   processed = processed.replace(/\{\{ROUTING_MODE\}\}/g, routingMode)
 
-  // Gemini model flag — inject at install time
-  // When gemini is used for any role, pass --gemini-model <name>
-  // The codeagent-wrapper gracefully ignores this flag for non-gemini backends
+  // Gemini model flag — inject at install time with line-aware substitution.
+  //
+  // When gemini is used for any role, we need `--gemini-model <name>` on
+  // gemini invocations. But some command templates hard-code a non-gemini
+  // backend on the same line (e.g. `--backend {{BACKEND_PRIMARY}}` where
+  // BACKEND_PRIMARY=codex, see backend.md / codex-exec.md). On those lines
+  // the flag is useless — codeagent-wrapper warns and ignores it, but we
+  // should not emit the dead flag at all (issue #130).
+  //
+  // Strategy: after BACKEND_PRIMARY / FRONTEND_PRIMARY have already been
+  // substituted above, scan each line containing `{{GEMINI_MODEL_FLAG}}`:
+  //   - If the line hard-codes a non-gemini backend (`--backend codex`,
+  //     `--backend claude`, etc.) — strip the flag on that line.
+  //   - If the line uses a conditional expression (`--backend <codex|gemini>`)
+  //     or hard-codes gemini — keep the flag (AI picks at runtime).
   const geminiModel = routing.geminiModel || 'gemini-3.1-pro-preview'
   const usesGemini = frontendPrimary === 'gemini' || backendPrimary === 'gemini'
-  const geminiModelFlag = usesGemini ? `--gemini-model ${geminiModel} ` : ''
-  processed = processed.replace(/\{\{GEMINI_MODEL_FLAG\}\}/g, geminiModelFlag)
+
+  if (!usesGemini) {
+    // Neither frontend nor backend is gemini — no flag needed anywhere.
+    processed = processed.replace(/\{\{GEMINI_MODEL_FLAG\}\}/g, '')
+  }
+  else {
+    const geminiModelFlagValue = `--gemini-model ${geminiModel} `
+    // Match `--backend <bare-identifier>` (rejects conditional `<...|...>`
+    // because `<` is not in [a-z0-9-]).
+    const hardCodedBackendRe = /--backend\s+([a-z0-9-]+)(?:\s|$)/
+
+    processed = processed.split('\n').map((line) => {
+      if (!line.includes('{{GEMINI_MODEL_FLAG}}')) {
+        return line
+      }
+      const m = line.match(hardCodedBackendRe)
+      if (m && m[1] !== 'gemini') {
+        // Hard-coded non-gemini backend on this line — strip the flag.
+        return line.replace(/\{\{GEMINI_MODEL_FLAG\}\}/g, '')
+      }
+      // Conditional / gemini-hard-coded — keep the flag.
+      return line.replace(/\{\{GEMINI_MODEL_FLAG\}\}/g, geminiModelFlagValue)
+    }).join('\n')
+  }
 
   // Lite mode flag for codeagent-wrapper
   // If liteMode is true, inject "--lite" flag
