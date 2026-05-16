@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.0.3] - 2026-05-17
+
+### ✨ New Features
+
+- **Codex Builder execution mode** — At plan approval HARD STOP, users can now choose between Agent Teams (Claude Builders) or Codex to write code. Codex writes directly to filesystem via codeagent-wrapper with full permissions, while Claude remains the orchestrator: monitoring progress, reviewing `git diff`, and running quality gates afterward.
+- **New role: `codex/builder.md`** — Implementation-focused role prompt with full write permissions. Follows plan exactly, validates after each task, outputs structured Execution Report.
+- **Execution mode selection at HARD STOP** — `full-collaborate` offers [Agent Teams / Codex], `guided-develop` offers [Claude / Codex]. Codex failure auto-degrades to the other option.
+
+### 🔄 Changes
+
+- **model-router.md updated** — Added `builder` role to available roles, documented Codex Builder mode for implementation phase.
+- **Role-based context filtering** — `subagent-context.js` now detects `builder` role from ROLE_FILE path and filters context.jsonl entries accordingly.
+
+---
+
 ## [3.0.2] - 2026-05-17
 
 ### ✨ New Features (Trellis-inspired)

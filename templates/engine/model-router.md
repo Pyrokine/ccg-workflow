@@ -46,8 +46,14 @@ Read ~/.claude/.ccg/config.toml
 | 不确定 | 双模型并行 | 各用对应 debugger |
 
 ### 实施阶段
-- 外部模型**仅提供建议**，Claude 执行所有文件修改
-- 外部模型有**零文件写入权限**
+
+**默认模式**（Claude 执行）：
+- 外部模型仅提供建议，Claude 执行所有文件修改
+
+**Codex Builder 模式**（用户选择时）：
+- backend 模型 + `$BACKEND/builder.md` — **有完整写权限**，直接写代码到文件系统
+- Claude 监控进度，审查产出，必要时接管
+- 适用于 M-L 复杂度、低中风险的明确实施任务
 
 ## 3. 调用模板
 
@@ -71,7 +77,7 @@ Bash({
 
 变量说明：
 - `$MODEL` — 选定的模型名（`codex` / `gemini` / `claude`）
-- `$ROLE` — 角色文件名（`analyzer` / `architect` / `reviewer` / `debugger` / `optimizer` / `tester`）
+- `$ROLE` — 角色文件名（`analyzer` / `architect` / `reviewer` / `debugger` / `optimizer` / `tester` / `builder`）
 - `$TASK_CONTENT` — 任务内容（需求 + 上下文）
 - `$OUTPUT_FORMAT` — 期望输出格式
 - `$SHORT_DESCRIPTION` — 简短描述（用于进度显示）

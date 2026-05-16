@@ -136,19 +136,31 @@ TaskOutput({ task_id: "$FRONTEND_TASK_ID", block: true, timeout: 600000 })
   nextAction → "等待用户审批计划"
 ```
 
-**⛔ HARD STOP**：展示完整计划，并告知用户：
+**⛔ HARD STOP**：展示完整计划，并询问用户选择执行模式：
+
 ```
-审批后将使用 Agent Teams 并行实施（多个 Builder 同时写代码）。
+⛔ 计划审批 + 执行模式选择
+
+请审批以上计划，并选择谁来写代码：
+  [1] Agent Teams（Claude Builders 并行写，多文件同时进行）
+  [2] Codex（Codex 写代码，更快更便宜，Claude 监控审查）
 ```
-等待用户明确审批。未审批不可进入 Phase 4。
+
+等待用户明确审批 + 选择。未审批不可进入 Phase 4。
 
 用户确认后：`task.json: gate → null`
 
-### Phase 4: 实施（Agent Teams 并行）
+### Phase 4: 实施
 
 `[模式：执行]`
 
-**Gate check**: 用户已审批计划
+**Gate check**: 用户已审批计划 + 选择了执行模式
+
+根据用户选择的执行模式执行：
+
+---
+
+#### 模式 A: Agent Teams 并行（用户选 [1]）
 
 **⛔⛔⛔ 你的第一个动作必须是 TeamCreate。不是 Write，不是 Bash，不是 Read，是 TeamCreate。⛔⛔⛔**
 
@@ -224,6 +236,37 @@ SendMessage({ to: "reviewer", message: { type: "shutdown_request" } })
 1. 告知用户："Agent Teams 未启用，降级为顺序实施"
 2. 按 plan.md 中的 Layer 顺序逐文件实施
 3. 仍然遵守质量关卡
+
+---
+
+#### 模式 B: Codex 实施（用户选 [2]）
+
+**Task 更新**：`currentPhase → "4-implementation"`, `nextAction → "Codex Builder 执行 plan"`
+
+Claude 作为主导者，调用 Codex 写代码：
+
+**Step 1**: 将 plan.md 转为 Codex 可执行的任务描述（包含具体文件路径、变更说明、验证命令）
+
+**Step 2**: 调用 codeagent-wrapper + builder 角色：
+
+```
+Bash({
+  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend codex {{GEMINI_MODEL_FLAG}}- \"$WORKDIR\" <<'CODEAGENT_EOF'\nROLE_FILE: ~/.claude/.ccg/prompts/codex/builder.md\n<TASK>\n按以下计划实施，逐个任务完成并验证。\n\n{plan.md 完整内容，包含文件路径、具体变更、验证命令}\n</TASK>\nOUTPUT: Execution Report (每个 task 的 PASS/FAIL + 变更文件列表)\nCODEAGENT_EOF",
+  run_in_background: true,
+  timeout: 3600000,
+  description: "Codex Builder: 执行实施计划"
+})
+```
+
+**Step 3**: 等待 Codex 完成，读取执行报告
+
+**Step 4**: Claude 审查产出：
+1. `git diff` 检查所有变更
+2. 确认变更在 plan 范围内（scope check）
+3. 如有小问题（<10 行）→ Claude 直接修复
+4. 如有大问题 → 再次调用 Codex 修复，或切换到 Claude 自己写
+
+**降级**：如果 Codex 返回错误或超时 → 告知用户 "Codex 执行失败，切换到 Agent Teams" → 按模式 A 执行
 
 ### Phase 5: 迭代审查 [required · Ralph Loop]
 

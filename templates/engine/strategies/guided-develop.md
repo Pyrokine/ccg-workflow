@@ -145,7 +145,17 @@ TaskOutput({ task_id: "<id>", block: true, timeout: 600000 })
   nextAction → "等待用户审批计划"
 ```
 
-**⛔ HARD STOP**：展示计划，等待用户确认后才能进入 Phase 5。
+**⛔ HARD STOP**：展示计划，并询问用户选择执行模式：
+
+```
+⛔ 计划审批 + 执行模式选择
+
+请审批以上计划，并选择谁来写代码：
+  [1] Claude 自己写（精细控制，逐步实施）
+  [2] Codex（Codex 写代码，更快更便宜，Claude 监控审查）
+```
+
+等待用户明确审批 + 选择。
 
 用户确认后：
 ```
@@ -154,10 +164,26 @@ TaskOutput({ task_id: "<id>", block: true, timeout: 600000 })
 
 ### Phase 5: 实施
 
+根据用户选择的执行模式：
+
+#### 模式 A: Claude 自己写（用户选 [1]）
+
 1. 严格按计划执行
 2. 遵循项目现有代码规范
 3. 每完成一个主要步骤，简要报告进度
 4. 遇到计划外的问题时告知用户，不自行扩大范围
+
+#### 模式 B: Codex 实施（用户选 [2]）
+
+Claude 作为主导者调用 Codex 写代码：
+
+1. 将 plan.md 转为 Codex 可执行的任务描述
+2. 调用 codeagent-wrapper + builder 角色（参考 model-router.md 调用模板，`$ROLE = builder`）
+3. 等待 Codex 完成，读取执行报告
+4. `git diff` 审查产出，确认在 plan 范围内
+5. 小问题 Claude 直接修复，大问题再调 Codex 或切换模式 A
+
+**降级**：Codex 失败/超时 → 切换到模式 A
 
 **Task 更新**：`currentPhase → "5-implement"`, `nextAction → "按计划执行实施"`
 
