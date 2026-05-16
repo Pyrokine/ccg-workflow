@@ -1,17 +1,31 @@
 # CCG - Claude + Codex + Gemini Multi-Model Collaboration
 
+<div align="center">
+
+<img src="assets/logo/ccg-logo-cropped.png" alt="CCG Workflow" width="400">
+
 [![GitHub stars](https://img.shields.io/github/stars/fengshao1227/ccg-workflow?style=social)](https://github.com/fengshao1227/ccg-workflow)
 [![NPM Downloads](https://img.shields.io/npm/dt/ccg-workflow?style=flat-square&color=blue)](https://www.npmjs.com/package/ccg-workflow)
 [![npm version](https://img.shields.io/npm/v/ccg-workflow.svg)](https://www.npmjs.com/package/ccg-workflow)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![Claude Code](https://img.shields.io/badge/Claude%20Code-Compatible-green.svg)](https://claude.ai/code)
+[![Tests](https://img.shields.io/badge/Tests-139%20passed-brightgreen.svg)]()
+[![Follow on X](https://img.shields.io/badge/X-@CCG__Workflow-black?logo=x&logoColor=white)](https://x.com/CCG_Workflow)
+![star](https://atomgit.com/fengshao1227/ccg-workflow/star/badge.svg)
 
 [简体中文](./README.zh-CN.md) | English
 
-## Sponsor
+</div>
 
-[302.AI](https://share.302.ai/oUDqQ6) — Pay-as-you-go enterprise AI resource hub with the latest AI models and APIs.
+## ♥️ Sponsor
 
-[n1n.ai](https://api.n1n.ai/register?channel=c_ivgzug0w) — One API Key to access 500+ AI models.
+[![302.AI](assets/sponsors/302.ai-en.jpg)](https://share.302.ai/oUDqQ6)
+
+[302.AI](https://share.302.ai/oUDqQ6) is a pay-as-you-go enterprise AI resource hub that offers the latest and most comprehensive AI models and APIs on the market, along with a variety of ready-to-use online AI applications.
+
+---
+
+[**n1n.ai**](https://api.n1n.ai/register?channel=c_ivgzug0w) — Global LLM API Gateway. One API Key to access 500+ top AI models (GPT-5, Claude 4.5, Gemini 3 Pro, and more).
 
 ---
 
@@ -223,6 +237,11 @@ npx ccg-workflow            # Select "Uninstall" from menu
 - **Email**: [noreply@github.com](mailto:noreply@github.com)
 - **Issues**: [GitHub Issues](https://github.com/fengshao1227/ccg-workflow/issues)
 - **Community**: [Linux.do](https://linux.do)
+
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=fengshao1227/ccg-workflow&type=timeline&legend=top-left)](https://www.star-history.com/#fengshao1227/ccg-workflow&type=timeline&legend=top-left)
 
 ## License
 

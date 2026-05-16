@@ -1,15 +1,32 @@
 # CCG - Claude + Codex + Gemini 多模型协作
+# CCG - Claude + Codex + Gemini Multi-Model Collaboration
 
+<div align="center">
+
+<img src="assets/logo/ccg-logo-cropped.png" alt="CCG Workflow" width="400">
+
+[![GitHub stars](https://img.shields.io/github/stars/fengshao1227/ccg-workflow?style=social)](https://github.com/fengshao1227/ccg-workflow)
+[![NPM Downloads](https://img.shields.io/npm/dt/ccg-workflow?style=flat-square&color=blue)](https://www.npmjs.com/package/ccg-workflow)
 [![npm version](https://img.shields.io/npm/v/ccg-workflow.svg)](https://www.npmjs.com/package/ccg-workflow)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![Claude Code](https://img.shields.io/badge/Claude%20Code-Compatible-green.svg)](https://claude.ai/code)
+[![Tests](https://img.shields.io/badge/Tests-139%20passed-brightgreen.svg)]()
+[![Follow on X](https://img.shields.io/badge/X-@CCG__Workflow-black?logo=x&logoColor=white)](https://x.com/CCG_Workflow)
+![star](https://atomgit.com/fengshao1227/ccg-workflow/star/badge.svg)
 
-简体中文 | [English](./README.md)
+[简体中文](./README.zh-CN.md) | English
 
-## 赞助商
+</div>
 
-[302.AI](https://share.302.ai/oUDqQ6) — 按用量付费的企业级 AI 资源平台。
+## ♥️ Sponsor
 
-[n1n.ai](https://api.n1n.ai/register?channel=c_ivgzug0w) — 一个 API Key 连接 500+ AI 模型。
+[![302.AI](assets/sponsors/302.ai-en.jpg)](https://share.302.ai/oUDqQ6)
+
+[302.AI](https://share.302.ai/oUDqQ6) is a pay-as-you-go enterprise AI resource hub that offers the latest and most comprehensive AI models and APIs on the market, along with a variety of ready-to-use online AI applications.
+
+---
+
+[**n1n.ai**](https://api.n1n.ai/register?channel=c_ivgzug0w) — Global LLM API Gateway. One API Key to access 500+ top AI models (GPT-5, Claude 4.5, Gemini 3 Pro, and more).
 
 ---
 
