@@ -127,7 +127,9 @@ $ARGUMENTS
 mkdir -p .ccg/tasks/{task-name}
 ```
 
-**Step 3**: 写入 `.ccg/tasks/{task-name}/task.json`：
+**Step 3**: 获取当前 git 分支名：`git rev-parse --abbrev-ref HEAD`
+
+**Step 4**: 写入 `.ccg/tasks/{task-name}/task.json`：
 
 ```json
 {
@@ -138,11 +140,15 @@ mkdir -p .ccg/tasks/{task-name}
   "currentPhase": "1",
   "nextAction": "{策略第一阶段的描述}",
   "gate": null,
+  "branch": "{当前 git 分支}",
+  "scope": "{task-name}",
   "createdAt": "{当前 ISO 日期时间}"
 }
 ```
 
-**Step 4**: 如果 `.ccg/spec/` 目录存在，创建 `.ccg/tasks/{task-name}/context.jsonl`，列出相关 spec 文件。
+**Step 5**: 创建 `.ccg/tasks/{task-name}/context.jsonl` 种子文件：
+- 第一行写种子示例：`{"_example": "Fill with {\"file\": \"path\", \"reason\": \"why\"}. Seed rows are skipped."}`
+- 如果 `.ccg/spec/` 存在 → 追加 spec 文件条目
 
 **复杂度 S → 跳过任务创建**（保持轻量）。
 

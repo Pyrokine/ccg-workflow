@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.0.1] - 2026-05-16
+
+- Task archival: completed tasks move to `.ccg/tasks/archive/YYYY-MM/` with auto-commit
+- task.json adds `branch` and `scope` fields for git/PR integration
+- context.jsonl seed: new tasks auto-generate example row + spec file entries
+- Stale pointer detection: hooks gracefully skip deleted/moved task directories
+- Default MCP provider changed from ace-tool to fast-context
+
+---
+
 ## [3.0.0] - 2026-05-16
 
 Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks, task persistence, and Agent Teams.

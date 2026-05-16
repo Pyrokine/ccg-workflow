@@ -25,9 +25,10 @@ function getActiveTask(projectRoot) {
   try {
     const dirs = fs.readdirSync(tasksDir)
       .filter(d => {
+        if (d === 'archive') return false;
         try {
-          return fs.statSync(path.join(tasksDir, d)).isDirectory()
-            && fs.existsSync(path.join(tasksDir, d, 'task.json'));
+          const full = path.join(tasksDir, d);
+          return fs.statSync(full).isDirectory() && fs.existsSync(path.join(full, 'task.json'));
         } catch { return false; }
       })
       .sort()
@@ -35,10 +36,12 @@ function getActiveTask(projectRoot) {
 
     for (const dir of dirs) {
       try {
-        const raw = fs.readFileSync(path.join(tasksDir, dir, 'task.json'), 'utf-8');
+        const taskPath = path.join(tasksDir, dir, 'task.json');
+        if (!fs.existsSync(taskPath)) continue; // stale pointer detection
+        const raw = fs.readFileSync(taskPath, 'utf-8');
         const task = JSON.parse(raw);
         if (task.status !== 'completed' && task.status !== 'archived') {
-          return { dir: path.join(tasksDir, dir), ...task };
+          return { dir: path.join(tasksDir, dir), ...task, _stale: false };
         }
       } catch { /* skip malformed */ }
     }
@@ -101,6 +104,54 @@ function outputHook(eventName, additionalContext) {
   }));
 }
 
+function archiveTask(taskDir, projectRoot) {
+  try {
+    const now = new Date();
+    const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const archiveDir = path.join(projectRoot, '.ccg', 'tasks', 'archive', month);
+    if (!fs.existsSync(archiveDir)) fs.mkdirSync(archiveDir, { recursive: true });
+    const name = path.basename(taskDir);
+    const dest = path.join(archiveDir, name);
+    fs.renameSync(taskDir, dest);
+    return dest;
+  } catch { return null; }
+}
+
+function autoCommitTask(projectRoot, message) {
+  try {
+    const { execSync } = require('child_process');
+    execSync('git add .ccg/tasks/', { cwd: projectRoot, stdio: 'pipe' });
+    const diff = execSync('git diff --cached --quiet', { cwd: projectRoot, stdio: 'pipe' }).toString();
+    return false; // nothing to commit
+  } catch {
+    try {
+      const { execSync } = require('child_process');
+      execSync(`git commit -m "${message || 'chore: archive ccg task'}"`, { cwd: projectRoot, stdio: 'pipe' });
+      return true;
+    } catch { return false; }
+  }
+}
+
+function seedContextJsonl(taskDir, projectRoot) {
+  const jsonlPath = path.join(taskDir, 'context.jsonl');
+  if (fs.existsSync(jsonlPath)) return;
+  const specDir = path.join(projectRoot, '.ccg', 'spec');
+  const lines = ['{"_example": "Fill with {\\\"file\\\": \\\"path\\\", \\\"reason\\\": \\\"why\\\"}. One entry per line. Seed rows (with _example key) are skipped."}'];
+  if (fs.existsSync(specDir)) {
+    try {
+      const walk = (dir, prefix) => {
+        for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+          const rel = prefix ? `${prefix}/${e.name}` : e.name;
+          if (e.isDirectory()) walk(path.join(dir, e.name), rel);
+          else if (e.name.endsWith('.md')) lines.push(JSON.stringify({ file: `.ccg/spec/${rel}`, reason: 'project spec' }));
+        }
+      };
+      walk(specDir, '');
+    } catch { /* silent */ }
+  }
+  try { fs.writeFileSync(jsonlPath, lines.join('\n') + '\n', 'utf-8'); } catch { /* silent */ }
+}
+
 module.exports = {
   findProjectRoot,
   getActiveTask,
@@ -109,5 +160,8 @@ module.exports = {
   readContextJsonl,
   detectTechStack,
   getGitInfo,
-  outputHook
+  outputHook,
+  archiveTask,
+  autoCommitTask,
+  seedContextJsonl
 };

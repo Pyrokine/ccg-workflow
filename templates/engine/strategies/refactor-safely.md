@@ -145,7 +145,13 @@ Step [N/M]: [描述] — ✅ 测试通过 / ❌ 测试失败
      📍 Next: /ccg:commit 提交
    ```
 
-**Task 更新**：`status → "completed"`, `nextAction → "可用 /ccg:commit 提交"`
+**Task 更新**：`status → "archived"`
+
+**归档任务**：
+```bash
+mkdir -p .ccg/tasks/archive/$(date +%Y-%m) && mv .ccg/tasks/{task-name} .ccg/tasks/archive/$(date +%Y-%m)/
+git add .ccg/tasks/ && git commit -m "chore: archive ccg task"
+```
 
 ---
 

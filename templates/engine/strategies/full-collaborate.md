@@ -277,7 +277,21 @@ SendMessage({ to: "reviewer", message: { type: "shutdown_request" } })
      📍 Next: /ccg commit 提交，或查看 .ccg/tasks/{task-name}/ 中的完整记录
    ```
 
-**Task 更新**：`status → "completed"`, `nextAction → "可用 /ccg:commit 提交"`
+**Task 更新**：`status → "archived"`
+
+**归档任务**：将 `.ccg/tasks/{task-name}/` 移动到 `.ccg/tasks/archive/YYYY-MM/{task-name}/`
+```bash
+mkdir -p .ccg/tasks/archive/$(date +%Y-%m) && mv .ccg/tasks/{task-name} .ccg/tasks/archive/$(date +%Y-%m)/
+```
+
+**自动提交归档**：
+```bash
+git add .ccg/tasks/ && git commit -m "chore: archive ccg task {task-name}"
+```
+
+```
+📍 Next: /ccg:commit 提交产品代码
+```
 
 ---
 
