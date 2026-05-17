@@ -1,0 +1,7 @@
+[
+  {
+    "event": "user_prompt_submit",
+    "script": "hooks/ccg-workflow.py",
+    "timeout_ms": 10000
+  }
+]

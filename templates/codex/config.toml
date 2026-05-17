@@ -1,0 +1,9 @@
+# CCG Codex Project Configuration
+# Installed by: npx ccg-workflow
+
+project_doc_fallback_filenames = ["AGENTS.md", "CLAUDE.md"]
+
+[features.multi_agent_v2]
+enabled = true
+max_concurrent_threads_per_session = 6
+min_wait_timeout_ms = 480000   # 8 min — external model calls need time

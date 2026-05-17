@@ -43,6 +43,7 @@ v3.0 从底层重写。一个命令替代 29 个。
 - **Agent Teams** — 大型任务通过 TeamCreate 并行 spawn 多个 Builder。每个 Builder 有独立文件所有权。
 - **质量关卡** — `verify-security`、`verify-quality`、`verify-change` 作为 Skill 在策略验证阶段强制调用。
 - **域知识 Hook** — 消息涉及安全、缓存、RAG 等关键词时，相关知识文件自动注入上下文。
+- **Codex 主导模式** — 用 Codex CLI 作为主编排器，Codex 自己写代码，同时调度 Gemini + Claude 做分析和审查。菜单 `X` 选项安装。
 
 ## 快速开始
 
@@ -245,4 +246,4 @@ MIT
 
 ---
 
-v3.0.3 | [Issues](https://github.com/fengshao1227/ccg-workflow/issues) | [Contributing](./CONTRIBUTING.md)
+v3.0.4 | [Issues](https://github.com/fengshao1227/ccg-workflow/issues) | [Contributing](./CONTRIBUTING.md)

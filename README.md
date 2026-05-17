@@ -42,6 +42,7 @@ v3.0 is a ground-up rewrite. One command replaces 29.
 - **Agent Teams** — Large tasks spawn parallel Builder teammates via TeamCreate. Each Builder gets isolated file ownership.
 - **Quality gates** — `verify-security`, `verify-quality`, `verify-change` run as Skill invocations inside strategy verification phases.
 - **Domain knowledge hooks** — When your message mentions security, caching, RAG, etc., the relevant knowledge file is auto-injected into context.
+- **Codex-Led Mode** — Use Codex CLI as the lead orchestrator. Codex writes code directly and dispatches analysis/review to Gemini + Claude via codeagent-wrapper. Install via menu option `X`.
 
 ## Quick Start
 
@@ -250,4 +251,4 @@ MIT
 
 ---
 
-v3.0.3 | [Issues](https://github.com/fengshao1227/ccg-workflow/issues) | [Contributing](./CONTRIBUTING.md)
+v3.0.4 | [Issues](https://github.com/fengshao1227/ccg-workflow/issues) | [Contributing](./CONTRIBUTING.md)

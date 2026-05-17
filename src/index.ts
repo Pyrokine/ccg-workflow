@@ -18,6 +18,7 @@ export {
   installWorkflows,
   installAceTool,
   installAceToolRs,
+  installCodexMode,
   uninstallWorkflows,
   uninstallAceTool,
 } from './utils/installer'

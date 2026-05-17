@@ -11,7 +11,7 @@ import { parse as parseTOML } from 'smol-toml'
 import { version } from '../../package.json'
 import { configMcp } from './config-mcp'
 import { i18n } from '../i18n'
-import { uninstallWorkflows } from '../utils/installer'
+import { installCodexMode, uninstallWorkflows } from '../utils/installer'
 import { readCcgConfig, writeCcgConfig } from '../utils/config'
 import { init } from './init'
 import { update } from './update'
@@ -169,6 +169,7 @@ export async function showMainMenu(): Promise<void> {
         item('6', i18n.t('menu:options.configModel'), isZh ? '前端/后端模型切换' : 'Switch frontend/backend models'),
 
         groupSep(isZh ? '其他工具' : 'Tools'),
+        item('X', isZh ? 'Codex 模式' : 'Codex Mode', isZh ? '安装 Codex 主导的多模型编排' : 'Install Codex-led multi-model orchestration'),
         item('T', i18n.t('menu:options.tools'), 'ccusage, CCometixLine'),
         item('C', i18n.t('menu:options.installClaude'), isZh ? '安装/重装 CLI' : 'Install/reinstall CLI'),
 
@@ -199,6 +200,9 @@ export async function showMainMenu(): Promise<void> {
         break
       case '6':
         await configModelRouting()
+        break
+      case 'X':
+        await handleCodexMode()
         break
       case 'T':
         await handleTools()
@@ -639,6 +643,52 @@ async function configOutputStyle(): Promise<void> {
 
 // ═══════════════════════════════════════════════════════
 // Install Claude Code
+// ═══════════════════════════════════════════════════════
+
+async function handleCodexMode(): Promise<void> {
+  const isZh = i18n.language === 'zh-CN'
+  console.log()
+  console.log(ansis.cyan.bold(isZh ? '  Codex 多模型编排模式' : '  Codex Multi-Model Orchestration Mode'))
+  console.log()
+  console.log(isZh
+    ? '  安装 CCG Codex 模式到 ~/.codex/，让 Codex CLI 作为主导者编排 Gemini + Claude。'
+    : '  Install CCG Codex mode to ~/.codex/, enabling Codex CLI as lead orchestrator for Gemini + Claude.',
+  )
+  console.log()
+  console.log(isZh ? '  将安装:' : '  Will install:')
+  console.log('    ~/.codex/AGENTS.md              — Codex auto-read instructions')
+  console.log('    ~/.codex/config.toml             — multi-agent + timeout config')
+  console.log('    ~/.codex/agents/ccg-implement.toml')
+  console.log('    ~/.codex/agents/ccg-review.toml')
+  console.log('    ~/.codex/agents/ccg-research.toml')
+  console.log()
+
+  const { confirm } = await inquirer.prompt([{
+    type: 'confirm',
+    name: 'confirm',
+    message: isZh ? '确认安装？' : 'Confirm install?',
+    default: true,
+  }])
+
+  if (!confirm) return
+
+  const spinner = ora(isZh ? '安装 Codex 模式...' : 'Installing Codex mode...').start()
+  const result = await installCodexMode()
+  if (result.success) {
+    spinner.succeed(isZh ? 'Codex 模式安装完成' : 'Codex mode installed')
+    console.log()
+    console.log(ansis.green(result.message))
+    console.log()
+    console.log(ansis.yellow(isZh
+      ? '  使用方法: 在项目目录运行 codex，AGENTS.md 会自动生效'
+      : '  Usage: run codex in your project directory, AGENTS.md takes effect automatically',
+    ))
+  }
+  else {
+    spinner.fail(result.message)
+  }
+}
+
 // ═══════════════════════════════════════════════════════
 
 async function handleInstallClaude(): Promise<void> {

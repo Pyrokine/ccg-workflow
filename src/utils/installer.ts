@@ -1,4 +1,5 @@
 import type { InstallResult } from '../types'
+import { homedir } from 'node:os'
 import ansis from 'ansis'
 import fs from 'fs-extra'
 import { basename, join } from 'pathe'
@@ -485,6 +486,95 @@ async function installSkillGeneratedCommands(ctx: InstallContext): Promise<void>
   catch (error) {
     // Non-fatal: skill command generation failure shouldn't block installation
     ctx.result.errors.push(`Skill Registry command generation warning: ${error}`)
+  }
+}
+
+/**
+ * Install Codex-mode files: AGENTS.md + .codex/config.toml + .codex/agents/*.toml
+ * These enable Codex CLI as an alternative lead orchestrator (Codex-led multi-model mode).
+ * Files are installed to ~/.codex/ (global) and user copies AGENTS.md to project root.
+ */
+export async function installCodexMode(): Promise<{ success: boolean, message: string }> {
+  const codexTemplateDir = join(PACKAGE_ROOT, 'templates', 'codex')
+  if (!(await fs.pathExists(codexTemplateDir))) {
+    return { success: false, message: 'Codex template directory not found' }
+  }
+
+  try {
+    const codexHome = join(homedir(), '.codex')
+    await fs.ensureDir(join(codexHome, 'agents'))
+
+    const configSrc = join(codexTemplateDir, 'config.toml')
+    const configDest = join(codexHome, 'config.toml')
+    if (await fs.pathExists(configSrc) && !(await fs.pathExists(configDest))) {
+      await fs.copy(configSrc, configDest)
+    }
+
+    const agentsSrc = join(codexTemplateDir, 'agents')
+    if (await fs.pathExists(agentsSrc)) {
+      await fs.copy(agentsSrc, join(codexHome, 'agents'), { overwrite: true })
+    }
+
+    const agentsMdSrc = join(codexTemplateDir, 'AGENTS.md')
+    if (await fs.pathExists(agentsMdSrc)) {
+      await fs.copy(agentsMdSrc, join(codexHome, 'AGENTS.md'), { overwrite: true })
+    }
+
+    // hooks/
+    const hooksSrc = join(codexTemplateDir, 'hooks')
+    if (await fs.pathExists(hooksSrc)) {
+      await fs.ensureDir(join(codexHome, 'hooks'))
+      await fs.copy(hooksSrc, join(codexHome, 'hooks'), { overwrite: true })
+    }
+
+    // hooks.json
+    const hooksJsonSrc = join(codexTemplateDir, 'hooks.json')
+    if (await fs.pathExists(hooksJsonSrc)) {
+      await fs.copy(hooksJsonSrc, join(codexHome, 'hooks.json'), { overwrite: true })
+    }
+
+    return {
+      success: true,
+      message: `Codex mode installed:\n  ~/.codex/AGENTS.md\n  ~/.codex/config.toml\n  ~/.codex/hooks.json\n  ~/.codex/hooks/ccg-workflow.py\n  ~/.codex/agents/ccg-implement.toml\n  ~/.codex/agents/ccg-review.toml\n  ~/.codex/agents/ccg-research.toml`,
+    }
+  }
+  catch (error) {
+    return { success: false, message: `Failed to install Codex mode: ${error}` }
+  }
+}
+
+async function _installCodexFilesInternal(ctx: InstallContext): Promise<void> {
+  const codexTemplateDir = join(ctx.templateDir, 'codex')
+  if (!(await fs.pathExists(codexTemplateDir))) return
+
+  try {
+    const codexHome = join(homedir(), '.codex')
+    await fs.ensureDir(join(codexHome, 'agents'))
+
+    // .codex/config.toml (merge, don't overwrite user's existing config)
+    const configSrc = join(codexTemplateDir, 'config.toml')
+    const configDest = join(codexHome, 'config.toml')
+    if (await fs.pathExists(configSrc)) {
+      if (!(await fs.pathExists(configDest))) {
+        await fs.copy(configSrc, configDest)
+      }
+    }
+
+    // .codex/agents/*.toml
+    const agentsSrc = join(codexTemplateDir, 'agents')
+    if (await fs.pathExists(agentsSrc)) {
+      await fs.copy(agentsSrc, join(codexHome, 'agents'), { overwrite: true })
+    }
+
+    // AGENTS.md → ~/.codex/AGENTS.md (global fallback)
+    const agentsMdSrc = join(codexTemplateDir, 'AGENTS.md')
+    if (await fs.pathExists(agentsMdSrc)) {
+      await fs.copy(agentsMdSrc, join(codexHome, 'AGENTS.md'), { overwrite: true })
+    }
+  }
+  catch (error) {
+    // Non-fatal: Codex mode is optional
+    ctx.result.errors.push(`Codex files install warning: ${error}`)
   }
 }
 

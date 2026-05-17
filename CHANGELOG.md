@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.0.4] - 2026-05-17
+
+### ✨ New Features
+
+- **Codex-Led Mode** — Complete Codex CLI orchestration mode where Codex acts as lead agent, dispatching analysis and review tasks to Gemini and Claude via codeagent-wrapper. Installed separately via menu option `X. Codex Mode`.
+  - `~/.codex/AGENTS.md` — Adaptive decision framework (not rigid workflow): auto-assesses complexity/risk, scales effort accordingly
+  - `~/.codex/hooks/ccg-workflow.py` — Intelligent guardrail hook: tracks progress per-turn, injects adaptive reminders based on what Codex has/hasn't done
+  - `~/.codex/config.toml` — Multi-agent v2 enabled with 8-min timeout for external model calls
+  - `~/.codex/agents/ccg-implement.toml` / `ccg-review.toml` / `ccg-research.toml` — Native sub-agent definitions
+  - `~/.codex/hooks.json` — Hook registration for UserPromptSubmit
+- **Dual-model enforcement in Codex mode** — M+ complexity tasks MUST call both Gemini AND Claude for analysis and review. Default call template is dual-model parallel with `&` + `wait`.
+- **Task persistence in Codex mode** — All tasks create `.ccg/tasks/` with task.json, phase tracking, and mandatory archival on completion.
+- **Spec system in Codex mode** — Codex reads `.ccg/spec/` before coding, writes back learnings (Spec Evolution) before archival.
+- **Inline execution mode** — Codex writes code directly (no sub-agent spawning) for maximum reliability. Sub-agents are available but optional.
+- **Menu entry for Codex mode** — `npx ccg-workflow` → `X. Codex Mode` with confirmation dialog and file listing.
+
+### 🔄 Changes
+
+- **`installCodexMode()` exported** from installer for programmatic use.
+- **`package.json` files array** updated to include `templates/codex/`.
+
+---
+
 ## [3.0.3] - 2026-05-17
 
 ### ✨ New Features
