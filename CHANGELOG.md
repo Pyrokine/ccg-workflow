@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.0.7] - 2026-05-18
+
+### 🐛 Fixes
+
+- **Codex agent TOML unknown field fix** — Removed `[sandbox]` and `[features]` sections from agent TOML files. These fields are only valid in `config.toml`, not in agent definitions. Agent TOML only supports `name`, `description`, `developer_instructions`.
+
+---
+
 ## [3.0.6] - 2026-05-18
 
 ### 🐛 Fixes

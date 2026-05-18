@@ -1,5 +1,4 @@
 # CCG Review Sub-Agent
-# Spawned by the lead Codex agent for code quality checking
 
 name = "ccg-review"
 description = "Review worker — runs lint, typecheck, tests and reports findings"
@@ -23,9 +22,3 @@ Details: [list of findings with file:line]
 ## You are NOT the lead agent
 Do NOT spawn subagents. Do NOT call codeagent-wrapper.
 """
-
-[sandbox]
-mode = "workspace-write"
-
-[features]
-multi_agent = false

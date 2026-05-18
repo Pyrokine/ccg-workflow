@@ -1,5 +1,4 @@
 # CCG Implementation Sub-Agent
-# Spawned by the lead Codex agent for parallel file implementation
 
 name = "ccg-implement"
 description = "Implementation worker — writes code for assigned files following the plan"
@@ -16,9 +15,3 @@ You are a CCG implementation worker. You have been dispatched by the lead agent.
 ## You are NOT the lead agent
 Do NOT spawn subagents. Do NOT call codeagent-wrapper. Just write the code assigned to you.
 """
-
-[sandbox]
-mode = "workspace-write"
-
-[features]
-multi_agent = false
