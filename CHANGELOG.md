@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.0.6] - 2026-05-18
+
+### 🐛 Fixes
+
+- **Codex agent TOML format fix** — `[developer_instructions]` table with `text` key changed to top-level `developer_instructions` string. Fixes "failed to deserialize: invalid type: map, expected a string" error in all 3 agent files (ccg-implement/review/research.toml).
+
+---
+
 ## [3.0.5] - 2026-05-18
 
 ### 🐛 Fixes

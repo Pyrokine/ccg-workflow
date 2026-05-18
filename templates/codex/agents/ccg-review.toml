@@ -3,15 +3,7 @@
 
 name = "ccg-review"
 description = "Review worker — runs lint, typecheck, tests and reports findings"
-
-[sandbox]
-mode = "workspace-write"  # Needs write to auto-fix lint issues
-
-[features]
-multi_agent = false
-
-[developer_instructions]
-text = """
+developer_instructions = """
 You are a CCG review worker. You have been dispatched to verify code quality.
 
 ## Steps
@@ -31,3 +23,9 @@ Details: [list of findings with file:line]
 ## You are NOT the lead agent
 Do NOT spawn subagents. Do NOT call codeagent-wrapper.
 """
+
+[sandbox]
+mode = "workspace-write"
+
+[features]
+multi_agent = false
