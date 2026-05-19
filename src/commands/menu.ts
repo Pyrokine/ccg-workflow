@@ -251,27 +251,9 @@ function showHelp(): void {
   const section = (title: string) => console.log(ansis.yellow.bold(`  ${title}`))
   const cmd = (name: string, desc: string) => console.log(`  ${ansis.green(name.padEnd(col1))} ${ansis.gray(desc)}`)
 
-  // Development Workflows
-  section(i18n.t('menu:help.sections.devWorkflow'))
-  cmd('/ccg:workflow', i18n.t('menu:help.descriptions.workflow'))
-  cmd('/ccg:plan', i18n.t('menu:help.descriptions.plan'))
-  cmd('/ccg:execute', i18n.t('menu:help.descriptions.execute'))
-  cmd('/ccg:frontend', i18n.t('menu:help.descriptions.frontend'))
-  cmd('/ccg:backend', i18n.t('menu:help.descriptions.backend'))
-  cmd('/ccg:feat', i18n.t('menu:help.descriptions.feat'))
-  cmd('/ccg:analyze', i18n.t('menu:help.descriptions.analyze'))
-  cmd('/ccg:debug', i18n.t('menu:help.descriptions.debug'))
-  cmd('/ccg:optimize', i18n.t('menu:help.descriptions.optimize'))
-  cmd('/ccg:test', i18n.t('menu:help.descriptions.test'))
-  cmd('/ccg:review', i18n.t('menu:help.descriptions.review'))
-  console.log()
-
-  // Agent Teams
-  section(isZh ? 'Agent Teams 并行实施:' : 'Agent Teams Parallel:')
-  cmd('/ccg:team-research', isZh ? '需求 → 约束集' : 'Requirements → Constraints')
-  cmd('/ccg:team-plan', isZh ? '约束 → 并行计划' : 'Constraints → Parallel plan')
-  cmd('/ccg:team-exec', isZh ? '并行实施' : 'Parallel execution')
-  cmd('/ccg:team-review', isZh ? '双模型审查' : 'Dual-model review')
+  // Core Engine
+  section(i18n.t('menu:help.sections.engine'))
+  cmd('/ccg:go', i18n.t('menu:help.descriptions.go'))
   console.log()
 
   // OpenSpec Workflows
@@ -291,10 +273,18 @@ function showHelp(): void {
   cmd('/ccg:worktree', i18n.t('menu:help.descriptions.worktree'))
   console.log()
 
-  // Project Init
+  // Project Management
   section(i18n.t('menu:help.sections.projectMgmt'))
   cmd('/ccg:init', i18n.t('menu:help.descriptions.init'))
-  cmd('/ccg:enhance', isZh ? 'Prompt 增强' : 'Prompt enhancement')
+  cmd('/ccg:context', i18n.t('menu:help.descriptions.context'))
+  console.log()
+
+  // Quality Gates
+  section(i18n.t('menu:help.sections.qualityGates'))
+  cmd('/ccg:verify-security', i18n.t('menu:help.descriptions.verifySecurity'))
+  cmd('/ccg:verify-quality', i18n.t('menu:help.descriptions.verifyQuality'))
+  cmd('/ccg:verify-change', i18n.t('menu:help.descriptions.verifyChange'))
+  cmd('/ccg:verify-module', i18n.t('menu:help.descriptions.verifyModule'))
   console.log()
 
   console.log(ansis.gray(`  ${i18n.t('menu:help.hint')}`))
