@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.0.10] - 2026-05-19
+
+### 🐛 Fixes
+
+- **Windows update shows v0.0.0 and triggers false migration** — `getCurrentVersion()` failed to find `package.json` on Windows npx cache paths, returning `0.0.0`. This caused the update flow to display wrong version and trigger v1.4.0 migration for V3 users. Fix: use build-time bundled version (always available after unbuild) as primary source. Also added config.toml version guard in `needsMigration()` — V2+ users skip migration entirely regardless of stale directory state.
+
+---
+
 ## [3.0.9] - 2026-05-19
 
 ### 🐛 Fixes

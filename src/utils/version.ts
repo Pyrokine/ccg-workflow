@@ -3,6 +3,7 @@ import { promisify } from 'node:util'
 import fs from 'fs-extra'
 import { dirname, join } from 'pathe'
 import { fileURLToPath } from 'node:url'
+import { version as bundledVersion } from '../../package.json'
 
 const execAsync = promisify(exec)
 
@@ -49,7 +50,12 @@ async function readPackageVersion(pkgPath: string): Promise<string | null> {
  * Get current installed version from package.json
  */
 export async function getCurrentVersion(): Promise<string> {
-  // Prefer path relative to this file so dist/src path depth doesn't matter.
+  // Prefer build-time bundled version (always available after unbuild)
+  if (bundledVersion) {
+    return bundledVersion
+  }
+
+  // Fallback: path relative to this file
   const relativePkgPath = fileURLToPath(new URL('../../package.json', import.meta.url))
   const relativeVersion = await readPackageVersion(relativePkgPath)
   if (relativeVersion) {

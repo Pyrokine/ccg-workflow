@@ -127,6 +127,24 @@ export async function migrateToV1_4_0(): Promise<MigrationResult> {
  * Check if migration is needed
  */
 export async function needsMigration(): Promise<boolean> {
+  // If config.toml exists with a version >= 2.0.0, skip migration entirely.
+  // This prevents V3 users from triggering v1.4.0 migration due to stale
+  // directories or getCurrentVersion() returning 0.0.0 on Windows npx cache.
+  try {
+    const configPath = join(homedir(), '.claude', '.ccg', 'config.toml')
+    if (await fs.pathExists(configPath)) {
+      const content = await fs.readFile(configPath, 'utf-8')
+      const versionMatch = content.match(/version\s*=\s*"([^"]+)"/)
+      if (versionMatch) {
+        const major = Number.parseInt(versionMatch[1].split('.')[0], 10)
+        if (major >= 2) return false
+      }
+    }
+  }
+  catch {
+    // Config read failed, fall through to directory checks
+  }
+
   const oldCcgDir = join(homedir(), '.ccg')
   const oldPromptsDir = join(homedir(), '.claude', 'prompts', 'ccg')
   const oldConfigFile = join(homedir(), '.claude', 'commands', 'ccg', '_config.md')
