@@ -1,4 +1,4 @@
-# CCG - Claude + Codex + Gemini Multi-Model Collaboration
+# CCG - Claude + Codex + Antigravity Multi-Model Collaboration
 
 <div align="center">
 
@@ -22,27 +22,43 @@
 
 [![302.AI](assets/sponsors/302.ai-en.jpg)](https://share.302.ai/oUDqQ6)
 
-[302.AI](https://share.302.ai/oUDqQ6) is a pay-as-you-go enterprise AI resource hub that offers the latest and most comprehensive AI models and APIs on the market, along with a variety of ready-to-use online AI applications.
+[302.AI](https://share.302.ai/oUDqQ6) is a pay-as-you-go enterprise AI resource hub that offers the latest and most
+comprehensive AI models and APIs on the market, along with a variety of ready-to-use online AI applications.
 
 ---
 
-[**n1n.ai**](https://api.n1n.ai/register?channel=c_ivgzug0w) — Global LLM API Gateway. One API Key to access 500+ top AI models (GPT-5, Claude 4.5, Gemini 3 Pro, and more).
+[![NotebookLM Remover](assets/sponsors/notebooklm-remover.png)](https://notebooklmremover.org)
+
+[NotebookLM Remover](https://notebooklmremover.org) — Free browser-local AI watermark remover. Remove NotebookLM
+watermarks across video, PDF, PPTX, infographic, podcast, and more. 100% private, works offline.
 
 ---
 
-CCG is a workflow engine for Claude Code that orchestrates multiple AI models (Codex, Gemini, Claude) with hook-based state tracking, automatic strategy selection, and Agent Teams parallel execution.
+CCG is a workflow engine for Claude Code that orchestrates multiple AI models (Codex, Antigravity, Claude) with
+hook-based
+state tracking, automatic strategy selection, and Agent Teams parallel execution.
+
+Gemini CLI is disabled because consumer OAuth requests stopped being processed after 2026-06-18. CCG uses Antigravity
+instead.
 
 ## What's new in v3.0
 
 v3.0 is a ground-up rewrite. One command replaces 29.
 
-- `/ccg:go` — Describe what you want in plain language. The engine analyzes your intent, picks the right strategy, and executes it.
-- **Hook engine** — Per-turn state injection keeps Claude on track even after context compaction. Session-start hooks inject full project context on every new session.
-- **Task persistence** — Medium+ complexity tasks create `.ccg/tasks/` with persistent state. Phase gates enforce HARD STOP checkpoints.
-- **Agent Teams** — Large tasks spawn parallel Builder teammates via TeamCreate. Each Builder gets isolated file ownership.
-- **Quality gates** — `verify-security`, `verify-quality`, `verify-change` run as Skill invocations inside strategy verification phases.
-- **Domain knowledge hooks** — When your message mentions security, caching, RAG, etc., the relevant knowledge file is auto-injected into context.
-- **Codex-Led Mode** — Use Codex CLI as the lead orchestrator. Codex writes code directly and dispatches analysis/review to Gemini + Claude via codeagent-wrapper. Install via menu option `X`.
+- `/ccg:go` — Describe what you want in plain language. The engine analyzes your intent, picks the right strategy, and
+  executes it.
+- **Hook engine** — Per-turn state injection keeps Claude on track even after context compaction. Session-start hooks
+  inject full project context on every new session.
+- **Task persistence** — Medium+ complexity tasks create `.ccg/tasks/` with persistent state. Phase gates enforce HARD
+  STOP checkpoints.
+- **Agent Teams** — Large tasks spawn parallel Builder teammates via TeamCreate. Each Builder gets isolated file
+  ownership.
+- **Quality gates** — `verify-security`, `verify-quality`, `verify-change` run as Skill invocations inside strategy
+  verification phases.
+- **Domain knowledge hooks** — When your message mentions security, caching, RAG, etc., the relevant knowledge file is
+  auto-injected into context.
+- **Codex-Led Mode** — Use Codex CLI as the lead orchestrator. Codex writes code directly and dispatches analysis/review
+  to Antigravity + Claude via codeagent-wrapper. Install via menu option `X`.
 
 ## Quick Start
 
@@ -50,9 +66,10 @@ v3.0 is a ground-up rewrite. One command replaces 29.
 npx ccg-workflow
 ```
 
-Requires Node.js 20+ and Claude Code CLI. Codex CLI and Gemini CLI are optional (enable multi-model features).
+Requires Node.js 20.19+ and Claude Code CLI. Codex CLI and Antigravity CLI are optional (enable multi-model features).
 
-The installer walks through 4 steps: API config, model routing, MCP tools, performance mode. New users get a streamlined 2-step flow with sensible defaults.
+The installer walks through 4 steps: API config, model routing, MCP tools, performance mode. New users get a streamlined
+2-step flow with sensible defaults.
 
 ## How it works
 
@@ -64,7 +81,7 @@ CCG Engine:
   2. Classifies: feature / L complexity / backend / high risk
   3. Selects strategy: full-collaborate
   4. Creates .ccg/tasks/add-jwt-auth/task.json
-  5. Launches dual-model analysis (Codex + Gemini in parallel)
+  5. Launches dual-model analysis (Codex + Antigravity in parallel)
   6. Produces plan → HARD STOP for your approval
   7. Spawns Agent Teams Builders for parallel implementation
   8. Runs quality gates + dual-model cross-review
@@ -83,18 +100,18 @@ Every turn, a hook injects:
 
 The engine picks a strategy based on task type and complexity:
 
-| Strategy | When | External models | Teams |
-|----------|------|-----------------|-------|
-| direct-fix | Simple bug, single file | No | No |
-| quick-implement | Small feature, clear scope | No | No |
-| guided-develop | Medium feature, needs planning | Single model | No |
-| full-collaborate | Complex feature, multi-module | Dual model parallel | Yes |
-| debug-investigate | Complex bug, unknown cause | Dual model diagnosis | No |
-| refactor-safely | Code restructuring | Dual model review | No |
-| deep-research | Technical research, comparison | Dual model exploration | No |
-| optimize-measure | Performance optimization | Optional | No |
-| review-audit | Code review | Dual model cross-review | No |
-| git-action | commit, rollback, branches | No | No |
+| Strategy          | When                           | External models         | Teams |
+|-------------------|--------------------------------|-------------------------|-------|
+| direct-fix        | Simple bug, single file        | No                      | No    |
+| quick-implement   | Small feature, clear scope     | No                      | No    |
+| guided-develop    | Medium feature, needs planning | Single model            | No    |
+| full-collaborate  | Complex feature, multi-module  | Dual model parallel     | Yes   |
+| debug-investigate | Complex bug, unknown cause     | Dual model diagnosis    | No    |
+| refactor-safely   | Code restructuring             | Dual model review       | No    |
+| deep-research     | Technical research, comparison | Dual model exploration  | No    |
+| optimize-measure  | Performance optimization       | Optional                | No    |
+| review-audit      | Code review                    | Dual model cross-review | No    |
+| git-action        | commit, rollback, branches     | No                      | No    |
 
 Simple tasks run fast with no overhead. Complex tasks get the full engine.
 
@@ -104,46 +121,46 @@ v3.0 default install: 13 commands. Legacy mode adds 18 more.
 
 ### Core
 
-| Command | Description |
-|---------|-------------|
+| Command   | Description                                                   |
+|-----------|---------------------------------------------------------------|
 | `/ccg:go` | Smart entry — describe what you want, engine handles the rest |
 
 ### Git
 
-| Command | Description |
-|---------|-------------|
-| `/ccg:commit` | Smart conventional commit |
-| `/ccg:rollback` | Interactive rollback |
-| `/ccg:clean-branches` | Clean merged branches |
-| `/ccg:worktree` | Worktree management |
+| Command               | Description               |
+|-----------------------|---------------------------|
+| `/ccg:commit`         | Smart conventional commit |
+| `/ccg:rollback`       | Interactive rollback      |
+| `/ccg:clean-branches` | Clean merged branches     |
+| `/ccg:worktree`       | Worktree management       |
 
 ### Project
 
-| Command | Description |
-|---------|-------------|
-| `/ccg:init` | Initialize project CLAUDE.md |
-| `/ccg:context` | Project context management |
+| Command        | Description                  |
+|----------------|------------------------------|
+| `/ccg:init`    | Initialize project CLAUDE.md |
+| `/ccg:context` | Project context management   |
 
 ### OpenSpec
 
-| Command | Description |
-|---------|-------------|
-| `/ccg:spec-init` | Initialize OPSX environment |
-| `/ccg:spec-research` | Requirements → constraints |
-| `/ccg:spec-plan` | Constraints → zero-decision plan |
-| `/ccg:spec-impl` | Execute plan + archive |
-| `/ccg:spec-review` | Dual-model cross-review |
+| Command              | Description                      |
+|----------------------|----------------------------------|
+| `/ccg:spec-init`     | Initialize OPSX environment      |
+| `/ccg:spec-research` | Requirements → constraints       |
+| `/ccg:spec-plan`     | Constraints → zero-decision plan |
+| `/ccg:spec-impl`     | Execute plan + archive           |
+| `/ccg:spec-review`   | Dual-model cross-review          |
 
 ## Hook Engine
 
 CCG installs 4 hooks into `~/.claude/settings.json`:
 
-| Hook | Event | Purpose |
-|------|-------|---------|
-| workflow-state.js | UserPromptSubmit | Injects task state breadcrumb every turn |
-| session-start.js | SessionStart | Injects full project context on session start/clear/compact |
+| Hook                | Event                   | Purpose                                                                         |
+|---------------------|-------------------------|---------------------------------------------------------------------------------|
+| workflow-state.js   | UserPromptSubmit        | Injects task state breadcrumb every turn                                        |
+| session-start.js    | SessionStart            | Injects full project context on session start/clear/compact                     |
 | subagent-context.js | PreToolUse (Bash/Agent) | Injects spec + task context into codeagent-wrapper calls and Team member spawns |
-| skill-router.js | UserPromptSubmit | Auto-injects domain knowledge when keywords detected |
+| skill-router.js     | UserPromptSubmit        | Auto-injects domain knowledge when keywords detected                            |
 
 Hooks are JavaScript, zero dependencies, silent on failure.
 
@@ -161,7 +178,8 @@ Medium+ complexity tasks create a persistent task directory:
 └── research/         # Persisted research findings
 ```
 
-The workflow-state hook reads `task.json` every turn and injects the current state. If context gets compacted, session-start re-injects the full task context. No state is lost.
+The workflow-state hook reads `task.json` every turn and injects the current state. If context gets compacted,
+session-start re-injects the full task context. No state is lost.
 
 ## Spec System
 
@@ -174,7 +192,8 @@ Project-level coding standards in `.ccg/spec/`:
 └── guides/index.md     # Cross-module guidelines
 ```
 
-The subagent-context hook reads `context.jsonl` and injects relevant spec files into every codeagent-wrapper call and Agent Team spawn. Sub-agents follow your project's standards without being told.
+The subagent-context hook reads `context.jsonl` and injects relevant spec files into every codeagent-wrapper call and
+Agent Team spawn. Sub-agents follow your project's standards without being told.
 
 ## Configuration
 
@@ -185,7 +204,7 @@ The subagent-context hook reads `context.jsonl` and injects relevant spec files 
 ├── .ccg/
 │   ├── config.toml        # Model routing, MCP, performance
 │   ├── engine/            # Strategy files + model router
-│   └── prompts/           # Expert prompts (codex/gemini/claude)
+│   └── prompts/           # Expert prompts (codex/antigravity/claude)
 ├── skills/ccg/            # Quality gates + domain knowledge
 └── bin/codeagent-wrapper  # Multi-model execution bridge
 ```
@@ -194,11 +213,11 @@ The subagent-context hook reads `context.jsonl` and injects relevant spec files 
 
 Set in `~/.claude/settings.json` under `"env"`:
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `CODEX_TIMEOUT` | `7200` | Wrapper timeout (seconds) |
-| `CODEAGENT_POST_MESSAGE_DELAY` | `5` | Post-completion delay (seconds) |
-| `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` | unset | Set to `1` to enable Agent Teams parallel execution |
+| Variable                               | Default | Description                                         |
+|----------------------------------------|---------|-----------------------------------------------------|
+| `CODEX_TIMEOUT`                        | `7200`  | Wrapper timeout (seconds)                           |
+| `CODEAGENT_POST_MESSAGE_DELAY`         | `5`     | Post-completion delay (seconds)                     |
+| `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` | unset   | Set to `1` to enable Agent Teams parallel execution |
 
 ## Update / Uninstall
 
@@ -240,7 +259,6 @@ npx ccg-workflow            # Select "Uninstall" from menu
 - **Issues**: [GitHub Issues](https://github.com/fengshao1227/ccg-workflow/issues)
 - **Community**: [Linux.do](https://linux.do)
 
-
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=fengshao1227/ccg-workflow&type=timeline&legend=top-left)](https://www.star-history.com/#fengshao1227/ccg-workflow&type=timeline&legend=top-left)
@@ -251,4 +269,4 @@ MIT
 
 ---
 
-v3.0.4 | [Issues](https://github.com/fengshao1227/ccg-workflow/issues) | [Contributing](./CONTRIBUTING.md)
+v3.1.6-aug.1 | [Issues](https://github.com/fengshao1227/ccg-workflow/issues) | [Contributing](./CONTRIBUTING.md)

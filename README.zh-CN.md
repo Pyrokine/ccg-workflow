@@ -1,5 +1,6 @@
-# CCG - Claude + Codex + Gemini 多模型协作
-# CCG - Claude + Codex + Gemini Multi-Model Collaboration
+# CCG - Claude + Codex + Antigravity 多模型协作
+
+# CCG - Claude + Codex + Antigravity Multi-Model Collaboration
 
 <div align="center">
 
@@ -23,15 +24,23 @@
 
 [![302.AI](assets/sponsors/302.ai-en.jpg)](https://share.302.ai/oUDqQ6)
 
-[302.AI](https://share.302.ai/oUDqQ6) is a pay-as-you-go enterprise AI resource hub that offers the latest and most comprehensive AI models and APIs on the market, along with a variety of ready-to-use online AI applications.
+[302.AI](https://share.302.ai/oUDqQ6) is a pay-as-you-go enterprise AI resource hub that offers the latest and most
+comprehensive AI models and APIs on the market, along with a variety of ready-to-use online AI applications.
 
 ---
 
-[**n1n.ai**](https://api.n1n.ai/register?channel=c_ivgzug0w) — Global LLM API Gateway. One API Key to access 500+ top AI models (GPT-5, Claude 4.5, Gemini 3 Pro, and more).
+[![NotebookLM Remover](assets/sponsors/notebooklm-remover.png)](https://notebooklmremover.org)
+
+[NotebookLM Remover](https://notebooklmremover.org) — 免费浏览器本地 AI 水印去除工具。支持视频、PDF、PPTX、信息图、播客等全格式，100%
+隐私，离线可用。
 
 ---
 
-CCG 是 Claude Code 的工作流引擎。它编排多个 AI 模型（Codex、Gemini、Claude），通过 Hook 状态追踪、自动策略选择和 Agent Teams 并行执行来完成开发任务。
+CCG 是 Claude Code 的工作流引擎。它编排多个 AI 模型（Codex、Antigravity、Claude），通过 Hook 状态追踪、自动策略选择和 Agent
+Teams
+并行执行来完成开发任务。
+
+Gemini CLI 已禁用：2026-06-18 后 consumer OAuth 请求不再处理。CCG 改用 Antigravity。
 
 ## v3.0 重大更新
 
@@ -43,7 +52,8 @@ v3.0 从底层重写。一个命令替代 29 个。
 - **Agent Teams** — 大型任务通过 TeamCreate 并行 spawn 多个 Builder。每个 Builder 有独立文件所有权。
 - **质量关卡** — `verify-security`、`verify-quality`、`verify-change` 作为 Skill 在策略验证阶段强制调用。
 - **域知识 Hook** — 消息涉及安全、缓存、RAG 等关键词时，相关知识文件自动注入上下文。
-- **Codex 主导模式** — 用 Codex CLI 作为主编排器，Codex 自己写代码，同时调度 Gemini + Claude 做分析和审查。菜单 `X` 选项安装。
+- **Codex 主导模式** — 用 Codex CLI 作为主编排器，Codex 自己写代码，同时调度 Antigravity + Claude 做分析和审查。菜单 `X`
+  选项安装。
 
 ## 快速开始
 
@@ -51,7 +61,7 @@ v3.0 从底层重写。一个命令替代 29 个。
 npx ccg-workflow
 ```
 
-需要 Node.js 20+ 和 Claude Code CLI。Codex CLI 和 Gemini CLI 可选（启用多模型功能）。
+需要 Node.js 20.19+ 和 Claude Code CLI。Codex CLI 和 Antigravity CLI 可选（启用多模型功能）。
 
 安装器 4 步：API 配置 → 模型路由 → MCP 工具 → 性能模式。新用户有精简流程，默认值开箱即用。
 
@@ -65,7 +75,7 @@ CCG 引擎:
   2. 分类: feature / L 复杂度 / backend / high 风险
   3. 选择策略: full-collaborate
   4. 创建 .ccg/tasks/add-jwt-auth/task.json
-  5. 双模型并行分析（Codex + Gemini）
+  5. 双模型并行分析（Codex + Antigravity）
   6. 产出计划 → HARD STOP 等你审批
   7. spawn Agent Teams Builder 并行实施
   8. 质量关卡 + 双模型交叉审查
@@ -84,18 +94,18 @@ CCG 引擎:
 
 引擎根据任务类型和复杂度自动选择策略：
 
-| 策略 | 场景 | 外部模型 | Teams |
-|------|------|---------|-------|
-| direct-fix | 简单 bug，单文件 | 无 | 无 |
-| quick-implement | 小功能，范围清晰 | 无 | 无 |
-| guided-develop | 中等功能，需要规划 | 单模型 | 无 |
-| full-collaborate | 复杂功能，跨模块 | 双模型并行 | 强制 |
-| debug-investigate | 复杂 bug，原因不明 | 双模型诊断 | 无 |
-| refactor-safely | 代码重构 | 双模型审查 | 无 |
-| deep-research | 技术研究、方案对比 | 双模型探索 | 无 |
-| optimize-measure | 性能优化 | 可选 | 无 |
-| review-audit | 代码审查 | 双模型交叉 | 无 |
-| git-action | commit、rollback 等 | 无 | 无 |
+| 策略                | 场景                | 外部模型  | Teams |
+|-------------------|-------------------|-------|-------|
+| direct-fix        | 简单 bug，单文件        | 无     | 无     |
+| quick-implement   | 小功能，范围清晰          | 无     | 无     |
+| guided-develop    | 中等功能，需要规划         | 单模型   | 无     |
+| full-collaborate  | 复杂功能，跨模块          | 双模型并行 | 强制    |
+| debug-investigate | 复杂 bug，原因不明       | 双模型诊断 | 无     |
+| refactor-safely   | 代码重构              | 双模型审查 | 无     |
+| deep-research     | 技术研究、方案对比         | 双模型探索 | 无     |
+| optimize-measure  | 性能优化              | 可选    | 无     |
+| review-audit      | 代码审查              | 双模型交叉 | 无     |
+| git-action        | commit、rollback 等 | 无     | 无     |
 
 简单任务零开销快速执行。复杂任务启动完整引擎。
 
@@ -105,46 +115,46 @@ v3.0 默认安装 13 个命令。旧版模式额外安装 18 个。
 
 ### 核心
 
-| 命令 | 说明 |
-|------|------|
+| 命令        | 说明                 |
+|-----------|--------------------|
 | `/ccg:go` | 智能入口 — 描述任务，引擎自动处理 |
 
 ### Git 工具
 
-| 命令 | 说明 |
-|------|------|
-| `/ccg:commit` | 智能 conventional commit |
-| `/ccg:rollback` | 交互式回滚 |
-| `/ccg:clean-branches` | 清理已合并分支 |
-| `/ccg:worktree` | Worktree 管理 |
+| 命令                    | 说明                     |
+|-----------------------|------------------------|
+| `/ccg:commit`         | 智能 conventional commit |
+| `/ccg:rollback`       | 交互式回滚                  |
+| `/ccg:clean-branches` | 清理已合并分支                |
+| `/ccg:worktree`       | Worktree 管理            |
 
 ### 项目
 
-| 命令 | 说明 |
-|------|------|
-| `/ccg:init` | 初始化项目 CLAUDE.md |
-| `/ccg:context` | 项目上下文管理 |
+| 命令             | 说明              |
+|----------------|-----------------|
+| `/ccg:init`    | 初始化项目 CLAUDE.md |
+| `/ccg:context` | 项目上下文管理         |
 
 ### OpenSpec
 
-| 命令 | 说明 |
-|------|------|
-| `/ccg:spec-init` | 初始化 OPSX 环境 |
-| `/ccg:spec-research` | 需求 → 约束集 |
-| `/ccg:spec-plan` | 零决策可执行计划 |
-| `/ccg:spec-impl` | 按规范实施 |
-| `/ccg:spec-review` | 双模型交叉审查 |
+| 命令                   | 说明          |
+|----------------------|-------------|
+| `/ccg:spec-init`     | 初始化 OPSX 环境 |
+| `/ccg:spec-research` | 需求 → 约束集    |
+| `/ccg:spec-plan`     | 零决策可执行计划    |
+| `/ccg:spec-impl`     | 按规范实施       |
+| `/ccg:spec-review`   | 双模型交叉审查     |
 
 ## Hook 引擎
 
 CCG 在 `~/.claude/settings.json` 注册 4 个 Hook：
 
-| Hook | 事件 | 作用 |
-|------|------|------|
-| workflow-state.js | UserPromptSubmit | 每轮注入任务状态面包屑 |
-| session-start.js | SessionStart | 会话开始/压缩时注入完整项目上下文 |
-| subagent-context.js | PreToolUse | codeagent-wrapper/Team spawn 时注入 spec + 任务上下文 |
-| skill-router.js | UserPromptSubmit | 检测域关键词，自动注入知识文件 |
+| Hook                | 事件               | 作用                                            |
+|---------------------|------------------|-----------------------------------------------|
+| workflow-state.js   | UserPromptSubmit | 每轮注入任务状态面包屑                                   |
+| session-start.js    | SessionStart     | 会话开始/压缩时注入完整项目上下文                             |
+| subagent-context.js | PreToolUse       | codeagent-wrapper/Team spawn 时注入 spec + 任务上下文 |
+| skill-router.js     | UserPromptSubmit | 检测域关键词，自动注入知识文件                               |
 
 纯 JavaScript，零依赖，失败时静默退出。
 
@@ -175,7 +185,8 @@ workflow-state Hook 每轮读取 task.json 注入状态。上下文压缩后 ses
 └── guides/index.md     # 跨模块指南
 ```
 
-subagent-context Hook 读取 `context.jsonl` 将相关 spec 文件注入到 codeagent-wrapper 调用和 Team spawn 中。子 Agent 自动遵循项目规范。
+subagent-context Hook 读取 `context.jsonl` 将相关 spec 文件注入到 codeagent-wrapper 调用和 Team spawn 中。子 Agent
+自动遵循项目规范。
 
 ## 配置
 
@@ -195,10 +206,10 @@ subagent-context Hook 读取 `context.jsonl` 将相关 spec 文件注入到 code
 
 在 `~/.claude/settings.json` 的 `"env"` 中设置：
 
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
-| `CODEX_TIMEOUT` | `7200` | Wrapper 超时（秒） |
-| `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` | 未设置 | 设为 `1` 启用 Agent Teams 并行 |
+| 变量                                     | 默认值    | 说明                       |
+|----------------------------------------|--------|--------------------------|
+| `CODEX_TIMEOUT`                        | `7200` | Wrapper 超时（秒）            |
+| `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` | 未设置    | 设为 `1` 启用 Agent Teams 并行 |
 
 ## 更新 / 卸载
 
@@ -246,4 +257,4 @@ MIT
 
 ---
 
-v3.0.4 | [Issues](https://github.com/fengshao1227/ccg-workflow/issues) | [Contributing](./CONTRIBUTING.md)
+v3.1.6-aug.1 | [Issues](https://github.com/fengshao1227/ccg-workflow/issues) | [Contributing](./CONTRIBUTING.md)

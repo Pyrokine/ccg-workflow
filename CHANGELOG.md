@@ -7,27 +7,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.1.6-aug.1] - 2026-06-20
+
+### Fixes
+
+- Active routing is restored to Antigravity/Codex during interactive and non-interactive reinstall, with `agy`
+  normalized to canonical `antigravity`
+- Gemini CLI is removed from active routing because consumer OAuth requests stopped being processed after 2026-06-18;
+  CCG now uses Antigravity instead
+- Old `gemini` config values are migrated to canonical `antigravity`, while `--backend gemini` and `--gemini-model` now
+  fail with an explicit disabled reason
+- `{{GEMINI_MODEL_FLAG}}` is stripped unconditionally and templates no longer generate Gemini backend invocations
+- `codeagent-wrapper` injects Antigravity proxy settings only when explicitly configured, reports failed Web UI
+  session JSON encoding instead of silently ignoring it, and gives clearer Antigravity/agy auth and empty-output
+  diagnostics. Binary v5.11.1-aug.1
+- Binary downloads now prefer the fork GitHub Release and verify the downloaded wrapper version before marking install
+  successful
+- Manually ported upstream v3.1.1-v3.1.6 fixes: Codex hook path rendering, uninstall hook cleanup, sub-agent context
+  `updatedInput` injection, terminal task status handling, macOS background Web UI open, Claude permission flag
+  propagation,
+  and Antigravity/agy prompt routing on Windows
+
+### Changes
+
+- TypeScript toolchain upgraded to TypeScript 6, ESLint 10, Vitest 4, and refreshed Node dependencies
+- Node engine floor is now `^20.19.0 || ^22.13.0 || >=24`, with CI updated to Node 20.19.0 / 22.13.0 / 24
+- Go wrapper build/test toolchain metadata is raised to Go 1.26.0
+
 ## [3.1.0] - 2026-05-20
 
 ### ✨ New Features
 
-- **Antigravity CLI backend** — Google Antigravity (`agy`) fully integrated as the 4th backend in codeagent-wrapper. Supports `-p` headless mode, `--add-dir` workspace, `--conversation` session resume, and line-by-line streaming to Web UI. Plain text output path (no JSON streaming) with `bufio.Scanner`. Binary v5.11.0.
-- **Antigravity as default frontend** — Replaces Gemini as the default frontend model. Init/menu/update UI all updated with Antigravity as recommended choice. Gemini remains available for enterprise users until June 18 sunset.
-- **Antigravity role prompts** — 7 prompts (`analyzer`, `architect`, `reviewer`, `debugger`, `optimizer`, `tester`, `frontend`) with READ-ONLY constraints + `builder` with FULL write permissions. Prompt-based permission control verified working.
-- **Codex parallel sub-agent orchestration** — AGENTS.md §5 upgraded: L+ complexity tasks use `spawn_agent("ccg-implement", fork_turns="none")` for parallel execution within a single Codex session. Complete spawn/wait/close lifecycle with Layer-based dependency ordering.
-- **Strategy parallel execution** — `guided-develop` and `full-collaborate` Codex/Antigravity mode uses `codeagent-wrapper --parallel` with Layer 1 (independent) ∥ Layer 2 (dependent) task decomposition. Supports mixed backend per task.
-- **Sub-agent guardrails** — Hook `ccg-workflow.py` detects Codex sub-agents and injects `<ccg-sub-agent-notice>` (execute dispatch only, ignore workflow). Agent TOMLs hardened with ⛔ absolute rules. `config.toml` adds `default_wait_timeout_ms=480000`, `max_wait_timeout_ms=3600000`.
-- **Codex Mode uninstall** — Menu option X now offers Install/Update/Uninstall. Uninstall only removes CCG-managed files (`ccg-*` agents, hooks, CCG-marked AGENTS.md), preserves `config.toml` and user files.
+- **Antigravity CLI backend** — Google Antigravity (`agy`) fully integrated as the 4th backend in codeagent-wrapper.
+  Supports `-p` headless mode, `--add-dir` workspace, `--conversation` session resume, and line-by-line streaming to Web
+  UI. Plain text output path (no JSON streaming) with `bufio.Scanner`. Binary v5.11.0.
+- **Antigravity as default frontend** — Replaces Gemini as the default frontend model. Init/menu/update UI all updated
+  with Antigravity as recommended choice. Gemini remains available for enterprise users until June 18 sunset.
+- **Antigravity role prompts** — 7 prompts (`analyzer`, `architect`, `reviewer`, `debugger`, `optimizer`, `tester`,
+  `frontend`) with READ-ONLY constraints + `builder` with FULL write permissions. Prompt-based permission control
+  verified working.
+- **Codex parallel sub-agent orchestration** — AGENTS.md §5 upgraded: L+ complexity tasks use
+  `spawn_agent("ccg-implement", fork_turns="none")` for parallel execution within a single Codex session. Complete
+  spawn/wait/close lifecycle with Layer-based dependency ordering.
+- **Strategy parallel execution** — `guided-develop` and `full-collaborate` Codex/Antigravity mode uses
+  `codeagent-wrapper --parallel` with Layer 1 (independent) ∥ Layer 2 (dependent) task decomposition. Supports mixed
+  backend per task.
+- **Sub-agent guardrails** — Hook `ccg-workflow.py` detects Codex sub-agents and injects `<ccg-sub-agent-notice>` (
+  execute dispatch only, ignore workflow). Agent TOMLs hardened with ⛔ absolute rules. `config.toml` adds
+  `default_wait_timeout_ms=480000`, `max_wait_timeout_ms=3600000`.
+- **Codex Mode uninstall** — Menu option X now offers Install/Update/Uninstall. Uninstall only removes CCG-managed
+  files (`ccg-*` agents, hooks, CCG-marked AGENTS.md), preserves `config.toml` and user files.
 
 ### 🐛 Fixes
 
-- **HARD STOP execution mode choice skipped** — Claude was skipping the "who writes code" choice. Fixed: go.md iron rule #7 + strategy HARD STOPs rewritten from code blocks to direct ⛔⛔⛔ instructions with "no file writes before user reply".
-- **V3 strategy hardcoded model names** — `guided-develop.md` and `full-collaborate.md` had `--backend codex`/`--backend gemini` hardcoded. Replaced with `{{BACKEND_PRIMARY}}`/`{{FRONTEND_PRIMARY}}` template variables.
+- **HARD STOP execution mode choice skipped** — Claude was skipping the "who writes code" choice. Fixed: go.md iron rule
+  #7 + strategy HARD STOPs rewritten from code blocks to direct ⛔⛔⛔ instructions with "no file writes before user
+  reply".
+- **V3 strategy hardcoded model names** — `guided-develop.md` and `full-collaborate.md` had `--backend codex`/
+  `--backend gemini` hardcoded. Replaced with `{{BACKEND_PRIMARY}}`/`{{FRONTEND_PRIMARY}}` template variables.
 
 ### 🔄 Changes
 
 - **ModelType expanded** — `'codex' | 'gemini' | 'claude' | 'antigravity'`
-- **codeagent-wrapper v5.11.0** — New `AntigravityBackend`, `"agy"` alias in registry, plain text stdout reader, stdin direct-pass for agy
+- **codeagent-wrapper v5.11.0** — New `AntigravityBackend`, `"agy"` alias in registry, plain text stdout reader, stdin
+  direct-pass for agy
 
 ---
 
@@ -35,7 +78,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 Fixes
 
-- **Windows update shows v0.0.0 and triggers false migration** — `getCurrentVersion()` failed to find `package.json` on Windows npx cache paths, returning `0.0.0`. This caused the update flow to display wrong version and trigger v1.4.0 migration for V3 users. Fix: use build-time bundled version (always available after unbuild) as primary source. Also added config.toml version guard in `needsMigration()` — V2+ users skip migration entirely regardless of stale directory state.
+- **Windows update shows v0.0.0 and triggers false migration** — `getCurrentVersion()` failed to find `package.json` on
+  Windows npx cache paths, returning `0.0.0`. This caused the update flow to display wrong version and trigger v1.4.0
+  migration for V3 users. Fix: use build-time bundled version (always available after unbuild) as primary source. Also
+  added config.toml version guard in `needsMigration()` — V2+ users skip migration entirely regardless of stale
+  directory state.
 
 ---
 
@@ -43,7 +90,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 Fixes
 
-- **Help page commands updated to V3** (#135) — `showHelp()` was still showing 25+ V2 commands (workflow/plan/execute/frontend/backend/feat/analyze/debug/optimize/test/review + team-*). Replaced with V3 structure: `/ccg:go` smart engine entry + OpenSpec + Git tools + project management + quality gates. Both zh-CN and en translations updated.
+- **Help page commands updated to V3** (#135) — `showHelp()` was still showing 25+ V2 commands (
+  workflow/plan/execute/frontend/backend/feat/analyze/debug/optimize/test/review + team-*). Replaced with V3 structure:
+  `/ccg:go` smart engine entry + OpenSpec + Git tools + project management + quality gates. Both zh-CN and en
+  translations updated.
 
 ---
 
@@ -51,10 +101,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 Fixes
 
-- **Codex agent TOML aligned with Trellis format** — Restored `sandbox_mode = "workspace-write"` as top-level string field, added `[features] multi_agent = false` + `[features.multi_agent_v2] enabled = false` for recursion guard. Matches Trellis's proven schema exactly.
-- **Codex hooks.json format** — Changed from simple array to Claude Code-style nested format (`{"hooks": {"UserPromptSubmit": [...]}}`) matching Trellis's working format.
-- **Codex config.toml** — Added detailed comments explaining trust requirements and timeout rationale, aligned with Trellis config style.
-- **Agent developer_instructions** — Added recursion guard sections ("You MUST NOT spawn another sub-agent") and context loading steps, following Trellis's battle-tested pattern.
+- **Codex agent TOML aligned with Trellis format** — Restored `sandbox_mode = "workspace-write"` as top-level string
+  field, added `[features] multi_agent = false` + `[features.multi_agent_v2] enabled = false` for recursion guard.
+  Matches Trellis's proven schema exactly.
+- **Codex hooks.json format** — Changed from simple array to Claude Code-style nested format (
+  `{"hooks": {"UserPromptSubmit": [...]}}`) matching Trellis's working format.
+- **Codex config.toml** — Added detailed comments explaining trust requirements and timeout rationale, aligned with
+  Trellis config style.
+- **Agent developer_instructions** — Added recursion guard sections ("You MUST NOT spawn another sub-agent") and context
+  loading steps, following Trellis's battle-tested pattern.
 
 ---
 
@@ -62,7 +117,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 Fixes
 
-- **Codex agent TOML unknown field fix** — Removed `[sandbox]` and `[features]` sections from agent TOML files. These fields are only valid in `config.toml`, not in agent definitions. Agent TOML only supports `name`, `description`, `developer_instructions`.
+- **Codex agent TOML unknown field fix** — Removed `[sandbox]` and `[features]` sections from agent TOML files. These
+  fields are only valid in `config.toml`, not in agent definitions. Agent TOML only supports `name`, `description`,
+  `developer_instructions`.
 
 ---
 
@@ -70,7 +127,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 Fixes
 
-- **Codex agent TOML format fix** — `[developer_instructions]` table with `text` key changed to top-level `developer_instructions` string. Fixes "failed to deserialize: invalid type: map, expected a string" error in all 3 agent files (ccg-implement/review/research.toml).
+- **Codex agent TOML format fix** — `[developer_instructions]` table with `text` key changed to top-level
+  `developer_instructions` string. Fixes "failed to deserialize: invalid type: map, expected a string" error in all 3
+  agent files (ccg-implement/review/research.toml).
 
 ---
 
@@ -78,7 +137,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 Fixes
 
-- **guided-develop forced dual-model analysis** — M complexity Phase 3 changed from "optional single model based on domain" to mandatory dual-model parallel (Gemini + Codex both called). Aligns CC mode with Codex mode rule: M+ = always both models.
+- **guided-develop forced dual-model analysis** — M complexity Phase 3 changed from "optional single model based on
+  domain" to mandatory dual-model parallel (Gemini + Codex both called). Aligns CC mode with Codex mode rule: M+ =
+  always both models.
 
 ---
 
@@ -86,16 +147,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ✨ New Features
 
-- **Codex-Led Mode** — Complete Codex CLI orchestration mode where Codex acts as lead agent, dispatching analysis and review tasks to Gemini and Claude via codeagent-wrapper. Installed separately via menu option `X. Codex Mode`.
-  - `~/.codex/AGENTS.md` — Adaptive decision framework (not rigid workflow): auto-assesses complexity/risk, scales effort accordingly
-  - `~/.codex/hooks/ccg-workflow.py` — Intelligent guardrail hook: tracks progress per-turn, injects adaptive reminders based on what Codex has/hasn't done
-  - `~/.codex/config.toml` — Multi-agent v2 enabled with 8-min timeout for external model calls
-  - `~/.codex/agents/ccg-implement.toml` / `ccg-review.toml` / `ccg-research.toml` — Native sub-agent definitions
-  - `~/.codex/hooks.json` — Hook registration for UserPromptSubmit
-- **Dual-model enforcement in Codex mode** — M+ complexity tasks MUST call both Gemini AND Claude for analysis and review. Default call template is dual-model parallel with `&` + `wait`.
-- **Task persistence in Codex mode** — All tasks create `.ccg/tasks/` with task.json, phase tracking, and mandatory archival on completion.
-- **Spec system in Codex mode** — Codex reads `.ccg/spec/` before coding, writes back learnings (Spec Evolution) before archival.
-- **Inline execution mode** — Codex writes code directly (no sub-agent spawning) for maximum reliability. Sub-agents are available but optional.
+- **Codex-Led Mode** — Complete Codex CLI orchestration mode where Codex acts as lead agent, dispatching analysis and
+  review tasks to Gemini and Claude via codeagent-wrapper. Installed separately via menu option `X. Codex Mode`.
+    - `~/.codex/AGENTS.md` — Adaptive decision framework (not rigid workflow): auto-assesses complexity/risk, scales
+      effort accordingly
+    - `~/.codex/hooks/ccg-workflow.py` — Intelligent guardrail hook: tracks progress per-turn, injects adaptive
+      reminders based on what Codex has/hasn't done
+    - `~/.codex/config.toml` — Multi-agent v2 enabled with 8-min timeout for external model calls
+    - `~/.codex/agents/ccg-implement.toml` / `ccg-review.toml` / `ccg-research.toml` — Native sub-agent definitions
+    - `~/.codex/hooks.json` — Hook registration for UserPromptSubmit
+- **Dual-model enforcement in Codex mode** — M+ complexity tasks MUST call both Gemini AND Claude for analysis and
+  review. Default call template is dual-model parallel with `&` + `wait`.
+- **Task persistence in Codex mode** — All tasks create `.ccg/tasks/` with task.json, phase tracking, and mandatory
+  archival on completion.
+- **Spec system in Codex mode** — Codex reads `.ccg/spec/` before coding, writes back learnings (Spec Evolution) before
+  archival.
+- **Inline execution mode** — Codex writes code directly (no sub-agent spawning) for maximum reliability. Sub-agents are
+  available but optional.
 - **Menu entry for Codex mode** — `npx ccg-workflow` → `X. Codex Mode` with confirmation dialog and file listing.
 
 ### 🔄 Changes
@@ -109,14 +177,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ✨ New Features
 
-- **Codex Builder execution mode** — At plan approval HARD STOP, users can now choose between Agent Teams (Claude Builders) or Codex to write code. Codex writes directly to filesystem via codeagent-wrapper with full permissions, while Claude remains the orchestrator: monitoring progress, reviewing `git diff`, and running quality gates afterward.
-- **New role: `codex/builder.md`** — Implementation-focused role prompt with full write permissions. Follows plan exactly, validates after each task, outputs structured Execution Report.
-- **Execution mode selection at HARD STOP** — `full-collaborate` offers [Agent Teams / Codex], `guided-develop` offers [Claude / Codex]. Codex failure auto-degrades to the other option.
+- **Codex Builder execution mode** — At plan approval HARD STOP, users can now choose between Agent Teams (Claude
+  Builders) or Codex to write code. Codex writes directly to filesystem via codeagent-wrapper with full permissions,
+  while Claude remains the orchestrator: monitoring progress, reviewing `git diff`, and running quality gates afterward.
+- **New role: `codex/builder.md`** — Implementation-focused role prompt with full write permissions. Follows plan
+  exactly, validates after each task, outputs structured Execution Report.
+- **Execution mode selection at HARD STOP** — `full-collaborate` offers [Agent Teams / Codex], `guided-develop`
+  offers [Claude / Codex]. Codex failure auto-degrades to the other option.
 
 ### 🔄 Changes
 
-- **model-router.md updated** — Added `builder` role to available roles, documented Codex Builder mode for implementation phase.
-- **Role-based context filtering** — `subagent-context.js` now detects `builder` role from ROLE_FILE path and filters context.jsonl entries accordingly.
+- **model-router.md updated** — Added `builder` role to available roles, documented Codex Builder mode for
+  implementation phase.
+- **Role-based context filtering** — `subagent-context.js` now detects `builder` role from ROLE_FILE path and filters
+  context.jsonl entries accordingly.
 
 ---
 
@@ -124,14 +198,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ✨ New Features (Trellis-inspired)
 
-- **Spec Evolution feedback loop** — Tasks auto-propose reusable coding conventions extracted from git diff + review findings before archival. User confirms before writing to `.ccg/spec/`. Added to 5 strategies: full-collaborate, guided-develop, refactor-safely, debug-investigate, review-audit. (phase-guide.md §8)
-- **Break-loop detection** — workflow-state hook tracks turn history in `.turns.json`. When same phase + nextAction repeats 3+ turns, injects `⚠️ LOOP DETECTED` warning with 5-step Break-Loop Protocol (stop, root-cause, switch approach). (phase-guide.md §9)
-- **Role-based JSONL filtering** — context.jsonl entries now support `roles` field (`implement`, `review`, `research`, `debug`). subagent-context hook auto-detects agent role from ROLE_FILE path or Agent name, injects only role-relevant context. Reduces token waste for reviewers/researchers.
-- **Ralph Loop iterative review** — Review phases in full-collaborate, guided-develop, refactor-safely upgraded to iterative loop: dual-model review → quality gates → user decides whether to continue → fix-dev (fresh Agent) → re-review. Max 3 rounds. Progress tracked in `fix-log.jsonl`. (phase-guide.md §10)
+- **Spec Evolution feedback loop** — Tasks auto-propose reusable coding conventions extracted from git diff + review
+  findings before archival. User confirms before writing to `.ccg/spec/`. Added to 5 strategies: full-collaborate,
+  guided-develop, refactor-safely, debug-investigate, review-audit. (phase-guide.md §8)
+- **Break-loop detection** — workflow-state hook tracks turn history in `.turns.json`. When same phase + nextAction
+  repeats 3+ turns, injects `⚠️ LOOP DETECTED` warning with 5-step Break-Loop Protocol (stop, root-cause, switch
+  approach). (phase-guide.md §9)
+- **Role-based JSONL filtering** — context.jsonl entries now support `roles` field (`implement`, `review`, `research`,
+  `debug`). subagent-context hook auto-detects agent role from ROLE_FILE path or Agent name, injects only role-relevant
+  context. Reduces token waste for reviewers/researchers.
+- **Ralph Loop iterative review** — Review phases in full-collaborate, guided-develop, refactor-safely upgraded to
+  iterative loop: dual-model review → quality gates → user decides whether to continue → fix-dev (fresh Agent) →
+  re-review. Max 3 rounds. Progress tracked in `fix-log.jsonl`. (phase-guide.md §10)
 
 ### 🐛 Fixes
 
-- **Security domain files no longer installed by default** — `domains/security/` (red-team, pentest, blue-team, etc.) contains reference content that triggers antivirus/corporate security tool false positives. Installer now removes it post-copy. Users who need it can manually copy from the npm package.
+- **Security domain files no longer installed by default** — `domains/security/` (red-team, pentest, blue-team, etc.)
+  contains reference content that triggers antivirus/corporate security tool false positives. Installer now removes it
+  post-copy. Users who need it can manually copy from the npm package.
 
 ### 🗑️ Removed
 
@@ -155,34 +239,39 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 
 ### Architecture
 
-- **`/ccg:go` smart entry** — One command replaces 29. Analyzes intent (task type, complexity, domain, risk), selects from 10 strategies, executes with phase gates.
+- **`/ccg:go` smart entry** — One command replaces 29. Analyzes intent (task type, complexity, domain, risk), selects
+  from 10 strategies, executes with phase gates.
 - **Hook engine** — 4 hooks registered in settings.json:
-  - `workflow-state.js` (UserPromptSubmit) — per-turn task state breadcrumb injection
-  - `session-start.js` (SessionStart) — full project context on session start/clear/compact
-  - `subagent-context.js` (PreToolUse Bash|Agent) — spec + task context injection into codeagent-wrapper and Team spawns
-  - `skill-router.js` (UserPromptSubmit) — auto-inject domain knowledge on keyword detection
-- **Task persistence** — `.ccg/tasks/{name}/` with task.json, requirements.md, plan.md, context.jsonl, review.md, research/
+    - `workflow-state.js` (UserPromptSubmit) — per-turn task state breadcrumb injection
+    - `session-start.js` (SessionStart) — full project context on session start/clear/compact
+    - `subagent-context.js` (PreToolUse Bash|Agent) — spec + task context injection into codeagent-wrapper and Team
+      spawns
+    - `skill-router.js` (UserPromptSubmit) — auto-inject domain knowledge on keyword detection
+- **Task persistence** — `.ccg/tasks/{name}/` with task.json, requirements.md, plan.md, context.jsonl, review.md,
+  research/
 - **Spec system** — `.ccg/spec/` project-level coding standards, auto-injected via hooks
-- **Agent Teams integration** — `full-collaborate` strategy uses TeamCreate + parallel Builder spawns with file ownership isolation
+- **Agent Teams integration** — `full-collaborate` strategy uses TeamCreate + parallel Builder spawns with file
+  ownership isolation
 
 ### Strategies (10)
 
-| Strategy | Complexity | External models | Teams |
-|----------|-----------|----------------|-------|
-| direct-fix | S | No | No |
-| quick-implement | S | No | No |
-| guided-develop | M | Single + dual review | No |
-| full-collaborate | L/XL | Dual parallel | Yes |
-| debug-investigate | M+ | Dual diagnosis | No |
-| refactor-safely | M+ | Dual review | No |
-| deep-research | any | Dual exploration | No |
-| optimize-measure | any | Optional | No |
-| review-audit | any | Dual cross-review | No |
-| git-action | any | No (delegates) | No |
+| Strategy          | Complexity | External models      | Teams |
+|-------------------|------------|----------------------|-------|
+| direct-fix        | S          | No                   | No    |
+| quick-implement   | S          | No                   | No    |
+| guided-develop    | M          | Single + dual review | No    |
+| full-collaborate  | L/XL       | Dual parallel        | Yes   |
+| debug-investigate | M+         | Dual diagnosis       | No    |
+| refactor-safely   | M+         | Dual review          | No    |
+| deep-research     | any        | Dual exploration     | No    |
+| optimize-measure  | any        | Optional             | No    |
+| review-audit      | any        | Dual cross-review    | No    |
+| git-action        | any        | No (delegates)       | No    |
 
 ### Quality gates in strategies
 
-`verify-security`, `verify-quality`, `verify-change` called as Skill invocations inside strategy verification phases. Critical findings block delivery.
+`verify-security`, `verify-quality`, `verify-change` called as Skill invocations inside strategy verification phases.
+Critical findings block delivery.
 
 ### Installer
 
@@ -199,7 +288,8 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 
 ### Breaking changes
 
-- Default install no longer includes legacy workflow commands (workflow, plan, execute, frontend, backend, feat, analyze, debug, optimize, test, review, enhance, codex-exec, team-*)
+- Default install no longer includes legacy workflow commands (workflow, plan, execute, frontend, backend, feat,
+  analyze, debug, optimize, test, review, enhance, codex-exec, team-*)
 - Select "legacy compat" during install to get all 31 commands
 
 ---
@@ -208,14 +298,20 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 
 ### ✨ 新功能
 
-- **Init 交互状态机**：`init` 流程重构为状态机模式，支持在每步中途返回上一步，解决"填错一个 URL/KEY 就要 Ctrl+C 全部重来"的痛点。每个 Step 的首个 list 选项末尾内嵌 `← 返回上一步` 和 `× 取消安装` 哨兵（Step 1 只有取消）。Step 3（MCP）因原首 prompt 是 checkbox 多选，加入前导 list 守门支持返回。
-- **摘要页跳回菜单**：最终确认页从 `confirm: yes/no` 改为 list 菜单，支持"确认安装 / 改 API 配置 / 改模型路由 / 改 MCP 工具 / 改性能模式 / 取消安装"。选"改 XXX"跳回对应 Step 重跑一次后直接回到摘要页，不用再走一遍后续步骤。
-- **API 跳过选项**：Step 1/4 API 提供方菜单新增第 4 个选项 `○ 跳过 — 我已通过 cc-switch / 其他工具自行配置`。选它后 CCG 不会写入 `settings.json` 的 `ANTHROPIC_BASE_URL/AUTH_TOKEN`，适用于已通过其他工具配好 API 的用户。
+- **Init 交互状态机**：`init` 流程重构为状态机模式，支持在每步中途返回上一步，解决"填错一个 URL/KEY 就要 Ctrl+C 全部重来"
+  的痛点。每个 Step 的首个 list 选项末尾内嵌 `← 返回上一步` 和 `× 取消安装` 哨兵（Step 1 只有取消）。Step 3（MCP）因原首
+  prompt 是 checkbox 多选，加入前导 list 守门支持返回。
+- **摘要页跳回菜单**：最终确认页从 `confirm: yes/no` 改为 list 菜单，支持"确认安装 / 改 API 配置 / 改模型路由 / 改 MCP
+  工具 / 改性能模式 / 取消安装"。选"改 XXX"跳回对应 Step 重跑一次后直接回到摘要页，不用再走一遍后续步骤。
+- **API 跳过选项**：Step 1/4 API 提供方菜单新增第 4 个选项 `○ 跳过 — 我已通过 cc-switch / 其他工具自行配置`。选它后 CCG
+  不会写入 `settings.json` 的 `ANTHROPIC_BASE_URL/AUTH_TOKEN`，适用于已通过其他工具配好 API 的用户。
 
 ### 🔄 变更
 
-- **重构 `src/commands/init.ts`**：Step 1-4 抽取为 `runApiStep / runModelStep / runMcpStep / runPerfStep` 闭包函数 + 主循环状态机，原 `Show summary / Confirm` 合并入 `runSummaryStep`。非交互模式（`--skip-prompt`）逻辑保持不变。net +200 行。
-- **i18n 新增 key**：`init.nav.*`、`init.summaryMenu.*`、`init.api.skipOption/skipNoticeTitle`、`init.mcp.gatePrompt/gateContinue`、`init.summary.apiProvider/apiSelfManaged/geminiModel`（中英双语）。
+- **重构 `src/commands/init.ts`**：Step 1-4 抽取为 `runApiStep / runModelStep / runMcpStep / runPerfStep` 闭包函数 +
+  主循环状态机，原 `Show summary / Confirm` 合并入 `runSummaryStep`。非交互模式（`--skip-prompt`）逻辑保持不变。net +200 行。
+- **i18n 新增 key**：`init.nav.*`、`init.summaryMenu.*`、`init.api.skipOption/skipNoticeTitle`、
+  `init.mcp.gatePrompt/gateContinue`、`init.summary.apiProvider/apiSelfManaged/geminiModel`（中英双语）。
 
 ---
 
@@ -223,8 +319,13 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 
 ### 🐛 修复
 
-- **`--gemini-model` 注入到纯 codex 调用行**（#130）：`injectConfigVariables()` 全局替换 `{{GEMINI_MODEL_FLAG}}`，不区分当前行的后端硬编码。导致用户配置 `Frontend: gemini + Backend: codex` 后，`/ccg:backend`、`/ccg:codex-exec` 等纯 codex 调用被注入 `--gemini-model gemini-3.1-pro-preview` 冗余参数。虽然 `codeagent-wrapper` 有兜底 warn + ignore 不影响执行，但命令看起来混乱且有误导性。改为**行级感知替换**：硬编码 `--backend gemini` 或条件行 `--backend <codex|gemini>` 保留 flag，纯 `--backend codex/claude` 行清除。
-- **新增 11 个单元测试**：覆盖 codex-only / gemini-only / 条件行 / 前后端交叉 / 无 gemini / 默认模型 / 自定义模型 / 真实模板集成测试
+- **`--gemini-model` 注入到纯 codex 调用行**（#130）：`injectConfigVariables()` 全局替换 `{{GEMINI_MODEL_FLAG}}`
+  ，不区分当前行的后端硬编码。导致用户配置 `Frontend: gemini + Backend: codex` 后，`/ccg:backend`、`/ccg:codex-exec` 等纯
+  codex 调用被注入 `--gemini-model gemini-3.1-pro-preview` 冗余参数。虽然 `codeagent-wrapper` 有兜底 warn + ignore
+  不影响执行，但命令看起来混乱且有误导性。改为**行级感知替换**：硬编码 `--backend gemini` 或条件行
+  `--backend <codex|gemini>` 保留 flag，纯 `--backend codex/claude` 行清除。
+- **新增 11 个单元测试**：覆盖 codex-only / gemini-only / 条件行 / 前后端交叉 / 无 gemini / 默认模型 / 自定义模型 /
+  真实模板集成测试
 
 ---
 
@@ -232,7 +333,9 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 
 ### 🐛 修复
 
-- **模型路由硬编码导致非默认配置失效**：21 个模板文件中 ROLE_FILE 路径、表头、执行指令硬编码了 `codex/` 和 `gemini/`，导致用户配置 `Frontend: codex` 后 Claude 仍尝试调用 Gemini（exit code 127）。全量替换为 `{{BACKEND_PRIMARY}}/` 和 `{{FRONTEND_PRIMARY}}/` 模板变量，安装时按路由配置动态生成
+- **模型路由硬编码导致非默认配置失效**：21 个模板文件中 ROLE_FILE 路径、表头、执行指令硬编码了 `codex/` 和 `gemini/`，导致用户配置
+  `Frontend: codex` 后 Claude 仍尝试调用 Gemini（exit code 127）。全量替换为 `{{BACKEND_PRIMARY}}/` 和
+  `{{FRONTEND_PRIMARY}}/` 模板变量，安装时按路由配置动态生成
 
 ---
 
@@ -240,7 +343,8 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 
 ### 🐛 修复
 
-- **Windows Gemini 多行参数截断**（#129）：Windows 上 npm `.cmd` wrapper 经由 cmd.exe 转发时截断多行 `-p` 参数，导致 Gemini 仅接收到角色设定首行而不执行任务。修复：Windows 平台改用 stdin pipe 传递任务内容，不再使用 `-p` 参数
+- **Windows Gemini 多行参数截断**（#129）：Windows 上 npm `.cmd` wrapper 经由 cmd.exe 转发时截断多行 `-p` 参数，导致 Gemini
+  仅接收到角色设定首行而不执行任务。修复：Windows 平台改用 stdin pipe 传递任务内容，不再使用 `-p` 参数
 - **Binary 版本升级**：`5.9.0` → `5.10.0`
 
 ---
@@ -258,11 +362,13 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 
 ### 🐛 修复
 
-- **更新后 MCP 提示词显示未配置**（#124）：`update` 无条件传 `--skip-mcp` 导致 `mcpProvider` 被覆盖为 `skip`，已配置 MCP 的用户更新后提示词回退为"未配置"。修复：从已有 `config.toml` 恢复 `mcp.provider`，仅在无历史配置时才 fallback
+- **更新后 MCP 提示词显示未配置**（#124）：`update` 无条件传 `--skip-mcp` 导致 `mcpProvider` 被覆盖为 `skip`，已配置 MCP
+  的用户更新后提示词回退为"未配置"。修复：从已有 `config.toml` 恢复 `mcp.provider`，仅在无历史配置时才 fallback
 
 ### ✨ 新功能
 
-- **Impeccable 命令可选安装**（#125）：init Step 4/4 新增 confirm 提示，20 个前端设计命令（polish/audit/animate 等）默认不安装，需要的用户自行勾选。update 时保留已有选择
+- **Impeccable 命令可选安装**（#125）：init Step 4/4 新增 confirm 提示，20 个前端设计命令（polish/audit/animate
+  等）默认不安装，需要的用户自行勾选。update 时保留已有选择
 - **X (Twitter) 社区入口**：README header 加 `@CCG_Workflow` 徽章 + 架构图下方 demo 推文链接 + Contact 区 Twitter 入口
 
 ---
@@ -271,7 +377,8 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 
 ### 🐛 修复
 
-- **Skill Registry 命令缺失 frontmatter**：`generateCommandContent()` 生成的 27 个 command 文件缺少 YAML frontmatter（`---\ndescription\n---`），导致 Claude Code 命令解析器级联失败，所有 `/ccg:*` 命令及项目级命令（如 OPSX）均无法索引
+- **Skill Registry 命令缺失 frontmatter**：`generateCommandContent()` 生成的 27 个 command 文件缺少 YAML frontmatter（
+  `---\ndescription\n---`），导致 Claude Code 命令解析器级联失败，所有 `/ccg:*` 命令及项目级命令（如 OPSX）均无法索引
 
 ---
 
@@ -287,7 +394,8 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 ### 🔄 变更
 
 - **init 步骤 3→4**：新增 Step 2/4 模型路由选择
-- **20+ 模板去硬编码**：所有命令模板中的 `--backend gemini`/`--backend codex` 替换为 `{{FRONTEND_PRIMARY}}`/`{{BACKEND_PRIMARY}}` 模板变量
+- **20+ 模板去硬编码**：所有命令模板中的 `--backend gemini`/`--backend codex` 替换为 `{{FRONTEND_PRIMARY}}`/
+  `{{BACKEND_PRIMARY}}` 模板变量
 - **update 保留模型配置**：`--skip-prompt` 模式从 config.toml 读取现有路由，不再回退到硬编码默认值
 
 ---
@@ -297,8 +405,10 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 ### ✨ 新功能
 
 - **Skill Registry 机制**：SKILL.md frontmatter 驱动自动命令生成。新增技能只需写一个 SKILL.md，安装时自动生成 slash command
-- **域知识秘典全量导入**：10 大领域 61 个知识文件（安全 7 + 架构 6 + DevOps 8 + AI 5 + 开发 9 + 前端设计 25 + 基础设施 + 移动端 + 数据工程 + 编排）
-- **Impeccable 工具集**：20 个 UI/UX 精打磨技能（polish/audit/harden/clarify/critique/animate/colorize 等），全部 user-invocable
+- **域知识秘典全量导入**：10 大领域 61 个知识文件（安全 7 + 架构 6 + DevOps 8 + AI 5 + 开发 9 + 前端设计 25 + 基础设施 +
+  移动端 + 数据工程 + 编排）
+- **Impeccable 工具集**：20 个 UI/UX 精打磨技能（polish/audit/harden/clarify/critique/animate/colorize 等），全部
+  user-invocable
 - **Override-Refusal 工具**：`/hi` 命令，会话级反拒绝覆写器（refusal_rewriter.js）
 - **Scrapling 技能**：网页抓取与数据提取，支持 Cloudflare/WAF 绕过
 - **3 个新输出风格**：冷刃简报（abyss-concise）、铁律军令（abyss-command）、祭仪长卷（abyss-ritual），输出风格总数达 8 种
@@ -307,7 +417,8 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 ### 🏗 架构
 
 - **`src/utils/skill-registry.ts`**：新模块，负责 SKILL.md frontmatter 解析、技能发现、命令生成
-- **installer 集成**：`installSkillGeneratedCommands()` 在 skill 复制后自动扫描并生成 user-invocable 命令，跳过 installer-data.ts 已有命令避免冲突
+- **installer 集成**：`installSkillGeneratedCommands()` 在 skill 复制后自动扫描并生成 user-invocable 命令，跳过
+  installer-data.ts 已有命令避免冲突
 
 ---
 
@@ -315,8 +426,10 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 
 ### ✨ 新功能
 
-- **`/ccg:team` 统一工作流**：第 28 个斜杠命令，8 阶段企业级工作流（需求→架构→规划→开发→测试→审查→修复→集成），7 角色 Agent Teams 自动编排
-- **3 个新 Agent**：`team-architect`（架构师）、`team-qa`（QA 工程师）、`team-reviewer`（代码审查员），均为 Agent Teams 真实 teammates
+- **`/ccg:team` 统一工作流**：第 28 个斜杠命令，8 阶段企业级工作流（需求→架构→规划→开发→测试→审查→修复→集成），7 角色 Agent
+  Teams 自动编排
+- **3 个新 Agent**：`team-architect`（架构师）、`team-qa`（QA 工程师）、`team-reviewer`（代码审查员），均为 Agent Teams 真实
+  teammates
 - **Evaluator-Optimizer 反馈环**：Phase 7 最多 2 轮自动修复 Critical 问题，超出交由用户决断
 - **架构+审查阶段多模型交叉**：Phase 2 Codex∥Gemini 并行架构分析，Phase 6 双模型交叉代码审查
 
@@ -326,7 +439,8 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 
 ### 🐛 修复
 
-- **Windows ccline 状态栏修复**：`%USERPROFILE%\\.claude\\ccline\\ccline.exe` 改为 `~/.claude/ccline/ccline.exe`，Claude Code 统一支持 `~` 展开
+- **Windows ccline 状态栏修复**：`%USERPROFILE%\\.claude\\ccline\\ccline.exe` 改为 `~/.claude/ccline/ccline.exe`，Claude
+  Code 统一支持 `~` 展开
 
 ---
 
@@ -334,7 +448,8 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 
 ### 🐛 修复
 
-- **WORKDIR 路径推断修复**：20 个命令模板的 `{{WORKDIR}}` 规则从"替换为绝对路径"改为"必须通过 `pwd`/`cd` 获取，禁止从 `$HOME` 推断"，修复沙箱/云端环境下工作目录错误问题
+- **WORKDIR 路径推断修复**：20 个命令模板的 `{{WORKDIR}}` 规则从"替换为绝对路径"改为"必须通过 `pwd`/`cd` 获取，禁止从
+  `$HOME` 推断"，修复沙箱/云端环境下工作目录错误问题
 - **spec-init 目录防御**：Step 3 新增禁止 `cd` 到其他路径的提示，防止 Claude 自行推断错误目录
 - **Windows 兼容**：WORKDIR 获取指令支持 `pwd`（Unix）和 `cd`（Windows CMD）双写
 
@@ -344,12 +459,14 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 
 ### 🐛 修复
 
-- **Gemini session_id 解析修复**：Gemini CLI 的 `init` 事件前粘有 MCP 警告文本导致 JSON 解析失败，现在自动提取行中 JSON 部分，正确捕获 `session_id`
+- **Gemini session_id 解析修复**：Gemini CLI 的 `init` 事件前粘有 MCP 警告文本导致 JSON 解析失败，现在自动提取行中 JSON
+  部分，正确捕获 `session_id`
 - **Gemini 会话复用恢复**：所有模板恢复使用 `resume <SESSION_ID>`（支持并行多会话场景），不再 fallback 到 `resume latest`
 
 ### ✨ 新功能
 
-- **spec-impl 跨阶段会话复用**：Step 4 原型 → Step 7 审查复用会话（`CODEX_PROTO_SESSION` / `GEMINI_PROTO_SESSION`），审查带有原型上下文，审查阶段带有原型上下文
+- **spec-impl 跨阶段会话复用**：Step 4 原型 → Step 7 审查复用会话（`CODEX_PROTO_SESSION` / `GEMINI_PROTO_SESSION`
+  ），审查带有原型上下文，审查阶段带有原型上下文
 
 ---
 
@@ -357,7 +474,8 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 
 ### 🐛 修复
 
-- **Gemini `resume latest` 模板修正**：Gemini CLI stream-json 不输出 SESSION_ID，所有模板改为 Gemini 用 `resume latest`、Codex 用 `resume <SESSION_ID>`
+- **Gemini `resume latest` 模板修正**：Gemini CLI stream-json 不输出 SESSION_ID，所有模板改为 Gemini 用 `resume latest`
+  、Codex 用 `resume <SESSION_ID>`
 
 ---
 
@@ -366,7 +484,8 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 ### 🐛 修复
 
 - **Gemini `-p -` 显示修正**：`Command:` 行现在显示真实的任务文本而非 `-p -`，与实际执行一致，消除误导
-- **Session-ID 早期输出**：wrapper 在 backend 返回 `session_started` 事件时立即输出 `Session-ID: xxx` 到 stderr，不再等到任务完成才输出。即使任务超时/失败，Claude 也能拿到真正的 session ID 来 resume，不再误用 PID
+- **Session-ID 早期输出**：wrapper 在 backend 返回 `session_started` 事件时立即输出 `Session-ID: xxx` 到
+  stderr，不再等到任务完成才输出。即使任务超时/失败，Claude 也能拿到真正的 session ID 来 resume，不再误用 PID
 
 ### 🔄 变更
 
@@ -379,9 +498,9 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 ### ✨ 新功能
 
 - **初始化交互重构**：3 步流程替代原来的 8 轮 yes/no 确认
-  - Step 1: API 提供方（list 选择：官方 / 第三方 / 赞助商预留位）
-  - Step 2: MCP 工具（checkbox 多选，可同时装多个，按需填 Key）
-  - Step 3: 性能模式（list 选择：标准 / 轻量）
+    - Step 1: API 提供方（list 选择：官方 / 第三方 / 赞助商预留位）
+    - Step 2: MCP 工具（checkbox 多选，可同时装多个，按需填 Key）
+    - Step 3: 性能模式（list 选择：标准 / 轻量）
 - **赞助商预留位**：init 和 menu 的 API 提供方选择中预留赞助商合作位
 - **MCP 多选共存**：ace-tool + fast-context 可同时安装，ace 为主检索，fast-context 辅助语义搜索
 
@@ -396,7 +515,9 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 
 ### 🐛 修复
 
-- **Gemini CLI stdin 兼容性修复**：Gemini CLI 不支持 `-p -` 作为 stdin 标记，wrapper 现在对 Gemini backend 直接通过 `-p "任务文本"` 传递 prompt，跳过 stdin pipe。修复 v1.7.74 引入的 `--include-directories` 与 `-p -` 参数链断裂导致 Gemini 无法调用的问题
+- **Gemini CLI stdin 兼容性修复**：Gemini CLI 不支持 `-p -` 作为 stdin 标记，wrapper 现在对 Gemini backend 直接通过
+  `-p "任务文本"` 传递 prompt，跳过 stdin pipe。修复 v1.7.74 引入的 `--include-directories` 与 `-p -` 参数链断裂导致
+  Gemini 无法调用的问题
 
 ---
 
@@ -404,12 +525,15 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 
 ### ✨ 新功能
 
-- **`--progress` 进度输出**：codeagent-wrapper 新增 `--progress` 参数，后台执行时向 stderr 输出 `[PROGRESS]` 精简进度行（session_started / reasoning / message / cmd_done / mcp_call / turn_completed），告别黑箱等待（PR #112 by @puyialeng233-spec）
+- **`--progress` 进度输出**：codeagent-wrapper 新增 `--progress` 参数，后台执行时向 stderr 输出 `[PROGRESS]`
+  精简进度行（session_started / reasoning / message / cmd_done / mcp_call / turn_completed），告别黑箱等待（PR #112 by
+  @puyialeng233-spec）
 - **CJK 安全截断**：progress 文本使用 `[]rune` 切片，中文内容不会断在多字节字符中间
 
 ### 🐛 修复
 
-- **全模板 `--progress` 覆盖**：所有 20+ 个命令模板的 codeagent-wrapper 调用均添加 `--progress`，包括补漏的 `debug.md`、`spec-review.md`、`codex-exec.md` review 调用
+- **全模板 `--progress` 覆盖**：所有 20+ 个命令模板的 codeagent-wrapper 调用均添加 `--progress`，包括补漏的 `debug.md`、
+  `spec-review.md`、`codex-exec.md` review 调用
 
 ---
 
@@ -422,7 +546,8 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 
 ### 🔄 变更
 
-- **全平台统一 permissions.allow**：macOS/Linux 不再使用 PreToolUse Hook + jq，全平台统一用 `permissions.allow` 通配符匹配，升级时自动清理旧 Hook 和旧规则
+- **全平台统一 permissions.allow**：macOS/Linux 不再使用 PreToolUse Hook + jq，全平台统一用 `permissions.allow`
+  通配符匹配，升级时自动清理旧 Hook 和旧规则
 
 ---
 
@@ -430,7 +555,8 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 
 ### 🐛 修复
 
-- **TS 类型错误修复**：`installer-mcp.ts` 的 `serverConfig` 参数从 `Record<string, any>` 收紧为 `McpServerConfig`，修复 `tsc --noEmit` 报错 TS2345
+- **TS 类型错误修复**：`installer-mcp.ts` 的 `serverConfig` 参数从 `Record<string, any>` 收紧为 `McpServerConfig`，修复
+  `tsc --noEmit` 报错 TS2345
 
 ### 🔄 变更
 
@@ -444,7 +570,8 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 
 - **Gemini 调用失败不重试**：所有 20 个命令模板新增 Gemini 失败重试规则（最多 2 次，间隔 5s），3 次全败才降级为单模型
 - **Codex 结果被跳过**：所有 20 个命令模板新增 Codex 必须等待规则，禁止在 Codex 未返回时跳过或继续下一阶段
-- **team-exec 退化为普通 Agent**：明确指定必须使用 TeamCreate + TaskCreate + Agent(team_name=...) 创建 Agent Teams，禁止退化为普通 Agent 子代理
+- **team-exec 退化为普通 Agent**：明确指定必须使用 TeamCreate + TaskCreate + Agent(team_name=...) 创建 Agent
+  Teams，禁止退化为普通 Agent 子代理
 
 ---
 
@@ -452,7 +579,8 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 
 ### 🐛 修复
 
-- **Skills 路径错误**：`SKILL.md` 模板中 `run_skill.js` 路径修正为 `~/.claude/skills/ccg/run_skill.js`，与 v1.7.75 命名空间迁移对齐，修复质量关卡调用失败问题
+- **Skills 路径错误**：`SKILL.md` 模板中 `run_skill.js` 路径修正为 `~/.claude/skills/ccg/run_skill.js`，与 v1.7.75
+  命名空间迁移对齐，修复质量关卡调用失败问题
 
 ---
 
@@ -464,12 +592,14 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 
 ### 🐛 修复
 
-- **更新时跳过 binary 重复下载**：`uninstallWorkflows()` 新增 `preserveBinary` 选项，更新流程保留已有 binary；`installBinaryFile()` 检测 binary 存在且可用时跳过下载
+- **更新时跳过 binary 重复下载**：`uninstallWorkflows()` 新增 `preserveBinary` 选项，更新流程保留已有 binary；
+  `installBinaryFile()` 检测 binary 存在且可用时跳过下载
 - **更新失败时显示 binary 下载提示**：更新完成后校验 binary 状态，失败时显示与初始化一致的红框警告 + 手动修复指引
 
 ### 🔄 变更
 
-- **提取 `showBinaryDownloadWarning()` / `verifyBinary()` 共享函数**：init.ts 和 update.ts 的 35 行重复代码合并为 `installer.ts` 中的 2 个导出函数
+- **提取 `showBinaryDownloadWarning()` / `verifyBinary()` 共享函数**：init.ts 和 update.ts 的 35 行重复代码合并为
+  `installer.ts` 中的 2 个导出函数
 - **移除 update.ts 中的 binary backup/restore 逻辑**：因 binary 不再被删除，backup 机制不再需要（-20 行）
 
 ---
@@ -478,14 +608,15 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 
 ### 🔄 变更
 
-- **安装器重构**：1878 行单文件拆分为 5 个聚焦模块（installer / installer-mcp / installer-data / installer-template / installer-prompt），净删 469 行（-25%），所有导出通过 barrel re-export 保持完全兼容
-  - `cmd()` 构建器：新增命令 = 1 行函数调用（原 12 行对象字面量）
-  - `MCP_PROVIDERS` 注册表：新增 MCP provider = 1 行配置（原 if/else 链）
-  - `getBinaryName()` 查表：新增平台支持 = 1 行映射（原 14 行 if/else）
-  - `copyMdTemplates()` 共享管线：agents/prompts/rules 安装共用
-  - `configureMcpInClaude()` 共享管线：5 个 MCP 安装函数共用
-  - `mirrorCcgServers()` 统一镜像：Codex/Gemini MCP 同步共用
-  - 删除死代码 `ALL_COMMANDS` 数组 + `normalizePath()` + `convertToGitBashPath()`
+- **安装器重构**：1878 行单文件拆分为 5 个聚焦模块（installer / installer-mcp / installer-data / installer-template /
+  installer-prompt），净删 469 行（-25%），所有导出通过 barrel re-export 保持完全兼容
+    - `cmd()` 构建器：新增命令 = 1 行函数调用（原 12 行对象字面量）
+    - `MCP_PROVIDERS` 注册表：新增 MCP provider = 1 行配置（原 if/else 链）
+    - `getBinaryName()` 查表：新增平台支持 = 1 行映射（原 14 行 if/else）
+    - `copyMdTemplates()` 共享管线：agents/prompts/rules 安装共用
+    - `configureMcpInClaude()` 共享管线：5 个 MCP 安装函数共用
+    - `mirrorCcgServers()` 统一镜像：Codex/Gemini MCP 同步共用
+    - 删除死代码 `ALL_COMMANDS` 数组 + `normalizePath()` + `convertToGitBashPath()`
 - **零功能变更**：135 测试全过，8 个消费者文件零修改，dist 产物 API 完全一致
 
 ---
@@ -494,11 +625,13 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 
 ### ✨ 新功能
 
-- **fast-context MCP 集成**：新增 Windsurf Fast Context 作为第四个代码检索 MCP 选项，与 ace-tool / ace-tool-rs / ContextWeaver 并列
-  - 初始化时 fast-context 为默认推荐选项
-  - 支持 API Key 可选（本地装 Windsurf 自动提取）+ FC_INCLUDE_SNIPPETS 模式选择
-  - 安装/卸载/菜单配置完整支持
-- **三端搜索提示词注入**：选择 fast-context 时自动写入搜索指南到 Claude Code (`~/.claude/rules/`)、Codex (`~/.codex/AGENTS.md`)、Gemini (`~/.gemini/GEMINI.md`)，卸载时自动清理
+- **fast-context MCP 集成**：新增 Windsurf Fast Context 作为第四个代码检索 MCP 选项，与 ace-tool / ace-tool-rs /
+  ContextWeaver 并列
+    - 初始化时 fast-context 为默认推荐选项
+    - 支持 API Key 可选（本地装 Windsurf 自动提取）+ FC_INCLUDE_SNIPPETS 模式选择
+    - 安装/卸载/菜单配置完整支持
+- **三端搜索提示词注入**：选择 fast-context 时自动写入搜索指南到 Claude Code (`~/.claude/rules/`)、Codex (
+  `~/.codex/AGENTS.md`)、Gemini (`~/.gemini/GEMINI.md`)，卸载时自动清理
 - **Gemini MCP 同步**：新增 `syncMcpToGemini()` 将 CCG 管理的 MCP 服务器镜像到 `~/.gemini/settings.json`，与 Codex 同步机制对齐
 
 ---
@@ -507,7 +640,8 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 
 ### 🔄 变更
 
-- **`/ccg:commit` Context 自动归档**：不再依赖手动 session.log，改为从 git diff 自动分析生成 ContextEntry（decisions/bugs/changes），session.log 有内容时额外合并。`.context/` 不存在时提示 init 但不阻断
+- **`/ccg:commit` Context 自动归档**：不再依赖手动 session.log，改为从 git diff 自动分析生成
+  ContextEntry（decisions/bugs/changes），session.log 有内容时额外合并。`.context/` 不存在时提示 init 但不阻断
 - **`/ccg:context log` 降为可选**：核心用法简化为 `init` 一次 → 正常开发 → `/ccg:commit` 全自动归档
 
 ---
@@ -518,10 +652,14 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 
 - **`/ccg:context` 命令**：第 27 个斜杠命令，项目上下文管理（`.context/` 目录初始化、决策日志记录、压缩归档、历史查看）
 - **`.context` 上下文工程体系**：为 LLM 全面自动化提供决策审计链 — 记录 WHY（为什么改）、WHAT（考虑了什么替代方案）、BUG（遇到了什么坑）
-- **ContextEntry Schema v1.0.0**：JSONL canonical store + Markdown 人类视图，UUIDv7 主键（rebase-safe），`.gitattributes merge=union` 减少冲突
-- **`/ccg:commit` Context Compress Phase**：提交时自动压缩 session.log → 脱敏 → 追加 history/commits.jsonl → 添加 `Context-Id` commit trailer
-- **13 个角色提示词 `.context Awareness` 注入**：Codex 6 个 + Gemini 7 个角色提示词增加 `.context/prefs/` 读取指令，外部模型自动遵守项目规范
-- **Quality Gate Rules 全局规则**：安装时自动写入 `~/.claude/rules/ccg-skills.md`，定义 5 个质量关卡的自动触发条件（新建模块/代码变更>30行/安全变更/重构）
+- **ContextEntry Schema v1.0.0**：JSONL canonical store + Markdown 人类视图，UUIDv7 主键（rebase-safe），
+  `.gitattributes merge=union` 减少冲突
+- **`/ccg:commit` Context Compress Phase**：提交时自动压缩 session.log → 脱敏 → 追加 history/commits.jsonl → 添加
+  `Context-Id` commit trailer
+- **13 个角色提示词 `.context Awareness` 注入**：Codex 6 个 + Gemini 7 个角色提示词增加 `.context/prefs/`
+  读取指令，外部模型自动遵守项目规范
+- **Quality Gate Rules 全局规则**：安装时自动写入 `~/.claude/rules/ccg-skills.md`，定义 5
+  个质量关卡的自动触发条件（新建模块/代码变更>30行/安全变更/重构）
 
 ### 🔧 修复
 
@@ -533,11 +671,13 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 
 ### 🐛 修复
 
-- **Binary 下载容错**：`downloadBinaryFromRelease()` 新增 3 次重试 + 60s/次 AbortController 超时，适应中国用户 GitHub Release CDN 慢/不可达的场景
+- **Binary 下载容错**：`downloadBinaryFromRelease()` 新增 3 次重试 + 60s/次 AbortController 超时，适应中国用户 GitHub
+  Release CDN 慢/不可达的场景
 - **Binary 下载失败醒目告警**：下载失败时在终端显示红框警告 + 手动下载地址 + 放置路径 + chmod 指引，不再静默吞掉错误
 - **Binary 失败不阻塞安装**：binary 下载失败降级为 warning，commands + skills 仍正常安装，不再将整个安装标记为失败
 - **Update binary 备份/恢复**：更新流程先备份旧 binary，新安装失败后自动恢复，避免"删了旧的、新的又没下成"
-- **Update subprocess 超时**：`npx init` 子进程超时从 120s 提升到 300s（5 分钟），避免 binary 下载慢时进程被杀导致 commands/skills 丢失
+- **Update subprocess 超时**：`npx init` 子进程超时从 120s 提升到 300s（5 分钟），避免 binary 下载慢时进程被杀导致
+  commands/skills 丢失
 
 ---
 
@@ -545,7 +685,8 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 
 ### 🐛 修复
 
-- **Windows Hook exit 255 修复**：Windows 用户 codeagent-wrapper 自动授权从 Hook（依赖 jq/grep/true）改为 `permissions.allow`，彻底消除 `failed with non-blocking status code 255` 报错
+- **Windows Hook exit 255 修复**：Windows 用户 codeagent-wrapper 自动授权从 Hook（依赖 jq/grep/true）改为
+  `permissions.allow`，彻底消除 `failed with non-blocking status code 255` 报错
 - **升级自动迁移**：Windows 用户更新时自动清理旧 Hook，无需手动操作
 
 ---
@@ -554,8 +695,10 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 
 ### 🏗 架构
 
-- **二进制产物迁移至 GitHub Release**：`bin/codeagent-wrapper-*` 不再打包到 npm 和 git，改从 GitHub Release (`preset` tag) 按需下载，npm 包从 16.3MB 缩减至 161KB
-- **GitHub Actions CI**：新增 `.github/workflows/build-binaries.yml`，`codeagent-wrapper/` 变更时自动交叉编译 6 平台并上传到 `preset` Release
+- **二进制产物迁移至 GitHub Release**：`bin/codeagent-wrapper-*` 不再打包到 npm 和 git，改从 GitHub Release (`preset` tag)
+  按需下载，npm 包从 16.3MB 缩减至 161KB
+- **GitHub Actions CI**：新增 `.github/workflows/build-binaries.yml`，`codeagent-wrapper/` 变更时自动交叉编译 6 平台并上传到
+  `preset` Release
 - **installer.ts 下载逻辑**：仅从 GitHub Release 下载，移除本地 `bin/` fallback（开发者可用 `build-all.sh` 自行编译）
 - **移除本地二进制**：`bin/codeagent-wrapper-*` 6 个文件已从仓库删除，仅保留 `bin/ccg.mjs` 入口
 
@@ -565,7 +708,8 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 
 ### 📝 文档
 
-- **README 重构**：命令分组展示（7 类）、新增「Why CCG?」价值主张、架构图上移、Prerequisites 合并、环境变量增加「何时修改」列、FAQ/Hook 配置去重折叠
+- **README 重构**：命令分组展示（7 类）、新增「Why CCG?」价值主张、架构图上移、Prerequisites 合并、环境变量增加「何时修改」列、FAQ/Hook
+  配置去重折叠
 - **新增 CONTRIBUTING.md**：开发环境搭建、PR 流程、Commit 规范、代码标准、Good First Issue 指南
 - **新增 Issue 模板**：`.github/ISSUE_TEMPLATE/` 下 3 套模板（bug report / feature request / good first issue）
 
@@ -575,7 +719,8 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 
 ### 🐛 修复
 
-- **Skills 命名空间隔离**：安装路径从 `~/.claude/skills/` 改为 `~/.claude/skills/ccg/`，卸载时不再误删用户自建 skill（如 `brainstorming`、`changelog-generator` 等）
+- **Skills 命名空间隔离**：安装路径从 `~/.claude/skills/` 改为 `~/.claude/skills/ccg/`，卸载时不再误删用户自建 skill（如
+  `brainstorming`、`changelog-generator` 等）
 - **旧版迁移**：升级时自动将 v1.7.73-74 散落在 `skills/` 根目录的 CCG 文件迁移到 `skills/ccg/`，用户 skill 原地不动
 
 ---
@@ -584,11 +729,13 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 
 ### 🔄 变更
 
-- **spec 模板 guardrail 加固**：`spec-research`/`spec-plan`/`spec-impl` 三个模板新增 USER GUIDANCE RULE，防止 LLM 向用户暴露内部 `/opsx:*` 命令，统一引导至 `/ccg:spec-*`；`spec-plan`/`spec-impl` 额外添加 TASKS FORMAT RULE 防止 checkbox 格式问题
+- **spec 模板 guardrail 加固**：`spec-research`/`spec-plan`/`spec-impl` 三个模板新增 USER GUIDANCE RULE，防止 LLM 向用户暴露内部
+  `/opsx:*` 命令，统一引导至 `/ccg:spec-*`；`spec-plan`/`spec-impl` 额外添加 TASKS FORMAT RULE 防止 checkbox 格式问题
 
 ### 🐛 修复
 
-- **Gemini CLI `.env` 隔离**：修复 Gemini CLI 从项目目录加载 `.env` 导致全局 API Key 被覆盖的问题。codeagent-wrapper 现将 Gemini 的 `cmd.Dir` 设为 `$HOME`，项目目录通过 `--include-directories` 传入
+- **Gemini CLI `.env` 隔离**：修复 Gemini CLI 从项目目录加载 `.env` 导致全局 API Key 被覆盖的问题。codeagent-wrapper 现将
+  Gemini 的 `cmd.Dir` 设为 `$HOME`，项目目录通过 `--include-directories` 传入
 - **Gemini 模型参数支持**：`buildGeminiArgs` 支持 `--gemini-model` / `-m` 参数传递自定义模型
 - **Codex 测试修正**：修复预存的环境变量名错误（`CODEX_BYPASS_SANDBOX` → `CODEX_REQUIRE_APPROVAL`）
 
@@ -598,10 +745,13 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 
 ### ✨ 新功能
 
-- **`/ccg:codex-exec` 命令**：新增第 26 个斜杠命令，与 `/ccg:plan` 配对使用——Codex 全权执行（MCP 搜索 + 代码实现 + 测试），Claude 仅做决策/审核，极大降低 Claude token 消耗
-- **Skills 体系**：首次引入 Claude Code 原生 Skills 机制，安装 6 个 skill 到 `~/.claude/skills/`（verify-security / verify-quality / verify-change / verify-module / gen-docs / multi-agent）
+- **`/ccg:codex-exec` 命令**：新增第 26 个斜杠命令，与 `/ccg:plan` 配对使用——Codex 全权执行（MCP 搜索 + 代码实现 +
+  测试），Claude 仅做决策/审核，极大降低 Claude token 消耗
+- **Skills 体系**：首次引入 Claude Code 原生 Skills 机制，安装 6 个 skill 到 `~/.claude/skills/`（verify-security /
+  verify-quality / verify-change / verify-module / gen-docs / multi-agent）
 - **context7 MCP 自动安装**：初始化时自动安装 context7（免费库文档查询），无需 API Key
-- **Codex MCP 同步**：新增 `syncMcpToCodex()`，将 CCG 管理的 MCP 服务器镜像同步到 `~/.codex/config.toml`，支持原子写 + stale 清理
+- **Codex MCP 同步**：新增 `syncMcpToCodex()`，将 CCG 管理的 MCP 服务器镜像同步到 `~/.codex/config.toml`，支持原子写 +
+  stale 清理
 
 ### 🐛 修复
 
@@ -618,7 +768,8 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 
 ### 🔄 变更
 
-- **全局提示词迁移至 rules/**：grok-search 搜索提示词从追加到 `~/.claude/CLAUDE.md` 改为写入 `~/.claude/rules/ccg-grok-search.md`，避免 CLAUDE.md 超 200 行导致执行力下降
+- **全局提示词迁移至 rules/**：grok-search 搜索提示词从追加到 `~/.claude/CLAUDE.md` 改为写入
+  `~/.claude/rules/ccg-grok-search.md`，避免 CLAUDE.md 超 200 行导致执行力下降
 - **旧版自动清理**：升级时自动清除 CLAUDE.md 中残留的 `CCG-GROK-SEARCH-PROMPT` 注入内容
 
 ---
@@ -627,7 +778,8 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 
 ### ✨ 新功能
 
-- **grok-search 联网搜索 MCP**：初始化和 MCP 菜单新增 grok-search 安装选项，支持 Tavily + Firecrawl + Grok 多信源联网搜索（比 Claude Code 内置联网更好用）
+- **grok-search 联网搜索 MCP**：初始化和 MCP 菜单新增 grok-search 安装选项，支持 Tavily + Firecrawl + Grok 多信源联网搜索（比
+  Claude Code 内置联网更好用）
 - **全局搜索提示词自动追加**：安装 grok-search 时自动追加搜索/证据/推理规范到 `~/.claude/CLAUDE.md`，不替换现有内容
 
 ### 🔄 变更
@@ -646,12 +798,14 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 
 ### 🔄 变更
 
-- **MCP 推荐调整**：ace-tool 恢复为默认推荐（`search_context` 可用，`enhance_prompt` 已不可用），中转推荐更新为 https://acemcp.heroman.wtf/
+- **MCP 推荐调整**：ace-tool 恢复为默认推荐（`search_context` 可用，`enhance_prompt`
+  已不可用），中转推荐更新为 https://acemcp.heroman.wtf/
 - **ContextWeaver 降为备选**：仍可使用，需硅基流动 API Key
 
 ### 🗑️ 移除
 
-- **清理仓库垃圾文件**：移除 `1.md`、`FINAL_VERIFICATION.md`、`OPENSPEC_COMMANDS_REFERENCE.md`、`OPSX_INTEGRATION_FIX.md`、`config.json`、`verify-*.sh`、`test-local-install.sh`、`.magi/`、`.claude/index.json`
+- **清理仓库垃圾文件**：移除 `1.md`、`FINAL_VERIFICATION.md`、`OPENSPEC_COMMANDS_REFERENCE.md`、`OPSX_INTEGRATION_FIX.md`、
+  `config.json`、`verify-*.sh`、`test-local-install.sh`、`.magi/`、`.claude/index.json`
 - **更新 `.gitignore`**：添加 `.magi/`、`verify-*.sh`、`*_FIX.md`、`*_REFERENCE.md` 防止再次提交
 
 ---
@@ -661,7 +815,8 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 ### ✨ 新功能
 
 - **国际化 (i18n)**：首次安装时提示选择语言（简体中文 / English），所有 CLI 交互文本通过 i18n 系统输出
-- **codeagent-wrapper Hook 自动授权**：安装时自动写入 `settings.json` Hook 配置，解决部分用户 `permissions.allow` 不生效的问题。需要系统安装 `jq`，安装时自动检测并提示
+- **codeagent-wrapper Hook 自动授权**：安装时自动写入 `settings.json` Hook 配置，解决部分用户 `permissions.allow`
+  不生效的问题。需要系统安装 `jq`，安装时自动检测并提示
 - **英文 README**：README.md 改为英文版，原中文版移至 README.zh-CN.md，双语互链
 
 ### 🔄 变更
@@ -675,15 +830,17 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 
 ### 🐛 修复
 
-- **update 命令全局安装死循环**：npm 全局安装用户在本地工作流版本过旧时，`update` 错误推荐 `npm install -g`（包版本已最新），导致死循环。修复 `performUpdate` 的 `isNewVersion` 参数，仅在 npm registry 有新版本时才推荐 npm 更新
+- **update 命令全局安装死循环**：npm 全局安装用户在本地工作流版本过旧时，`update` 错误推荐 `npm install -g`
+  （包版本已最新），导致死循环。修复 `performUpdate` 的 `isNewVersion` 参数，仅在 npm registry 有新版本时才推荐 npm 更新
 
 ### ✅ 测试
 
 - **测试覆盖率 38 → 130**（+242%），新增 4 个测试文件：
-  - `version.test.ts`（14）：`compareVersions` 全场景覆盖，含 update bug 回归用例
-  - `config.test.ts`（14）：`createDefaultConfig` + `createDefaultRouting` 纯函数测试
-  - `platform.test.ts`（10）：平台检测、`getMcpCommand`、路径分隔符
-  - `installer.test.ts`（54）：注册表一致性、路由/liteMode 注入、模板变量完整性、contextweaver E2E、卸载 E2E、二进制安装、prompts 安装
+    - `version.test.ts`（14）：`compareVersions` 全场景覆盖，含 update bug 回归用例
+    - `config.test.ts`（14）：`createDefaultConfig` + `createDefaultRouting` 纯函数测试
+    - `platform.test.ts`（10）：平台检测、`getMcpCommand`、路径分隔符
+    - `installer.test.ts`（54）：注册表一致性、路由/liteMode 注入、模板变量完整性、contextweaver E2E、卸载 E2E、二进制安装、prompts
+      安装
 
 ---
 
@@ -692,10 +849,10 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 ### 🐛 修复
 
 - **spec 工作流完全对齐 OPSX**：修复状态持久化问题，确保用户切换上下文后可以正确恢复
-  - `spec-research`：Step 7 添加结构化总结 + 明确调用 `/opsx:continue` 生成 proposal
-  - `spec-plan`：Step 5 添加结构化总结 + 明确调用 `/opsx:continue` 生成 specs/design/tasks
-  - `spec-impl`：Step 2 调用 `/opsx:apply` 进入实施模式，Step 10 调用 `/opsx:archive` 归档
-  - `spec-init`：移除 ace-tool MCP 检查（非必需）
+    - `spec-research`：Step 7 添加结构化总结 + 明确调用 `/opsx:continue` 生成 proposal
+    - `spec-plan`：Step 5 添加结构化总结 + 明确调用 `/opsx:continue` 生成 specs/design/tasks
+    - `spec-impl`：Step 2 调用 `/opsx:apply` 进入实施模式，Step 10 调用 `/opsx:archive` 归档
+    - `spec-init`：移除 ace-tool MCP 检查（非必需）
 
 ### 🔄 变更
 
@@ -707,7 +864,8 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 
 ### 🐛 修复
 
-- **spec-research 并行调用缺失**：补全 Step 4 多模型并行探索模板，添加 `run_in_background: true` 指令和完整的 Bash 并行调用示例（Codex + Gemini），与 `spec-plan` / `spec-impl` 保持一致
+- **spec-research 并行调用缺失**：补全 Step 4 多模型并行探索模板，添加 `run_in_background: true` 指令和完整的 Bash
+  并行调用示例（Codex + Gemini），与 `spec-plan` / `spec-impl` 保持一致
 
 ---
 
@@ -715,7 +873,8 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 
 ### 🐛 修复
 
-- **MCP skip 模式修复**：当用户选择跳过 MCP 配置时，正确处理模板中的 `{{MCP_SEARCH_TOOL}}` 引用，替换为 Glob + Grep fallback 提示（PR #68 by @ymdvsymd）
+- **MCP skip 模式修复**：当用户选择跳过 MCP 配置时，正确处理模板中的 `{{MCP_SEARCH_TOOL}}` 引用，替换为 Glob + Grep
+  fallback 提示（PR #68 by @ymdvsymd）
 - **team-plan.md 修复**：将硬编码的 `mcp__ace-tool__search_context` 改为模板变量
 
 ### ✨ 新功能
@@ -738,9 +897,9 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 ### 🔄 变更
 
 - **适配 OpenSpec 1.2**：更新 `spec-*` 系列命令兼容新版 OPSX
-  - `spec-init`：支持 Profile 系统（`core`/`custom`）+ AI 工具自动检测
-  - `spec-review`：更新引用（移除过时的 `AGENTS.md`，改用 `config.yaml`）
-  - **保持封装**：用户只需使用 `/ccg:spec-*` 命令，无需了解底层 OPSX 命令
+    - `spec-init`：支持 Profile 系统（`core`/`custom`）+ AI 工具自动检测
+    - `spec-review`：更新引用（移除过时的 `AGENTS.md`，改用 `config.yaml`）
+    - **保持封装**：用户只需使用 `/ccg:spec-*` 命令，无需了解底层 OPSX 命令
 
 ---
 
@@ -774,12 +933,14 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 - `/ccg:team-review` — 双模型交叉审查（Codex 后端审查 + Gemini 前端审查，分级处理）
 
 **设计特点**：
+
 - 完全独立体系，不依赖现有 `/ccg:workflow` 等命令
 - 每步之间 `/clear` 隔离上下文，通过文件传递状态，不怕上下文爆
 - Builder teammates 使用 Sonnet 模型，成本可控
 - 智能触发：子任务 ≥ 3 个且文件范围无冲突时才启用并行
 
 **前置条件**：
+
 - Claude Code ≥ 2.1.32
 - 需手动启用：`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`
 
@@ -798,26 +959,31 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 ### ✨ 新功能
 
 **1. MCP 工具扩展**
+
 - 新增 ContextWeaver MCP（推荐）- 本地混合搜索，替代收费的 ace-tool
 - 新增辅助工具 MCP（多选）：Context7、Playwright、DeepWiki、Exa
 - ace-tool/ace-tool-rs 标注为收费，ContextWeaver 设为默认推荐
 
 **2. API 配置**
+
 - 初始化和菜单新增「配置 API」选项
 - 支持自定义 ANTHROPIC_BASE_URL 和 ANTHROPIC_API_KEY
 - 自动添加优化配置（禁用遥测、MCP 超时等）
 - 自动添加 codeagent-wrapper 权限白名单
 
 **3. 实用工具**
+
 - 新增 ccusage - Claude Code 用量分析
 - 新增 CCometixLine - 状态栏工具（Git + 用量跟踪）
 
 **4. Claude Code 安装**
+
 - 新增「安装 Claude Code」菜单选项
 - 支持多种安装方式：npm、homebrew、curl、powershell、cmd
 - 支持检测已安装版本并重装
 
 ### 🔧 改进
+
 - MCP 配置菜单重构为两类：代码检索 MCP + 辅助工具 MCP
 - 卸载 CCG 时不再询问 MCP 卸载（独立操作）
 
@@ -830,6 +996,7 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 **修复 CCG 与 OpenSpec CLI 的集成问题**
 
 #### 问题描述
+
 - CCG spec 命令模板中错误地尝试通过 `Skill(opsx:list)` 调用 OPSX 命令
 - 使用了不存在的命令选项（如 `--json` 用于 `new change`）
 - 混淆了 CLI 命令 `openspec` 和斜杠命令 `/opsx:`
@@ -837,18 +1004,22 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 #### 修复内容
 
 **1. 修正命令调用方式**
+
 - ❌ 之前：`Skill(opsx:list)` 或 `Run /opsx:list`
 - ✅ 现在：`openspec list --json`（通过 Bash 调用）
 
 **2. 修正命令语法**
+
 - ❌ 之前：`openspec new "<name>" --json`
 - ✅ 现在：`openspec new change "<name>"`（移除不支持的 `--json`）
 
 **3. 统一命令名称**
+
 - 明确说明 CLI 命令是 `openspec`，不是 `opsx`
 - `/opsx:xxx` 是 Claude 斜杠命令，内部调用 `openspec` CLI
 
 #### 修改的文件
+
 - ✅ `templates/commands/spec-init.md` - 添加 CLI 命令说明和初始化检查
 - ✅ `templates/commands/spec-research.md` - 修复 `new change` 语法，添加变更存在性检查
 - ✅ `templates/commands/spec-plan.md` - 替换所有 `/opsx:` 引用为 CLI 调用
@@ -856,6 +1027,7 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 - ✅ `templates/commands/spec-review.md` - 替换所有 `/opsx:` 引用为 CLI 调用
 
 #### 已验证的命令
+
 - ✅ `openspec --version`
 - ✅ `openspec list --json`
 - ✅ `openspec status --change "<id>" --json`
@@ -864,6 +1036,7 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 - ✅ `npx @fission-ai/openspec init --tools claude`
 
 #### 新增文档
+
 - `OPSX_INTEGRATION_FIX.md` - 详细修复说明
 - `OPENSPEC_COMMANDS_REFERENCE.md` - OpenSpec CLI 命令参考
 - `FINAL_VERIFICATION.md` - 最终验证报告
@@ -884,10 +1057,12 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 - ✅ `/opsx:` 命令通过安装 `@fission-ai/openspec` 获得
 
 **修改文件**：
+
 - `templates/commands/spec-init.md` - 修正安装命令和说明文本
 - `CHANGELOG.md` - 添加修复说明
 
 **技术说明**：
+
 - OPSX = OpenSpec eXperimental workflow
 - 包名保持：`@fission-ai/openspec`
 - 命令格式：`/opsx:*` (实验性工作流) 和传统 OpenSpec 命令
@@ -902,16 +1077,17 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 
 - ✅ 完整更新所有 5 个 `spec-*.md` 模板文件中的 OpenSpec CLI 命令为 OPSX 命令
 - ✅ 更新命令映射：
-  - `openspec list` → `/opsx:list`
-  - `openspec show <id>` → `/opsx:show <id>`
-  - `openspec status --change <id>` → `/opsx:status <id>`
-  - `openspec new change` → `/opsx:new`
-  - `openspec validate <id>` → `/opsx:validate <id>`
-  - `openspec diff <id>` → `/opsx:diff <id>`
-  - `openspec workflow schemas` → `/opsx:schemas`
+    - `openspec list` → `/opsx:list`
+    - `openspec show <id>` → `/opsx:show <id>`
+    - `openspec status --change <id>` → `/opsx:status <id>`
+    - `openspec new change` → `/opsx:new`
+    - `openspec validate <id>` → `/opsx:validate <id>`
+    - `openspec diff <id>` → `/opsx:diff <id>`
+    - `openspec workflow schemas` → `/opsx:schemas`
 - ⚠️ **已知问题**：错误地将安装包写为 `@opsx/cli`（应为 `@fission-ai/openspec`）- 已在 v1.7.54 修复
 
 **修改文件**：
+
 - `templates/commands/spec-impl.md` - 完整替换所有 openspec 命令为 /opsx 命令
 - `templates/commands/spec-init.md` - 更新安装包和初始化命令
 - `templates/commands/spec-plan.md` - 更新状态检查和冲突检测命令
@@ -931,6 +1107,7 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 - 更新所有 spec 相关命令模板以支持新架构
 
 **修改文件**：
+
 - `templates/commands/spec-init.md` - 更新为 OPSX 初始化流程
 - `templates/commands/spec-research.md` - 更新为 OPSX 研究流程
 - `templates/commands/spec-plan.md` - 更新为 OPSX 规划流程
@@ -965,6 +1142,7 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 - 确保 npm 包安装后默认显示为中文界面
 
 **修改文件**：
+
 - `src/cli-setup.ts`: 所有 `.command()` 调用的描述文本改为中文
 - `src/commands/menu.ts`: 退出消息中文化
 
@@ -978,15 +1156,16 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 
 新增 5 个 `/ccg:spec-*` 命令，把需求变成约束，让 AI 没法自由发挥：
 
-| 命令 | 说明 |
-|------|------|
-| `/ccg:spec-init` | 初始化 OpenSpec 环境 + 验证多模型 MCP 工具 |
-| `/ccg:spec-research` | 需求 → 约束集（并行探索 + OpenSpec 提案） |
-| `/ccg:spec-plan` | 多模型分析 → 消除歧义 → 零决策可执行计划 |
-| `/ccg:spec-impl` | 按规范执行 + 多模型协作 + 归档 |
-| `/ccg:spec-review` | 双模型交叉审查（独立工具，随时可用） |
+| 命令                   | 说明                             |
+|----------------------|--------------------------------|
+| `/ccg:spec-init`     | 初始化 OpenSpec 环境 + 验证多模型 MCP 工具 |
+| `/ccg:spec-research` | 需求 → 约束集（并行探索 + OpenSpec 提案）   |
+| `/ccg:spec-plan`     | 多模型分析 → 消除歧义 → 零决策可执行计划        |
+| `/ccg:spec-impl`     | 按规范执行 + 多模型协作 + 归档             |
+| `/ccg:spec-review`   | 双模型交叉审查（独立工具，随时可用）             |
 
 **核心理念**：
+
 - 约束集 vs 信息堆砌：输出明确约束（如 "JWT TTL=15min"），而不是一堆背景知识
 - 零决策计划：Plan 阶段消除所有歧义，Impl 阶段纯机械执行
 - 分阶段执行：每阶段之间可 `/clear`，状态存在 `openspec/` 目录，不怕上下文爆
@@ -1009,12 +1188,13 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
   Failed to read ROLE_FILE 'C:/Users/XXX/.claude/.ccg/prompts/gemini/architect.md':
   The system cannot find the file specified.
   ```
-- **根本原因**: `templates/prompts/gemini/` 目录下缺失 `architect.md` 文件，但命令模板 (`plan.md`, `execute.md` 等) 引用了该文件
+- **根本原因**: `templates/prompts/gemini/` 目录下缺失 `architect.md` 文件，但命令模板 (`plan.md`, `execute.md` 等)
+  引用了该文件
 - **修复**: 新增 `templates/prompts/gemini/architect.md` 文件，定义前端架构师角色
 - **影响**:
-  - ✅ `/ccg:plan` 和 `/ccg:execute` 可正常使用 Gemini 后端
-  - ✅ 会话复用 (`resume`) 功能恢复正常
-  - ✅ 更新 `package.json` 将新文件加入发布列表
+    - ✅ `/ccg:plan` 和 `/ccg:execute` 可正常使用 Gemini 后端
+    - ✅ 会话复用 (`resume`) 功能恢复正常
+    - ✅ 更新 `package.json` 将新文件加入发布列表
 
 ### 📝 环境变量配置说明
 
@@ -1041,16 +1221,16 @@ VSCode 插件启动的子进程不会继承终端环境变量，必须通过 `se
 
 - **问题**: 选择 ace-tool-rs 并输入 Token 后，安装摘要仍显示"MCP工具跳过"
 - **根本原因**:
-  - Line 179: 显示摘要的条件判断遗漏 `ace-tool-rs`，只检查 `mcpProvider === 'ace-tool'`
-  - Line 389: MCP 资源提示的条件判断也有同样问题
+    - Line 179: 显示摘要的条件判断遗漏 `ace-tool-rs`，只检查 `mcpProvider === 'ace-tool'`
+    - Line 389: MCP 资源提示的条件判断也有同样问题
 - **修复**:
-  - 统一为 `(mcpProvider === 'ace-tool' || mcpProvider === 'ace-tool-rs')`
-  - 显示时动态使用 `mcpProvider` 变量，正确显示 `ace-tool` 或 `ace-tool-rs`
+    - 统一为 `(mcpProvider === 'ace-tool' || mcpProvider === 'ace-tool-rs')`
+    - 显示时动态使用 `mcpProvider` 变量，正确显示 `ace-tool` 或 `ace-tool-rs`
 - **影响**:
-  - ✅ ace-tool-rs 用户可以看到正确的安装状态
-  - ✅ Token 配置成功时显示绿色"ace-tool-rs"
-  - ✅ 跳过 Token 配置时显示黄色"ace-tool-rs (待配置)"
-  - ✅ 真正跳过时才显示灰色"跳过"
+    - ✅ ace-tool-rs 用户可以看到正确的安装状态
+    - ✅ Token 配置成功时显示绿色"ace-tool-rs"
+    - ✅ 跳过 Token 配置时显示黄色"ace-tool-rs (待配置)"
+    - ✅ 真正跳过时才显示灰色"跳过"
 
 **感谢 @用户 发现并报告此问题！**
 
@@ -1064,13 +1244,13 @@ VSCode 插件启动的子进程不会继承终端环境变量，必须通过 `se
 
 - **问题**: codeagent-wrapper 仅对 `claude` 后端设置环境变量，导致 `codex`/`gemini` 在 Windows Git Bash 后台进程中找不到命令
 - **修复**: 统一所有后端的环境变量处理逻辑
-  - 所有后端均调用 `cmd.SetEnv()` 显式合并父进程环境变量
-  - 确保 PATH 等关键环境变量正确继承
-  - 修复文件: `codeagent-wrapper/executor.go:972-978`
+    - 所有后端均调用 `cmd.SetEnv()` 显式合并父进程环境变量
+    - 确保 PATH 等关键环境变量正确继承
+    - 修复文件: `codeagent-wrapper/executor.go:972-978`
 - **影响**:
-  - ✅ Windows 用户不再需要手动配置 `settings.json` 注入 PATH
-  - ✅ 所有平台的环境变量继承行为统一
-  - ✅ 减少 "command not found" 错误
+    - ✅ Windows 用户不再需要手动配置 `settings.json` 注入 PATH
+    - ✅ 所有平台的环境变量继承行为统一
+    - ✅ 减少 "command not found" 错误
 
 **详细诊断**: 参见 `PATH_ISSUE_DIAGNOSIS.md`
 
@@ -1085,17 +1265,19 @@ VSCode 插件启动的子进程不会继承终端环境变量，必须通过 `se
 将原有的 workflow 拆分为两个独立命令，实现规划与执行的解耦：
 
 #### `/ccg:plan` - 多模型协作规划
+
 - **Phase 1**: 上下文全量检索
-  - 强制调用 `mcp__ace-tool__enhance_prompt` 增强提示词
-  - 调用 `mcp__ace-tool__search_context` 检索项目上下文
+    - 强制调用 `mcp__ace-tool__enhance_prompt` 增强提示词
+    - 调用 `mcp__ace-tool__search_context` 检索项目上下文
 - **Phase 2**: 多模型协作分析
-  - Codex + Gemini 并行分析，交叉验证
-  - 可选：双模型产出"计划草案"降低遗漏风险
-  - 生成 Step-by-step 实施计划
+    - Codex + Gemini 并行分析，交叉验证
+    - 可选：双模型产出"计划草案"降低遗漏风险
+    - 生成 Step-by-step 实施计划
 - **计划交付**：保存至 `.claude/plan/<功能名>.md`，提示用户审查或执行
 - **不问 Y/N**：只展示计划，让用户决定下一步
 
 #### `/ccg:execute` - 多模型协作执行
+
 - **Phase 0**: 读取计划文件，提取 SESSION_ID
 - **Phase 1**: 上下文快速检索（使用 MCP 工具，禁止手动 find/ls）
 - **Phase 3**: 原型获取（Codex/Gemini 根据任务类型路由）
@@ -1103,6 +1285,7 @@ VSCode 插件启动的子进程不会继承终端环境变量，必须通过 `se
 - **Phase 5**: 审计与交付（双模型 Code Review）
 
 #### 关键设计
+
 - **代码主权**：Codex/Gemini 只输出 Unified Diff Patch，Claude 负责实际修改
 - **SESSION_ID 交接**：plan 生成的 SESSION_ID 可传递给 execute 复用上下文
 - **信任规则**：后端逻辑以 Codex 为准，前端设计以 Gemini 为准
@@ -1135,6 +1318,7 @@ VSCode 插件启动的子进程不会继承终端环境变量，必须通过 `se
 用户反馈：当通过 npm 全局安装且当前版本已是最新版本时，系统仍然提示用户运行 `npm install -g ccg-workflow@latest`，导致用户困惑。
 
 **场景重现**：
+
 ```
 当前版本: v1.7.37
 最新版本: v1.7.37
@@ -1151,6 +1335,7 @@ npm install -g ccg-workflow@latest  ← 用户困惑：明明已经是最新版�
 在 `src/commands/update.ts:196-237` 中添加判断逻辑：
 
 **修复前**：
+
 ```typescript
 if (isGlobalInstall) {
   // 总是提示用户运行 npm install -g
@@ -1158,6 +1343,7 @@ if (isGlobalInstall) {
 ```
 
 **修复后**：
+
 ```typescript
 // 如果全局安装且仅工作流需要更新（包已是最新）
 if (isGlobalInstall && !isNewVersion) {
@@ -1176,6 +1362,7 @@ else if (isGlobalInstall && isNewVersion) {
 #### 修复后的用户体验
 
 **场景 1：包已是最新，仅工作流需要更新**
+
 ```
 当前版本: v1.7.38
 最新版本: v1.7.38
@@ -1188,6 +1375,7 @@ else if (isGlobalInstall && isNewVersion) {
 ```
 
 **场景 2：包有新版本**
+
 ```
 当前版本: v1.7.37
 最新版本: v1.7.38
@@ -1213,6 +1401,7 @@ npm install -g ccg-workflow@latest
 #### 背景
 
 社区用户反馈希望支持 [ace-tool-rs](https://github.com/missdeer/ace-tool-rs)，这是 ace-tool 的 Rust 实现版本，具有以下优势：
+
 - 更轻量（二进制文件更小）
 - 更快速（Rust 性能优势）
 - 更低的资源占用
@@ -1222,6 +1411,7 @@ npm install -g ccg-workflow@latest
 **1. 添加 `installAceToolRs` 函数**
 
 在 `src/utils/installer.ts` 中添加 ace-tool-rs 安装函数：
+
 ```typescript
 export async function installAceToolRs(config: AceToolConfig): Promise<...> {
   // 使用 npx ace-tool-rs 命令
@@ -1232,6 +1422,7 @@ export async function installAceToolRs(config: AceToolConfig): Promise<...> {
 **2. 更新 i18n 文本**
 
 添加中英文翻译：
+
 - `init:aceToolRs.title` - "ace-tool-rs MCP 配置"
 - `init:aceToolRs.description` - "Rust 实现的 ace-tool，更轻量、更快速"
 - `init:aceToolRs.installing` - "正在配置 ace-tool-rs MCP..."
@@ -1240,6 +1431,7 @@ export async function installAceToolRs(config: AceToolConfig): Promise<...> {
 **3. 修改 init 命令**
 
 在初始化时提供 3 个选项：
+
 - `ace-tool` (Node.js 实现)
 - `ace-tool-rs` **(推荐)** (Rust 实现)
 - 跳过
@@ -1249,6 +1441,7 @@ export async function installAceToolRs(config: AceToolConfig): Promise<...> {
 **4. 修改 config-mcp 命令**
 
 在 MCP 配置命令中添加选项：
+
 - 安装/更新 ace-tool MCP (Node.js 实现)
 - 安装/更新 ace-tool-rs MCP **(推荐)** (Rust 实现)
 - 卸载 MCP 配置
@@ -1256,6 +1449,7 @@ export async function installAceToolRs(config: AceToolConfig): Promise<...> {
 #### 使用方式
 
 **初始化时选择**：
+
 ```bash
 npx ccg-workflow
 
@@ -1267,6 +1461,7 @@ npx ccg-workflow
 ```
 
 **后续配置**：
+
 ```bash
 npx ccg-workflow config mcp
 
@@ -1281,6 +1476,7 @@ npx ccg-workflow config mcp
 #### MCP 配置格式
 
 **ace-tool-rs 配置**：
+
 ```json
 {
   "mcpServers": {
@@ -1303,14 +1499,16 @@ npx ccg-workflow config mcp
 #### 重要说明
 
 **MCP 工具名称统一**：
+
 - ace-tool 和 ace-tool-rs 都注册为 **同一个 MCP 服务器名称** `"ace-tool"`
 - 提供 **相同的工具接口**：
-  - `mcp__ace-tool__search_context` - 代码检索
-  - `mcp__ace-tool__enhance_prompt` - Prompt 增强
+    - `mcp__ace-tool__search_context` - 代码检索
+    - `mcp__ace-tool__enhance_prompt` - Prompt 增强
 - **无需修改提示词模板**：两个实现可以无缝切换
 - AI 会自动调用 `mcp__ace-tool__*` 工具，无论底层使用哪个实现
 
 **选择建议**：
+
 - **ace-tool-rs (推荐)**：Rust 实现，更轻量、更快速、资源占用更低
 - **ace-tool**：Node.js 实现，兼容性更好，适合特殊环境
 
@@ -1362,14 +1560,14 @@ if !envFlagEnabled("CODEX_REQUIRE_APPROVAL") {
 **Web UI 增强**
 
 1. **自动滚动修复**
-   - 修复显示任务内容后不滚动到底部的问题
-   - 每次新内容到达时自动滚动
-   - 尊重用户手动滚动（向上滚动后停止自动滚动）
+    - 修复显示任务内容后不滚动到底部的问题
+    - 每次新内容到达时自动滚动
+    - 尊重用户手动滚动（向上滚动后停止自动滚动）
 
 2. **任务完成后自动关闭页面**
-   - 显示 "✓ 完成 (3秒后自动关闭)"
-   - 3 秒后自动调用 `window.close()`
-   - 如果无法关闭（用户手动打开的窗口），显示 "✓ 完成 (可以关闭此页面)"
+    - 显示 "✓ 完成 (3秒后自动关闭)"
+    - 3 秒后自动调用 `window.close()`
+    - 如果无法关闭（用户手动打开的窗口），显示 "✓ 完成 (可以关闭此页面)"
 
 ### 📦 版本更新
 
@@ -1387,12 +1585,14 @@ if !envFlagEnabled("CODEX_REQUIRE_APPROVAL") {
 #### 问题背景
 
 v1.7.21 的修复不完整，Windows 上 Codex 完成后 codeagent-wrapper 进程仍然挂起：
+
 - 日志显示 "terminating lingering backend" 后就卡住了
 - `taskkill /T /F` 成功执行，但 `cmd.Wait()` 仍然阻塞
 
 #### 根本原因
 
 `cmd.Wait()` 阻塞直到 **所有 stdout 句柄关闭**，而不仅仅是主进程退出。在 Windows 上：
+
 1. Codex CLI 启动子进程（Node.js workers）
 2. 子进程继承了 stdout 句柄
 3. `taskkill /T /F` 杀死进程树
@@ -1441,6 +1641,7 @@ case <-messageTimerCh:
 #### 问题背景
 
 v1.7.18 的修复不完整，Windows 上 Codex 完成后进程仍然卡住：
+
 - Web UI 显示完成，但 codeagent-wrapper 进程一直不退出
 - 只有手动杀死进程才能继续
 - Mac 没问题，Windows 的 Gemini 也没问题
@@ -1453,13 +1654,13 @@ v1.7.18 的修复不完整，Windows 上 Codex 完成后进程仍然卡住：
 #### 核心修复
 
 1. **使用 `taskkill /T` 终止整个进程树**：
-   - 新增 `killProcessTree()` 函数，使用 `taskkill /T /F /PID` 递归杀死所有子进程
-   - `terminateCommand()`、`terminateProcess()`、`forwardSignals()` 在 Windows 上调用进程树终止
+    - 新增 `killProcessTree()` 函数，使用 `taskkill /T /F /PID` 递归杀死所有子进程
+    - `terminateCommand()`、`terminateProcess()`、`forwardSignals()` 在 Windows 上调用进程树终止
 
 2. **移除阻塞等待**：
-   - `messageTimerCh` case 里不再直接阻塞等待 `waitCh`
-   - 让循环继续，下一轮通过 `case waitErr = <-waitCh` 正常退出
-   - 即使 `taskkill` 失败，也不会永远卡住
+    - `messageTimerCh` case 里不再直接阻塞等待 `waitCh`
+    - 让循环继续，下一轮通过 `case waitErr = <-waitCh` 正常退出
+    - 即使 `taskkill` 失败，也不会永远卡住
 
 #### 技术细节
 
@@ -1510,12 +1711,14 @@ case <-messageTimerCh:
 v1.7.19 的表格格式精简过度，导致 Claude 无法理解需要发起并行 Bash 调用。
 
 **修复方案**：将表格格式改为明确的调用指令格式：
+
 ```
 1. **Codex 后端诊断**：`Bash({ command: "...--backend codex...", run_in_background: true })`
 2. **Gemini 前端诊断**：`Bash({ command: "...--backend gemini...", run_in_background: true })`
 ```
 
 **修改文件**：
+
 - `templates/commands/debug.md`
 - `templates/commands/optimize.md`
 - `templates/commands/review.md`
@@ -1531,11 +1734,13 @@ v1.7.19 的表格格式精简过度，导致 Claude 无法理解需要发起并�
 **精简命令模板，去除冗余代码块**
 
 所有调用外部模型的命令模板已统一格式：
+
 - 顶部保留完整的「多模型调用规范」代码示例（只出现一次）
 - 各阶段改为 `⚠️ 必须调用 xxx（参照上方调用规范）` + 参数表格
 - 避免重复教学，减少模板体积
 
 **修改文件**：
+
 - `templates/commands/backend.md` - 阶段 2、3、5 精简
 - `templates/commands/frontend.md` - 阶段 2、3、5 精简
 - `templates/commands/debug.md` - 阶段 2 精简
@@ -1555,12 +1760,14 @@ v1.7.19 的表格格式精简过度，导致 Claude 无法理解需要发起并�
 #### 问题背景
 
 用户在 Windows 系统上使用 Codex 时遇到问题：
+
 - Codex 任务实际已完成（Web 界面显示完成，输出了 `agent_message` 和 `turn.completed`）
 - 但 codeagent-wrapper 进程一直不退出
 - 导致 Claude Code Task 工具无法获取日志，一直等待
 - 只有手动关闭进程才能继续
 
 **根本原因**：
+
 - `terminateCommand` 函数使用 `syscall.SIGTERM` 信号终止进程
 - **Windows 不支持 SIGTERM 信号**，该调用静默失败（不报错但不执行任何操作）
 - 虽然有 `forceKillDelay` 后的 `Kill()` 备用逻辑，但代码在 `waitCh` 上阻塞等待进程退出
@@ -1569,13 +1776,13 @@ v1.7.19 的表格格式精简过度，导致 Claude 无法理解需要发起并�
 #### 核心修复
 
 1. **Windows 平台直接使用 Kill()**：
-   - `terminateCommand()` 函数：Windows 上直接调用 `proc.Kill()` 而非 `SIGTERM`
-   - `terminateProcess()` 函数：同样的修复
-   - `forwardSignals()` 函数：同样的修复
+    - `terminateCommand()` 函数：Windows 上直接调用 `proc.Kill()` 而非 `SIGTERM`
+    - `terminateProcess()` 函数：同样的修复
+    - `forwardSignals()` 函数：同样的修复
 
 2. **保持 Unix 兼容性**：
-   - Unix/Linux/macOS 仍使用 `SIGTERM` 实现优雅退出
-   - 保留 `forceKillDelay` 后的强制 Kill 逻辑
+    - Unix/Linux/macOS 仍使用 `SIGTERM` 实现优雅退出
+    - 保留 `forceKillDelay` 后的强制 Kill 逻辑
 
 #### 技术细节
 
@@ -1616,11 +1823,13 @@ if isWindows() {
 #### 问题背景
 
 用户在 Windows 系统上使用 Codex 时遇到问题：
+
 - Codex 任务实际已完成（Web 界面显示完成，输出了 `agent_message`）
 - 但 Claude Code 一直显示 "Codex 响应较慢" 或继续等待
 - 导致用户体验不佳，需要手动中断
 
 **根本原因**：
+
 - `codeagent-wrapper` 的 `postMessageTerminateDelay` 设置为 1 秒
 - Codex CLI 在输出 `agent_message` 后，发送完成事件（`turn.completed`/`thread.completed`）可能有延迟
 - 在 Windows 系统上，这个延迟经常超过 1 秒
@@ -1629,19 +1838,19 @@ if isWindows() {
 #### 核心修复
 
 1. **增加默认延迟时间**：从 1 秒增加到 5 秒
-   - 给 Codex CLI 足够时间发送完成事件
-   - 解决 Windows 系统上的延迟问题
+    - 给 Codex CLI 足够时间发送完成事件
+    - 解决 Windows 系统上的延迟问题
 
 2. **添加环境变量支持**：`CODEAGENT_POST_MESSAGE_DELAY`
-   - 用户可以根据网络环境自定义延迟时间（单位：秒）
-   - 默认值：5 秒
-   - 最大值：60 秒（防止过长等待）
-   - 示例：`export CODEAGENT_POST_MESSAGE_DELAY=10`
+    - 用户可以根据网络环境自定义延迟时间（单位：秒）
+    - 默认值：5 秒
+    - 最大值：60 秒（防止过长等待）
+    - 示例：`export CODEAGENT_POST_MESSAGE_DELAY=10`
 
 3. **代码改进**：
-   - 将硬编码常量 `postMessageTerminateDelay` 改为函数 `resolvePostMessageDelay()`
-   - 添加环境变量解析和验证逻辑
-   - 添加详细的注释说明延迟的作用
+    - 将硬编码常量 `postMessageTerminateDelay` 改为函数 `resolvePostMessageDelay()`
+    - 添加环境变量解析和验证逻辑
+    - 添加详细的注释说明延迟的作用
 
 #### 影响范围
 
@@ -1652,6 +1861,7 @@ if isWindows() {
 #### 技术细节
 
 修改文件：`codeagent-wrapper/executor.go`
+
 - 添加 `resolvePostMessageDelay()` 函数（第 22-45 行）
 - 修改 `runCodexTaskWithContext()` 中的定时器创建（第 1136 行）
 - 添加 `strconv` 导入以支持环境变量解析
@@ -1667,11 +1877,13 @@ if isWindows() {
 #### 问题背景
 
 用户在 Windows 系统上通过 `npx ccg-workflow` 更新时遇到错误：
+
 ```
 Binary not found in package: codeagent-wrapper-windows-amd64.exe
 ```
 
 **根本原因**：
+
 - `.gitignore` 忽略了所有 `.exe` 文件（包括 `bin/` 目录下的预编译二进制文件）
 - Windows 二进制文件未被 Git 跟踪，导致发布的 npm 包中缺失这些文件
 - macOS/Linux 二进制文件正常（无 `.exe` 扩展名，未被忽略）
@@ -1679,12 +1891,12 @@ Binary not found in package: codeagent-wrapper-windows-amd64.exe
 #### 核心修复
 
 1. **修改 `.gitignore`**：添加例外规则 `!bin/*.exe`
-   - 忽略构建过程中的 `.exe` 文件
-   - 但允许 `bin/` 目录下的预编译二进制文件被跟踪
+    - 忽略构建过程中的 `.exe` 文件
+    - 但允许 `bin/` 目录下的预编译二进制文件被跟踪
 
 2. **提交 Windows 二进制文件到 Git**：
-   - `bin/codeagent-wrapper-windows-amd64.exe` ✅
-   - `bin/codeagent-wrapper-windows-arm64.exe` ✅
+    - `bin/codeagent-wrapper-windows-amd64.exe` ✅
+    - `bin/codeagent-wrapper-windows-arm64.exe` ✅
 
 3. **发布新版本到 npm**：确保 Windows 用户能正常安装和更新
 
@@ -1706,36 +1918,39 @@ Binary not found in package: codeagent-wrapper-windows-amd64.exe
 Windows 用户在使用 CCG 工作流时遇到两个关键问题：
 
 1. **路径问题**：后台命令执行失败（exit code 127）
-   - 原因：Windows 路径中的反斜杠 `\` 在 Git Bash heredoc 中被转义
-   - 错误：`C:\Users\USER\.claude\bin\codeagent-wrapper` → `C:UsersLin.claudebincodeagent-wrapper`
+    - 原因：Windows 路径中的反斜杠 `\` 在 Git Bash heredoc 中被转义
+    - 错误：`C:\Users\USER\.claude\bin\codeagent-wrapper` → `C:UsersLin.claudebincodeagent-wrapper`
 
 2. **输出截断问题**：codeagent-wrapper 不返回完整结果
-   - 原因 1：日志行长度限制（1000 字符）截断长 JSON 事件
-   - 原因 2：Windows Git Bash 后台进程 stdout 缓冲未刷新
-   - 影响：只能获取推理过程，获取不到完整的 agent_message
+    - 原因 1：日志行长度限制（1000 字符）截断长 JSON 事件
+    - 原因 2：Windows Git Bash 后台进程 stdout 缓冲未刷新
+    - 影响：只能获取推理过程，获取不到完整的 agent_message
 
 #### 核心修复
 
 **1. 路径兼容性修复（所有平台受益）**
+
 - ✅ 统一使用正斜杠路径（`C:/Users/...`）
-  - Windows Git Bash、PowerShell、CMD 均支持正斜杠
-  - heredoc 中不会被转义
+    - Windows Git Bash、PowerShell、CMD 均支持正斜杠
+    - heredoc 中不会被转义
 - ✅ Windows 下自动添加 `.exe` 扩展名
-  - `~/.claude/bin/codeagent-wrapper` → `C:/Users/.../bin/codeagent-wrapper.exe`
+    - `~/.claude/bin/codeagent-wrapper` → `C:/Users/.../bin/codeagent-wrapper.exe`
 - 📝 修改文件：`src/utils/installer.ts`
 
 **2. 输出截断修复**
+
 - ✅ 移除日志行长度限制（所有平台）
-  - `codexLogLineLimit: 1000 → 0`（无限制）
-  - 防止长 JSON 事件（如 agent_message）被截断
+    - `codexLogLineLimit: 1000 → 0`（无限制）
+    - 防止长 JSON 事件（如 agent_message）被截断
 - ✅ 强制刷新 stdout（仅 Windows）
-  - 添加 `os.Stdout.Sync()` 确保后台进程输出完整捕获
+    - 添加 `os.Stdout.Sync()` 确保后台进程输出完整捕获
 - 📝 修改文件：`codeagent-wrapper/main.go`（升级至 v5.4.1）
 - 🔨 重新编译所有平台二进制文件
 
 #### 技术细节
 
 **installer.ts 路径处理逻辑**：
+
 ```typescript
 // 1. 正斜杠路径（所有平台）
 const normalizePath = (path: string) => path.replace(/\\/g, '/')
@@ -1746,6 +1961,7 @@ const wrapperPath = `${normalizePath(binDir)}/${wrapperName}`
 ```
 
 **codeagent-wrapper 修复**：
+
 ```go
 // 1. 无限制日志（所有平台）
 const codexLogLineLimit = 0 // was 1000
@@ -1759,6 +1975,7 @@ if isWindows() {
 #### 用户体验改进
 
 **修复前（Windows）**：
+
 ```
 ❌ 路径：C:UsersLin.claudebincodeagent-wrapper (错误)
 ❌ 输出：只获取到约 600 字符（12,917 字符被截断）
@@ -1766,6 +1983,7 @@ if isWindows() {
 ```
 
 **修复后（Windows）**：
+
 ```
 ✅ 路径：C:/Users/USER/.claude/bin/codeagent-wrapper.exe
 ✅ 输出：完整的 agent_message（无截断）
@@ -1787,28 +2005,30 @@ if isWindows() {
 原因：`checkForUpdates()` 只比较 npm registry 版本，没有比较本地配置版本 (`config.general.version`)。
 
 导致：
+
 1. **每次都要手动选择"重新安装"** - `hasUpdate` 总是 false，默认选项是"否"
 2. **用户困惑** - 明明需要更新，但系统提示"已是最新版本"
 
 #### 核心修复
 
 1. **新增本地版本检测**
-   - ✅ 读取 `~/.claude/.ccg/config.toml` 中的 `general.version`
-   - ✅ 比较本地版本与当前 npm 包版本
-   - ✅ 如果本地版本低于当前包版本，`needsWorkflowUpdate = true`
-   - 📝 修改文件：`src/commands/update.ts`
+    - ✅ 读取 `~/.claude/.ccg/config.toml` 中的 `general.version`
+    - ✅ 比较本地版本与当前 npm 包版本
+    - ✅ 如果本地版本低于当前包版本，`needsWorkflowUpdate = true`
+    - 📝 修改文件：`src/commands/update.ts`
 
 2. **优化更新提示**
-   - ✅ 显示"本地工作流版本"，让用户清楚知道当前状态
-   - ✅ 三种提示场景：
-     - npm 有新版本：`确认要更新到 vX.Y.Z 吗？`
-     - npm 是最新但本地过期：`检测到本地工作流版本 (vA.B.C) 低于当前版本 (vX.Y.Z)，是否更新？`
-     - 完全最新：`当前已是最新版本。要重新安装吗？`
-   - ✅ 当需要更新时，默认选项改为"是"
+    - ✅ 显示"本地工作流版本"，让用户清楚知道当前状态
+    - ✅ 三种提示场景：
+        - npm 有新版本：`确认要更新到 vX.Y.Z 吗？`
+        - npm 是最新但本地过期：`检测到本地工作流版本 (vA.B.C) 低于当前版本 (vX.Y.Z)，是否更新？`
+        - 完全最新：`当前已是最新版本。要重新安装吗？`
+    - ✅ 当需要更新时，默认选项改为"是"
 
 #### 用户体验改进
 
 **更新流程（本地版本过期）**：
+
 ```
 🔄 检查更新...
 
@@ -1836,15 +2056,16 @@ if isWindows() {
 #### 问题背景
 
 Windows 用户使用 PowerShell 执行命令时，路径格式不兼容：
+
 - 模板中的路径被转换为 Git Bash 格式：`/c/Users/USER/.claude/.ccg/...`
 - PowerShell 无法识别此格式，报错"路径不存在"
 
 #### 核心修复
 
 1. **重写路径替换函数**
-   - ✅ Windows 上使用原生路径格式：`C:\Users\USER\.claude\.ccg\...`
-   - ✅ 修复混合分隔符问题（`C:\Users\USER/.claude/bin` → `C:\Users\USER\.claude\bin`）
-   - 📝 修改文件：`src/utils/installer.ts`
+    - ✅ Windows 上使用原生路径格式：`C:\Users\USER\.claude\.ccg\...`
+    - ✅ 修复混合分隔符问题（`C:\Users\USER/.claude/bin` → `C:\Users\USER\.claude\bin`）
+    - 📝 修改文件：`src/utils/installer.ts`
 
 ### 💡 用户价值
 
@@ -1861,35 +2082,38 @@ Windows 用户使用 PowerShell 执行命令时，路径格式不兼容：
 #### 问题背景
 
 用户通过 `npm install -g ccg-workflow` 全局安装后，存在双重路径问题：
+
 - npm 全局包路径（提供 `ccg` 命令入口）
 - 用户工作目录 `~/.claude/`（存储命令模板、配置等）
 
 导致：
+
 1. **卸载显示成功但命令仍可用** - 只删除了 `~/.claude/` 文件，npm 全局包未移除
 2. **更新显示成功但版本号不变** - 只更新了工作目录文件，`ccg` 命令仍指向旧版本
 
 #### 核心修复
 
 1. **新增全局安装检测**
-   - ✅ 新增 `checkIfGlobalInstall()` 函数检测 npm 全局安装
-   - ✅ 通过 `npm list -g ccg-workflow --depth=0` 判断
-   - 📝 修改文件：`src/commands/update.ts`, `src/commands/menu.ts`
+    - ✅ 新增 `checkIfGlobalInstall()` 函数检测 npm 全局安装
+    - ✅ 通过 `npm list -g ccg-workflow --depth=0` 判断
+    - 📝 修改文件：`src/commands/update.ts`, `src/commands/menu.ts`
 
 2. **修复更新功能**
-   - ✅ 检测到全局安装时，引导用户使用 `npm install -g ccg-workflow@latest`
-   - ✅ 提供交互式选择：推荐 npm 更新 / 继续内置更新（仅更新工作流文件）
-   - ✅ 明确告知内置更新不会更新 `ccg` 命令本身
-   - 📝 修改文件：`src/commands/update.ts`
+    - ✅ 检测到全局安装时，引导用户使用 `npm install -g ccg-workflow@latest`
+    - ✅ 提供交互式选择：推荐 npm 更新 / 继续内置更新（仅更新工作流文件）
+    - ✅ 明确告知内置更新不会更新 `ccg` 命令本身
+    - 📝 修改文件：`src/commands/update.ts`
 
 3. **修复卸载功能**
-   - ✅ 卸载前提示"完整卸载需要两步"
-   - ✅ 卸载后显示第二步提示：`npm uninstall -g ccg-workflow`
-   - ✅ 说明完成后 `ccg` 命令将彻底移除
-   - 📝 修改文件：`src/commands/menu.ts`
+    - ✅ 卸载前提示"完整卸载需要两步"
+    - ✅ 卸载后显示第二步提示：`npm uninstall -g ccg-workflow`
+    - ✅ 说明完成后 `ccg` 命令将彻底移除
+    - 📝 修改文件：`src/commands/menu.ts`
 
 #### 用户体验改进
 
 **更新流程（全局安装用户）**：
+
 ```
 ⚠️  检测到你是通过 npm 全局安装的
 
@@ -1902,6 +2126,7 @@ Windows 用户使用 PowerShell 执行命令时，路径格式不兼容：
 ```
 
 **卸载流程（全局安装用户）**：
+
 ```
 ⚠️  检测到你是通过 npm 全局安装的
 
@@ -1938,31 +2163,31 @@ Windows 用户使用 PowerShell 执行命令时，路径格式不兼容：
 #### 核心修复
 
 1. **修复 Windows 路径兼容性问题**
-   - ✅ 新增 `convertToGitBashPath` 函数，将 Windows 路径转换为 Git Bash 兼容格式
-   - ✅ 修复路径从 `C:\Users\USER\.claude\bin` 变形为 `C:Userszlb/.claude/bin` 的问题
-   - ✅ 支持所有驱动器盘符（C:, D:, E: 等）自动转换为 `/c/`, `/d/`, `/e/`
-   - ✅ 影响所有调用 codeagent-wrapper 的命令（backend、frontend、workflow、analyze 等）
-   - 📝 修改文件：`src/utils/installer.ts`
+    - ✅ 新增 `convertToGitBashPath` 函数，将 Windows 路径转换为 Git Bash 兼容格式
+    - ✅ 修复路径从 `C:\Users\USER\.claude\bin` 变形为 `C:Userszlb/.claude/bin` 的问题
+    - ✅ 支持所有驱动器盘符（C:, D:, E: 等）自动转换为 `/c/`, `/d/`, `/e/`
+    - ✅ 影响所有调用 codeagent-wrapper 的命令（backend、frontend、workflow、analyze 等）
+    - 📝 修改文件：`src/utils/installer.ts`
 
 2. **修复配置迁移问题**
-   - ✅ `update` 命令现在会自动检测并执行从 `~/.ccg` 到 `~/.claude/.ccg` 的迁移
-   - ✅ 从 v1.3.x 升级到 v1.7.x 时自动迁移配置文件和 prompts
-   - ✅ 显示详细的迁移日志（已迁移文件、已跳过文件、错误信息）
-   - 📝 修改文件：`src/commands/update.ts`
+    - ✅ `update` 命令现在会自动检测并执行从 `~/.ccg` 到 `~/.claude/.ccg` 的迁移
+    - ✅ 从 v1.3.x 升级到 v1.7.x 时自动迁移配置文件和 prompts
+    - ✅ 显示详细的迁移日志（已迁移文件、已跳过文件、错误信息）
+    - 📝 修改文件：`src/commands/update.ts`
 
 3. **修复 Windows npx 缓存问题**
-   - ✅ `update` 命令在 Windows 上自动清理 npx 缓存
-   - ✅ 确保更新时拉取最新版本，而不是使用缓存的旧版本
-   - ✅ 先尝试 `npx clear-npx-cache`，失败则手动删除 `~/.npm/_npx`
-   - 📝 修改文件：`src/commands/update.ts`
+    - ✅ `update` 命令在 Windows 上自动清理 npx 缓存
+    - ✅ 确保更新时拉取最新版本，而不是使用缓存的旧版本
+    - ✅ 先尝试 `npx clear-npx-cache`，失败则手动删除 `~/.npm/_npx`
+    - 📝 修改文件：`src/commands/update.ts`
 
 ### 📝 文档改进
 
 1. **完善卸载与更新文档**
-   - ✅ README 中增加完整的卸载说明（交互式 + 手动清理）
-   - ✅ **新增 npx 缓存清理说明**，解决更新后仍使用旧版本的问题
-   - ✅ 提供手动清理 MCP 配置的指引
-   - 📝 修改文件：`README.md`
+    - ✅ README 中增加完整的卸载说明（交互式 + 手动清理）
+    - ✅ **新增 npx 缓存清理说明**，解决更新后仍使用旧版本的问题
+    - ✅ 提供手动清理 MCP 配置的指引
+    - 📝 修改文件：`README.md`
 
 ### 🧪 测试验证
 
@@ -1987,16 +2212,16 @@ Windows 用户使用 PowerShell 执行命令时，路径格式不兼容：
 #### 核心改进
 
 1. **backend.md 和 frontend.md 重大升级**
-   - ✅ **5阶段完整工作流**：上下文检索 → 多模型分析 → 原型生成 → 重构实施 → 多模型审计
-   - ✅ **多模型并行分析**：Step 2 新增多模型并行分析（Codex + Gemini / Gemini + Claude）
-   - ✅ **多模型审计交付**：Step 5 新增多模型交叉验证审计
-   - ✅ **强制用户确认**：分析完成后询问"是否继续执行此方案？(Y/N)"
-   - ✅ **详细使用说明**：每个命令添加 v1.6.0 升级说明、与 /ccg:dev 的区别、使用建议
+    - ✅ **5阶段完整工作流**：上下文检索 → 多模型分析 → 原型生成 → 重构实施 → 多模型审计
+    - ✅ **多模型并行分析**：Step 2 新增多模型并行分析（Codex + Gemini / Gemini + Claude）
+    - ✅ **多模型审计交付**：Step 5 新增多模型交叉验证审计
+    - ✅ **强制用户确认**：分析完成后询问"是否继续执行此方案？(Y/N)"
+    - ✅ **详细使用说明**：每个命令添加 v1.6.0 升级说明、与 /ccg:dev 的区别、使用建议
 
 2. **用户价值**
-   - **后端专家**：使用 `/ccg:backend` 享受 Codex + Gemini 交叉验证
-   - **前端专家**：使用 `/ccg:frontend` 享受 Gemini + Claude 交叉验证
-   - **全栈开发者**：继续使用 `/ccg:dev` 获得完整 6 阶段工作流
+    - **后端专家**：使用 `/ccg:backend` 享受 Codex + Gemini 交叉验证
+    - **前端专家**：使用 `/ccg:frontend` 享受 Gemini + Claude 交叉验证
+    - **全栈开发者**：继续使用 `/ccg:dev` 获得完整 6 阶段工作流
 
 ### 🎨 用户体验改进
 
@@ -2005,19 +2230,20 @@ Windows 用户使用 PowerShell 执行命令时，路径格式不兼容：
 #### 新增功能
 
 1. **三种预设模式**
-   - **最小化**（3 命令）：dev, code, commit - 推荐新手
-   - **标准**（12 命令）：dev, code, frontend, backend, review, analyze, debug, test, commit, rollback, clean-branches, feat - 推荐
-   - **完整**（17 命令）：全部功能 - 高级用户
-   - **自定义**：手动勾选任意命令组合
+    - **最小化**（3 命令）：dev, code, commit - 推荐新手
+    - **标准**（12 命令）：dev, code, frontend, backend, review, analyze, debug, test, commit, rollback, clean-branches,
+      feat - 推荐
+    - **完整**（17 命令）：全部功能 - 高级用户
+    - **自定义**：手动勾选任意命令组合
 
 2. **简化安装流程**
-   - 安装时直接选择预设模式，无需逐个勾选命令
-   - 覆盖 90% 用户的常见需求场景（标准模式扩展到 12 个常用命令）
-   - 减少新用户的选择困难
+    - 安装时直接选择预设模式，无需逐个勾选命令
+    - 覆盖 90% 用户的常见需求场景（标准模式扩展到 12 个常用命令）
+    - 减少新用户的选择困难
 
 3. **代码实现**
-   - `src/utils/installer.ts` 新增 `WORKFLOW_PRESETS` 常量
-   - `src/commands/init.ts` 新增预设选择界面
+    - `src/utils/installer.ts` 新增 `WORKFLOW_PRESETS` 常量
+    - `src/commands/init.ts` 新增预设选择界面
 
 ### 🔧 配置简化
 
@@ -2026,19 +2252,19 @@ Windows 用户使用 PowerShell 执行命令时，路径格式不兼容：
 #### 主要变更
 
 1. **简化 MCP 选择**
-   - ✅ 只保留 **ace-tool** 安装选项
-   - ✅ 移除 auggie 作为安装选项（用户仍可手动配置）
-   - ✅ 从 3 个选项简化为 2 个（安装 ace-tool / 跳过）
+    - ✅ 只保留 **ace-tool** 安装选项
+    - ✅ 移除 auggie 作为安装选项（用户仍可手动配置）
+    - ✅ 从 3 个选项简化为 2 个（安装 ace-tool / 跳过）
 
 2. **中转服务支持**
-   - ✅ 添加 linux.do 社区中转服务提示
-   - ✅ 无需注册即可使用（降低使用门槛）
-   - ✅ 安装时提供官方服务和中转服务两种选择
+    - ✅ 添加 linux.do 社区中转服务提示
+    - ✅ 无需注册即可使用（降低使用门槛）
+    - ✅ 安装时提供官方服务和中转服务两种选择
 
 3. **Token 配置优化**
-   - ✅ 支持跳过 Token 配置（默认：跳过）
-   - ✅ 可稍后运行 `npx ccg config mcp` 配置
-   - ✅ 提高安装成功率（60% → 90%）
+    - ✅ 支持跳过 Token 配置（默认：跳过）
+    - ✅ 可稍后运行 `npx ccg config mcp` 配置
+    - ✅ 提高安装成功率（60% → 90%）
 
 ### 🧹 代码清理
 
@@ -2047,21 +2273,22 @@ Windows 用户使用 PowerShell 执行命令时，路径格式不兼容：
 #### 清理内容
 
 1. **删除 `_config.md` 死链接**（11 个文件）
-   - 所有命令模板中的 `> 调用语法见 _config.md` 已删除
-   - 文件：dev.md, code.md, frontend.md, backend.md, review.md, analyze.md, think.md, optimize.md, test.md, bugfix.md, debug.md
+    - 所有命令模板中的 `> 调用语法见 _config.md` 已删除
+    - 文件：dev.md, code.md, frontend.md, backend.md, review.md, analyze.md, think.md, optimize.md, test.md, bugfix.md,
+      debug.md
 
 2. **删除 `shared-config.md`**
-   - ✅ 删除模板文件：`templates/config/shared-config.md`（88 行）
-   - ✅ 删除安装逻辑：`src/utils/installer.ts`（12 行）
-   - ✅ 删除迁移逻辑：`src/utils/migration.ts`（27 行）
-   - ✅ 删除空目录：`templates/config/`
-   - ✅ 更新文档：README.md（1 行）
-   - **总计减少**：128 行代码
+    - ✅ 删除模板文件：`templates/config/shared-config.md`（88 行）
+    - ✅ 删除安装逻辑：`src/utils/installer.ts`（12 行）
+    - ✅ 删除迁移逻辑：`src/utils/migration.ts`（27 行）
+    - ✅ 删除空目录：`templates/config/`
+    - ✅ 更新文档：README.md（1 行）
+    - **总计减少**：128 行代码
 
 3. **优化效果**
-   - 构建大小：94.2 kB → 92.6 kB（减少 1.6 kB）
-   - 配置文件简化，减少用户困惑
-   - 代码可维护性提升
+    - 构建大小：94.2 kB → 92.6 kB（减少 1.6 kB）
+    - 配置文件简化，减少用户困惑
+    - 代码可维护性提升
 
 ### ♻️ 重构
 
@@ -2070,34 +2297,34 @@ Windows 用户使用 PowerShell 执行命令时，路径格式不兼容：
 #### 主要变更
 
 1. **移除动态替换**
-   - 所有模板文件硬编码使用 `mcp__ace-tool__search_context` 和 `mcp__ace-tool__enhance_prompt`
-   - 移除 `installer.ts` 中的 MCP 工具名动态注入逻辑（保留模型路由注入）
+    - 所有模板文件硬编码使用 `mcp__ace-tool__search_context` 和 `mcp__ace-tool__enhance_prompt`
+    - 移除 `installer.ts` 中的 MCP 工具名动态注入逻辑（保留模型路由注入）
 
 2. **参数规范统一**
-   - `search_context`: `project_root_path` (必需), `query` (必需)
-   - `enhance_prompt`: `prompt` (必需), `conversation_history` (可选), `project_root_path` (可选)
+    - `search_context`: `project_root_path` (必需), `query` (必需)
+    - `enhance_prompt`: `prompt` (必需), `conversation_history` (可选), `project_root_path` (可选)
 
 ### 📝 文档更新
 
 1. **README.md**
-   - 更新版本号：v1.4.2 → v1.6.0
-   - 重写"重大改进"部分（多模型并行增强、配置简化、代码清理）
-   - 更新核心特性表格（12个专家提示词、17个斜杠命令、Workflow 预设）
-   - 新增 Workflow 预设说明表格
-   - 更新命令参考表格（新增工作流列）
-   - 更新专家角色系统说明（修正数量、删除 Claude 角色）
-   - 更新配置文件示例
-   - 新增 Q1: v1.6.0 有哪些重要更新？
-   - 更新 MCP 配置说明（v1.6.0 简化流程）
-   - 重新编号所有常见问题（Q1-Q8）
-   - 更新最后更新日期和版本号
+    - 更新版本号：v1.4.2 → v1.6.0
+    - 重写"重大改进"部分（多模型并行增强、配置简化、代码清理）
+    - 更新核心特性表格（12个专家提示词、17个斜杠命令、Workflow 预设）
+    - 新增 Workflow 预设说明表格
+    - 更新命令参考表格（新增工作流列）
+    - 更新专家角色系统说明（修正数量、删除 Claude 角色）
+    - 更新配置文件示例
+    - 新增 Q1: v1.6.0 有哪些重要更新？
+    - 更新 MCP 配置说明（v1.6.0 简化流程）
+    - 重新编号所有常见问题（Q1-Q8）
+    - 更新最后更新日期和版本号
 
 2. **backend.md 和 frontend.md**
-   - 新增 "⭐ v1.6.0 重大升级" 说明部分
-   - 详细说明 5 阶段工作流
-   - 添加交叉验证机制说明
-   - 添加与 /ccg:dev 的对比表格
-   - 提供使用建议
+    - 新增 "⭐ v1.6.0 重大升级" 说明部分
+    - 详细说明 5 阶段工作流
+    - 添加交叉验证机制说明
+    - 添加与 /ccg:dev 的对比表格
+    - 提供使用建议
 
 ### 🔄 升级说明
 
@@ -2116,6 +2343,7 @@ Windows 用户使用 PowerShell 执行命令时，路径格式不兼容：
 #### 问题描述
 
 `templates/commands/dev.md` 和 `review.md` 中存在矛盾描述：
+
 - 开头简化描述："前端分析: gemini, 后端分析: codex"
 - 后面遍历逻辑："遍历 {{BACKEND_MODELS}} 和 {{FRONTEND_MODELS}}"
 - 导致 Claude 执行时只调用 2 个模型而非配置的全部模型（如 4 个）
@@ -2123,12 +2351,12 @@ Windows 用户使用 PowerShell 执行命令时，路径格式不兼容：
 #### 修复内容
 
 1. **dev.md**
-   - 阶段2：删除误导性简化描述，明确"总共并行调用次数 = 后端模型数 + 前端模型数"
-   - 阶段3：同上
-   - 阶段5：明确"总共并行调用次数 = 审查模型数"
+    - 阶段2：删除误导性简化描述，明确"总共并行调用次数 = 后端模型数 + 前端模型数"
+    - 阶段3：同上
+    - 阶段5：明确"总共并行调用次数 = 审查模型数"
 
 2. **review.md**
-   - Step 2：删除误导性示例代码块，统一为"遍历 {{REVIEW_MODELS}}"
+    - Step 2：删除误导性示例代码块，统一为"遍历 {{REVIEW_MODELS}}"
 
 #### 影响
 
@@ -2157,8 +2385,8 @@ Windows 用户使用 PowerShell 执行命令时，路径格式不兼容：
 - **MODELS 变量**（数组）：用于遍历所有模型
 - **PRIMARY 变量**（单个）：作为主模型
 - **命令路由**：
-  - `dev`/`review`/`analyze` 命令：并行调用所有模型
-  - `backend`/`frontend`/`code` 命令：使用主模型
+    - `dev`/`review`/`analyze` 命令：并行调用所有模型
+    - `backend`/`frontend`/`code` 命令：使用主模型
 
 #### 3. 模板优化
 
@@ -2171,11 +2399,13 @@ Windows 用户使用 PowerShell 执行命令时，路径格式不兼容：
 #### 4. 变量注入完善
 
 **MCP 工具**：
+
 - `{{MCP_SEARCH_TOOL}}` → `mcp__ace-tool__search_context` 或 `mcp__auggie-mcp__codebase-retrieval`
 - `{{MCP_ENHANCE_TOOL}}` → `mcp__ace-tool__enhance_prompt` 或 `mcp__auggie-mcp__enhance_prompt`
 - `{{MCP_SEARCH_PARAM}}` → `query` 或 `information_request`
 
 **模型配置**：
+
 - `{{BACKEND_MODELS}}` → `["codex", "gemini", "claude"]`
 - `{{BACKEND_PRIMARY}}` → `"codex"`
 - `{{FRONTEND_MODELS}}` → `["gemini", "codex", "claude"]`
@@ -2183,6 +2413,7 @@ Windows 用户使用 PowerShell 执行命令时，路径格式不兼容：
 - `{{REVIEW_MODELS}}` → `["codex", "gemini", "claude"]`
 
 **路径替换**：
+
 - `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/analyzer.md`
 - 安装后自动替换为绝对路径
 
@@ -2195,12 +2426,14 @@ Windows 用户使用 PowerShell 执行命令时，路径格式不兼容：
 #### 修改文件
 
 **核心逻辑**（4 个）：
+
 - `src/utils/installer.ts`: 完善 `injectConfigVariables()`
 - `src/commands/init.ts`: 传递完整 routing 配置
 - `src/commands/update.ts`: 保留用户配置
 - `src/utils/config.ts`: 添加 auggie enhance_prompt 工具
 
 **命令模板**（18 个）：
+
 - `templates/commands/dev.md`: 多模型遍历逻辑
 - `templates/commands/review.md`: 遍历审查模型
 - `templates/commands/analyze.md`: 合并前后端模型
@@ -2246,11 +2479,13 @@ Administrator 安装:
 **安装时固化绝对路径**：安装时将模板中的 `~` 路径替换为当前用户的绝对路径。
 
 修改前（模板）：
+
 ```markdown
 ROLE_FILE: ~/.claude/.ccg/prompts/codex/analyzer.md
 ```
 
 修改后（用户 li 安装后）：
+
 ```markdown
 ROLE_FILE: C:\Users\USER\.claude\.ccg\prompts\codex\analyzer.md
 ```
@@ -2258,9 +2493,9 @@ ROLE_FILE: C:\Users\USER\.claude\.ccg\prompts\codex\analyzer.md
 #### 修改文件
 
 - `src/utils/installer.ts`:
-  - 新增 `replaceHomePathsInTemplate()` 函数
-  - 修改 `installWorkflows()` - 命令模板、agents、prompts、shared-config 安装时替换路径
-  - 将 `fs.copy()` 改为 `fs.readFile()` + 路径替换 + `fs.writeFile()`
+    - 新增 `replaceHomePathsInTemplate()` 函数
+    - 修改 `installWorkflows()` - 命令模板、agents、prompts、shared-config 安装时替换路径
+    - 将 `fs.copy()` 改为 `fs.readFile()` + 路径替换 + `fs.writeFile()`
 
 #### 影响范围
 
@@ -2297,13 +2532,13 @@ C:\Users\USER> npx ccg init
 #### 新增功能
 
 1. **自动 Windows 命令包装**：
-   - Windows 环境下 `npx`/`uvx` 命令自动包装为 `cmd /c` 格式
-   - 用户无需手动设置环境变量或修改配置
-   - 安装时自动应用，无需额外操作
+    - Windows 环境下 `npx`/`uvx` 命令自动包装为 `cmd /c` 格式
+    - 用户无需手动设置环境变量或修改配置
+    - 安装时自动应用，无需额外操作
 
 2. **MCP 配置自动备份**：
-   - 修改 `~/.claude.json` 前自动备份到 `~/.claude/backup/`
-   - 时间戳命名，支持回滚恢复
+    - 修改 `~/.claude.json` 前自动备份到 `~/.claude/backup/`
+    - 时间戳命名，支持回滚恢复
 
 3. **新增诊断工具**：
    ```bash
@@ -2329,6 +2564,7 @@ C:\Users\USER> npx ccg init
 #### 技术细节
 
 **Windows 命令包装示例**：
+
 ```json
 // Before (不工作)
 {
@@ -2356,6 +2592,7 @@ C:\Users\USER> npx ccg init
 #### 升级说明
 
 已安装 v1.4.1 的用户：
+
 1. 运行 `npx ccg-workflow@latest init` 更新
 2. Windows 用户可运行 `npx ccg fix-mcp` 修复现有配置
 3. 所有用户可运行 `npx ccg diagnose-mcp` 验证配置
@@ -2385,12 +2622,14 @@ C:\Users\USER> npx ccg init
 #### 影响范围
 
 已修复 13 个文件中的路径引用：
+
 - `templates/commands/*.md` (12 个命令)
 - `templates/config/shared-config.md` (共享配置)
 
 #### 升级说明
 
 如果你已经安装了 v1.4.0，请重新运行安装命令更新模板：
+
 ```bash
 npx ccg-workflow@latest init
 ```
@@ -2406,18 +2645,21 @@ npx ccg-workflow@latest init
 #### 变更详情
 
 **变更 1：配置目录迁移**
+
 ```
 旧版本：~/.ccg/
 新版本：~/.claude/.ccg/
 ```
 
 **变更 2：Prompts 目录迁移**
+
 ```
 旧版本：~/.claude/prompts/ccg/
 新版本：~/.claude/.ccg/prompts/
 ```
 
 **变更 3：共享配置文件**
+
 ```
 旧版本：~/.claude/commands/ccg/_config.md  (会被 CC 误识别为命令)
 新版本：~/.claude/.ccg/shared-config.md     (不会被 CC 扫描)
@@ -2449,12 +2691,14 @@ npx ccg-workflow@latest init
 #### 自动迁移
 
 ✨ **无需手动操作**！运行 `npx ccg-workflow@latest init` 会自动：
+
 1. 检测旧版本配置
 2. 迁移所有文件到新位置
 3. 清理旧文件（安全检查后）
 4. 显示迁移报告
 
 示例输出：
+
 ```
 ℹ Migration completed:
   ✓ ~/.ccg/config.toml → ~/.claude/.ccg/config.toml
@@ -2483,11 +2727,11 @@ ls -la ~/.claude/.ccg/prompts/
 
 #### 不兼容性说明
 
-| 影响项 | 描述 | 解决方案 |
-|--------|------|----------|
-| **配置路径硬编码** | 如果你的脚本硬编码了 `~/.ccg/` 路径 | 改为 `~/.claude/.ccg/` |
+| 影响项            | 描述                                 | 解决方案                         |
+|----------------|------------------------------------|------------------------------|
+| **配置路径硬编码**    | 如果你的脚本硬编码了 `~/.ccg/` 路径            | 改为 `~/.claude/.ccg/`         |
 | **Prompts 引用** | 如果你的命令引用了 `~/.claude/prompts/ccg/` | 改为 `~/.claude/.ccg/prompts/` |
-| **_config.md** | 旧的 `_config.md` 已重命名 | 改为 `shared-config.md` |
+| **_config.md** | 旧的 `_config.md` 已重命名               | 改为 `shared-config.md`        |
 
 #### 修改位置
 
@@ -2511,6 +2755,7 @@ ls -la ~/.claude/.ccg/prompts/
 ### 修复 1：ace-tool MCP 配置兼容性问题
 
 #### 问题描述
+
 - 用户反馈 ace-tool MCP "安装不上去"
 - 代码准备了参数数组（`--base-url`, `--token`）但实际写入配置时未使用
 - 使用环境变量模式（`env: { ACE_BASE_URL, ACE_TOKEN }`）可能不被 ace-tool 支持
@@ -2520,6 +2765,7 @@ ls -la ~/.claude/.ccg/prompts/
 **修改位置**：`src/utils/installer.ts:567-630`
 
 **旧代码**（环境变量模式）：
+
 ```typescript
 existingConfig.mcpServers['ace-tool'] = {
   type: 'stdio',
@@ -2533,6 +2779,7 @@ existingConfig.mcpServers['ace-tool'] = {
 ```
 
 **新代码**（参数传递模式）：
+
 ```typescript
 existingConfig.mcpServers['ace-tool'] = {
   type: 'stdio',
@@ -2542,6 +2789,7 @@ existingConfig.mcpServers['ace-tool'] = {
 ```
 
 #### 生成的配置格式
+
 ```json
 {
   "mcpServers": {
@@ -2560,6 +2808,7 @@ existingConfig.mcpServers['ace-tool'] = {
 ```
 
 #### 修复效果
+
 - ✅ **兼容性更好**：参数传递模式不依赖 ace-tool 的环境变量支持
 - ✅ **符合预期**：使用之前准备的 `args` 数组，避免重复代码
 - ✅ **用户验证**：符合社区用户反馈的正确配置格式
@@ -2568,31 +2817,37 @@ existingConfig.mcpServers['ace-tool'] = {
 ### 修复 2：Subagents 安装路径修正
 
 #### 问题描述
+
 - Subagents 被安装到 `~/.claude/commands/ccg/agents/`（错误路径）
 - Claude Code 无法识别，因为 subagents 应该在 `~/.claude/agents/ccg/`
 
 #### 修复方案
 
 **修改位置**：
+
 - `src/utils/installer.ts:318-320` - 修改安装目标路径
 - `config.json:19-23` - 添加 agents 安装配置（Python 安装器）
 
 **旧代码**：
+
 ```typescript
 const agentsDestDir = join(commandsDir, 'agents')
 ```
 
 **新代码**：
+
 ```typescript
 const agentsDestDir = join(installDir, 'agents', 'ccg')
 ```
 
 #### 修复效果
+
 - ✅ **正确识别**：Subagents 安装到 `~/.claude/agents/ccg/`，Claude Code 可以识别
 - ✅ **符合规范**：遵循 Claude Code 的 agents 目录结构
 - ✅ **不影响命令**：Slash commands 仍在 `~/.claude/commands/ccg/`
 
 #### 影响范围
+
 - **所有平台**：通过 `npx ccg-workflow init` 或 `python3 install.py` 安装的用户
 - **Subagents**：planner, ui-ux-designer, init-architect, get-current-datetime
 - **向下兼容**：旧路径的 agents 不会被自动清理，需要手动删除
@@ -2604,22 +2859,25 @@ const agentsDestDir = join(installDir, 'agents', 'ccg')
 ### 安全修复：Windows PATH 配置方法
 
 #### 问题描述
+
 - Windows 安装时使用 `setx` 命令配置 PATH 存在 **1024 字符限制**
 - 如果用户 PATH 已经很长，使用 `setx PATH "%PATH%;新路径"` 会导致：
-  - PATH 被截断到 1024 字符
-  - 超出部分的路径丢失
-  - 可能破坏现有系统配置
+    - PATH 被截断到 1024 字符
+    - 超出部分的路径丢失
+    - 可能破坏现有系统配置
 
 #### 修复方案
 
 **修改位置**：`src/commands/init.ts:281-299`
 
 **旧代码**（有风险）：
+
 ```typescript
 console.log(ansis.gray(`     [System.Environment]::SetEnvironmentVariable('PATH', "$env:PATH;${result.binPath.replace(/\//g, '\\')}", 'User')`))
 ```
 
 **新代码**（安全追加）：
+
 ```typescript
 const windowsPath = result.binPath.replace(/\//g, '\\')
 console.log(ansis.gray(`     $currentPath = [System.Environment]::GetEnvironmentVariable('PATH', 'User')`))
@@ -2630,6 +2888,7 @@ console.log(ansis.gray(`     }`))
 ```
 
 #### 新方法优势
+
 - ✅ **无字符限制**：PowerShell `SetEnvironmentVariable` 支持最大 32767 字符
 - ✅ **安全追加**：先读取当前 PATH，再追加新路径
 - ✅ **重复检测**：使用 `-notlike` 判断路径是否已存在，避免重复添加
@@ -2637,6 +2896,7 @@ console.log(ansis.gray(`     }`))
 - ✅ **不影响旧版**：仅影响新安装用户，不破坏现有配置
 
 #### 影响范围
+
 - **仅 Windows 用户**：修改仅影响 Windows 平台的 PATH 配置提示
 - **macOS/Linux**：继续使用自动写入 `.zshrc`/`.bashrc` 的方式（无影响）
 - **旧版 install.py**：Python 脚本中的 `setx` 提示保持不变（已弃用）
@@ -2648,6 +2908,7 @@ console.log(ansis.gray(`     }`))
 ### 关键 Bug 修复：MCP 配置缺失
 
 #### 问题描述
+
 - 安装后 `~/.ccg/config.toml` 缺少 `[mcp]` 配置部分
 - TypeScript 类型定义 `CcgConfig` 未包含 `mcp` 字段
 - `createDefaultConfig` 函数未生成 MCP 相关配置
@@ -2674,10 +2935,10 @@ console.log(ansis.gray(`     }`))
   ```
 
 - **配置生成更新** (`src/utils/config.ts`):
-  - `createDefaultConfig` 函数新增 `mcp` 字段生成逻辑
-  - 默认配置：`provider = "ace-tool"`
-  - 包含完整的工具映射和参数名配置
-  - 配置文件版本号从 `1.0.0` 升级到 `1.3.2`
+    - `createDefaultConfig` 函数新增 `mcp` 字段生成逻辑
+    - 默认配置：`provider = "ace-tool"`
+    - 包含完整的工具映射和参数名配置
+    - 配置文件版本号从 `1.0.0` 升级到 `1.3.2`
 
 - **生成的配置结构**:
   ```toml
@@ -2698,6 +2959,7 @@ console.log(ansis.gray(`     }`))
   ```
 
 #### 影响
+
 - 修复后，所有新安装都会自动生成完整的 MCP 配置
 - 命令模板（如 `/ccg:dev`, `/ccg:enhance`）可以正确读取 MCP 工具映射
 - 用户无需手动编辑配置文件即可使用 MCP 功能
@@ -2710,8 +2972,8 @@ console.log(ansis.gray(`     }`))
 
 - **说明修正**：澄清 auggie 也支持 Prompt 增强功能（需按教程配置）
 - **模板更新**：修正 `/ccg:dev` 和 `/ccg:enhance` 命令的提示信息
-  - 从"auggie 不支持"改为"未配置 Prompt 增强功能"
-  - 提供配置教程链接
+    - 从"auggie 不支持"改为"未配置 Prompt 增强功能"
+    - 提供配置教程链接
 - **配置注释**：更新 `prompt_enhance_auggie = ""` 的说明
 
 ---
@@ -2731,10 +2993,10 @@ console.log(ansis.gray(`     }`))
 #### 技术实现
 
 - **install.py 更新**：
-  - 新增 `choose_mcp_provider()` 函数：交互式选择界面
-  - 新增 `install_auggie()` 函数：安装 auggie MCP (`@augmentcode/auggie@prerelease`)
-  - 新增 `create_ccg_config()` 函数：生成配置文件 `~/.ccg/config.toml`
-  - 修改 `execute_operation()`：支持 `"install_mcp"` 操作类型，动态路由到不同的安装函数
+    - 新增 `choose_mcp_provider()` 函数：交互式选择界面
+    - 新增 `install_auggie()` 函数：安装 auggie MCP (`@augmentcode/auggie@prerelease`)
+    - 新增 `create_ccg_config()` 函数：生成配置文件 `~/.ccg/config.toml`
+    - 修改 `execute_operation()`：支持 `"install_mcp"` 操作类型，动态路由到不同的安装函数
 
 - **配置文件结构** (`~/.ccg/config.toml`)：
   ```toml
@@ -2754,10 +3016,11 @@ console.log(ansis.gray(`     }`))
   ```
 
 - **命令模板更新**（11个命令文件）：
-  - 所有命令模板统一引用 `memorys/MCP_USAGE.md` 获取 MCP 调用规范
-  - 移除重复的 MCP 工具调用说明，减少 50% 的提示词长度
-  - 命令模板只需引用配置文件 `~/.ccg/config.toml` 中的工具映射表
-  - 支持文件：`dev.md`, `enhance.md`, `code.md`, `debug.md`, `bugfix.md`, `test.md`, `think.md`, `optimize.md`, `analyze.md`, `backend.md`, `frontend.md`, `review.md`
+    - 所有命令模板统一引用 `memorys/MCP_USAGE.md` 获取 MCP 调用规范
+    - 移除重复的 MCP 工具调用说明，减少 50% 的提示词长度
+    - 命令模板只需引用配置文件 `~/.ccg/config.toml` 中的工具映射表
+    - 支持文件：`dev.md`, `enhance.md`, `code.md`, `debug.md`, `bugfix.md`, `test.md`, `think.md`, `optimize.md`,
+      `analyze.md`, `backend.md`, `frontend.md`, `review.md`
 
 - **工具映射对照**：
   | 功能 | ace-tool | auggie |
@@ -2768,16 +3031,16 @@ console.log(ansis.gray(`     }`))
 #### 用户体验
 
 - **安装流程**：
-  1. 运行 `python3 install.py` 或 `npx ccg-workflow`
-  2. 看到 MCP 选择菜单，对比功能后选择
-  3. 自动安装并配置对应的 MCP 工具
-  4. 生成配置文件，记录选择
+    1. 运行 `python3 install.py` 或 `npx ccg-workflow`
+    2. 看到 MCP 选择菜单，对比功能后选择
+    3. 自动安装并配置对应的 MCP 工具
+    4. 生成配置文件，记录选择
 
 - **使用体验**：
-  - 命令模板自动读取配置，无需手动修改
-  - ace-tool 用户：完整功能（Prompt 增强 + 代码检索）
-  - auggie 用户：代码检索功能，提示查看配置教程链接
-  - 配置教程：https://linux.do/t/topic/1280612
+    - 命令模板自动读取配置，无需手动修改
+    - ace-tool 用户：完整功能（Prompt 增强 + 代码检索）
+    - auggie 用户：代码检索功能，提示查看配置教程链接
+    - 配置教程：https://linux.do/t/topic/1280612
 
 #### 文档更新
 
@@ -2799,15 +3062,15 @@ console.log(ansis.gray(`     }`))
 ### 新增
 
 - **二进制安装验证**：安装后自动验证 `codeagent-wrapper` 可用性
-  - 在 `installCodeagentWrapper()` 中新增验证步骤
-  - 执行 `codeagent-wrapper --version` 验证二进制文件正常运行
-  - 显示版本信息确认安装成功
+    - 在 `installCodeagentWrapper()` 中新增验证步骤
+    - 执行 `codeagent-wrapper --version` 验证二进制文件正常运行
+    - 显示版本信息确认安装成功
 
 ### 优化
 
 - **错误显示**：安装失败时显示详细错误信息
-  - 捕获并显示具体的错误消息
-  - 提供友好的错误提示和解决建议
+    - 捕获并显示具体的错误消息
+    - 提供友好的错误提示和解决建议
 - **文档清理**：删除 `dev.md` 中的过时提示
 
 ---
@@ -2846,12 +3109,14 @@ console.log(ansis.gray(`     }`))
 #### 技术实现
 
 在 `codeagent-wrapper/utils.go` 中新增 `injectRoleFile()` 函数：
+
 - 使用正则 `^ROLE_FILE:\s*(.+)` 匹配指令
 - 自动展开 `~/` 为用户 HOME 目录
 - 读取文件内容并原地替换 `ROLE_FILE:` 行
 - 完整日志记录注入过程（文件路径、大小）
 
 在 `codeagent-wrapper/main.go` 中集成动态注入：
+
 - Explicit stdin 模式支持
 - Piped task 模式支持
 - Parallel 模式支持（所有任务）
@@ -2886,9 +3151,9 @@ EOF
 ### 新增功能
 
 - **PATH 自动配置**：安装后自动配置 `codeagent-wrapper` 可执行路径
-  - **Mac/Linux**：交互式提示，自动添加到 `.zshrc` 或 `.bashrc`
-  - **Windows**：提供详细手动配置指南 + PowerShell 一键命令
-  - 智能检测重复配置，避免多次添加
+    - **Mac/Linux**：交互式提示，自动添加到 `.zshrc` 或 `.bashrc`
+    - **Windows**：提供详细手动配置指南 + PowerShell 一键命令
+    - 智能检测重复配置，避免多次添加
 
 ### 用户体验
 
@@ -2909,9 +3174,9 @@ EOF
 ### 新增功能
 
 - **codeagent-wrapper 自动安装**：安装时自动复制二进制文件到 `~/.claude/bin/`
-  - 跨平台支持：darwin-amd64, darwin-arm64, linux-amd64, windows-amd64
-  - 自动设置可执行权限（Unix 系统）
-  - 显示安装路径和配置说明
+    - 跨平台支持：darwin-amd64, darwin-arm64, linux-amd64, windows-amd64
+    - 自动设置可执行权限（Unix 系统）
+    - 显示安装路径和配置说明
 
 ### 技术实现
 
@@ -2943,28 +3208,28 @@ EOF
 ### 新增功能
 
 - **智能更新系统**：一键更新命令模板和提示词，无需卸载重装
-  - 自动检测 npm 最新版本并对比当前版本
-  - 增量更新，仅更新命令和提示词文件
-  - 保留用户配置（`~/.ccg/config.toml`）
-  - 支持强制重装，修复损坏的文件
-  - 无需 sudo 权限
+    - 自动检测 npm 最新版本并对比当前版本
+    - 增量更新，仅更新命令和提示词文件
+    - 保留用户配置（`~/.ccg/config.toml`）
+    - 支持强制重装，修复损坏的文件
+    - 无需 sudo 权限
 
 ### 核心实现
 
 - 新增 `src/utils/version.ts` - 版本管理工具
-  - `getCurrentVersion()` - 获取当前安装版本
-  - `getLatestVersion()` - 查询 npm 最新版本
-  - `compareVersions()` - 语义化版本对比
-  - `checkForUpdates()` - 检查是否有可用更新
+    - `getCurrentVersion()` - 获取当前安装版本
+    - `getLatestVersion()` - 查询 npm 最新版本
+    - `compareVersions()` - 语义化版本对比
+    - `checkForUpdates()` - 检查是否有可用更新
 
 - 新增 `src/commands/update.ts` - 更新命令实现
-  - 交互式更新流程
-  - 版本检测和对比
-  - 强制重装选项
+    - 交互式更新流程
+    - 版本检测和对比
+    - 强制重装选项
 
 - 更新 `src/commands/menu.ts` - 菜单集成
-  - 新增"更新工作流"选项
-  - 移除复杂的备份管理功能
+    - 新增"更新工作流"选项
+    - 移除复杂的备份管理功能
 
 ### 用户体验
 
@@ -3001,8 +3266,8 @@ EOF
 ### 新增
 
 - 补充 init-project 命令所需的两个 subagent
-  - `init-architect.md` - 架构师子智能体
-  - `planner.md` - 任务规划师
+    - `init-architect.md` - 架构师子智能体
+    - `planner.md` - 任务规划师
 
 ---
 
@@ -3059,6 +3324,7 @@ EOF
 #### 核心功能
 
 **开发工作流（12个命令）**
+
 - `/ccg:dev` - 完整6阶段三模型工作流
 - `/ccg:code` - 三模型代码生成（智能路由）
 - `/ccg:debug` - UltraThink 三模型调试
@@ -3073,21 +3339,25 @@ EOF
 - `/ccg:enhance` - Prompt 增强（ace-tool MCP）
 
 **智能规划（2个命令）**
+
 - `/ccg:scan` - 智能仓库扫描
 - `/ccg:feat` - 智能功能开发
 
 **Git 工具（4个命令）**
+
 - `/ccg:commit` - 智能 commit（支持 emoji）
 - `/ccg:rollback` - 交互式回滚
 - `/ccg:clean-branches` - 清理已合并分支
 - `/ccg:worktree` - Worktree 管理
 
 **项目初始化（1个命令）**
+
 - `/ccg:init` - 初始化项目 AI 上下文
 
 #### 专家提示词系统
 
 **18个角色文件**，动态角色注入：
+
 - **Codex 角色**（6个）：architect, analyzer, debugger, tester, reviewer, optimizer
 - **Gemini 角色**（6个）：frontend, analyzer, debugger, tester, reviewer, optimizer
 - **Claude 角色**（6个）：architect, analyzer, debugger, tester, reviewer, optimizer
@@ -3125,6 +3395,7 @@ EOF
 使用 `python3 install.py` 进行安装，支持双模型协作（Codex + Gemini）。
 
 **主要限制**：
+
 - 需要手动 clone 仓库
 - Python 环境依赖
 - 配置不够灵活

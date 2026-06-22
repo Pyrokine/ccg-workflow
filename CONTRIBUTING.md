@@ -6,9 +6,9 @@ Thanks for your interest in contributing to CCG! This guide will help you get st
 
 ### Prerequisites
 
-- Node.js 20+
+- Node.js 20.19+
 - pnpm (`npm install -g pnpm`)
-- Go 1.21+ (only for `codeagent-wrapper` changes)
+- Go 1.26+ (only for `codeagent-wrapper` changes)
 
 ### Getting Started
 
@@ -37,7 +37,7 @@ skills-v2/
 │   └── utils/              # Shared utilities
 ├── templates/              # Installed to ~/.claude/
 │   ├── commands/           # 26 slash command templates (.md)
-│   ├── prompts/            # Expert prompts (codex/ + gemini/)
+│   ├── prompts/            # Expert prompts (codex/ + antigravity/ + claude/)
 │   └── skills/             # Quality gates + orchestration
 ├── codeagent-wrapper/      # Go binary source
 ├── tests/                  # Vitest test files
@@ -46,19 +46,20 @@ skills-v2/
 
 ### Key Files
 
-| File | Purpose |
-|------|---------|
-| `src/utils/installer.ts` | Core installation logic |
-| `src/utils/config.ts` | Configuration management |
-| `src/utils/mcp.ts` | MCP tool integration |
-| `templates/commands/*.md` | Slash command templates |
-| `templates/prompts/` | Expert prompts for Codex/Gemini |
+| File                      | Purpose                                     |
+|---------------------------|---------------------------------------------|
+| `src/utils/installer.ts`  | Core installation logic                     |
+| `src/utils/config.ts`     | Configuration management                    |
+| `src/utils/mcp.ts`        | MCP tool integration                        |
+| `templates/commands/*.md` | Slash command templates                     |
+| `templates/prompts/`      | Expert prompts for Codex/Antigravity/Claude |
 
 ## How to Contribute
 
 ### Find an Issue
 
-- Check [`good first issue`](https://github.com/fengshao1227/ccg-workflow/labels/good%20first%20issue) for beginner-friendly tasks
+- Check [`good first issue`](https://github.com/fengshao1227/ccg-workflow/labels/good%20first%20issue) for
+  beginner-friendly tasks
 - Check [`help wanted`](https://github.com/fengshao1227/ccg-workflow/labels/help%20wanted) for tasks needing assistance
 - Or open a new issue to propose your idea
 
@@ -76,14 +77,14 @@ skills-v2/
 
 We use [Conventional Commits](https://www.conventionalcommits.org/):
 
-| Prefix | Usage |
-|--------|-------|
-| `feat:` | New feature |
-| `fix:` | Bug fix |
-| `docs:` | Documentation changes |
-| `test:` | Adding or updating tests |
+| Prefix      | Usage                                 |
+|-------------|---------------------------------------|
+| `feat:`     | New feature                           |
+| `fix:`      | Bug fix                               |
+| `docs:`     | Documentation changes                 |
+| `test:`     | Adding or updating tests              |
 | `refactor:` | Code refactoring (no behavior change) |
-| `chore:` | Build, CI, dependency updates |
+| `chore:`    | Build, CI, dependency updates         |
 
 ### Code Standards
 
@@ -110,6 +111,7 @@ Good first issues are designed to be completable in ~2 hours. They typically inv
 - **Small fixes**: Single-file bug fixes in `src/utils/`
 
 Each good first issue includes:
+
 - Clear problem description
 - Specific files to modify
 - Acceptance criteria
@@ -117,12 +119,12 @@ Each good first issue includes:
 
 ## Review Process
 
-| Event | Timeline |
-|-------|----------|
-| Issue claimed | Assigned within 1 day |
-| PR submitted | First review within 3 days |
-| After review feedback | Contributor has 5 days to respond |
-| No response | Issue unassigned (you can reclaim later) |
+| Event                 | Timeline                                 |
+|-----------------------|------------------------------------------|
+| Issue claimed         | Assigned within 1 day                    |
+| PR submitted          | First review within 3 days               |
+| After review feedback | Contributor has 5 days to respond        |
+| No response           | Issue unassigned (you can reclaim later) |
 
 ## Questions?
 
