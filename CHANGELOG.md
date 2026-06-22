@@ -588,7 +588,7 @@ Critical findings block delivery.
 
 ### ✨ 新功能
 
-- **Binary 双源下载**：GitHub Release（8s 超时）→ Cloudflare R2 镜像（60s 超时）自动切换，国内用户下载体验大幅改善
+- **Binary 按需下载**：从 GitHub Release 下载预编译 binary，安装包保持轻量
 
 ### 🐛 修复
 

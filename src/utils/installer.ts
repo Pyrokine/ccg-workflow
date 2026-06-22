@@ -88,16 +88,11 @@ interface InstallContext {
 
 const GITHUB_REPO = 'Pyrokine/ccg-workflow'
 const RELEASE_TAG = 'preset'
-
-/** Download sources: fork GitHub Release first → R2 mirror fallback. */
-const BINARY_SOURCES = [
-  {
-    name: 'GitHub Release',
-    url: `https://github.com/${GITHUB_REPO}/releases/download/${RELEASE_TAG}`,
-    timeoutMs: 120_000,
-  },
-  { name: 'Cloudflare CDN', url: 'https://github.20031227.xyz/preset', timeoutMs: 30_000 },
-]
+const BINARY_SOURCE = {
+  name: 'GitHub Release',
+  url: `https://github.com/${GITHUB_REPO}/releases/download/${RELEASE_TAG}`,
+  timeoutMs: 120_000,
+}
 
 /**
  * Download binary from a single URL with retry.
@@ -156,17 +151,10 @@ async function downloadFromUrl(url: string, destPath: string, timeoutMs: number,
   return false
 }
 
-/**
- * Download codeagent-wrapper binary with dual-source fallback.
- * Strategy: R2 mirror (60s) → GitHub Release (120s). Uses curl for proxy support.
- */
+/** Download codeagent-wrapper binary from the fork GitHub Release. */
 async function downloadBinaryFromRelease(binaryName: string, destPath: string): Promise<boolean> {
-  for (const source of BINARY_SOURCES) {
-    const url = `${source.url}/${binaryName}`
-    const ok = await downloadFromUrl(url, destPath, source.timeoutMs)
-    if (ok) return true
-  }
-  return false
+  const url = `${BINARY_SOURCE.url}/${binaryName}`
+  return downloadFromUrl(url, destPath, BINARY_SOURCE.timeoutMs)
 }
 
 // ═══════════════════════════════════════════════════════
