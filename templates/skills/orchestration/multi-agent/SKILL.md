@@ -25,13 +25,13 @@ disable-model-invocation: false
 
 ### 阶段定义
 
-| 阶段 | 角色 | 动作 | 产出 |
-|------|------|------|------|
-| 🔍 侦察 | Scout | 探索代码库，标记关键文件和依赖 | 任务池 + 依赖图 |
-| ⚒️ 工作 | Worker | 并行执行任务，可产生子任务 | 代码变更 + 进度信息素 |
-| 🛡️ 审查 | Soldier | 审查所有变更，发现问题 | 修复任务 / 通过 |
-| 🔧 修复 | Worker | 执行审查产生的修复任务 | 修复后的代码 |
-| ✅ 完成 | Lead | 汇总报告，统一 commit | 最终交付 |
+| 阶段     | 角色      | 动作              | 产出           |
+|--------|---------|-----------------|--------------|
+| 🔍 侦察  | Scout   | 探索代码库，标记关键文件和依赖 | 任务池 + 依赖图    |
+| ⚒️ 工作  | Worker  | 并行执行任务，可产生子任务   | 代码变更 + 进度信息素 |
+| 🛡️ 审查 | Soldier | 审查所有变更，发现问题     | 修复任务 / 通过    |
+| 🔧 修复  | Worker  | 执行审查产生的修复任务     | 修复后的代码       |
+| ✅ 完成   | Lead    | 汇总报告，统一 commit  | 最终交付         |
 
 ---
 
@@ -39,15 +39,15 @@ disable-model-invocation: false
 
 在 Codex CLI 中，TeamCreate/Task 抽象统一映射到以下原生动作：
 
-| 协同意图 | Codex 动作 | 约束 |
-|---------|------------|------|
-| 创建团队/子任务 | `spawn_agent` | 明确角色、文件所有权、完成定义 |
-| 下发任务/追问 | `send_input` | 单条消息只包含一个目标动作 |
-| 等待完成 | `wait` | 优先长等待，避免忙轮询 |
-| 长耗时命令 | `awaiter` agent | 测试/构建/监控必须用 awaiter |
-| 代码探索 | `explorer` agent | 探索结果视为权威，不重复检索 |
-| 执行改动 | `worker` agent | 明确“只改分配文件” |
-| 收尾回收 | `close_agent` | 任务结束必须关闭子 Agent |
+| 协同意图     | Codex 动作         | 约束                  |
+|----------|------------------|---------------------|
+| 创建团队/子任务 | `spawn_agent`    | 明确角色、文件所有权、完成定义     |
+| 下发任务/追问  | `send_input`     | 单条消息只包含一个目标动作       |
+| 等待完成     | `wait`           | 优先长等待，避免忙轮询         |
+| 长耗时命令    | `awaiter` agent  | 测试/构建/监控必须用 awaiter |
+| 代码探索     | `explorer` agent | 探索结果视为权威，不重复检索      |
+| 执行改动     | `worker` agent   | 明确“只改分配文件”          |
+| 收尾回收     | `close_agent`    | 任务结束必须关闭子 Agent     |
 
 ### 执行顺序（不可跳步）
 
@@ -82,24 +82,24 @@ disable-model-invocation: false
 
 满足**任意 1 条**即启用 TeamCreate：
 
-| 条件 | 说明 | 示例 |
-|------|------|------|
-| 多文件独立变更 | ≥3 个无交叉依赖的文件 | 6 个新秘典各自独立 |
-| 可并行子任务 | ≥2 个无数据依赖的工作流 | 前端+后端+文档 |
-| 复杂度高 | 单 Agent 需 >10 步 | 全栈重构 |
-| 时间紧迫 | 劫钟催命，需加速 | 紧急修复多服务 |
+| 条件      | 说明              | 示例         |
+|---------|-----------------|------------|
+| 多文件独立变更 | ≥3 个无交叉依赖的文件    | 6 个新秘典各自独立 |
+| 可并行子任务  | ≥2 个无数据依赖的工作流   | 前端+后端+文档   |
+| 复杂度高    | 单 Agent 需 >10 步 | 全栈重构       |
+| 时间紧迫    | 劫钟催命，需加速        | 紧急修复多服务    |
 
 ---
 
 ## 角色体系（蚁群映射）
 
-| 角色 | 蚁群映射 | 道语 | 职责 | 工具权限 | 模型建议 |
-|------|----------|------|------|----------|----------|
-| 主修 (Lead) | 蚁后 Queen | 天罗主修 | 任务分解、调度、汇总 | `spawn_agent/send_input/wait/close_agent` | 当前模型 |
-| 斥候 (Scout) | 侦察蚁 Scout | 天罗斥候 | 只读探索，标记关键文件 | `explorer` + Read/Grep/Glob（只读） | haiku（快速低成本） |
-| 道侣 (Worker) | 工蚁 Worker | 天罗道侣 | 执行任务，可产生子任务 | `worker` + Read/Write/Edit/Bash | sonnet/当前模型 |
-| 护法 (Soldier) | 兵蚁 Soldier | 天罗护法 | 审查质量，发现问题 | `worker`(审查模式) + Read/Grep/Glob（只读） | sonnet |
-| 走卒 (Drone) | 无人蚁 Drone | 天罗走卒 | 简单 bash 命令，零 LLM 成本 | Bash（仅此一个） | 无（execSync） |
+| 角色           | 蚁群映射       | 道语   | 职责                  | 工具权限                                      | 模型建议         |
+|--------------|------------|------|---------------------|-------------------------------------------|--------------|
+| 主修 (Lead)    | 蚁后 Queen   | 天罗主修 | 任务分解、调度、汇总          | `spawn_agent/send_input/wait/close_agent` | 当前模型         |
+| 斥候 (Scout)   | 侦察蚁 Scout  | 天罗斥候 | 只读探索，标记关键文件         | `explorer` + Read/Grep/Glob（只读）           | haiku（快速低成本） |
+| 道侣 (Worker)  | 工蚁 Worker  | 天罗道侣 | 执行任务，可产生子任务         | `worker` + Read/Write/Edit/Bash           | sonnet/当前模型  |
+| 护法 (Soldier) | 兵蚁 Soldier | 天罗护法 | 审查质量，发现问题           | `worker`(审查模式) + Read/Grep/Glob（只读）       | sonnet       |
+| 走卒 (Drone)   | 无人蚁 Drone  | 天罗走卒 | 简单 bash 命令，零 LLM 成本 | Bash（仅此一个）                                | 无（execSync）  |
 
 ### 角色使用时机
 
@@ -117,22 +117,22 @@ disable-model-invocation: false
 
 `/ccg:team` 命令在蚁群基础角色之上，增加 3 个大厂级专业角色，对应 Agent Teams 真实 teammates：
 
-| 角色 | Agent 名 | 道语 | 职责 | 工具权限 | 模型 |
-|------|----------|------|------|----------|------|
-| 🏗 架构师 (Architect) | `team-architect` | 天罗军师 | 代码库扫描、架构蓝图、文件分配矩阵 | Read/Glob/Grep（只读） | Sonnet |
-| 🧪 QA 工程师 (QA) | `team-qa` | 天罗验毒 | 写测试、跑测试、lint、typecheck | Read/Write/Edit/Bash/Glob/Grep | Sonnet |
-| 🔬 审查员 (Reviewer) | `team-reviewer` | 天罗护法 | 综合 Codex/Gemini 审查、分级判决 | Read/Glob/Grep（只读） | Sonnet |
+| 角色                 | Agent 名          | 道语   | 职责                           | 工具权限                           | 模型     |
+|--------------------|------------------|------|------------------------------|--------------------------------|--------|
+| 🏗 架构师 (Architect) | `team-architect` | 天罗军师 | 代码库扫描、架构蓝图、文件分配矩阵            | Read/Glob/Grep（只读）             | Sonnet |
+| 🧪 QA 工程师 (QA)     | `team-qa`        | 天罗验毒 | 写测试、跑测试、lint、typecheck       | Read/Write/Edit/Bash/Glob/Grep | Sonnet |
+| 🔬 审查员 (Reviewer)  | `team-reviewer`  | 天罗护法 | 综合 Codex/Antigravity 审查、分级判决 | Read/Glob/Grep（只读）             | Sonnet |
 
 ### 8 阶段流水线
 
 ```
 Phase 0: PRE-FLIGHT    → 环境检测 + 参数解析
 Phase 1: REQUIREMENT   → Lead 需求增强 → mini-PRD
-Phase 2: ARCHITECTURE  → Codex∥Gemini 外援 + Architect teammate 出蓝图
+Phase 2: ARCHITECTURE  → Codex∥Antigravity 外援 + Architect teammate 出蓝图
 Phase 3: PLANNING      → Lead 拆任务 → 零决策并行计划
 Phase 4: DEVELOPMENT   → Dev×N teammates 并行编码（文件隔离）
 Phase 5: TESTING       → QA teammate 写测试 + 跑全量验证
-Phase 6: REVIEW        → Codex∥Gemini 外援 + Reviewer teammate 综合审查
+Phase 6: REVIEW        → Codex∥Antigravity 外援 + Reviewer teammate 综合审查
 Phase 7: FIX           → Dev teammate(s) 修复 Critical（最多 2 轮）
 Phase 8: INTEGRATION   → Lead 全量验证 + 报告 + 清理
 ```
@@ -159,13 +159,13 @@ TeamCreate ─── Phase 2: spawn Architect → shutdown
 
 ### 信息素类型
 
-| 类型 | 释放者 | 含义 | 用途 |
-|------|--------|------|------|
-| `discovery` | Scout | 发现的代码结构、关键文件 | 帮助 Worker 快速定位 |
-| `progress` | Worker | 完成的变更、修改的文件 | 帮助后续 Worker 避免冲突 |
-| `warning` | Soldier | 质量问题、冲突风险 | 降低相关任务优先级 |
-| `completion` | Worker | 任务完成标记 | 强化成功路径 |
-| `repellent` | 任意 | 失败路径标记（负信息素） | 阻止后续 Agent 走同一条死路 |
+| 类型           | 释放者     | 含义           | 用途                |
+|--------------|---------|--------------|-------------------|
+| `discovery`  | Scout   | 发现的代码结构、关键文件 | 帮助 Worker 快速定位    |
+| `progress`   | Worker  | 完成的变更、修改的文件  | 帮助后续 Worker 避免冲突  |
+| `warning`    | Soldier | 质量问题、冲突风险    | 降低相关任务优先级         |
+| `completion` | Worker  | 任务完成标记       | 强化成功路径            |
+| `repellent`  | 任意      | 失败路径标记（负信息素） | 阻止后续 Agent 走同一条死路 |
 
 ### 实现方式
 
@@ -187,12 +187,12 @@ TaskUpdate(taskId, metadata: {
 
 ### 信息素决策规则
 
-| 规则 | 说明 |
-|------|------|
-| **正强化** | discovery/completion 信息素的文件 → 优先分配 |
-| **负惩罚** | warning 信息素的文件 → 降低优先级 |
-| **强负惩罚** | repellent 信息素的文件 → 避免分配，需主修评估 |
-| **ε-greedy** | 90% 按信息素强度选任务，10% 随机选 → 避免全挤同一条路 |
+| 规则           | 说明                                 |
+|--------------|------------------------------------|
+| **正强化**      | discovery/completion 信息素的文件 → 优先分配 |
+| **负惩罚**      | warning 信息素的文件 → 降低优先级             |
+| **强负惩罚**     | repellent 信息素的文件 → 避免分配，需主修评估      |
+| **ε-greedy** | 90% 按信息素强度选任务，10% 随机选 → 避免全挤同一条路   |
 
 ---
 
@@ -209,12 +209,12 @@ TaskUpdate(taskId, metadata: {
 
 ### 过载保护
 
-| 信号 | 动作 |
-|------|------|
+| 信号              | 动作                    |
+|-----------------|-----------------------|
 | Agent 连续失败 ≥2 次 | 减少并发，释放 repellent 信息素 |
-| 429 限流 | 暂停派发，等待恢复后继续 |
-| 所有任务完成 | 立即进入审查阶段 |
-| 子任务膨胀 >30 | 停止产生新子任务，先完成现有 |
+| 429 限流          | 暂停派发，等待恢复后继续          |
+| 所有任务完成          | 立即进入审查阶段              |
+| 子任务膨胀 >30       | 停止产生新子任务，先完成现有        |
 
 ---
 
@@ -393,22 +393,22 @@ Scout(侦察) → Worker(执行) → Soldier(审查) → Worker(修复) → Lead
 
 ### SendMessage 规范
 
-| 类型 | 用途 | 格式 |
-|------|------|------|
-| message | 点对点通信 | `{type: "message", recipient: "agent-name", content: "...", summary: "5字摘要"}` |
-| broadcast | 全体通知 | `{type: "broadcast", content: "...", summary: "5字摘要"}` |
-| shutdown_request | 请求关闭 | `{type: "shutdown_request", recipient: "agent-name", content: "原因"}` |
+| 类型               | 用途    | 格式                                                                            |
+|------------------|-------|-------------------------------------------------------------------------------|
+| message          | 点对点通信 | `{type: "message", recipient: "agent-name", content: "...", summary: "5字摘要"}` |
+| broadcast        | 全体通知  | `{type: "broadcast", content: "...", summary: "5字摘要"}`                        |
+| shutdown_request | 请求关闭  | `{type: "shutdown_request", recipient: "agent-name", content: "原因"}`          |
 
 ### 通信时机
 
-| 事件 | 发送者 | 接收者 | 内容 |
-|------|--------|--------|------|
-| 侦察完成 | Scout | 主修 | 文件清单 + 依赖图 + discovery 信息素 |
-| 任务分配 | 主修 | 道侣 | 文件列表 + 要求 + 相关信息素 |
-| 任务完成 | 道侣 | 主修 | 文件清单 + 验证结果 |
-| 遇阻报告 | 道侣 | 主修 | 阻塞原因 + warning/repellent 信息素 |
-| 审查完成 | 护法 | 主修 | 通过/问题列表 |
-| 汇总指令 | 主修 | 全体 | broadcast 进入汇总阶段 |
+| 事件   | 发送者   | 接收者 | 内容                           |
+|------|-------|-----|------------------------------|
+| 侦察完成 | Scout | 主修  | 文件清单 + 依赖图 + discovery 信息素   |
+| 任务分配 | 主修    | 道侣  | 文件列表 + 要求 + 相关信息素            |
+| 任务完成 | 道侣    | 主修  | 文件清单 + 验证结果                  |
+| 遇阻报告 | 道侣    | 主修  | 阻塞原因 + warning/repellent 信息素 |
+| 审查完成 | 护法    | 主修  | 通过/问题列表                      |
+| 汇总指令 | 主修    | 全体  | broadcast 进入汇总阶段             |
 
 ---
 
@@ -430,12 +430,12 @@ Scout(侦察) → Worker(执行) → Soldier(审查) → Worker(修复) → Lead
 
 ### 冲突解决
 
-| 冲突类型 | 解决方案 |
-|----------|----------|
-| 两个 Agent 需写同一文件 | 串行执行，先完成的先写 |
-| 写入内容矛盾 | 主修裁决，以业务逻辑为准 |
-| 依赖文件未就绪 | 标记 blocked，主修协调优先级 |
-| 循环依赖 | 释放 repellent 信息素，主修手动拆解 |
+| 冲突类型            | 解决方案                    |
+|-----------------|-------------------------|
+| 两个 Agent 需写同一文件 | 串行执行，先完成的先写             |
+| 写入内容矛盾          | 主修裁决，以业务逻辑为准            |
+| 依赖文件未就绪         | 标记 blocked，主修协调优先级      |
+| 循环依赖            | 释放 repellent 信息素，主修手动拆解 |
 
 ---
 

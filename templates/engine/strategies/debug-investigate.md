@@ -3,6 +3,7 @@
 > 适用于原因不明的复杂 bug，需要多模型并行诊断和交叉验证。
 
 ## 适用条件
+
 - 复杂度 M 或以上
 - 错误原因不明确
 - 需要多角度诊断
@@ -10,7 +11,7 @@
 ## 前置加载
 
 ```
-Read("~/.claude/.ccg/engine/model-router.md")
+Read("/home/USER/.claude/.ccg/engine/model-router.md")
 ```
 
 ---
@@ -55,10 +56,10 @@ Gate: 用户已确认修复方向 ✓
 **Task 更新**：`currentPhase → "1-collect"`, `nextAction → "收集错误信息"`
 
 1. 收集错误上下文：
-   - 错误消息 / 堆栈跟踪
-   - 复现步骤（如果有）
-   - 最近的相关变更（`git log --oneline -10`）
-   - 环境信息（如相关）
+    - 错误消息 / 堆栈跟踪
+    - 复现步骤（如果有）
+    - 最近的相关变更（`git log --oneline -10`）
+    - 环境信息（如相关）
 
 2. 搜索相关代码（Grep/MCP）
 3. 读取可能相关的文件
@@ -68,6 +69,7 @@ Gate: 用户已确认修复方向 ✓
 **Gate check**: 错误信息已收集
 
 **并行调用**（`run_in_background: true`）：
+
 - **backend 模型**：debugger 角色
   ```
   <TASK>
@@ -111,12 +113,14 @@ Gate: 用户已确认修复方向 ✓
 **Gate check**: 假设已排序
 
 展示诊断结果，请用户选择修复方向：
+
 - 按假设 1 修复
 - 按假设 2 修复
 - 需要更多调查
 - 其他方向
 
 **Task 更新**：
+
 ```
 更新 task.json:
   currentPhase → "4-confirm"
@@ -147,6 +151,7 @@ Gate: 用户已确认修复方向 ✓
 #### Spec Evolution（归档前必须执行）
 
 参考 `phase-guide.md § 8 Spec Evolution Protocol` 执行：
+
 1. 分析本次调试的根因和修复方案，提炼可复用的调试经验和防御性编码约定
 2. 如有值得记录的经验（特别是非显而易见的坑）→ 草拟 Spec 条目，展示给用户确认后追加到 `.ccg/spec/{domain}/index.md`
 3. 无值得提炼的经验 → 跳过
@@ -154,6 +159,7 @@ Gate: 用户已确认修复方向 ✓
 **Task 更新**：`status → "archived"`
 
 **归档任务**：
+
 ```bash
 mkdir -p .ccg/tasks/archive/$(date +%Y-%m) && mv .ccg/tasks/{task-name} .ccg/tasks/archive/$(date +%Y-%m)/
 git add .ccg/tasks/ && git commit -m "chore: archive ccg task"

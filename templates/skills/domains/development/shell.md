@@ -5,10 +5,10 @@ description: Shell 脚本开发。Bash、自动化、系统管理。当用户提
 
 # 📜 符箓秘典 · Shell
 
-
 ## Bash 基础
 
 ### 变量与字符串
+
 ```bash
 #!/bin/bash
 
@@ -31,6 +31,7 @@ echo ${var:=default}   # 如果 var 未设置，设置并返回 default
 ```
 
 ### 数组
+
 ```bash
 # 索引数组
 arr=("a" "b" "c")
@@ -51,6 +52,7 @@ echo ${map[name]}
 ```
 
 ### 条件判断
+
 ```bash
 # 字符串比较
 if [[ "$str1" == "$str2" ]]; then
@@ -75,6 +77,7 @@ if [[ $a -gt 0 || $b -gt 0 ]]; then echo "At least one positive"; fi
 ```
 
 ### 循环
+
 ```bash
 # for 循环
 for i in {1..5}; do
@@ -99,6 +102,7 @@ done
 ```
 
 ### 函数
+
 ```bash
 # 定义函数
 greet() {
@@ -121,6 +125,7 @@ today=$(get_date)
 ## 实用脚本模板
 
 ### 带参数的脚本
+
 ```bash
 #!/bin/bash
 set -euo pipefail
@@ -184,6 +189,7 @@ main
 ```
 
 ### 日志函数
+
 ```bash
 #!/bin/bash
 
@@ -212,6 +218,7 @@ die() {
 ```
 
 ### 错误处理
+
 ```bash
 #!/bin/bash
 set -euo pipefail
@@ -231,6 +238,7 @@ TEMP_FILE=$(mktemp)
 ## 常用命令组合
 
 ### 文本处理
+
 ```bash
 # grep - 搜索
 grep -r "pattern" .
@@ -253,6 +261,7 @@ cat file | grep "pattern" | awk '{print $2}' | sort | uniq -c
 ```
 
 ### 文件操作
+
 ```bash
 # 查找
 find . -name "*.txt"
@@ -270,6 +279,7 @@ find . -name "*.py" | xargs grep "TODO"
 ```
 
 ### 网络
+
 ```bash
 # curl
 curl -s https://api.example.com/data

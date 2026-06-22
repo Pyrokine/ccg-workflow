@@ -64,35 +64,35 @@ pip show scrapling
 
 ## Cookie 格式速查
 
-| Fetcher 类型 | Cookie 格式 | 示例 |
-|-------------|-------------|------|
-| Fetcher / FetcherSession | `dict` | `{'name': 'value', 'token': 'abc'}` |
+| Fetcher 类型                       | Cookie 格式    | 示例                                                                  |
+|----------------------------------|--------------|---------------------------------------------------------------------|
+| Fetcher / FetcherSession         | `dict`       | `{'name': 'value', 'token': 'abc'}`                                 |
 | StealthyFetcher / DynamicFetcher | `list[dict]` | `[{'name': 'n', 'value': 'v', 'domain': '.site.com', 'path': '/'}]` |
 
 **浏览器 Fetcher cookie 必填字段**: `name`, `value`, `domain`, `path`
 
 ## 超时单位速查
 
-| Fetcher 类型 | 超时单位 | 示例 |
-|-------------|---------|------|
-| Fetcher / FetcherSession | 秒 | `timeout=30` |
-| StealthyFetcher / DynamicFetcher | 毫秒 | `timeout=60000` |
+| Fetcher 类型                       | 超时单位 | 示例              |
+|----------------------------------|------|-----------------|
+| Fetcher / FetcherSession         | 秒    | `timeout=30`    |
+| StealthyFetcher / DynamicFetcher | 毫秒   | `timeout=60000` |
 
 ## 模板索引
 
-| 模板 | 文件 | 何时读取 |
-|------|------|---------|
-| 基础 HTTP 抓取 | `templates/basic_fetch.py` | 目标为静态页面，无反爬 |
-| Cloudflare 绕过 | `templates/stealth_cloudflare.py` | 目标有 CF/WAF 保护 |
-| Session 登录 | `templates/session_login.py` | 需 HTTP 表单登录后抓取 |
-| 纯 HTML 解析 | `templates/parse_only.py` | 已有 HTML 字符串，只需提取数据 |
+| 模板            | 文件                                | 何时读取               |
+|---------------|-----------------------------------|--------------------|
+| 基础 HTTP 抓取    | `templates/basic_fetch.py`        | 目标为静态页面，无反爬        |
+| Cloudflare 绕过 | `templates/stealth_cloudflare.py` | 目标有 CF/WAF 保护      |
+| Session 登录    | `templates/session_login.py`      | 需 HTTP 表单登录后抓取     |
+| 纯 HTML 解析     | `templates/parse_only.py`         | 已有 HTML 字符串，只需提取数据 |
 
 ## References 索引
 
-| 文件 | 何时读取 |
-|------|---------|
-| `references/site-patterns.md` | **每次抓取前先查阅** — 检查目标站点是否有已记录的模式 |
-| `references/api-quick-ref.md` | 生成脚本时查阅 — Fetcher/Selector 方法签名和参数 |
-| `references/troubleshooting.md` | 执行报错时查阅 — 按错误信息查找原因和解决方案 |
-| `references/cookie-vault.md` | 需要登录 cookie 时查阅 — 检查是否有历史记录可复用 |
-| `references/maintenance.md` | 安装/升级/依赖问题时查阅 — 安装层级和验证命令 |
+| 文件                              | 何时读取                               |
+|---------------------------------|------------------------------------|
+| `references/site-patterns.md`   | **每次抓取前先查阅** — 检查目标站点是否有已记录的模式     |
+| `references/api-quick-ref.md`   | 生成脚本时查阅 — Fetcher/Selector 方法签名和参数 |
+| `references/troubleshooting.md` | 执行报错时查阅 — 按错误信息查找原因和解决方案           |
+| `references/cookie-vault.md`    | 需要登录 cookie 时查阅 — 检查是否有历史记录可复用     |
+| `references/maintenance.md`     | 安装/升级/依赖问题时查阅 — 安装层级和验证命令          |

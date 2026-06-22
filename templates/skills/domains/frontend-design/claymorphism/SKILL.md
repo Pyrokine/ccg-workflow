@@ -32,6 +32,7 @@ Reference: [references/tokens.css](references/tokens.css)
 ## Component Examples
 
 ### Card
+
 ```css
 .clay-card {
   background: var(--clay-bg-card);
@@ -43,6 +44,7 @@ Reference: [references/tokens.css](references/tokens.css)
 ```
 
 ### Button
+
 ```css
 .clay-btn {
   background: var(--clay-bg-button);
@@ -63,6 +65,7 @@ Reference: [references/tokens.css](references/tokens.css)
 ```
 
 ### Input
+
 ```css
 .clay-input {
   background: var(--clay-bg);
@@ -79,6 +82,7 @@ Reference: [references/tokens.css](references/tokens.css)
 ```
 
 ### Toggle
+
 ```css
 .clay-toggle {
   width: 56px;

@@ -20,6 +20,7 @@ color: magenta
 ### 步骤 1：理解需求
 
 分析功能需求，明确：
+
 - 用户目标是什么？
 - 核心交互是什么？
 - 需要哪些页面/视图？
@@ -75,23 +76,25 @@ color: magenta
 ### 2.1 布局草图（ASCII Art）
 
 ```
+
 +-----------------------------------------------+
-|  Header                                       |
+| Header |
 |  [Logo]              [Nav Links]   [Profile]  |
 +-----------------------------------------------+
-|                                               |
-|  +------------------+                         |
-|  |  Main Content    |   Sidebar (可选)        |
-|  |                  |   +------------------+  |
-|  |  {{核心区块}}    |   |  {{辅助信息}}    |  |
-|  |                  |   |                  |  |
-|  |  [CTA Button]    |   +------------------+  |
-|  +------------------+                         |
-|                                               |
+| |
+| +------------------+ |
+| | Main Content | Sidebar (可选)        |
+| | | +------------------+ |
+| | {{核心区块}} | | {{辅助信息}} | |
+| | | | | |
+| |  [CTA Button]    | +------------------+ |
+| +------------------+ |
+| |
 +-----------------------------------------------+
-|  Footer                                       |
+| Footer |
 |  [Links] [Copyright] [Social]                 |
 +-----------------------------------------------+
+
 ```
 
 ### 2.2 区块说明
@@ -110,22 +113,24 @@ color: magenta
 ### 3.1 组件树结构
 
 ```
+
 {{PageName}}
 ├── PageHeader
-│   ├── Logo
-│   ├── NavigationMenu
-│   └── UserProfile
+│ ├── Logo
+│ ├── NavigationMenu
+│ └── UserProfile
 ├── MainContent
-│   ├── {{FeatureComponent}}
-│   │   ├── {{SubComponent1}}
-│   │   └── {{SubComponent2}}
-│   └── CTAButton
+│ ├── {{FeatureComponent}}
+│ │ ├── {{SubComponent1}}
+│ │ └── {{SubComponent2}}
+│ └── CTAButton
 ├── Sidebar (可选)
-│   ├── RecommendationCard
-│   └── AdBanner
+│ ├── RecommendationCard
+│ └── AdBanner
 └── PageFooter
-    ├── FooterLinks
-    └── SocialIcons
+├── FooterLinks
+└── SocialIcons
+
 ```
 
 ### 3.2 组件详细定义
@@ -222,12 +227,12 @@ graph TD
 
 ### 4.2 状态转换
 
-| 当前状态 | 触发事件 | 下一状态 | UI 变化 |
-|----------|----------|----------|---------|
-| Idle | 用户点击"提交" | Loading | 按钮显示 spinner |
-| Loading | API 返回成功 | Success | 显示成功提示，跳转 |
-| Loading | API 返回失败 | Error | 显示错误提示 |
-| Error | 用户点击"重试" | Loading | 重新提交 |
+| 当前状态    | 触发事件     | 下一状态    | UI 变化        |
+|---------|----------|---------|--------------|
+| Idle    | 用户点击"提交" | Loading | 按钮显示 spinner |
+| Loading | API 返回成功 | Success | 显示成功提示，跳转    |
+| Loading | API 返回失败 | Error   | 显示错误提示       |
+| Error   | 用户点击"重试" | Loading | 重新提交         |
 
 ### 4.3 关键交互
 
@@ -235,24 +240,24 @@ graph TD
 
 - **触发时机**：用户输入时（onBlur）或提交时（onSubmit）
 - **验证规则**：
-  - 邮箱格式：`/^[^\s@]+@[^\s@]+\.[^\s@]+$/`
-  - 密码长度：≥ 8 字符
-  - 必填字段：非空
+    - 邮箱格式：`/^[^\s@]+@[^\s@]+\.[^\s@]+$/`
+    - 密码长度：≥ 8 字符
+    - 必填字段：非空
 - **错误提示位置**：输入框下方，红色文字
 - **成功状态**：输入框右侧显示绿色 ✓
 
 #### 交互 2：异步操作反馈
 
 - **Loading 状态**：
-  - 按钮文字变为"提交中..."
-  - 显示 spinner 图标
-  - 禁用按钮（`disabled={true}`）
+    - 按钮文字变为"提交中..."
+    - 显示 spinner 图标
+    - 禁用按钮（`disabled={true}`）
 - **成功状态**：
-  - Toast 提示："操作成功"
-  - 3 秒后自动跳转
+    - Toast 提示："操作成功"
+    - 3 秒后自动跳转
 - **失败状态**：
-  - Toast 提示："操作失败：{{错误信息}}"
-  - 保持当前页面，允许重试
+    - Toast 提示："操作失败：{{错误信息}}"
+    - 保持当前页面，允许重试
 
 ---
 
@@ -260,18 +265,18 @@ graph TD
 
 ### 5.1 Breakpoint 策略
 
-| 屏幕尺寸 | Breakpoint | 布局调整 |
-|----------|------------|----------|
-| Mobile | < 640px | 单列布局，全宽表单 |
-| Tablet | 640px - 1023px | 双列布局，表单宽度 80% |
-| Desktop | ≥ 1024px | 三列布局，表单最大宽度 480px |
+| 屏幕尺寸    | Breakpoint     | 布局调整              |
+|---------|----------------|-------------------|
+| Mobile  | < 640px        | 单列布局，全宽表单         |
+| Tablet  | 640px - 1023px | 双列布局，表单宽度 80%     |
+| Desktop | ≥ 1024px       | 三列布局，表单最大宽度 480px |
 
 ### 5.2 移动端优化
 
 - **触摸友好**：按钮最小尺寸 44x44px
 - **键盘优化**：
-  - 邮箱输入：`type="email"` 触发邮箱键盘
-  - 手机输入：`type="tel"` 触发数字键盘
+    - 邮箱输入：`type="email"` 触发邮箱键盘
+    - 手机输入：`type="tel"` 触发数字键盘
 - **滚动优化**：避免横向滚动，使用 `overflow-x: hidden`
 
 ### 5.3 响应式示例（Tailwind）
@@ -296,13 +301,13 @@ graph TD
 
 ### 6.1 关键实践
 
-| 实践 | 实施方法 | 示例 |
-|------|----------|------|
-| 语义化 HTML | 使用正确的 HTML 标签 | `<button>` 而非 `<div onclick>` |
-| 键盘导航 | 确保所有交互可用 Tab 导航 | `tabindex` 顺序逻辑 |
-| 屏幕阅读器 | 使用 ARIA 属性 | `aria-label`, `aria-describedby` |
-| 颜色对比度 | WCAG AA 标准（4.5:1） | 文字 vs 背景对比度检查 |
-| 焦点可见 | 显示焦点环 | `focus:ring-2 focus:ring-blue-500` |
+| 实践       | 实施方法              | 示例                                 |
+|----------|-------------------|------------------------------------|
+| 语义化 HTML | 使用正确的 HTML 标签     | `<button>` 而非 `<div onclick>`      |
+| 键盘导航     | 确保所有交互可用 Tab 导航   | `tabindex` 顺序逻辑                    |
+| 屏幕阅读器    | 使用 ARIA 属性        | `aria-label`, `aria-describedby`   |
+| 颜色对比度    | WCAG AA 标准（4.5:1） | 文字 vs 背景对比度检查                      |
+| 焦点可见     | 显示焦点环             | `focus:ring-2 focus:ring-blue-500` |
 
 ### 6.2 表单 A11y 示例
 
@@ -397,12 +402,12 @@ xl:  32px (p-8)
 
 ### 8.1 需要的图标
 
-| 图标 | 用途 | 来源 |
-|------|------|------|
-| 关闭 (X) | 关闭弹窗、删除 | Heroicons / Lucide |
-| 成功 (✓) | 成功状态提示 | Heroicons / Lucide |
+| 图标            | 用途         | 来源                 |
+|---------------|------------|--------------------|
+| 关闭 (X)        | 关闭弹窗、删除    | Heroicons / Lucide |
+| 成功 (✓)        | 成功状态提示     | Heroicons / Lucide |
 | 加载中 (Spinner) | Loading 状态 | Heroicons / Lucide |
-| 警告 (⚠) | 警告提示 | Heroicons / Lucide |
+| 警告 (⚠)        | 警告提示       | Heroicons / Lucide |
 
 ### 8.2 需要的插图/图片
 
@@ -457,24 +462,26 @@ xl:  32px (p-8)
 ## 2. 页面结构设计
 
 ```
+
 +------------------------------------+
-|           Header (Logo)            |
+| Header (Logo)            |
 +------------------------------------+
-|                                    |
-|   +---------------------------+    |
-|   |   登录表单卡片             |    |
-|   |   +---------+              |    |
-|   |   | 邮箱    |              |    |
-|   |   +---------+              |    |
-|   |   | 密码    |              |    |
-|   |   +---------+              |    |
-|   |   [登录按钮]               |    |
-|   |   忘记密码？ | 注册账号     |    |
-|   +---------------------------+    |
-|                                    |
+| |
+| +---------------------------+ |
+| | 登录表单卡片 | |
+| | +---------+ | |
+| | | 邮箱 | | |
+| | +---------+ | |
+| | | 密码 | | |
+| | +---------+ | |
+| |   [登录按钮]               | |
+| | 忘记密码？ | 注册账号 | |
+| +---------------------------+ |
+| |
 +------------------------------------+
-|           Footer                   |
+| Footer |
 +------------------------------------+
+
 ```
 
 ## 3. 组件拆分
@@ -482,18 +489,20 @@ xl:  32px (p-8)
 ### 3.1 组件树
 
 ```
+
 LoginPage
 ├── PageHeader
-│   └── Logo
+│ └── Logo
 ├── LoginCard
-│   ├── LoginForm
-│   │   ├── EmailInput
-│   │   ├── PasswordInput
-│   │   └── SubmitButton
-│   └── FooterLinks
-│       ├── ForgotPasswordLink
-│       └── SignUpLink
+│ ├── LoginForm
+│ │ ├── EmailInput
+│ │ ├── PasswordInput
+│ │ └── SubmitButton
+│ └── FooterLinks
+│ ├── ForgotPasswordLink
+│ └── SignUpLink
 └── PageFooter
+
 ```
 
 ### 3.2 核心组件: `LoginForm`
@@ -538,10 +547,10 @@ interface LoginFormProps {
 
 ## 5. 响应式设计
 
-| 屏幕 | 卡片宽度 | 其他调整 |
-|------|----------|----------|
-| Mobile | 100% | 移除卡片阴影 |
-| Tablet | 80% | 居中显示 |
+| 屏幕      | 卡片宽度       | 其他调整    |
+|---------|------------|---------|
+| Mobile  | 100%       | 移除卡片阴影  |
+| Tablet  | 80%        | 居中显示    |
 | Desktop | 480px 最大宽度 | 居中 + 阴影 |
 
 ## 6. A11y 要点
@@ -557,6 +566,7 @@ interface LoginFormProps {
 - [ ] LoginForm.tsx (含验证逻辑)
 - [ ] EmailInput.tsx / PasswordInput.tsx (可复用)
 - [ ] SubmitButton.tsx (含 loading 状态)
+
 ```
 
 ---

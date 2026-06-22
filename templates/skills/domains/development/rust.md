@@ -5,10 +5,10 @@ description: Rust 开发。系统编程、内存安全、高性能、WebAssembly
 
 # 📜 符箓秘典 · Rust
 
-
 ## 基础语法
 
 ### 所有权系统
+
 ```rust
 fn main() {
     // 所有权转移
@@ -36,6 +36,7 @@ fn change(s: &mut String) {
 ```
 
 ### 结构体与枚举
+
 ```rust
 // 结构体
 struct User {
@@ -77,6 +78,7 @@ fn handle_message(msg: Message) {
 ```
 
 ### 错误处理
+
 ```rust
 use std::fs::File;
 use std::io::{self, Read};
@@ -106,6 +108,7 @@ impl From<io::Error> for AppError {
 ## 异步编程
 
 ### Tokio
+
 ```rust
 use tokio;
 
@@ -151,6 +154,7 @@ async fn channel_example() {
 ## Web 框架
 
 ### Axum
+
 ```rust
 use axum::{
     routing::{get, post},
@@ -186,6 +190,7 @@ async fn main() {
 ```
 
 ### Actix-web
+
 ```rust
 use actix_web::{web, App, HttpServer, HttpResponse};
 
@@ -208,6 +213,7 @@ async fn main() -> std::io::Result<()> {
 ## CLI 工具
 
 ### Clap
+
 ```rust
 use clap::{Parser, Subcommand};
 
@@ -299,15 +305,15 @@ myproject/
 
 ## 常用库
 
-| 库 | 用途 |
-|---|------|
-| tokio | 异步运行时 |
-| axum/actix-web | Web 框架 |
-| serde | 序列化 |
-| reqwest | HTTP 客户端 |
-| sqlx | 数据库 |
-| clap | CLI |
-| tracing | 日志 |
+| 库              | 用途       |
+|----------------|----------|
+| tokio          | 异步运行时    |
+| axum/actix-web | Web 框架   |
+| serde          | 序列化      |
+| reqwest        | HTTP 客户端 |
+| sqlx           | 数据库      |
+| clap           | CLI      |
+| tracing        | 日志       |
 
 ---
 

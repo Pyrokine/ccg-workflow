@@ -14,14 +14,14 @@ description: '交互式 Git 回滚：安全回滚分支到历史版本，支持 
 
 ## 选项
 
-| 选项 | 说明 |
-|------|------|
-| `--branch <branch>` | 要回滚的分支 |
-| `--target <rev>` | 目标版本（commit/tag/reflog） |
-| `--mode reset\|revert` | 回滚模式 |
-| `--depth <n>` | 列出最近 n 个版本（默认 20） |
-| `--dry-run` | 只预览，不执行（**默认**） |
-| `--yes` | 跳过确认直接执行 |
+| 选项                     | 说明                      |
+|------------------------|-------------------------|
+| `--branch <branch>`    | 要回滚的分支                  |
+| `--target <rev>`       | 目标版本（commit/tag/reflog） |
+| `--mode reset\|revert` | 回滚模式                    |
+| `--depth <n>`          | 列出最近 n 个版本（默认 20）       |
+| `--dry-run`            | 只预览，不执行（**默认**）         |
+| `--yes`                | 跳过确认直接执行                |
 
 ---
 
@@ -55,10 +55,10 @@ git fetch --all --prune
 
 `[模式：决策]`
 
-| 模式 | 说明 | 推送方式 |
-|------|------|----------|
-| `reset` | 硬回滚，改变历史 | `--force-with-lease` |
-| `revert` | 生成反向提交，保留历史 | 普通 push |
+| 模式       | 说明          | 推送方式                 |
+|----------|-------------|----------------------|
+| `reset`  | 硬回滚，改变历史    | `--force-with-lease` |
+| `revert` | 生成反向提交，保留历史 | 普通 push              |
 
 ### ⛔ 阶段 5：最终确认
 
@@ -71,12 +71,14 @@ git fetch --all --prune
 `[模式：执行]`
 
 **reset 模式**：
+
 ```bash
 git switch <branch>
 git reset --hard <target>
 ```
 
 **revert 模式**：
+
 ```bash
 git switch <branch>
 git revert --no-edit <target>..HEAD

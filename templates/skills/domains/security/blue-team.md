@@ -5,7 +5,6 @@ description: 蓝队防御技术。检测工程、SOC运营、应急响应、数�
 
 # ❄ 玄冰秘典 · 蓝队防御 (Blue Team)
 
-
 ## 防御链
 
 ```
@@ -80,6 +79,7 @@ level: critical
 ```
 
 ### Sigma 转换
+
 ```bash
 # 安装
 pip install sigma-cli
@@ -132,6 +132,7 @@ rule Webshell_Generic {
 ## 关键日志源
 
 ### Windows 安全日志
+
 ```python
 CRITICAL_EVENTS = {
     # 登录事件
@@ -159,6 +160,7 @@ CRITICAL_EVENTS = {
 ```
 
 ### Sysmon 事件
+
 ```python
 SYSMON_EVENTS = {
     '1': 'Process Create',
@@ -178,6 +180,7 @@ SYSMON_EVENTS = {
 ## SOC 运营
 
 ### 告警分级
+
 ```yaml
 P1 - Critical (15分钟响应):
   - 确认的入侵活动
@@ -202,6 +205,7 @@ P4 - Low (24小时响应):
 ```
 
 ### 告警质量指标
+
 ```python
 class AlertMetrics:
     def calculate(self, alerts):
@@ -220,6 +224,7 @@ class AlertMetrics:
 ## 应急响应
 
 ### IR 流程
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    应急响应流程                               │
@@ -245,6 +250,7 @@ class AlertMetrics:
 ```
 
 ### 快速遏制
+
 ```bash
 # Windows - 隔离主机
 netsh advfirewall set allprofiles state on
@@ -265,6 +271,7 @@ kill -9 <pid>
 ```
 
 ### 证据收集
+
 ```bash
 # Windows
 wmic process list full > processes.txt
@@ -283,6 +290,7 @@ cp /var/log/auth.log .
 ## 数字取证
 
 ### 内存取证
+
 ```bash
 # 内存获取
 # Windows - WinPMEM
@@ -300,6 +308,7 @@ vol.py -f memory.raw --profile=Win10x64 dlllist
 ```
 
 ### 磁盘取证
+
 ```bash
 # 镜像获取
 dd if=/dev/sda of=disk.img bs=4M status=progress
@@ -317,6 +326,7 @@ photorec disk.img
 ```
 
 ### 日志分析
+
 ```bash
 # Windows 事件日志
 # 使用 EvtxECmd 解析
@@ -331,6 +341,7 @@ zcat /var/log/auth.log.*.gz | grep "sudo"
 ## 威胁狩猎
 
 ### 狩猎假设
+
 ```yaml
 # 基于 ATT&CK 的狩猎假设
 hypothesis: "攻击者可能使用 PowerShell 下载并执行恶意代码"
@@ -343,6 +354,7 @@ query: |
 ```
 
 ### 狩猎查询示例
+
 ```sql
 -- 异常父子进程关系
 SELECT parent_name, process_name, command_line
@@ -364,34 +376,37 @@ WHERE command LIKE '%powershell%' OR command LIKE '%cmd%'
 
 ## 工具清单
 
-| 工具 | 用途 |
-|------|------|
-| Sigma | 通用检测规则 |
-| YARA | 恶意软件检测 |
+| 工具             | 用途      |
+|----------------|---------|
+| Sigma          | 通用检测规则  |
+| YARA           | 恶意软件检测  |
 | Splunk/Elastic | SIEM 平台 |
-| Volatility | 内存取证 |
-| Autopsy | 磁盘取证 |
-| Velociraptor | 端点响应 |
-| TheHive | 事件管理 |
-| MISP | 威胁情报 |
+| Volatility     | 内存取证    |
+| Autopsy        | 磁盘取证    |
+| Velociraptor   | 端点响应    |
+| TheHive        | 事件管理    |
+| MISP           | 威胁情报    |
 
 ## 密钥管理
 
 ### 密钥生命周期
+
 ```
 生成 → 存储 → 分发 → 使用 → 轮转 → 撤销 → 销毁
 ```
 
 ### 核心工具
-| 工具 | 类型 | 特点 |
-|------|------|------|
-| HashiCorp Vault | 平台 | 动态密钥、AppRole、多后端 |
-| AWS KMS | 云服务 | 托管密钥、信封加密、自动轮转 |
-| AWS Secrets Manager | 云服务 | 自动轮转、Lambda集成 |
-| Sealed Secrets | K8s | GitOps 友好、加密存储 |
-| External Secrets | K8s | 多后端同步（Vault/AWS/GCP） |
+
+| 工具                  | 类型  | 特点                   |
+|---------------------|-----|----------------------|
+| HashiCorp Vault     | 平台  | 动态密钥、AppRole、多后端     |
+| AWS KMS             | 云服务 | 托管密钥、信封加密、自动轮转       |
+| AWS Secrets Manager | 云服务 | 自动轮转、Lambda集成        |
+| Sealed Secrets      | K8s | GitOps 友好、加密存储       |
+| External Secrets    | K8s | 多后端同步（Vault/AWS/GCP） |
 
 ### 密钥管理检查清单
+
 ```yaml
 生成与存储:
   - [ ] 加密强随机数生成器
@@ -412,6 +427,7 @@ WHERE command LIKE '%powershell%' OR command LIKE '%cmd%'
 ```
 
 ### Vault 关键操作速查
+
 ```bash
 # KV 读写
 vault kv put secret/myapp/config db_password="xxx" api_key="yyy"
@@ -425,12 +441,13 @@ vault write auth/approle/login role_id="<id>" secret_id="<id>"
 ```
 
 ### 密钥分类策略
-| 级别 | 类型 | 轮转周期 | 存储 |
-|------|------|----------|------|
-| P0 | 根密钥、主密钥 | 年度 | HSM |
-| P1 | 数据加密密钥 | 季度 | Vault |
-| P2 | API 密钥 | 月度 | Secrets Manager |
-| P3 | 会话令牌 | 小时 | Redis |
+
+| 级别 | 类型      | 轮转周期 | 存储              |
+|----|---------|------|-----------------|
+| P0 | 根密钥、主密钥 | 年度   | HSM             |
+| P1 | 数据加密密钥  | 季度   | Vault           |
+| P2 | API 密钥  | 月度   | Secrets Manager |
+| P3 | 会话令牌    | 小时   | Redis           |
 
 ---
 

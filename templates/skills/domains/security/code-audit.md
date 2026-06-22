@@ -5,7 +5,6 @@ description: 代码安全审计。危险函数识别、污点分析、漏洞挖�
 
 # 🔥 赤焰秘典 · 代码安全审计 (Code Audit)
 
-
 ## 审计流程
 
 ```
@@ -34,6 +33,7 @@ description: 代码安全审计。危险函数识别、污点分析、漏洞挖�
 ## 危险函数速查
 
 ### Python
+
 ```python
 # 🔴 命令执行
 os.system(cmd)
@@ -67,6 +67,7 @@ yaml.safe_load(user_data)
 ```
 
 ### Java
+
 ```java
 // 🔴 命令执行
 Runtime.getRuntime().exec(userInput);
@@ -93,6 +94,7 @@ pstmt.setInt(1, userId);
 ```
 
 ### JavaScript/Node.js
+
 ```javascript
 // 🔴 命令执行
 child_process.exec(userInput);
@@ -118,6 +120,7 @@ element.textContent = userInput;
 ```
 
 ### Go
+
 ```go
 // 🔴 命令执行
 exec.Command("sh", "-c", userInput).Run()
@@ -139,12 +142,14 @@ db.Query("SELECT * FROM users WHERE id = ?", userId)
 ## 污点分析
 
 ### 概念
+
 ```
 Source (污点源)     →    传播路径    →    Sink (汇聚点)
 用户可控输入              数据流转          危险函数调用
 ```
 
 ### Source 识别
+
 ```python
 # HTTP 请求参数
 request.args.get('param')
@@ -165,6 +170,7 @@ cursor.fetchone()
 ```
 
 ### 传播追踪
+
 ```python
 # 示例：追踪污点传播
 user_input = request.args.get('id')  # Source
@@ -210,6 +216,7 @@ cursor.execute(f"SELECT * FROM users WHERE id = {user_id}")
 用户输入直接拼接到 SQL 语句中，未经过滤或参数化，导致 SQL 注入。
 
 **污点追踪:**
+
 ```
 request.args.get('id')  [Source]
     ↓
@@ -219,14 +226,17 @@ cursor.execute(query)   [Sink]
 ```
 
 **PoC:**
+
 ```
 GET /api/users?id=1' OR '1'='1
 ```
 
 **修复建议:**
+
 ```python
 cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
 ```
+
 ```
 
 ## 审计检查清单

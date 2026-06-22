@@ -11,7 +11,6 @@ argument-hint: <扫描路径>
 
 # ⚖ 校验关卡 · 安全校验
 
-
 ## 核心原则
 
 ```
@@ -36,18 +35,18 @@ node scripts/security_scanner.js <扫描路径> --exclude vendor  # 排除目录
 
 ### 自动检测的漏洞类型
 
-| 类别 | 检测项 | 严重度 |
-|------|--------|--------|
-| **注入** | SQL 注入、命令注入、代码注入 | 🔴 Critical |
-| **敏感信息** | 硬编码密钥、AWS Key、私钥 | 🔴 Critical |
-| **XSS** | innerHTML、dangerouslySetInnerHTML | 🟠 High |
-| **反序列化** | pickle.loads、yaml.load | 🟠 High |
-| **路径遍历** | 未验证的文件路径操作 | 🟠 High |
-| **SSRF** | 未验证的 URL 请求 | 🟠 High |
-| **XXE** | 不安全的 XML 解析 | 🟠 High |
-| **弱加密** | MD5、SHA1 用于安全场景 | 🟡 Medium |
-| **不安全随机** | random 模块用于安全场景 | 🟡 Medium |
-| **调试代码** | console.log、print、debugger | 🔵 Low |
+| 类别        | 检测项                               | 严重度         |
+|-----------|-----------------------------------|-------------|
+| **注入**    | SQL 注入、命令注入、代码注入                  | 🔴 Critical |
+| **敏感信息**  | 硬编码密钥、AWS Key、私钥                  | 🔴 Critical |
+| **XSS**   | innerHTML、dangerouslySetInnerHTML | 🟠 High     |
+| **反序列化**  | pickle.loads、yaml.load            | 🟠 High     |
+| **路径遍历**  | 未验证的文件路径操作                        | 🟠 High     |
+| **SSRF**  | 未验证的 URL 请求                       | 🟠 High     |
+| **XXE**   | 不安全的 XML 解析                       | 🟠 High     |
+| **弱加密**   | MD5、SHA1 用于安全场景                   | 🟡 Medium   |
+| **不安全随机** | random 模块用于安全场景                   | 🟡 Medium   |
+| **调试代码**  | console.log、print、debugger        | 🔵 Low      |
 
 ### 文档层面检查
 
@@ -61,6 +60,7 @@ node scripts/security_scanner.js <扫描路径> --exclude vendor  # 排除目录
 ## 危险模式速查
 
 ### Python
+
 ```python
 # 🔴 危险 - 触犯道基
 eval(), exec(), os.system()
@@ -76,6 +76,7 @@ cursor.execute("SELECT * FROM t WHERE id = %s", (id,))
 ```
 
 ### JavaScript
+
 ```javascript
 // 🔴 危险 - 触犯道基
 eval(), innerHTML, document.write()
@@ -87,6 +88,7 @@ JSON.parse(), textContent
 ```
 
 ### Go
+
 ```go
 // 🔴 危险 - 触犯道基
 exec.Command("sh", "-c", userInput)
@@ -109,13 +111,13 @@ html/template 自动转义
 
 ## 自动触发时机
 
-| 场景 | 触发条件 |
-|------|----------|
-| 新建模块 | 模块创建完成时 |
+| 场景     | 触发条件            |
+|--------|-----------------|
+| 新建模块   | 模块创建完成时         |
 | 安全相关变更 | 涉及认证、授权、加密、输入处理 |
-| 攻防任务 | 红队/蓝队任务完成时 |
-| 重构完成 | 重构任务完成时 |
-| 提交前 | 代码提交前检查 |
+| 攻防任务   | 红队/蓝队任务完成时      |
+| 重构完成   | 重构任务完成时         |
+| 提交前    | 代码提交前检查         |
 
 ## 校验报告格式
 

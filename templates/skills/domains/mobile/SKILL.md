@@ -25,11 +25,11 @@ disable-model-invocation: false
 
 - View 组件：`struct MyView: View { var body: some View { ... } }`
 - State 管理：
-  - `@State` — 本地状态
-  - `@Binding` — 父子双向绑定
-  - `@StateObject` — 拥有 ObservableObject
-  - `@ObservedObject` — 引用 ObservableObject
-  - `@EnvironmentObject` / `@Environment` — 全局注入
+    - `@State` — 本地状态
+    - `@Binding` — 父子双向绑定
+    - `@StateObject` — 拥有 ObservableObject
+    - `@ObservedObject` — 引用 ObservableObject
+    - `@EnvironmentObject` / `@Environment` — 全局注入
 - ObservableObject：`@Published` 属性自动触发 UI 更新
 - Custom ViewModifier：`struct CardModifier: ViewModifier` + `extension View { func cardStyle() }`
 - 生命周期：`.task { await ... }` / `.onAppear` / `.onDisappear`
@@ -51,12 +51,14 @@ disable-model-invocation: false
 ### iOS 架构
 
 MVVM（推荐）：
+
 - Model：`Codable` 数据结构
 - Repository：`protocol` + `async throws` 方法
 - ViewModel：`@MainActor class VM: ObservableObject` + `@Published` 属性
 - View：`@StateObject private var viewModel = VM()`
 
 VIPER（复杂场景）：
+
 - View ←→ Presenter ←→ Interactor → Entity
 - Router 处理导航
 
@@ -92,24 +94,24 @@ VIPER（复杂场景）：
 
 - Composable：`@Composable fun MyScreen() { ... }`
 - State 管理：
-  - `remember { mutableStateOf(value) }` — 本地状态
-  - `rememberSaveable` — 跨配置变更保存
-  - `derivedStateOf` — 派生状态避免重组
+    - `remember { mutableStateOf(value) }` — 本地状态
+    - `rememberSaveable` — 跨配置变更保存
+    - `derivedStateOf` — 派生状态避免重组
 - LazyColumn：`items(list, key = { it.id })` 提供稳定 key
 - Side Effects：
-  - `LaunchedEffect(key)` — 启动协程
-  - `DisposableEffect(key)` — 清理资源（onDispose）
-  - `SideEffect` — 同步状态到外部
-  - `snapshotFlow { state }` — 监听状态变化转 Flow
+    - `LaunchedEffect(key)` — 启动协程
+    - `DisposableEffect(key)` — 清理资源（onDispose）
+    - `SideEffect` — 同步状态到外部
+    - `snapshotFlow { state }` — 监听状态变化转 Flow
 - Navigation：`NavHost` + `composable(route)` + `navController.navigate()`
 - Custom Modifier：`fun Modifier.myModifier(): Modifier = composed { ... }`
 
 ### ViewModel + StateFlow
 
 - StateFlow（推荐替代 LiveData）：
-  - `MutableStateFlow(UiState())` + `.asStateFlow()`
-  - `_uiState.update { it.copy(isLoading = true) }`
-  - Compose 中：`val uiState by viewModel.uiState.collectAsState()`
+    - `MutableStateFlow(UiState())` + `.asStateFlow()`
+    - `_uiState.update { it.copy(isLoading = true) }`
+    - Compose 中：`val uiState by viewModel.uiState.collectAsState()`
 - UiState data class：封装 loading / error / data
 
 ### Kotlin Coroutines & Flow
@@ -157,15 +159,15 @@ VIPER（复杂场景）：
 
 ### React Native vs Flutter
 
-| 维度 | React Native | Flutter |
-|------|--------------|---------|
-| 语言 | TypeScript | Dart |
-| 渲染 | 原生组件(桥接) | 自绘引擎(Skia) |
-| 性能 | 接近原生 | 接近原生 |
-| 热重载 | Fast Refresh | Hot Reload |
-| 生态 | npm（成熟） | pub.dev（快速增长） |
-| UI 一致性 | 跟随系统 | 完全一致 |
-| 包体积 | ~7MB | ~15MB |
+| 维度     | React Native | Flutter       |
+|--------|--------------|---------------|
+| 语言     | TypeScript   | Dart          |
+| 渲染     | 原生组件(桥接)     | 自绘引擎(Skia)    |
+| 性能     | 接近原生         | 接近原生          |
+| 热重载    | Fast Refresh | Hot Reload    |
+| 生态     | npm（成熟）      | pub.dev（快速增长） |
+| UI 一致性 | 跟随系统         | 完全一致          |
+| 包体积    | ~7MB         | ~15MB         |
 
 ### React Native 核心模式
 
@@ -180,21 +182,21 @@ VIPER（复杂场景）：
 
 - Widget：StatelessWidget / StatefulWidget + `setState`
 - 状态管理：
-  - Provider：`ChangeNotifier` + `Consumer` / `context.watch`
-  - Riverpod（推荐）：`FutureProvider` / `StateNotifierProvider` + `ref.watch`
+    - Provider：`ChangeNotifier` + `Consumer` / `context.watch`
+    - Riverpod（推荐）：`FutureProvider` / `StateNotifierProvider` + `ref.watch`
 - Navigation：go_router（`GoRoute` + `context.go/push/pop`）
 - 原生桥接：`MethodChannel` + Platform Channels（iOS Swift / Android Kotlin）
 - 性能：`const` 构造函数 / `ListView.builder` / `RepaintBoundary` / `ValueKey`
 
 ### 选型建议
 
-| 场景 | 推荐 | 理由 |
-|------|------|------|
-| 团队有 Web 背景 | React Native | 学习成本低 |
-| 追求极致性能/动画 | Flutter | 自绘引擎 60fps |
-| UI 高度定制 | Flutter | 完全控制渲染 |
-| 大量原生交互 | React Native | 桥接生态成熟 |
-| 需要原生极致体验 | 原生开发 | 无桥接开销 |
+| 场景         | 推荐           | 理由         |
+|------------|--------------|------------|
+| 团队有 Web 背景 | React Native | 学习成本低      |
+| 追求极致性能/动画  | Flutter      | 自绘引擎 60fps |
+| UI 高度定制    | Flutter      | 完全控制渲染     |
+| 大量原生交互     | React Native | 桥接生态成熟     |
+| 需要原生极致体验   | 原生开发         | 无桥接开销      |
 
 ### 跨平台 Checklist
 
@@ -209,15 +211,15 @@ VIPER（复杂场景）：
 
 ## 通用最佳实践
 
-| 实践 | 说明 |
-|------|------|
-| MVVM 架构 | 分离 UI / 业务逻辑 / 数据层 |
-| 依赖注入 | Hilt(Android) / Protocol(iOS) / Context(RN) |
-| 响应式状态 | StateFlow / Combine / Hooks / Riverpod |
-| 网络层封装 | 统一错误处理 + Token 管理 + 重试 |
-| 本地持久化 | Room / Core Data / AsyncStorage / Hive |
-| 列表优化 | 懒加载 + 稳定 key + 缓存 |
-| 测试覆盖 | ViewModel 单元测试 + UI 测试关键流程 |
+| 实践      | 说明                                          |
+|---------|---------------------------------------------|
+| MVVM 架构 | 分离 UI / 业务逻辑 / 数据层                          |
+| 依赖注入    | Hilt(Android) / Protocol(iOS) / Context(RN) |
+| 响应式状态   | StateFlow / Combine / Hooks / Riverpod      |
+| 网络层封装   | 统一错误处理 + Token 管理 + 重试                      |
+| 本地持久化   | Room / Core Data / AsyncStorage / Hive      |
+| 列表优化    | 懒加载 + 稳定 key + 缓存                           |
+| 测试覆盖    | ViewModel 单元测试 + UI 测试关键流程                  |
 
 ## 触发词
 

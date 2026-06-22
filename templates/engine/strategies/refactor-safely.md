@@ -3,6 +3,7 @@
 > 适用于代码重构，强调增量执行和测试保护。
 
 ## 适用条件
+
 - 复杂度 M 或以上
 - 重构、整理、提取、简化类任务
 - 需要保证行为不变
@@ -10,7 +11,7 @@
 ## 前置加载（L/XL 复杂度时）
 
 ```
-Read("~/.claude/.ccg/engine/model-router.md")
+Read("/home/USER/.claude/.ccg/engine/model-router.md")
 ```
 
 ---
@@ -100,12 +101,14 @@ Gate: 所有步骤已执行 ✓
 **Task 更新**：`currentPhase → "4-execute"`, `nextAction → "逐步执行重构"`
 
 **逐步执行**，每步之后：
+
 1. 应用变更
 2. 运行测试
 3. 如果测试通过 → 继续下一步
 4. 如果测试失败 → **立即停止**，分析原因，修复或回退
 
 每步报告：
+
 ```
 Step [N/M]: [描述] — ✅ 测试通过 / ❌ 测试失败
 ```
@@ -119,13 +122,12 @@ Step [N/M]: [描述] — ✅ 测试通过 / ❌ 测试失败
 
 #### Round N 流程
 
-**⛔ 双模型交叉审查（每轮 spawn 新调用，干净上下文）：**
+**⛔ 审查线程（每轮 spawn 新调用，干净上下文）：**
 
 3. 获取变更：`git diff` 全量输出
-4. 并行调用双模型审查（`run_in_background: true`）：
-   - backend 模型 + reviewer 角色 — 关注安全、性能、错误处理、行为一致性
-   - frontend 模型 + reviewer 角色 — 关注可访问性、设计一致性（如涉及前端）
-5. 等待双模型结果，综合审查意见
+4. 调用 backend 模型 + reviewer 角色，关注安全、性能、错误处理、行为一致性
+    - 只有任务明确涉及前端、布局、界面、页面设计、UI/UX、视觉样式或交互设计时，才额外调用 frontend 模型检查可访问性和设计一致性
+5. 等待已启动的模型结果，综合审查意见
 
 **⛔ 质量关卡（必须逐个调用 Skill，不可跳过，不可用自己的判断替代）：**
 
@@ -133,9 +135,10 @@ Step [N/M]: [描述] — ✅ 测试通过 / ❌ 测试失败
 7. 调用 Skill `verify-security` — 等待报告
 8. 调用 Skill `verify-change` — 等待报告
 
-**综合报告**：双模型审查 + 质量关卡，按严重度分级
+**综合报告**：模型审查 + 质量关卡，按严重度分级
 
 **用户决定（⛔ 必须等待）：**
+
 - 有 Critical → `发现 N 个 Critical 问题。修复后再审一轮？[Y/n]`
 - 无 Critical → `审查通过。需要再审一轮？[y/N]`
 - 用户选择继续 → 修复后回到 Round N+1
@@ -158,6 +161,7 @@ Step [N/M]: [描述] — ✅ 测试通过 / ❌ 测试失败
 #### Spec Evolution（归档前必须执行）
 
 参考 `phase-guide.md § 8 Spec Evolution Protocol` 执行：
+
 1. 分析本次重构的 `git diff`，提炼可复用的重构模式和架构约定
 2. 如有值得记录的经验 → 草拟 Spec 条目，展示给用户确认后追加到 `.ccg/spec/{domain}/index.md`
 3. 无值得提炼的经验 → 跳过
@@ -165,6 +169,7 @@ Step [N/M]: [描述] — ✅ 测试通过 / ❌ 测试失败
 **Task 更新**：`status → "archived"`
 
 **归档任务**：
+
 ```bash
 mkdir -p .ccg/tasks/archive/$(date +%Y-%m) && mv .ccg/tasks/{task-name} .ccg/tasks/archive/$(date +%Y-%m)/
 git add .ccg/tasks/ && git commit -m "chore: archive ccg task"

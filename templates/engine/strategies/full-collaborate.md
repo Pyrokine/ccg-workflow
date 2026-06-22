@@ -3,6 +3,7 @@
 > 适用于复杂功能开发，需要多模型并行分析、规划和审查。等效于 /ccg:workflow。
 
 ## 适用条件
+
 - 复杂度 L/XL（5+ 文件，跨模块，架构级变更）
 - 风险 medium 或 high
 - 需要多角度分析和交叉验证
@@ -10,7 +11,7 @@
 ## 前置加载
 
 ```
-Read("~/.claude/.ccg/engine/model-router.md")
+Read("/home/USER/.claude/.ccg/engine/model-router.md")
 ```
 
 ---
@@ -63,15 +64,17 @@ Gate: 优化审查已完成 ✓
 1. **需求增强**：分析 $ARGUMENTS 的意图、缺失信息、隐含假设，补全为结构化需求（目标、约束、范围、验收标准）
 2. **上下文检索**：用 MCP 搜索工具收集项目上下文
 3. **需求完整性评分**（0-10）：
-   - 目标明确性（0-3）、预期结果（0-3）、边界范围（0-2）、约束条件（0-2）
-   - ≥7：继续 | <7：停止，提出补充问题
+    - 目标明确性（0-3）、预期结果（0-3）、边界范围（0-2）、约束条件（0-2）
+    - ≥7：继续 | <7：停止，提出补充问题
 
 **Task 更新**：
+
 ```
 更新 .ccg/tasks/{task-name}/task.json:
   currentPhase → "1-research"
   nextAction → "需求增强 + 上下文检索"
 ```
+
 持久化：写入 `.ccg/tasks/{task-name}/requirements.md`
 
 ### Phase 2: 多模型构思 [required]
@@ -80,13 +83,15 @@ Gate: 优化审查已完成 ✓
 
 **Gate check**: 需求评分 ≥7
 
-**并行调用**（`run_in_background: true`）：
+**模型调用**：
+
 - **backend 模型**：analyzer 角色 — 技术可行性、后端方案、风险评估
-- **frontend 模型**：analyzer 角色 — UI 可行性、前端方案、用户体验
+- **frontend 模型**：只有任务明确涉及前端、布局、界面、页面设计、UI/UX、视觉样式或交互设计时才调用
 
 使用 model-router.md 中的调用模板。
 
 等待双模型返回：
+
 ```
 TaskOutput({ task_id: "$BACKEND_TASK_ID", block: true, timeout: 600000 })
 TaskOutput({ task_id: "$FRONTEND_TASK_ID", block: true, timeout: 600000 })
@@ -95,9 +100,11 @@ TaskOutput({ task_id: "$FRONTEND_TASK_ID", block: true, timeout: 600000 })
 **保存 SESSION_ID**（`BACKEND_SESSION` / `FRONTEND_SESSION`）用于后续复用。
 
 **重试规则**：
+
 - frontend 模型失败 → 重试 2 次，间隔 5s
+- frontend 模型 3 次全败 → 按 `frontend.models` 顺序调用下一个候选模型执行同一任务
 - backend 模型执行中（5-15 分钟正常）→ 持续等待，**绝不终止**
-- 3 次全败 → 降级为单模型，告知用户
+- fallback 全败 → 降级为后端单模型，告知用户
 
 综合双方分析，输出方案对比（至少 2 个方案）。
 
@@ -106,6 +113,7 @@ TaskOutput({ task_id: "$FRONTEND_TASK_ID", block: true, timeout: 600000 })
 
 **策展 context.jsonl**：
 在进入 Phase 3 前，策展 `.ccg/tasks/{task-name}/context.jsonl`：
+
 - 检查 `.ccg/spec/` 存在 → 列出相关 spec 文件
 - 将 analysis.md 加入（子 Agent 在规划阶段需要参考分析结果）
 - 格式：每行 `{"file": "路径", "reason": "原因"}`
@@ -116,11 +124,13 @@ TaskOutput({ task_id: "$FRONTEND_TASK_ID", block: true, timeout: 600000 })
 
 **Gate check**: 双模型分析已返回
 
-**并行调用**（复用会话 `resume`）：
+**模型调用**（复用会话 `resume`）：
+
 - **backend 模型**：architect 角色 + `resume $BACKEND_SESSION`
-- **frontend 模型**：architect 角色 + `resume $FRONTEND_SESSION`
+- **frontend 模型**：只有 Phase 2 已启动 frontend 会话时，才用 architect 角色 + `resume $FRONTEND_SESSION`
 
 综合双方规划，输出详细实施计划：
+
 - 实施步骤（按文件/模块分组）
 - 架构决策及理由
 - 测试策略
@@ -129,6 +139,7 @@ TaskOutput({ task_id: "$FRONTEND_TASK_ID", block: true, timeout: 600000 })
 **持久化**：写入 `.ccg/tasks/{task-name}/plan.md`
 
 **Task 更新**：
+
 ```
 更新 task.json:
   currentPhase → "3-planning"
@@ -144,8 +155,9 @@ TaskOutput({ task_id: "$FRONTEND_TASK_ID", block: true, timeout: 600000 })
 ⛔ **计划审批 + 执行模式选择**
 
 请审批以上计划，并选择谁来写代码：
+
 1. **Agent Teams** — Claude Builders 并行写，多文件同时进行
-2. **Codex / Antigravity** — 外部模型写代码，更快更便宜，Claude 监控审查
+2. **backend / frontend 模型** — 外部模型写代码，更快更便宜，Claude 监控审查
 
 请回复 1 或 2（或直接说"用team"/"用codex"等）。
 ---
@@ -175,12 +187,14 @@ TaskOutput({ task_id: "$FRONTEND_TASK_ID", block: true, timeout: 600000 })
 #### Step 1: 拆分子任务
 
 从 plan.md 中提取实施步骤，按**文件归属**拆分为独立子任务：
+
 - 每个子任务有明确的文件范围（互不重叠）
 - 标注依赖关系：Layer 1（无依赖）→ Layer 2（依赖 Layer 1）
 
 #### Step 2: 创建 Team（必须执行）
 
 **立即调用 TeamCreate，不可跳过或假设会失败：**
+
 ```
 TeamCreate({ team_name: "{task-id}-team", description: "CCG 实施团队" })
 ```
@@ -237,6 +251,7 @@ SendMessage({ to: "reviewer", message: { type: "shutdown_request" } })
 #### 降级方案（仅当 TeamCreate 实际报错时）
 
 如果 TeamCreate 返回错误（如 `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` 未启用），则：
+
 1. 告知用户："Agent Teams 未启用，降级为顺序实施"
 2. 按 plan.md 中的 Layer 顺序逐文件实施
 3. 仍然遵守质量关卡
@@ -247,9 +262,10 @@ SendMessage({ to: "reviewer", message: { type: "shutdown_request" } })
 
 **Task 更新**：`currentPhase → "4-implementation"`, `nextAction → "Parallel Builder 执行 plan"`
 
-Claude 作为编排者，调用外部模型（Codex / Antigravity）**并行写代码**。
+Claude 作为编排者，调用外部模型（backend / frontend 模型）**并行写代码**。
 
 **Step 1**: 从 plan.md 按**文件归属**拆分为并行子任务：
+
 - **Layer 1** — 无依赖（底层模块：model/store/util/schema）→ 并行
 - **Layer 2** — 依赖 Layer 1（上层：route/middleware/controller/component）→ 串行等 Layer 1
 - 每个子任务：文件范围 + 实施步骤 + 验证命令
@@ -258,7 +274,7 @@ Claude 作为编排者，调用外部模型（Codex / Antigravity）**并行写�
 
 ```
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --parallel --backend {{BACKEND_PRIMARY}} {{GEMINI_MODEL_FLAG}}- \"$WORKDIR\" <<'PARALLEL_EOF'\n---TASK---\nid: layer1-{name1}\nworkdir: $WORKDIR\n---CONTENT---\nROLE_FILE: ~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/builder.md\n<TASK>\n## 文件范围（⛔ 只改这些文件）\n{file1, file2}\n\n## 实施步骤\n{steps from plan.md Layer 1}\n\n## 验证命令\n{test/lint commands}\n</TASK>\n---TASK---\nid: layer1-{name2}\nworkdir: $WORKDIR\n---CONTENT---\nROLE_FILE: ~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/builder.md\n<TASK>\n## 文件范围\n{file3, file4}\n\n## 实施步骤\n{steps}\n</TASK>\n---TASK---\nid: layer2-{name3}\nworkdir: $WORKDIR\ndependencies: layer1-{name1},layer1-{name2}\n---CONTENT---\nROLE_FILE: ~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/builder.md\n<TASK>\n## 文件范围\n{file5, file6}\n\n## 实施步骤\n{steps from Layer 2}\n</TASK>\nPARALLEL_EOF",
+  command: "/home/USER/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --parallel --backend codex - \"$WORKDIR\" <<'PARALLEL_EOF'\n---TASK---\nid: layer1-{name1}\nworkdir: $WORKDIR\n---CONTENT---\nROLE_FILE: /home/USER/.claude/.ccg/prompts/codex/builder.md\n<TASK>\n## 文件范围（⛔ 只改这些文件）\n{file1, file2}\n\n## 实施步骤\n{steps from plan.md Layer 1}\n\n## 验证命令\n{test/lint commands}\n</TASK>\n---TASK---\nid: layer1-{name2}\nworkdir: $WORKDIR\n---CONTENT---\nROLE_FILE: /home/USER/.claude/.ccg/prompts/codex/builder.md\n<TASK>\n## 文件范围\n{file3, file4}\n\n## 实施步骤\n{steps}\n</TASK>\n---TASK---\nid: layer2-{name3}\nworkdir: $WORKDIR\ndependencies: layer1-{name1},layer1-{name2}\n---CONTENT---\nROLE_FILE: /home/USER/.claude/.ccg/prompts/codex/builder.md\n<TASK>\n## 文件范围\n{file5, file6}\n\n## 实施步骤\n{steps from Layer 2}\n</TASK>\nPARALLEL_EOF",
   run_in_background: true,
   timeout: 3600000,
   description: "Parallel Builder: {N} 个子任务（L1: {X} 并行 → L2: {Y} 串行）"
@@ -266,13 +282,15 @@ Bash({
 ```
 
 拆分原则：
+
 - Layer 1 子任务数量 = plan 中无依赖的文件组数（通常 2-4 个）
 - 每个子任务的文件范围**不可重叠**
-- 可混合 backend（后端任务用 codex，前端任务用 antigravity）— 在 `---TASK---` 中指定 `backend: antigravity`
+- 可混合 backend（后端任务用 backend 模型，前端任务用 frontend 模型）— 在 `---TASK---` 中指定对应 `backend` 值
 
 **Step 3**: 等待完成，读取汇总报告（wrapper 自动合并所有子任务结果）
 
 **Step 4**: Claude 审查产出：
+
 1. `git diff` 检查所有变更
 2. 确认变更在 plan 范围内（scope check）
 3. 小问题（<10 行）→ Claude 直接修复
@@ -286,17 +304,18 @@ Bash({
 
 **Gate check**: 实施已完成
 
-**Task 更新**：`currentPhase → "5-optimization"`, `nextAction → "Ralph Loop Round 1: 双模型审查 + 质量关卡"`
+**Task 更新**：`currentPhase → "5-optimization"`, `nextAction → "Ralph Loop Round 1: 模型审查 + 质量关卡"`
 
 参考 `phase-guide.md § 10 Ralph Loop` 执行迭代审查。最多 3 轮。
 
 #### Round N 流程（N=1,2,3）
 
-**5a. 双模型交叉审查（每轮 spawn 新 Agent，干净上下文）**
+**5a. 模型审查（每轮 spawn 新 Agent，干净上下文）**
 
-**并行调用**（`run_in_background: true`）：
+**模型调用**：
+
 - **backend 模型**：reviewer 角色 — 关注安全、性能、错误处理
-- **frontend 模型**：reviewer 角色 — 关注可访问性、设计一致性
+- **frontend 模型**：只有任务明确涉及前端、布局、界面、页面设计、UI/UX、视觉样式或交互设计时才调用，关注可访问性和设计一致性
 
 **5b. 质量关卡**
 
@@ -309,6 +328,7 @@ Bash({
 **5c. 综合报告**
 
 整合审查意见 + 质量关卡结果，按严重度分级：
+
 - **Critical**：必须修复（阻塞交付）
 - **Warning**：建议修复
 - **Info**：供参考
@@ -316,6 +336,7 @@ Bash({
 **持久化**：写入 `.ccg/tasks/{task-name}/review.md`（每轮覆盖）
 
 追加进度到 `.ccg/tasks/{task-name}/fix-log.jsonl`：
+
 ```jsonl
 {"round": N, "critical": X, "warning": Y, "info": Z, "ts": "ISO"}
 ```
@@ -323,11 +344,13 @@ Bash({
 **5d. 用户决定（⛔ 必须等待）**
 
 展示审查结果后询问用户：
+
 - 有 Critical → `发现 N 个 Critical 问题。修复后再审一轮？[Y/n]`
 - 无 Critical 但有 Warning → `无 Critical 问题。需要再审一轮处理 Warning？[y/N]`
 - 全部通过 → 直接进入 Phase 6
 
 用户选择继续 →
+
 1. spawn fix-dev（**新 Agent，干净上下文**）修复 Critical/Warning
 2. fix-dev 完成后回到 5a 开始 Round N+1
 3. 追加修复记录到 fix-log.jsonl
@@ -357,6 +380,7 @@ Bash({
 #### Spec Evolution（归档前必须执行）
 
 参考 `phase-guide.md § 8 Spec Evolution Protocol` 执行：
+
 1. 分析本次 `git diff` + `review.md`，提炼可复用的编码约定和经验教训
 2. 如有值得记录的经验 → 草拟 Spec 条目，展示给用户确认后追加到 `.ccg/spec/{domain}/index.md`
 3. 无值得提炼的经验 → 跳过（不强行凑）
@@ -364,11 +388,13 @@ Bash({
 **Task 更新**：`status → "archived"`
 
 **归档任务**：将 `.ccg/tasks/{task-name}/` 移动到 `.ccg/tasks/archive/YYYY-MM/{task-name}/`
+
 ```bash
 mkdir -p .ccg/tasks/archive/$(date +%Y-%m) && mv .ccg/tasks/{task-name} .ccg/tasks/archive/$(date +%Y-%m)/
 ```
 
 **自动提交归档**：
+
 ```bash
 git add .ccg/tasks/ && git commit -m "chore: archive ccg task {task-name}"
 ```

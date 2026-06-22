@@ -27,10 +27,10 @@ skills/
 
 ## Quick Navigation
 
-| Category | Description | Entry |
-|----------|-------------|-------|
-| **Quality Gates** | Module completeness, security, quality, change validation | [Quality Gates](#quality-gates) |
-| **Multi-Agent** | Multi-agent coordination and task decomposition | [Multi-Agent](#multi-agent-orchestration) |
+| Category          | Description                                               | Entry                                     |
+|-------------------|-----------------------------------------------------------|-------------------------------------------|
+| **Quality Gates** | Module completeness, security, quality, change validation | [Quality Gates](#quality-gates)           |
+| **Multi-Agent**   | Multi-agent coordination and task decomposition           | [Multi-Agent](#multi-agent-orchestration) |
 
 ---
 
@@ -38,13 +38,13 @@ skills/
 
 **Mandatory quality checkpoints to ensure deliverable standards.**
 
-| Skill | Trigger | Description |
-|-------|---------|-------------|
-| `/verify-module` | New module completed | Module structure & documentation completeness |
-| `/verify-security` | New module / security changes / refactoring | Security vulnerability scanning |
-| `/verify-change` | Design-level changes / refactoring | Document sync & change impact analysis |
-| `/verify-quality` | Complex modules / refactoring | Code quality metrics checking |
-| `/gen-docs` | New module created | README.md & DESIGN.md skeleton generator |
+| Skill              | Trigger                                     | Description                                   |
+|--------------------|---------------------------------------------|-----------------------------------------------|
+| `/verify-module`   | New module completed                        | Module structure & documentation completeness |
+| `/verify-security` | New module / security changes / refactoring | Security vulnerability scanning               |
+| `/verify-change`   | Design-level changes / refactoring          | Document sync & change impact analysis        |
+| `/verify-quality`  | Complex modules / refactoring               | Code quality metrics checking                 |
+| `/gen-docs`        | New module created                          | README.md & DESIGN.md skeleton generator      |
 
 ### Auto-trigger Rules
 
@@ -73,11 +73,12 @@ node ~/.claude/skills/ccg/run_skill.js gen-docs ./new-module --force
 
 ## Multi-Agent Orchestration
 
-| Skill | Trigger | Description |
-|-------|---------|-------------|
+| Skill         | Trigger                                 | Description                                  |
+|---------------|-----------------------------------------|----------------------------------------------|
 | `multi-agent` | TeamCreate, parallel tasks, multi-agent | Ant colony-inspired multi-agent coordination |
 
 Provides:
+
 - Agent role system (Lead/Scout/Worker/Soldier/Drone)
 - Pheromone-based indirect communication
 - File ownership locking & conflict avoidance

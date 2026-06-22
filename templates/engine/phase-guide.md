@@ -5,6 +5,7 @@
 ## 1. 阶段状态自检
 
 每完成一个阶段，回顾对应的 `[phase-state:N]` 块：
+
 1. 确认该阶段的 Gate 条件已满足
 2. 输出 `📍 Next: [具体动作]` 告知用户下一步
 3. 如有 `[required]` 标记的阶段未完成，不可跳过
@@ -28,6 +29,7 @@ Gate 失败时：说明缺失什么，给出补救建议，不可绕过。
 ```
 
 示例：
+
 - `📍 Next: 加载模型路由器，启动双模型并行分析`
 - `📍 Next: 请确认以上修复方案是否正确`
 - `📍 Next: 运行测试验证修复效果`
@@ -38,29 +40,31 @@ Gate 失败时：说明缺失什么，给出补救建议，不可绕过。
 
 1. 明确告知用户：`当前策略为 [名称]，但发现 [原因]，建议升级到 [目标策略]`
 2. 等待用户确认
-3. 确认后：`Read ~/.claude/.ccg/engine/strategies/[target].md`
+3. 确认后：`Read /home/USER/.claude/.ccg/engine/strategies/[target].md`
 4. 从新策略的 Phase 1 开始（已完成的分析工作可复用）
 
 **只能升级，不能降级**（除非用户明确要求）。
 
 ## 5. 错误恢复
 
-| 场景 | 处理方式 |
-|------|---------|
-| 外部模型调用失败 | 按模型路由器重试规则处理 |
-| 测试失败 | 分析失败原因，修复后重新运行 |
-| 用户要求中止 | 立即停止，报告已完成的工作 |
-| 意外文件冲突 | 报告冲突，等待用户决策 |
+| 场景       | 处理方式           |
+|----------|----------------|
+| 外部模型调用失败 | 按模型路由器重试规则处理   |
+| 测试失败     | 分析失败原因，修复后重新运行 |
+| 用户要求中止   | 立即停止，报告已完成的工作  |
+| 意外文件冲突   | 报告冲突，等待用户决策    |
 
 ## 6. Team Dispatch 协议
 
 当策略需要并行实施时，使用 Agent Teams：
 
 ### 前置条件
+
 - 任务已拆分为文件级子任务（互不重叠）
 - plan.md 已审批
 
 ### 标准流程
+
 ```
 1. TeamCreate({ team_name: "{task-id}-team" })
 2. 同一消息内并行 spawn 所有 Layer 1 Builder
@@ -71,13 +75,16 @@ Gate 失败时：说明缺失什么，给出补救建议，不可绕过。
 ```
 
 ### Builder Prompt 必含项
+
 - `## 工作目录` — 绝对路径
 - `## 文件范围约束（⛔ 硬性规则）` — 只能改的文件列表
 - `## 实施步骤` — 具体操作
 - `## 验收标准` — 怎样算完成
 
 ### Spec 注入
+
 PreToolUse Hook 自动为 Team member 注入：
+
 - context.jsonl 中列出的 spec 文件
 - requirements.md 和 plan.md 摘要
 - research/ 目录下的研究成果
@@ -85,6 +92,7 @@ PreToolUse Hook 自动为 Team member 注入：
 Builder 不需要在 prompt 中手动粘贴 spec — Hook 自动处理。
 
 ### 降级方案
+
 TeamCreate 失败（Agent Teams 未启用）→ Claude 自己按计划顺序实施。
 
 ## 7. 输出规范
@@ -101,6 +109,7 @@ TeamCreate 失败（Agent Teams 未启用）→ Claude 自己按计划顺序实�
 ### 触发条件
 
 任务归档前（status → "archived"），如果以下任一条件成立，**必须执行 Spec Evolution**：
+
 - 本次开发中发现了可复用的编码模式或约定
 - 外部模型审查提出了有价值的规范建议
 - 修复了一个非显而易见的坑（未来可能再踩）
@@ -110,9 +119,9 @@ TeamCreate 失败（Agent Teams 未启用）→ Claude 自己按计划顺序实�
 
 1. **提炼经验**：分析 `git diff` + review.md（如有），提取可复用的经验教训
 2. **分类归属**：判断经验属于哪个 Spec 域：
-   - 后端相关 → `.ccg/spec/backend/index.md`
-   - 前端相关 → `.ccg/spec/frontend/index.md`
-   - 跨模块/通用 → `.ccg/spec/guides/index.md`
+    - 后端相关 → `.ccg/spec/backend/index.md`
+    - 前端相关 → `.ccg/spec/frontend/index.md`
+    - 跨模块/通用 → `.ccg/spec/guides/index.md`
 3. **草拟更新**：以追加方式写出建议新增的 Spec 条目（不覆盖现有内容）
 4. **展示给用户**：
    ```
@@ -129,11 +138,13 @@ TeamCreate 失败（Agent Teams 未启用）→ Claude 自己按计划顺序实�
 ### 条目质量标准
 
 好的 Spec 条目：
+
 - ✅ 具体：引用真实文件路径和 API 签名
 - ✅ 说明 Why：不只说"要这样做"，还说"因为…"
 - ✅ 可验证：子 Agent 能根据条目判断对错
 
 坏的 Spec 条目：
+
 - ❌ 空泛："写好的代码" / "注意安全"
 - ❌ 一次性：只对本次任务有价值，对未来无意义
 
@@ -151,10 +162,10 @@ TeamCreate 失败（Agent Teams 未启用）→ Claude 自己按计划顺序实�
 
 1. **立即停止**当前重复动作
 2. **根因分析**（5 Why）：
-   - 是外部依赖阻塞？（网络/API/权限）→ 告知用户
-   - 是策略不适配？→ 建议升级策略
-   - 是信息不足？→ 向用户提问
-   - 是实现路径走死？→ 换方案
+    - 是外部依赖阻塞？（网络/API/权限）→ 告知用户
+    - 是策略不适配？→ 建议升级策略
+    - 是信息不足？→ 向用户提问
+    - 是实现路径走死？→ 换方案
 3. **更新 task.json**：`nextAction` 必须变更为新的动作描述（打破循环）
 4. **如果连续 2 次触发 Break-Loop**（即 6 轮无进展）→ 强制暂停，输出完整状态摘要请用户介入
 
@@ -198,6 +209,7 @@ Round N (N=1,2,...,MAX_ROUNDS):
 ### context.jsonl 角色标注
 
 策展 context.jsonl 时，按角色标注 `roles` 字段：
+
 ```jsonl
 {"file": ".ccg/spec/backend/index.md", "reason": "后端规范", "roles": ["implement", "review"]}
 {"file": ".ccg/tasks/{name}/plan.md", "reason": "实施计划", "roles": ["implement"]}

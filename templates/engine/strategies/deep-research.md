@@ -3,6 +3,7 @@
 > 适用于技术方案研究、对比分析。多模型并行探索，结构化输出。
 
 ## 适用条件
+
 - 用户提出研究/分析/对比类问题
 - 不涉及代码修改（纯研究）
 - 任何复杂度级别
@@ -10,7 +11,7 @@
 ## 前置加载
 
 ```
-Read("~/.claude/.ccg/engine/model-router.md")
+Read("/home/USER/.claude/.ccg/engine/model-router.md")
 ```
 
 ---
@@ -46,9 +47,9 @@ Gate: 双模型探索已返回 ✓
 ### Phase 1: 明确问题 [required]
 
 1. 解析用户的研究意图：
-   - 要研究什么？
-   - 研究目的是什么？（做决策？了解现状？评估可行性？）
-   - 有什么约束或偏好？
+    - 要研究什么？
+    - 研究目的是什么？（做决策？了解现状？评估可行性？）
+    - 有什么约束或偏好？
 
 2. 如果问题太宽泛，先收窄：
    ```
@@ -63,6 +64,7 @@ Gate: 双模型探索已返回 ✓
 **Task 更新**：`currentPhase → "2-explore"`, `nextAction → "双模型并行探索"`
 
 **并行调用**（`run_in_background: true`）：
+
 - **backend 模型**：analyzer 角色
   ```
   <TASK>
@@ -89,6 +91,7 @@ Gate: 双模型探索已返回 ✓
 交叉对比双方视角。
 
 **持久化研究成果**（如有任务目录）：
+
 - 将双模型原始分析写入 `.ccg/tasks/{task-name}/research/backend-analysis.md`
 - 将双模型原始分析写入 `.ccg/tasks/{task-name}/research/frontend-analysis.md`
 
@@ -120,6 +123,7 @@ Gate: 双模型探索已返回 ✓
 ### Phase 4: 交互式讨论
 
 用户可以：
+
 - 追问某个方案的细节
 - 要求更深入分析某个方面
 - 要求 POC / 原型验证

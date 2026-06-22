@@ -13,22 +13,22 @@ $ARGUMENTS
 **与 `/ccg:plan` 配对使用**：
 
 ```
-/ccg:plan → 多模型协同规划（Codex ∥ Gemini 分析 → Claude 综合）
+/ccg:plan → 多模型协同规划（Codex ∥ frontend 模型 分析 → Claude 综合）
                 ↓ 计划文件 (.claude/plan/xxx.md)
 /ccg:codex-exec → Codex 全权执行（MCP 搜索 + 代码实现 + 测试）
                 ↓ 代码变更
-                → 多模型审核（Codex ∥ Gemini 交叉审查）
+                → 多模型审核（Codex ∥ frontend 模型 交叉审查）
 ```
 
 **与 `/ccg:execute` 的区别**：
 
-| 维度 | `/ccg:execute` | `/ccg:codex-exec` |
-|------|---------------|-------------------|
-| 代码实现 | Claude 重构 {{BACKEND_PRIMARY}}/{{FRONTEND_PRIMARY}} 的 Diff | **{{BACKEND_PRIMARY}} 直接实现** |
-| MCP 搜索 | Claude 调用 MCP | **{{BACKEND_PRIMARY}} 调用 MCP** |
-| Claude 上下文 | 高（搜索结果 + 代码全进来） | **极低（只看摘要 + diff）** |
-| Claude token | 大量消耗 | **极少消耗** |
-| 审核 | 多模型审查 | **多模型审查（不变）** |
+| 维度           | `/ccg:execute`                                            | `/ccg:codex-exec`              |
+|--------------|-----------------------------------------------------------|--------------------------------|
+| 代码实现         | Claude 重构 {{BACKEND_PRIMARY}}/{{FRONTEND_PRIMARY}} 的 Diff | **{{BACKEND_PRIMARY}} 直接实现**   |
+| MCP 搜索       | Claude 调用 MCP                                             | **{{BACKEND_PRIMARY}} 调用 MCP** |
+| Claude 上下文   | 高（搜索结果 + 代码全进来）                                           | **极低（只看摘要 + diff）**            |
+| Claude token | 大量消耗                                                      | **极少消耗**                       |
+| 审核           | 多模型审查                                                     | **多模型审查（不变）**                  |
 
 ---
 
@@ -42,6 +42,7 @@ $ARGUMENTS
 ## 多模型调用规范
 
 **工作目录**：
+
 - `{{WORKDIR}}`：**必须通过 Bash 执行 `pwd`（Unix）或 `cd`（Windows CMD）获取当前工作目录的绝对路径**，禁止从 `$HOME` 或环境变量推断
 - 如果用户通过 `/add-dir` 添加了多个工作区，先用 Glob/Grep 确定任务相关的工作区
 - 如果无法确定，用 `AskUserQuestion` 询问用户选择目标工作区
@@ -50,7 +51,7 @@ $ARGUMENTS
 
 ```
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend {{BACKEND_PRIMARY}} {{GEMINI_MODEL_FLAG}}- \"{{WORKDIR}}\" <<'EXEC_EOF'
+  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend {{BACKEND_PRIMARY}} - \"{{WORKDIR}}\" <<'EXEC_EOF'
 <TASK>
 <指令内容>
 </TASK>
@@ -65,7 +66,7 @@ EXEC_EOF",
 
 ```
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend {{BACKEND_PRIMARY}} {{GEMINI_MODEL_FLAG}}resume <SESSION_ID> - \"{{WORKDIR}}\" <<'EXEC_EOF'
+  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend {{BACKEND_PRIMARY}} resume <SESSION_ID> - \"{{WORKDIR}}\" <<'EXEC_EOF'
 <TASK>
 <指令内容>
 </TASK>
@@ -76,11 +77,11 @@ EXEC_EOF",
 })
 ```
 
-**审核调用语法**（Codex ∥ Gemini 并行审查）：
+**审核调用语法**（Codex ∥ frontend 模型 并行审查）：
 
 ```
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend <{{BACKEND_PRIMARY}}|{{FRONTEND_PRIMARY}}> {{GEMINI_MODEL_FLAG}}- \"{{WORKDIR}}\" <<'REVIEW_EOF'
+  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend <{{BACKEND_PRIMARY}}|{{FRONTEND_PRIMARY}}> - \"{{WORKDIR}}\" <<'REVIEW_EOF'
 ROLE_FILE: <角色提示词路径>
 <TASK>
 Scope: Audit the code changes made by Codex.
@@ -102,8 +103,8 @@ REVIEW_EOF",
 
 **角色提示词**：
 
-| 阶段 | 后端 | 前端 |
-|------|-------|--------|
+| 阶段 | 后端                                                       | 前端                                                        |
+|----|----------------------------------------------------------|-----------------------------------------------------------|
 | 审查 | `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/reviewer.md` | `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/reviewer.md` |
 
 **等待后台任务**（最大超时 600000ms = 10 分钟）：
@@ -113,11 +114,14 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 ```
 
 **重要**：
+
 - 必须指定 `timeout: 600000`，否则默认只有 30 秒会导致提前超时
 - 若 10 分钟后仍未完成，继续用 `TaskOutput` 轮询，**绝对不要 Kill 进程**
 - 若因等待时间过长跳过了等待，**必须调用 `AskUserQuestion` 询问用户选择继续等待还是 Kill Task**
-- ⛔ **前端模型失败必须重试**：若前端模型调用失败（非零退出码或输出包含错误信息），最多重试 2 次（间隔 5 秒）。仅当 3 次全部失败时才跳过前端模型结果并使用单模型结果继续。
-- ⛔ **后端模型结果必须等待**：后端模型执行时间较长（5-15 分钟）属于正常。TaskOutput 超时后必须继续用 TaskOutput 轮询，**绝对禁止在后端模型未返回结果时直接跳过或继续下一阶段**。已启动的后端任务若被跳过 = 浪费 token + 丢失结果。
+- ⛔ **前端模型失败必须重试**：若前端模型调用失败（非零退出码或输出包含错误信息），最多重试 2 次（间隔 5 秒）。仅当 3
+  次全部失败时才跳过前端模型结果并使用单模型结果继续。
+- ⛔ **后端模型结果必须等待**：后端模型执行时间较长（5-15 分钟）属于正常。TaskOutput 超时后必须继续用 TaskOutput 轮询，*
+  *绝对禁止在后端模型未返回结果时直接跳过或继续下一阶段**。已启动的后端任务若被跳过 = 浪费 token + 丢失结果。
 
 ---
 
@@ -130,15 +134,15 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 `[模式：准备]`
 
 1. **识别输入类型**：
-   - 计划文件路径（如 `.claude/plan/xxx.md`）→ 读取并解析
-   - 直接的任务描述 → 提示用户先执行 `/ccg:plan`
+    - 计划文件路径（如 `.claude/plan/xxx.md`）→ 读取并解析
+    - 直接的任务描述 → 提示用户先执行 `/ccg:plan`
 
 2. **解析计划内容**，提取：
-   - 任务类型（前端/后端/全栈）
-   - 技术方案
-   - 实施步骤
-   - 关键文件列表
-   - SESSION_ID（`CODEX_SESSION` / `GEMINI_SESSION`）
+    - 任务类型（前端/后端/全栈）
+    - 技术方案
+    - 实施步骤
+    - 关键文件列表
+    - SESSION_ID（`CODEX_SESSION` / `FRONTEND_SESSION`）
 
 3. **执行前确认**：
    向用户展示计划摘要，确认后执行：
@@ -167,7 +171,7 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 
 ```
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend {{BACKEND_PRIMARY}} {{GEMINI_MODEL_FLAG}}resume <CODEX_SESSION> - \"{{WORKDIR}}\" <<'EXEC_EOF'
+  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend {{BACKEND_PRIMARY}} resume <CODEX_SESSION> - \"{{WORKDIR}}\" <<'EXEC_EOF'
 <TASK>
 You are a full-stack execution agent. Implement the following plan end-to-end.
 
@@ -248,14 +252,14 @@ EXEC_EOF",
    ```
 
 3. **快速判定**：
-   - 变更是否在计划范围内？
-   - 是否有明显安全/逻辑问题？
-   - 测试是否通过？
+    - 变更是否在计划范围内？
+    - 是否有明显安全/逻辑问题？
+    - 测试是否通过？
 
 4. **处理结果**：
-   - ✅ **通过** → Phase 3 多模型审核
-   - ⚠️ **小问题** → Claude 直接修复（< 10 行的修正 Claude 自己做）
-   - ❌ **需返工** → Phase 2.5 追加指令
+    - ✅ **通过** → Phase 3 多模型审核
+    - ⚠️ **小问题** → Claude 直接修复（< 10 行的修正 Claude 自己做）
+    - ❌ **需返工** → Phase 2.5 追加指令
 
 ---
 
@@ -267,7 +271,7 @@ EXEC_EOF",
 
 ```
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend {{BACKEND_PRIMARY}} {{GEMINI_MODEL_FLAG}}resume <CODEX_EXEC_SESSION> - \"{{WORKDIR}}\" <<'FIXEOF'
+  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend {{BACKEND_PRIMARY}} resume <CODEX_EXEC_SESSION> - \"{{WORKDIR}}\" <<'FIXEOF'
 <TASK>
 The implementation needs corrections:
 
@@ -306,28 +310,28 @@ FIXEOF",
 
 2. **并行调用**（`run_in_background: true`）：
 
-   - **{{BACKEND_PRIMARY}} 审查**：
-     - ROLE_FILE: `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/reviewer.md`
-     - 输入：变更 Diff + 计划文件内容
-     - 关注：安全性、性能、错误处理、逻辑正确性
+    - **{{BACKEND_PRIMARY}} 审查**：
+        - ROLE_FILE: `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/reviewer.md`
+        - 输入：变更 Diff + 计划文件内容
+        - 关注：安全性、性能、错误处理、逻辑正确性
 
-   - **{{FRONTEND_PRIMARY}} 审查**：
-     - ROLE_FILE: `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/reviewer.md`
-     - 输入：变更 Diff + 计划文件内容
-     - 关注：代码可读性、设计一致性、可维护性
+    - **{{FRONTEND_PRIMARY}} 审查**：
+        - ROLE_FILE: `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/reviewer.md`
+        - 输入：变更 Diff + 计划文件内容
+        - 关注：代码可读性、设计一致性、可维护性
 
    用 `TaskOutput` 等待两个模型的完整审查结果。
 
 3. **整合审查意见**：
-   - 按信任规则：后端问题以 {{BACKEND_PRIMARY}} 为准，前端问题以 {{FRONTEND_PRIMARY}} 为准
-   - **Critical** → 必须修复（Claude 直接修或再派 Codex）
-   - **Warning** → 建议修复，报告给用户决定
-   - **Info** → 记录不处理
+    - 按信任规则：后端问题以 {{BACKEND_PRIMARY}} 为准，前端问题以 {{FRONTEND_PRIMARY}} 为准
+    - **Critical** → 必须修复（Claude 直接修或再派 Codex）
+    - **Warning** → 建议修复，报告给用户决定
+    - **Info** → 记录不处理
 
 4. **执行修复**（如有 Critical）：
-   - < 10 行修正：Claude 直接修
-   - ≥ 10 行修正：再派 Codex（复用 `CODEX_EXEC_SESSION`）
-   - 修复后可选重复 Phase 3（直到风险可接受）
+    - < 10 行修正：Claude 直接修
+    - ≥ 10 行修正：再派 Codex（复用 `CODEX_EXEC_SESSION`）
+    - 修复后可选重复 Phase 3（直到风险可接受）
 
 ---
 
@@ -357,7 +361,7 @@ FIXEOF",
 
 ### 审核结果
 - Codex 审查：<通过/发现 N 个问题>
-- Gemini 审查：<通过/发现 N 个问题>
+- Antigravity 审查：<通过/发现 N 个问题>
 - Claude 处理：<已修复 N 个 Critical，N 个 Warning 待用户决定>
 
 ### 后续建议
@@ -371,7 +375,7 @@ FIXEOF",
 
 1. **Claude 极简原则** — Claude 不调用 MCP、不做代码检索。只读计划、指挥 Codex、审核结果。
 2. **{{BACKEND_PRIMARY}} 全权执行** — MCP 搜索、文档查询、代码检索、实现、测试全由 {{BACKEND_PRIMARY}} 完成。
-3. **多模型审核不变** — 审核阶段仍然 Codex ∥ Gemini 交叉审查，保证质量。
+3. **多模型审核不变** — 审核阶段仍然 Codex ∥ frontend 模型 交叉审查，保证质量。
 4. **信任规则** — 后端以 {{BACKEND_PRIMARY}} 为准，前端以 {{FRONTEND_PRIMARY}} 为准。
 5. **一次性下发** — 尽量一次给 Codex 完整指令 + 完整计划，减少来回通信。
 6. **最多 2 轮返工** — 超过 2 轮 Claude 直接接管，避免无限循环。
@@ -407,5 +411,6 @@ FIXEOF",
 ```
 
 用户可根据任务特点选择：
+
 - **需要精细控制** → `/ccg:execute`（Claude 逐行重构）
 - **需要高效执行** → `/ccg:codex-exec`（Codex 一把梭）

@@ -5,10 +5,10 @@ description: TypeScript/JavaScript 开发。前后端、Node.js、React、Vue。
 
 # 📜 符箓秘典 · TypeScript/JavaScript
 
-
 ## TypeScript 基础
 
 ### 类型系统
+
 ```typescript
 // 基础类型
 let name: string = "Alice";
@@ -49,6 +49,7 @@ type Omit<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 ## Node.js 后端
 
 ### Express
+
 ```typescript
 import express, { Request, Response, NextFunction } from 'express';
 
@@ -86,6 +87,7 @@ app.listen(3000);
 ```
 
 ### Fastify
+
 ```typescript
 import Fastify from 'fastify';
 
@@ -102,6 +104,7 @@ fastify.listen({ port: 3000 });
 ## React
 
 ### 函数组件
+
 ```tsx
 import React, { useState, useEffect, useCallback } from 'react';
 
@@ -146,6 +149,7 @@ export default UserCard;
 ```
 
 ### Hooks
+
 ```tsx
 // 自定义 Hook
 function useFetch<T>(url: string) {
@@ -171,6 +175,7 @@ const { data, loading } = useFetch<User[]>('/api/users');
 ## Vue 3
 
 ### Composition API
+
 ```vue
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
@@ -216,6 +221,7 @@ const handleClick = () => {
 ## 测试
 
 ### Jest/Vitest
+
 ```typescript
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
@@ -263,15 +269,15 @@ myproject/
 
 ## 常用库
 
-| 库 | 用途 |
-|---|------|
+| 库               | 用途         |
+|-----------------|------------|
 | Express/Fastify | Node.js 框架 |
-| React/Vue | 前端框架 |
-| Next.js/Nuxt | 全栈框架 |
-| Prisma | ORM |
-| Zod | 数据验证 |
-| Vitest/Jest | 测试 |
-| ESLint/Prettier | 代码规范 |
+| React/Vue       | 前端框架       |
+| Next.js/Nuxt    | 全栈框架       |
+| Prisma          | ORM        |
+| Zod             | 数据验证       |
+| Vitest/Jest     | 测试         |
+| ESLint/Prettier | 代码规范       |
 
 ---
 

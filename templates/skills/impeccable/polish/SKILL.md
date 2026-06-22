@@ -7,29 +7,32 @@ user-invocable: true
 
 ## MANDATORY PREPARATION
 
-Invoke /frontend-design — it contains design principles, anti-patterns, and the **Context Gathering Protocol**. Follow the protocol before proceeding — if no design context exists yet, you MUST run /teach-impeccable first. Additionally gather: quality bar (MVP vs flagship).
+Invoke /frontend-design — it contains design principles, anti-patterns, and the **Context Gathering Protocol**. Follow
+the protocol before proceeding — if no design context exists yet, you MUST run /teach-impeccable first. Additionally
+gather: quality bar (MVP vs flagship).
 
 ---
 
-Perform a meticulous final pass to catch all the small details that separate good work from great work. The difference between shipped and polished.
+Perform a meticulous final pass to catch all the small details that separate good work from great work. The difference
+between shipped and polished.
 
 ## Pre-Polish Assessment
 
 Understand the current state and goals:
 
 1. **Review completeness**:
-   - Is it functionally complete?
-   - Are there known issues to preserve (mark with TODOs)?
-   - What's the quality bar? (MVP vs flagship feature?)
-   - When does it ship? (How much time for polish?)
+    - Is it functionally complete?
+    - Are there known issues to preserve (mark with TODOs)?
+    - What's the quality bar? (MVP vs flagship feature?)
+    - When does it ship? (How much time for polish?)
 
 2. **Identify polish areas**:
-   - Visual inconsistencies
-   - Spacing and alignment issues
-   - Interaction state gaps
-   - Copy inconsistencies
-   - Edge cases and error states
-   - Loading and transition smoothness
+    - Visual inconsistencies
+    - Spacing and alignment issues
+    - Interaction state gaps
+    - Copy inconsistencies
+    - Edge cases and error states
+    - Loading and transition smoothness
 
 **CRITICAL**: Polish is the last step, not the first. Don't polish work that's not functionally complete.
 
@@ -46,6 +49,7 @@ Work through these dimensions methodically:
 - **Grid adherence**: Elements snap to baseline grid
 
 **Check**:
+
 - Enable grid overlay and verify alignment
 - Check spacing with browser inspector
 - Test at multiple viewport sizes
@@ -89,7 +93,8 @@ Every interactive element needs all states:
 ### Micro-interactions & Transitions
 
 - **Smooth transitions**: All state changes animated appropriately (150-300ms)
-- **Consistent easing**: Use ease-out-quart/quint/expo for natural deceleration. Never bounce or elastic—they feel dated.
+- **Consistent easing**: Use ease-out-quart/quint/expo for natural deceleration. Never bounce or elastic—they feel
+  dated.
 - **No jank**: 60fps animations, only animate transform and opacity
 - **Appropriate motion**: Motion serves purpose, not decoration
 - **Reduced motion**: Respects `prefers-reduced-motion`
@@ -183,6 +188,7 @@ Go through systematically:
 **IMPORTANT**: Polish is about details. Zoom in. Squint at it. Use it yourself. The little things add up.
 
 **NEVER**:
+
 - Polish before it's functionally complete
 - Spend hours on polish if it ships in 30 minutes (triage)
 - Introduce bugs while polishing (test thoroughly)
@@ -199,5 +205,6 @@ Before marking as done:
 - **Compare to design**: Match intended design
 - **Check all states**: Don't just test happy path
 
-Remember: You have impeccable attention to detail and exquisite taste. Polish until it feels effortless, looks intentional, and works flawlessly. Sweat the details - they matter.
+Remember: You have impeccable attention to detail and exquisite taste. Polish until it feels effortless, looks
+intentional, and works flawlessly. Sweat the details - they matter.
 

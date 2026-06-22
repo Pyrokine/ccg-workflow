@@ -10,11 +10,11 @@ disable-model-invocation: false
 
 ## 能力矩阵
 
-| Skill | 定位 | 核心能力 |
-|-------|------|----------|
-| [agent-dev](agent-dev.md) | Agent 开发 | 多 Agent 编排、工具调用、RAG |
-| [llm-security](llm-security.md) | LLM 安全 | Prompt 注入、越狱防护、输出安全 |
-| [rag-system](rag-system.md) | RAG 系统 | 向量数据库、检索策略、重排算法 |
+| Skill                                 | 定位             | 核心能力                                  |
+|---------------------------------------|----------------|---------------------------------------|
+| [agent-dev](agent-dev.md)             | Agent 开发       | 多 Agent 编排、工具调用、RAG                   |
+| [llm-security](llm-security.md)       | LLM 安全         | Prompt 注入、越狱防护、输出安全                   |
+| [rag-system](rag-system.md)           | RAG 系统         | 向量数据库、检索策略、重排算法                       |
 | [prompt-and-eval](prompt-and-eval.md) | Prompt 工程与模型评估 | Few-shot、CoT、ReAct、RAGAS、LLM-as-Judge |
 
 ## AI 工程原则

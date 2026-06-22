@@ -5,7 +5,6 @@ description: 缓存策略秘典。缓存模式、Redis实践、三大问题、CD
 
 # 🏗 阵法秘典 · 缓存策略
 
-
 ## 缓存层次
 
 ```
@@ -22,12 +21,12 @@ CDN 缓存 (边缘节点)
 数据库
 ```
 
-| 层级 | 延迟 | 容量 | 一致性 |
-|------|------|------|--------|
-| L1 本地内存 | ~ns | MB级 | 进程内一致 |
-| L2 分布式缓存 | ~ms | GB级 | 最终一致 |
-| L3 CDN | ~10ms | TB级 | TTL控制 |
-| DB | ~10-100ms | PB级 | 强一致 |
+| 层级       | 延迟        | 容量  | 一致性   |
+|----------|-----------|-----|-------|
+| L1 本地内存  | ~ns       | MB级 | 进程内一致 |
+| L2 分布式缓存 | ~ms       | GB级 | 最终一致  |
+| L3 CDN   | ~10ms     | TB级 | TTL控制 |
+| DB       | ~10-100ms | PB级 | 强一致   |
 
 ---
 
@@ -51,10 +50,10 @@ def get_user(user_id: str) -> dict:
     cached = redis.get(f"user:{user_id}")
     if cached:
         return json.loads(cached)
-    
+
     # 2. 查DB
     user = db.query("SELECT * FROM users WHERE id = %s", user_id)
-    
+
     # 3. 写缓存
     redis.setex(f"user:{user_id}", 3600, json.dumps(user))
     return user
@@ -107,14 +106,14 @@ def update_user(user_id: str, data: dict):
 
 ### 数据结构选型
 
-| 结构 | 场景 | 示例 |
-|------|------|------|
-| String | 简单KV、计数器 | 用户信息、页面PV |
-| Hash | 对象属性 | 用户Profile各字段 |
-| List | 队列、最新列表 | 消息队列、最新动态 |
-| Set | 去重、交集 | 标签、共同好友 |
-| Sorted Set | 排行榜、延迟队列 | 积分排名、定时任务 |
-| Stream | 消息流 | 事件日志 |
+| 结构         | 场景       | 示例           |
+|------------|----------|--------------|
+| String     | 简单KV、计数器 | 用户信息、页面PV    |
+| Hash       | 对象属性     | 用户Profile各字段 |
+| List       | 队列、最新列表  | 消息队列、最新动态    |
+| Set        | 去重、交集    | 标签、共同好友      |
+| Sorted Set | 排行榜、延迟队列 | 积分排名、定时任务    |
+| Stream     | 消息流      | 事件日志         |
 
 ### 过期策略
 
@@ -168,10 +167,10 @@ def release_lock(conn: redis.Redis, lock_name: str, token: str) -> bool:
 解决方案:
   1. 布隆过滤器 (Bloom Filter)
      请求 → 布隆过滤器 → 不存在则直接返回
-     
+
   2. 缓存空值
      redis.setex(f"user:{user_id}", 300, "NULL")  # 短TTL
-     
+
   3. 参数校验
      ID格式校验，拦截非法请求
 ```
@@ -185,10 +184,10 @@ def release_lock(conn: redis.Redis, lock_name: str, token: str) -> bool:
   1. 互斥锁 (Mutex)
      未命中 → 获取锁 → 查DB → 写缓存 → 释放锁
      其他请求等待或返回旧值
-     
+
   2. 永不过期 + 异步更新
      逻辑过期: 缓存中存储过期时间，过期后异步刷新
-     
+
   3. 热点预加载
      提前刷新即将过期的热点key
 ```
@@ -201,13 +200,13 @@ def release_lock(conn: redis.Redis, lock_name: str, token: str) -> bool:
 解决方案:
   1. 过期时间加随机值
      ttl = base_ttl + random(0, 300)  # 打散过期时间
-     
+
   2. 多级缓存
      L1(本地) + L2(Redis) → Redis挂了还有本地缓存
-     
+
   3. 熔断降级
      缓存不可用时，限流 + 降级返回默认值
-     
+
   4. Redis 高可用
      Sentinel / Cluster 模式
 ```
@@ -267,11 +266,11 @@ aws cloudfront create-invalidation \
 
 ### 一致性级别选择
 
-| 级别 | 方案 | 延迟 | 复杂度 |
-|------|------|------|--------|
-| 强一致 | Write-Through | 高 | 中 |
-| 最终一致 | Cache-Aside + 删除 | 低 | 低 |
-| 最终一致(可靠) | Binlog 订阅 | 中 | 高 |
+| 级别       | 方案               | 延迟 | 复杂度 |
+|----------|------------------|----|-----|
+| 强一致      | Write-Through    | 高  | 中   |
+| 最终一致     | Cache-Aside + 删除 | 低  | 低   |
+| 最终一致(可靠) | Binlog 订阅        | 中  | 高   |
 
 ---
 

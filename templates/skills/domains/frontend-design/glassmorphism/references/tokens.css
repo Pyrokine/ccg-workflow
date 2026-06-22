@@ -22,7 +22,7 @@
 }
 
 /* Dark theme overrides */
-[data-theme="dark"] {
+[data-theme='dark'] {
   --glass-bg-light: rgba(255, 255, 255, 0.04);
   --glass-bg: rgba(255, 255, 255, 0.08);
   --glass-bg-heavy: rgba(255, 255, 255, 0.14);

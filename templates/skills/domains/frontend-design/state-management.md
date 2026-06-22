@@ -7,14 +7,14 @@ description: 前端状态管理技术。Redux、Zustand、Jotai、Recoil、Conte
 
 ## 状态管理对比
 
-| 框架 | 模式 | 学习曲线 | 性能 | 适用场景 |
-|------|------|----------|------|----------|
-| Redux | Flux | 陡峭 | 中 | 大型应用、复杂状态 |
-| Zustand | Flux-like | 平缓 | 高 | 中小型应用、快速开发 |
-| Jotai | Atomic | 平缓 | 高 | 细粒度更新、原子化状态 |
-| Recoil | Atomic | 中等 | 高 | React生态、派生状态 |
-| Context | Provider | 简单 | 低 | 简单共享、主题配置 |
-| MobX | Reactive | 中等 | 高 | OOP风格、自动追踪 |
+| 框架      | 模式        | 学习曲线 | 性能 | 适用场景         |
+|---------|-----------|------|----|--------------|
+| Redux   | Flux      | 陡峭   | 中  | 大型应用、复杂状态    |
+| Zustand | Flux-like | 平缓   | 高  | 中小型应用、快速开发   |
+| Jotai   | Atomic    | 平缓   | 高  | 细粒度更新、原子化状态  |
+| Recoil  | Atomic    | 中等   | 高  | React生态、派生状态 |
+| Context | Provider  | 简单   | 低  | 简单共享、主题配置    |
+| MobX    | Reactive  | 中等   | 高  | OOP风格、自动追踪   |
 
 ## 选择决策树
 
@@ -668,13 +668,13 @@ export const useStore = create<Store>((set) => ({
 
 ## 工具清单
 
-| 工具 | 用途 |
-|------|------|
-| Redux DevTools | 时间旅行调试 |
-| Zustand DevTools | Zustand 状态调试 |
-| Jotai DevTools | Atom 依赖可视化 |
-| Recoil DevTools | Recoil 状态调试 |
-| React Query DevTools | 服务器状态调试 |
-| Immer | 不可变数据更新 |
+| 工具                   | 用途           |
+|----------------------|--------------|
+| Redux DevTools       | 时间旅行调试       |
+| Zustand DevTools     | Zustand 状态调试 |
+| Jotai DevTools       | Atom 依赖可视化   |
+| Recoil DevTools      | Recoil 状态调试  |
+| React Query DevTools | 服务器状态调试      |
+| Immer                | 不可变数据更新      |
 
 ---

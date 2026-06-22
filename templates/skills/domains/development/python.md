@@ -5,10 +5,10 @@ description: Python 开发。Web框架、数据处理、自动化脚本、测试
 
 # 📜 符箓秘典 · Python
 
-
 ## Web 框架
 
 ### FastAPI (推荐)
+
 ```python
 from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
@@ -43,6 +43,7 @@ async def get_items(db = Depends(get_db)):
 ```
 
 ### Flask
+
 ```python
 from flask import Flask, request, jsonify
 
@@ -61,6 +62,7 @@ def not_found(e):
 ```
 
 ### Django
+
 ```python
 # models.py
 from django.db import models
@@ -107,6 +109,7 @@ asyncio.run(fetch_all(['http://example.com', 'http://example.org']))
 ## 数据处理
 
 ### Pandas
+
 ```python
 import pandas as pd
 
@@ -136,6 +139,7 @@ df.to_json('output.json', orient='records')
 ## 测试
 
 ### pytest
+
 ```python
 import pytest
 from myapp import calculate, UserService
@@ -181,6 +185,7 @@ async def test_async_fetch():
 ```
 
 ### 运行测试
+
 ```bash
 pytest                      # 运行所有
 pytest test_file.py         # 指定文件
@@ -193,6 +198,7 @@ pytest -x                   # 失败即停
 ## CLI 工具
 
 ### Typer (推荐)
+
 ```python
 import typer
 
@@ -216,6 +222,7 @@ if __name__ == "__main__":
 ```
 
 ### argparse
+
 ```python
 import argparse
 
@@ -248,6 +255,7 @@ myproject/
 ```
 
 ### pyproject.toml
+
 ```toml
 [project]
 name = "myproject"
@@ -273,16 +281,16 @@ select = ["E", "F", "I"]
 
 ## 常用库
 
-| 库 | 用途 |
-|---|------|
+| 库              | 用途       |
+|----------------|----------|
 | requests/httpx | HTTP 客户端 |
-| aiohttp | 异步 HTTP |
-| SQLAlchemy | ORM |
-| Pydantic | 数据验证 |
-| Click/Typer | CLI |
-| pytest | 测试 |
-| pandas | 数据处理 |
-| loguru | 日志 |
+| aiohttp        | 异步 HTTP  |
+| SQLAlchemy     | ORM      |
+| Pydantic       | 数据验证     |
+| Click/Typer    | CLI      |
+| pytest         | 测试       |
+| pandas         | 数据处理     |
+| loguru         | 日志       |
 
 ---
 

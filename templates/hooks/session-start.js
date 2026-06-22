@@ -8,8 +8,12 @@ try {
   const path = require('path');
   const fs = require('fs');
   const {
-    findProjectRoot, getActiveTask, readFileSafe,
-    detectTechStack, getGitInfo, outputHook
+    findProjectRoot,
+    getActiveTask,
+    readFileSafe,
+    detectTechStack,
+    getGitInfo,
+    outputHook,
   } = require('./task-utils.js');
 
   const cwd = process.env.CLAUDE_PROJECT_DIR || process.cwd();
@@ -35,11 +39,13 @@ Root: ${root}
     const configRaw = readFileSafe(configPath);
     if (configRaw) {
       const frontendMatch = configRaw.match(/primary\s*=\s*"(\w+)"/);
-      const models = frontendMatch ? `Configured (see .ccg/config.toml)` : 'Default (frontend=gemini, backend=codex)';
+      const models = frontendMatch
+        ? `Configured (see .ccg/config.toml)`
+        : 'Default (frontend=antigravity, backend=codex)';
       sections.push(`<models>${models}</models>`);
     }
   } else {
-    sections.push('<models>Default (frontend=gemini, backend=codex)</models>');
+    sections.push('<models>Default (frontend=antigravity, backend=codex)</models>');
   }
 
   // Active task
@@ -82,9 +88,13 @@ Root: ${root}
       };
       walk(specDir, '');
       if (specPaths.length > 0) {
-        sections.push(`<specs>\nAvailable specs in .ccg/spec/:\n${specPaths.map(p => `  - ${p}`).join('\n')}\n</specs>`);
+        sections.push(
+          `<specs>\nAvailable specs in .ccg/spec/:\n${specPaths.map((p) => `  - ${p}`).join('\n')}\n</specs>`
+        );
       }
-    } catch { /* silent */ }
+    } catch {
+      /* silent */
+    }
   }
 
   // Available commands hint

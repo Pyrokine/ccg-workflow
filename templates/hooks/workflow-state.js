@@ -38,7 +38,9 @@ try {
 
   if (loop) {
     lines.push('');
-    lines.push(`⚠️ LOOP DETECTED: Phase "${loop.phase}" with same nextAction repeated ${loop.count} turns (${loop.elapsedSec}s).`);
+    lines.push(
+      `⚠️ LOOP DETECTED: Phase "${loop.phase}" with same nextAction repeated ${loop.count} turns (${loop.elapsedSec}s).`
+    );
     lines.push('🔄 BREAK-LOOP PROTOCOL:');
     lines.push('  1. STOP current approach immediately');
     lines.push('  2. Root-cause analysis: why is this phase not progressing?');

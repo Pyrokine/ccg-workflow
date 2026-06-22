@@ -37,6 +37,7 @@ Use CSS custom properties from `tokens.css` for consistent theming:
 ## Component Examples
 
 ### Card
+
 ```css
 .glass-card {
   background: var(--glass-bg);
@@ -50,6 +51,7 @@ Use CSS custom properties from `tokens.css` for consistent theming:
 ```
 
 ### Navbar
+
 ```css
 .glass-nav {
   background: var(--glass-bg-heavy);
@@ -64,6 +66,7 @@ Use CSS custom properties from `tokens.css` for consistent theming:
 ```
 
 ### Modal Overlay
+
 ```css
 .glass-modal-backdrop {
   background: rgba(0, 0, 0, 0.4);
@@ -80,6 +83,7 @@ Use CSS custom properties from `tokens.css` for consistent theming:
 ```
 
 ### Button
+
 ```css
 .glass-btn {
   background: var(--glass-bg-light);
@@ -96,10 +100,10 @@ Use CSS custom properties from `tokens.css` for consistent theming:
 
 ## Browser Compatibility
 
-| Feature | Chrome | Firefox | Safari | Edge |
-|---------|--------|---------|--------|------|
-| `backdrop-filter` | 76+ | 103+ | 9+ (`-webkit-`) | 79+ |
-| `rgba()` backgrounds | All | All | All | All |
+| Feature              | Chrome | Firefox | Safari          | Edge |
+|----------------------|--------|---------|-----------------|------|
+| `backdrop-filter`    | 76+    | 103+    | 9+ (`-webkit-`) | 79+  |
+| `rgba()` backgrounds | All    | All     | All             | All  |
 
 - Always include `-webkit-backdrop-filter` for Safari support
 - Firefox <103: use `@supports` fallback with solid semi-transparent bg

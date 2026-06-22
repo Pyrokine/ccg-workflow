@@ -3,6 +3,7 @@
 > 适用于中等复杂度的功能开发。可选调用外部模型进行领域分析。
 
 ## 适用条件
+
 - 复杂度 M（2-5 文件，单模块）
 - 需要一定规划但不需要完整的多模型协作
 - 风险 low 或 medium
@@ -53,6 +54,7 @@ Gate: 实施已完成 ✓
 ### Phase 1: 需求增强 [required]
 
 分析用户的 $ARGUMENTS，补全为结构化需求：
+
 - **目标**：要实现什么
 - **约束**：不能改什么、需要兼容什么
 - **范围**：哪些文件/模块会受影响
@@ -71,30 +73,34 @@ Gate: 实施已完成 ✓
 
 **Gate check**: 需求已增强 ✓ 上下文已收集 ✓
 
-**⛔ M 复杂度必须调用双模型（Gemini + Codex）并行分析。不可只调一个，不可跳过。**
+**⛔ M 复杂度必须调用 backend 模型分析。只有任务明确涉及前端、布局、界面、页面设计、UI/UX、视觉样式或交互设计时，才额外调用
+frontend 模型。**
 
-这是多模型协作的核心价值——两个模型从不同角度分析同一个问题，交叉验证，弥补单模型盲区。
+默认协作形态是 Claude Code 编排 + backend 模型独立分析；frontend 模型只用于前端设计类问题。
 
 执行步骤：
 
 1. 确定工作目录：`WORKDIR=$(pwd)`
 
-2. **并行调用双模型**（`run_in_background: true`，两个同时启动）：
+2. **模型调用**：默认调用 backend 模型；只有任务明确涉及前端、布局、界面、页面设计、UI/UX、视觉样式或交互设计时，才同时调用
+   frontend 模型：
 
 Backend 模型：
+
 ```
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend {{BACKEND_PRIMARY}} {{GEMINI_MODEL_FLAG}}- \"$WORKDIR\" <<'CODEAGENT_EOF'\nROLE_FILE: ~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/analyzer.md\n<TASK>\n需求：{增强后的需求}\n上下文：{Phase 2 收集的项目上下文、相关代码摘要}\n</TASK>\nOUTPUT: 技术分析报告（可行性、架构建议、风险评估、实施方案对比）\nCODEAGENT_EOF",
+  command: "/home/USER/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend {{BACKEND_PRIMARY}} - \"$WORKDIR\" <<'CODEAGENT_EOF'\nROLE_FILE: /home/USER/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/analyzer.md\n<TASK>\n需求：{增强后的需求}\n上下文：{Phase 2 收集的项目上下文、相关代码摘要}\n</TASK>\nOUTPUT: 技术分析报告（可行性、架构建议、风险评估、实施方案对比）\nCODEAGENT_EOF",
   run_in_background: true,
   timeout: 3600000,
   description: "Backend 模型分析"
 })
 ```
 
-Frontend 模型（**必须同时启动，不是"如果是全栈才调"**）：
+Frontend 模型（仅前端设计范围）：
+
 ```
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend {{FRONTEND_PRIMARY}} {{GEMINI_MODEL_FLAG}}- \"$WORKDIR\" <<'CODEAGENT_EOF'\nROLE_FILE: ~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/analyzer.md\n<TASK>\n需求：{增强后的需求}\n上下文：{Phase 2 收集的项目上下文}\n</TASK>\nOUTPUT: 从不同视角的分析报告（可行性、设计建议、风险评估）\nCODEAGENT_EOF",
+  command: "/home/USER/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend {{FRONTEND_PRIMARY}} - \"$WORKDIR\" <<'CODEAGENT_EOF'\nROLE_FILE: /home/USER/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/analyzer.md\n<TASK>\n需求：{增强后的需求}\n上下文：{Phase 2 收集的项目上下文}\n</TASK>\nOUTPUT: 从不同视角的分析报告（可行性、设计建议、风险评估）\nCODEAGENT_EOF",
   run_in_background: true,
   timeout: 3600000,
   description: "Frontend 模型分析"
@@ -102,6 +108,7 @@ Bash({
 ```
 
 4. **等待结果**（必须等，不可跳过）：
+
 ```
 TaskOutput({ task_id: "<id>", block: true, timeout: 600000 })
 ```
@@ -137,6 +144,7 @@ TaskOutput({ task_id: "<id>", block: true, timeout: 600000 })
 将计划持久化到 `.ccg/tasks/{task-name}/plan.md`。
 
 **Task 更新**：
+
 ```
 更新 .ccg/tasks/{task-name}/task.json:
   currentPhase → "4-plan"
@@ -152,8 +160,9 @@ TaskOutput({ task_id: "<id>", block: true, timeout: 600000 })
 ⛔ **计划审批 + 执行模式选择**
 
 请审批以上计划，并选择谁来写代码：
+
 1. **Claude 自己写** — 精细控制，逐步实施
-2. **Codex / Antigravity** — 外部模型写代码，更快，Claude 监控审查
+2. **backend / frontend 模型** — 外部模型写代码，更快，Claude 监控审查
 
 请回复 1 或 2（或直接说"你来写"/"用codex"等）。
 ---
@@ -161,6 +170,7 @@ TaskOutput({ task_id: "<id>", block: true, timeout: 600000 })
 **在用户回复之前，你不可以执行任何文件写入操作。** 违反 = 流程失控。
 
 用户确认后：
+
 ```
 更新 task.json: gate → null, currentPhase → "5-implement"
 ```
@@ -178,9 +188,10 @@ TaskOutput({ task_id: "<id>", block: true, timeout: 600000 })
 
 #### 模式 B: 外部模型实施（用户选 [2]）
 
-Claude 作为编排者，调用外部模型（Codex / Antigravity）写代码。
+Claude 作为编排者，调用外部模型（backend / frontend 模型）写代码。
 
 **Step 1**: 从 plan.md 按文件归属拆分子任务：
+
 - **Layer 1** — 无依赖的任务（底层模块：model/util/store）
 - **Layer 2** — 依赖 Layer 1 的任务（上层：route/middleware/component）
 - 每个子任务标注：文件范围、实施步骤、验证命令
@@ -189,7 +200,7 @@ Claude 作为编排者，调用外部模型（Codex / Antigravity）写代码。
 
 ```
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --parallel --backend {{BACKEND_PRIMARY}} {{GEMINI_MODEL_FLAG}}- \"$WORKDIR\" <<'PARALLEL_EOF'\n---TASK---\nid: layer1-{name1}\nworkdir: $WORKDIR\n---CONTENT---\nROLE_FILE: ~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/builder.md\n<TASK>\n## 文件范围（⛔ 只改这些文件）\n{file1, file2}\n\n## 实施步骤\n{steps from plan.md}\n</TASK>\n---TASK---\nid: layer1-{name2}\nworkdir: $WORKDIR\n---CONTENT---\nROLE_FILE: ~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/builder.md\n<TASK>\n## 文件范围\n{file3, file4}\n\n## 实施步骤\n{steps}\n</TASK>\n---TASK---\nid: layer2-{name3}\nworkdir: $WORKDIR\ndependencies: layer1-{name1},layer1-{name2}\n---CONTENT---\nROLE_FILE: ~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/builder.md\n<TASK>\n## 文件范围\n{file5}\n\n## 实施步骤\n{steps}\n</TASK>\nPARALLEL_EOF",
+  command: "/home/USER/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --parallel --backend codex - \"$WORKDIR\" <<'PARALLEL_EOF'\n---TASK---\nid: layer1-{name1}\nworkdir: $WORKDIR\n---CONTENT---\nROLE_FILE: /home/USER/.claude/.ccg/prompts/codex/builder.md\n<TASK>\n## 文件范围（⛔ 只改这些文件）\n{file1, file2}\n\n## 实施步骤\n{steps from plan.md}\n</TASK>\n---TASK---\nid: layer1-{name2}\nworkdir: $WORKDIR\n---CONTENT---\nROLE_FILE: /home/USER/.claude/.ccg/prompts/codex/builder.md\n<TASK>\n## 文件范围\n{file3, file4}\n\n## 实施步骤\n{steps}\n</TASK>\n---TASK---\nid: layer2-{name3}\nworkdir: $WORKDIR\ndependencies: layer1-{name1},layer1-{name2}\n---CONTENT---\nROLE_FILE: /home/USER/.claude/.ccg/prompts/codex/builder.md\n<TASK>\n## 文件范围\n{file5}\n\n## 实施步骤\n{steps}\n</TASK>\nPARALLEL_EOF",
   run_in_background: true,
   timeout: 3600000,
   description: "Parallel Builder: {task count} 个子任务"
@@ -197,12 +208,14 @@ Bash({
 ```
 
 **也可以用 Codex 原生 spawn 模式**（如果项目 `.codex/` 已配置 multi_agent_v2）：
+
 - 发送编排指令让 Codex 读 AGENTS.md 的 §5 "Parallel Spawn" 模式
 - Codex 自行 spawn ccg-implement 子代理并行写
 
 **Step 3**: 等待完成，读取汇总报告
 
 **Step 4**: Claude 审查 `git diff`，确认变更在 plan 范围内
+
 - 小问题 Claude 直接修复
 - 大问题再调外部模型或切换模式 A
 
@@ -219,18 +232,20 @@ Bash({
 
 #### Round N 流程
 
-**⛔ 双模型交叉审查（每轮 spawn 新调用，干净上下文）：**
-3. 并行调用双模型（`run_in_background: true`，使用 model-router.md 模板）：
-   - backend 模型 + reviewer 角色 — 安全、性能、错误处理
-   - frontend 模型 + reviewer 角色 — 设计一致性（如涉及前端）
+**⛔ 审查线程：**
+
+3. 调用 backend 模型 + reviewer 角色，检查安全、性能、错误处理
+    - 只有任务明确涉及前端、布局、界面、页面设计、UI/UX、视觉样式或交互设计时，才额外调用 frontend 模型检查设计一致性
 4. 综合审查意见
 
 **⛔ 质量关卡（必须逐个调用 Skill，不可跳过）：**
+
 5. 调用 Skill `verify-quality` — 等待报告
 6. 调用 Skill `verify-security` — 等待报告（涉及 auth/input/crypto 时）
 7. 调用 Skill `verify-change` — 等待报告
 
 **用户决定（⛔ 必须等待）：**
+
 - 有 Critical → `发现 N 个 Critical 问题。修复后再审一轮？[Y/n]`
 - 无 Critical → `审查通过。需要再审一轮？[y/N]`
 - 用户选择继续 → 修复 Critical 后回到 Round N+1
@@ -252,6 +267,7 @@ Bash({
 #### Spec Evolution（归档前必须执行）
 
 参考 `phase-guide.md § 8 Spec Evolution Protocol` 执行：
+
 1. 分析本次 `git diff` + 审查结果，提炼可复用的编码约定
 2. 如有值得记录的经验 → 草拟 Spec 条目，展示给用户确认后追加到 `.ccg/spec/{domain}/index.md`
 3. 无值得提炼的经验 → 跳过
@@ -259,6 +275,7 @@ Bash({
 **Task 更新**：`status → "archived"`
 
 **归档任务**：
+
 ```bash
 mkdir -p .ccg/tasks/archive/$(date +%Y-%m) && mv .ccg/tasks/{task-name} .ccg/tasks/archive/$(date +%Y-%m)/
 git add .ccg/tasks/ && git commit -m "chore: archive ccg task"

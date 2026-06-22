@@ -3,6 +3,7 @@
 > 适用于代码审查需求，双模型交叉验证，结果分级输出。
 
 ## 适用条件
+
 - 用户请求代码审查
 - 任何复杂度级别
 - 自动检测 git diff 作为审查范围
@@ -10,7 +11,7 @@
 ## 前置加载
 
 ```
-Read("~/.claude/.ccg/engine/model-router.md")
+Read("/home/USER/.claude/.ccg/engine/model-router.md")
 ```
 
 ---
@@ -42,12 +43,13 @@ Gate: 双模型审查已返回 ✓
 
 1. 如果用户指定了文件/范围 → 使用指定范围
 2. 如果未指定 → 自动获取：
-   - `git diff HEAD` — 未提交的变更
-   - 如果无 diff → `git diff HEAD~1` — 最近一次提交
-   - 如果仍无 diff → 询问用户要审查什么
+    - `git diff HEAD` — 未提交的变更
+    - 如果无 diff → `git diff HEAD~1` — 最近一次提交
+    - 如果仍无 diff → 询问用户要审查什么
 3. 读取变更涉及的完整文件（不只是 diff，需要上下文）
 
 输出审查范围：
+
 ```
 📋 审查范围
   变更: [N] 文件，[+M/-K] 行
@@ -59,6 +61,7 @@ Gate: 双模型审查已返回 ✓
 **Gate check**: 审查范围已确定
 
 **并行调用**（`run_in_background: true`）：
+
 - **backend 模型**：reviewer 角色
   ```
   <TASK>
@@ -78,6 +81,7 @@ Gate: 双模型审查已返回 ✓
 #### 3a. 质量关卡
 
 **⛔ 必须逐个调用 Skill，不可跳过：**
+
 - 调用 Skill `verify-security` — 等待报告
 - 调用 Skill `verify-quality` — 等待报告
 
@@ -109,6 +113,7 @@ Gate: 双模型审查已返回 ✓
 #### Spec Evolution（审查完成后执行）
 
 参考 `phase-guide.md § 8 Spec Evolution Protocol` 执行：
+
 1. 从审查发现中提炼可复用的编码规范（特别是 Critical/Warning 级反复出现的模式）
 2. 如有值得记录的经验 → 草拟 Spec 条目，展示给用户确认后追加到 `.ccg/spec/{domain}/index.md`
 3. 无值得提炼的经验 → 跳过

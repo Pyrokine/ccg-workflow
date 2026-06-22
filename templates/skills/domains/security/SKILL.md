@@ -19,14 +19,14 @@ disable-model-invocation: false
 
 ## 秘典矩阵
 
-| 秘典 | 道脉 | 化身 | 核心神通 |
-|------|------|------|----------|
-| [pentest](pentest.md) | 🗡 破阵 | 破阵化身 | Web/API/内网渗透、OWASP Top 10、BOLA、JWT、GraphQL |
-| [code-audit](code-audit.md) | 🔬 验毒 | 验毒化身 | 危险函数、污点分析、漏洞挖掘、Source→Sink 追踪 |
-| [red-team](red-team.md) | 🔥 赤焰 | 赤焰化身 | PoC开发、C2框架、横向移动、免杀、供应链安全 |
-| [blue-team](blue-team.md) | ❄ 玄冰 | 玄冰化身 | 检测工程、SOC运营、应急响应、取证、密钥管理 |
-| [threat-intel](threat-intel.md) | 👁 天眼 | 天眼化身 | OSINT、威胁狩猎、情报分析、威胁建模、ATT&CK |
-| [vuln-research](vuln-research.md) | 💀 噬魂 | 噬魂化身 | 二进制分析、逆向工程、Exploit开发、Fuzzing、PWN |
+| 秘典                                | 道脉    | 化身   | 核心神通                                       |
+|-----------------------------------|-------|------|--------------------------------------------|
+| [pentest](pentest.md)             | 🗡 破阵 | 破阵化身 | Web/API/内网渗透、OWASP Top 10、BOLA、JWT、GraphQL |
+| [code-audit](code-audit.md)       | 🔬 验毒 | 验毒化身 | 危险函数、污点分析、漏洞挖掘、Source→Sink 追踪              |
+| [red-team](red-team.md)           | 🔥 赤焰 | 赤焰化身 | PoC开发、C2框架、横向移动、免杀、供应链安全                   |
+| [blue-team](blue-team.md)         | ❄ 玄冰  | 玄冰化身 | 检测工程、SOC运营、应急响应、取证、密钥管理                    |
+| [threat-intel](threat-intel.md)   | 👁 天眼 | 天眼化身 | OSINT、威胁狩猎、情报分析、威胁建模、ATT&CK                |
+| [vuln-research](vuln-research.md) | 💀 噬魂 | 噬魂化身 | 二进制分析、逆向工程、Exploit开发、Fuzzing、PWN           |
 
 ## 攻击链视角（赤焰脉·破妄道）
 
@@ -47,26 +47,29 @@ disable-model-invocation: false
 ## 快速选择
 
 ### 进攻（赤焰脉）
+
 - **Web/API 渗透** → `pentest.md` — 🗡 破阵化身
 - **代码审计** → `code-audit.md` — 🔬 验毒化身
 - **红队行动** → `red-team.md` — 🔥 赤焰化身
 - **漏洞研究/PWN** → `vuln-research.md` — 💀 噬魂化身
 
 ### 防守（玄冰脉）
+
 - **检测规则** → `blue-team.md` — ❄ 玄冰化身
 - **应急响应** → `blue-team.md` — ❄ 玄冰化身
 - **威胁情报** → `threat-intel.md` — 👁 天眼化身
 
 ### 攻防协同（紫霄脉）
+
 - **ATT&CK 映射** → 组合 `red-team.md` + `blue-team.md`
 - **检测验证** → 红方执行 + 蓝方检测
 - **差距分析** → 攻防对抗后复盘
 
 ## 场景优先级
 
-| 场景 | 优先级 |
-|------|--------|
+| 场景          | 优先级          |
+|-------------|--------------|
 | 攻击模拟 / 安全评估 | 效果 > 精准 > 控制 |
-| 防御响应 | 正确 > 覆盖 > 速度 |
-| 攻防协同 | 正确 > 完整 > 简洁 |
-| 紧急安全事件 | 速度 > 正确 > 简洁 |
+| 防御响应        | 正确 > 覆盖 > 速度 |
+| 攻防协同        | 正确 > 完整 > 简洁 |
+| 紧急安全事件      | 速度 > 正确 > 简洁 |

@@ -5,26 +5,25 @@ description: 消息队列秘典。Kafka、RabbitMQ、Redis Streams、事件驱�
 
 # 🏗 阵法秘典 · 消息队列
 
-
 ## 核心概念
 
 ```
 Producer → Broker → Consumer
   发送       存储       消费
-  
+
 模式:
   点对点 (Queue):  1 Producer → 1 Consumer
   发布订阅 (Topic): 1 Producer → N Consumers
 ```
 
-| 概念 | 含义 | 类比 |
-|------|------|------|
-| Producer | 消息生产者 | 发令者 |
-| Consumer | 消息消费者 | 执行者 |
-| Broker | 消息中间件 | 传令阵 |
-| Topic/Queue | 消息通道 | 传音符 |
-| Partition | 分区（并行单元） | 阵眼 |
-| Offset | 消费位置 | 修行进度 |
+| 概念          | 含义       | 类比   |
+|-------------|----------|------|
+| Producer    | 消息生产者    | 发令者  |
+| Consumer    | 消息消费者    | 执行者  |
+| Broker      | 消息中间件    | 传令阵  |
+| Topic/Queue | 消息通道     | 传音符  |
+| Partition   | 分区（并行单元） | 阵眼   |
+| Offset      | 消费位置     | 修行进度 |
 
 ---
 
@@ -39,7 +38,7 @@ Producer ──→ Broker Cluster ──→ Consumer Group
           │ Topic-A  │
           │ P0 P1 P2 │  (3 Partitions)
           └──────────┘
-          
+
 Replication: Leader + Followers
 ZooKeeper/KRaft: 元数据管理
 ```
@@ -99,7 +98,7 @@ try:
         if msg.error():
             handle_error(msg.error())
             continue
-        
+
         process_message(msg.value())
         consumer.commit(asynchronous=False)  # 处理成功后提交
 finally:
@@ -128,12 +127,12 @@ Topic 设计:
 
 ### Exchange 类型
 
-| 类型 | 路由规则 | 适用场景 |
-|------|----------|----------|
-| Direct | 精确匹配 routing key | 点对点 |
-| Fanout | 广播到所有绑定队列 | 发布订阅 |
-| Topic | 通配符匹配 routing key | 灵活路由 |
-| Headers | 匹配消息头 | 复杂路由 |
+| 类型      | 路由规则              | 适用场景 |
+|---------|-------------------|------|
+| Direct  | 精确匹配 routing key  | 点对点  |
+| Fanout  | 广播到所有绑定队列         | 发布订阅 |
+| Topic   | 通配符匹配 routing key | 灵活路由 |
+| Headers | 匹配消息头             | 复杂路由 |
 
 ```
 Producer → Exchange → Binding → Queue → Consumer
@@ -187,11 +186,11 @@ XACK orders order-group <message-id>
 XPENDING orders order-group
 ```
 
-| 特性 | 适用 | 不适用 |
-|------|------|--------|
-| 轻量级 | 中小规模、低延迟 | 海量数据持久化 |
-| 消费组 | 多消费者并行 | 复杂路由 |
-| 内存存储 | 实时处理 | 长期存储 |
+| 特性   | 适用       | 不适用     |
+|------|----------|---------|
+| 轻量级  | 中小规模、低延迟 | 海量数据持久化 |
+| 消费组  | 多消费者并行   | 复杂路由    |
+| 内存存储 | 实时处理     | 长期存储    |
 
 ---
 
@@ -235,7 +234,7 @@ Orchestration (编排):
     ├→ Payment Service: 扣款
     ├→ Inventory Service: 扣库存
     └→ Shipping Service: 发货
-    
+
   失败补偿:
     Shipping失败 → 补偿Inventory → 补偿Payment → 补偿Order
 ```
@@ -244,15 +243,15 @@ Orchestration (编排):
 
 ## 选型对比
 
-| 维度 | Kafka | RabbitMQ | Redis Streams |
-|------|-------|----------|---------------|
-| 吞吐量 | 极高 (百万/s) | 高 (万/s) | 高 (十万/s) |
-| 延迟 | ms 级 | μs-ms 级 | μs 级 |
-| 持久化 | 磁盘 | 磁盘/内存 | 内存+AOF |
-| 消息顺序 | 分区内有序 | 队列内有序 | 流内有序 |
-| 消息回溯 | ✅ 支持 | ❌ 不支持 | ✅ 支持 |
-| 协议 | 自有协议 | AMQP | Redis协议 |
-| 适用 | 大数据/日志/流处理 | 业务消息/RPC | 轻量级实时 |
+| 维度   | Kafka      | RabbitMQ | Redis Streams |
+|------|------------|----------|---------------|
+| 吞吐量  | 极高 (百万/s)  | 高 (万/s)  | 高 (十万/s)      |
+| 延迟   | ms 级       | μs-ms 级  | μs 级          |
+| 持久化  | 磁盘         | 磁盘/内存    | 内存+AOF        |
+| 消息顺序 | 分区内有序      | 队列内有序    | 流内有序          |
+| 消息回溯 | ✅ 支持       | ❌ 不支持    | ✅ 支持          |
+| 协议   | 自有协议       | AMQP     | Redis协议       |
+| 适用   | 大数据/日志/流处理 | 业务消息/RPC | 轻量级实时         |
 
 ### 选型决策树
 

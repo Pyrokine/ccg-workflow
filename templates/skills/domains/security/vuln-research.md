@@ -5,7 +5,6 @@ description: 漏洞研究。二进制分析、逆向工程、Exploit开发、Fuz
 
 # 🔥 赤焰秘典 · 漏洞研究 (Vulnerability Research)
 
-
 ## 研究流程
 
 ```
@@ -17,6 +16,7 @@ description: 漏洞研究。二进制分析、逆向工程、Exploit开发、Fuz
 ## 逆向工程
 
 ### 静态分析
+
 ```bash
 # 文件信息
 file binary
@@ -29,6 +29,7 @@ objdump -d binary
 ```
 
 ### 动态分析
+
 ```bash
 # GDB 调试
 gdb ./binary
@@ -47,6 +48,7 @@ ltrace ./binary
 ```
 
 ### 常用工具
+
 ```yaml
 反汇编/反编译:
   - IDA Pro: 商业，最强大
@@ -70,6 +72,7 @@ ltrace ./binary
 ## 漏洞类型
 
 ### 栈溢出
+
 ```c
 // 漏洞代码
 void vulnerable(char *input) {
@@ -99,6 +102,7 @@ p.interactive()
 ```
 
 ### 堆溢出
+
 ```c
 // 漏洞代码
 struct chunk {
@@ -114,6 +118,7 @@ void vulnerable(char *input) {
 ```
 
 ### Use-After-Free
+
 ```c
 // 漏洞代码
 void vulnerable() {
@@ -125,6 +130,7 @@ void vulnerable() {
 ```
 
 ### 格式化字符串
+
 ```c
 // 漏洞代码
 void vulnerable(char *input) {
@@ -140,12 +146,14 @@ void vulnerable(char *input) {
 ## 保护机制绕过
 
 ### 检查保护
+
 ```bash
 checksec ./binary
 # RELRO, Stack Canary, NX, PIE, FORTIFY
 ```
 
 ### 绕过技术
+
 ```yaml
 NX (不可执行):
   - ROP (Return Oriented Programming)
@@ -172,6 +180,7 @@ RELRO:
 ```
 
 ### ROP 链构造
+
 ```python
 from pwn import *
 
@@ -196,6 +205,7 @@ rop2.system(bin_sh)
 ## Fuzzing
 
 ### AFL++
+
 ```bash
 # 编译插桩
 afl-gcc -o target_afl target.c
@@ -212,6 +222,7 @@ afl-tmin -i output/crashes/id:000000 -o minimized -- ./target_afl @@
 ```
 
 ### LibFuzzer
+
 ```cpp
 // fuzz_target.cpp
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
@@ -230,6 +241,7 @@ clang++ -fsanitize=fuzzer,address fuzz_target.cpp -o fuzzer
 ```
 
 ### 智能 Fuzzing
+
 ```python
 # 基于覆盖率的 Fuzzing
 # 使用 AFL、LibFuzzer 等
@@ -244,6 +256,7 @@ clang++ -fsanitize=fuzzer,address fuzz_target.cpp -o fuzzer
 ## Exploit 开发
 
 ### Shellcode
+
 ```python
 # pwntools 生成
 from pwn import *
@@ -267,6 +280,7 @@ shellcode = asm('''
 ```
 
 ### 完整 Exploit 模板
+
 ```python
 #!/usr/bin/env python3
 from pwn import *
@@ -316,6 +330,7 @@ if __name__ == '__main__':
 ## CTF PWN 技巧
 
 ### 常见题型
+
 ```yaml
 栈溢出:
   - ret2text: 跳转到后门函数
@@ -336,6 +351,7 @@ if __name__ == '__main__':
 ```
 
 ### 快速解题流程
+
 ```bash
 # 1. 检查保护
 checksec ./pwn
@@ -354,16 +370,16 @@ checksec ./pwn
 
 ## 工具清单
 
-| 工具 | 用途 |
-|------|------|
-| IDA Pro | 反汇编/反编译 |
-| Ghidra | 开源逆向 |
-| pwntools | Exploit 开发 |
-| GDB + pwndbg | 调试 |
-| AFL++ | Fuzzing |
-| ROPgadget | ROP 链 |
-| one_gadget | libc gadget |
-| angr | 符号执行 |
+| 工具           | 用途          |
+|--------------|-------------|
+| IDA Pro      | 反汇编/反编译     |
+| Ghidra       | 开源逆向        |
+| pwntools     | Exploit 开发  |
+| GDB + pwndbg | 调试          |
+| AFL++        | Fuzzing     |
+| ROPgadget    | ROP 链       |
+| one_gadget   | libc gadget |
+| angr         | 符号执行        |
 
 ---
 

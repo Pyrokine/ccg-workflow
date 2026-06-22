@@ -5,10 +5,10 @@ description: 数据库设计与优化。SQL、NoSQL、索引、查询优化。�
 
 # 🔧 炼器秘典 · 数据库
 
-
 ## SQL 基础
 
 ### 查询
+
 ```sql
 -- 基础查询
 SELECT id, name, email
@@ -49,6 +49,7 @@ FROM employees;
 ```
 
 ### 索引
+
 ```sql
 -- 创建索引
 CREATE INDEX idx_users_email ON users(email);
@@ -63,6 +64,7 @@ EXPLAIN ANALYZE SELECT * FROM users WHERE email = 'test@example.com';
 ```
 
 ### 索引策略
+
 ```yaml
 适合索引:
   - WHERE 条件列
@@ -83,6 +85,7 @@ EXPLAIN ANALYZE SELECT * FROM users WHERE email = 'test@example.com';
 ## PostgreSQL
 
 ### 特性
+
 ```sql
 -- JSON 支持
 SELECT data->>'name' as name
@@ -107,6 +110,7 @@ DO UPDATE SET name = EXCLUDED.name;
 ## MySQL
 
 ### 特性
+
 ```sql
 -- 全文搜索
 SELECT * FROM articles
@@ -130,6 +134,7 @@ CREATE TABLE orders (
 ## NoSQL
 
 ### MongoDB
+
 ```javascript
 // 查询
 db.users.find({ status: "active" })
@@ -150,6 +155,7 @@ db.users.createIndex({ location: "2dsphere" })
 ```
 
 ### Redis
+
 ```bash
 # 字符串
 SET key value

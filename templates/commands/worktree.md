@@ -14,25 +14,25 @@ description: '管理 Git Worktree：在 ../.ccg/项目名/ 目录创建，支持
 
 ## 子命令
 
-| 命令 | 说明 |
-|------|------|
-| `add <path>` | 创建新 worktree |
-| `list` | 列出所有 worktree |
-| `remove <path>` | 删除指定 worktree |
-| `prune` | 清理无效引用 |
+| 命令                 | 说明               |
+|--------------------|------------------|
+| `add <path>`       | 创建新 worktree     |
+| `list`             | 列出所有 worktree    |
+| `remove <path>`    | 删除指定 worktree    |
+| `prune`            | 清理无效引用           |
 | `migrate <target>` | 迁移内容到目标 worktree |
 
 ## 选项
 
-| 选项 | 说明 |
-|------|------|
-| `-b <branch>` | 创建新分支 |
-| `-o, --open` | 创建后用 IDE 打开 |
-| `--from <source>` | 迁移源路径 |
-| `--stash` | 迁移 stash 内容 |
-| `--track` | 跟踪远程分支 |
-| `--detach` | 分离 HEAD |
-| `--lock` | 锁定 worktree |
+| 选项                | 说明          |
+|-------------------|-------------|
+| `-b <branch>`     | 创建新分支       |
+| `-o, --open`      | 创建后用 IDE 打开 |
+| `--from <source>` | 迁移源路径       |
+| `--stash`         | 迁移 stash 内容 |
+| `--track`         | 跟踪远程分支      |
+| `--detach`        | 分离 HEAD     |
+| `--lock`          | 锁定 worktree |
 
 ---
 

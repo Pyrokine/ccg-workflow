@@ -32,7 +32,7 @@
   --nb-letter-spacing: -0.02em;
 }
 
-[data-theme="dark"] {
+[data-theme='dark'] {
   --nb-border: 3px solid #fff;
   --nb-border-thick: 5px solid #fff;
   --nb-shadow-sm: 3px 3px 0 #fff;

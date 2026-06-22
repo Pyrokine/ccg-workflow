@@ -5,6 +5,7 @@
 **错误信息**: `ModuleNotFoundError: No module named 'curl_cffi'`
 **原因**: 安装了基础包 `pip install scrapling`，不含抓取依赖
 **解决方案**:
+
 ```bash
 pip install "scrapling[fetchers]"
 ```
@@ -14,6 +15,7 @@ pip install "scrapling[fetchers]"
 **错误信息**: 返回 403，页面内容包含 "Just a moment" 或 "Checking your browser"
 **原因**: Fetcher（curl_cffi）无法通过 Cloudflare 验证
 **解决方案**: 换用 StealthyFetcher + `solve_cloudflare=True`
+
 ```python
 from scrapling.fetchers import StealthyFetcher
 page = StealthyFetcher.fetch(url, headless=True, solve_cloudflare=True, timeout=60000)
@@ -30,6 +32,7 @@ page = StealthyFetcher.fetch(url, headless=True, solve_cloudflare=True, timeout=
 **错误信息**: `Expected array, got object` at `$.cookies`
 **原因**: 浏览器 Fetcher（StealthyFetcher/DynamicFetcher）cookie 必须是 `list[dict]`，不能是 `dict`
 **解决方案**:
+
 ```python
 # ❌ 错误
 cookies = {'name': 'value'}
@@ -43,6 +46,7 @@ cookies = [{'name': 'cookie_name', 'value': 'cookie_value', 'domain': '.site.com
 **错误信息**: `Cookie should have a url or a domain/path pair`
 **原因**: cookie dict 缺少 `domain` 和 `path` 字段
 **解决方案**: 每个 cookie dict 必须包含 `domain`（以 `.` 开头）和 `path`（通常 `/`）
+
 ```python
 cookies = [
     {'name': 'token', 'value': 'abc', 'domain': '.example.com', 'path': '/'},
@@ -54,6 +58,7 @@ cookies = [
 **错误信息**: 返回 404，页面提示内容为私有
 **原因**: Cloudflare 已通过，但目标页面需要登录态
 **解决方案**: 带上登录 cookie（从浏览器手动获取），参见 `cookie-vault.md`
+
 ```python
 page = StealthyFetcher.fetch(
     url,
@@ -74,6 +79,7 @@ page = StealthyFetcher.fetch(
 **错误信息**: `scrapling: command not found`
 **原因**: Python Scripts 目录不在 PATH 中
 **解决方案**:
+
 ```python
 # 方式 1: 使用 python -c
 python -c "from scrapling.cli import main; main(['install'])"
@@ -87,6 +93,7 @@ python -m scrapling install
 **错误信息**: 类似 "browser not found" 或 Playwright/Camoufox 相关错误
 **原因**: 未安装浏览器依赖
 **解决方案**:
+
 ```bash
 # 安装 scrapling 浏览器依赖
 scrapling install

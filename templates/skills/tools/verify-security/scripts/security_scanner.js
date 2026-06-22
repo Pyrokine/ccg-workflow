@@ -154,19 +154,43 @@ const SECURITY_RULES = [
 ];
 
 const CODE_EXTENSIONS = new Set([
-  '.py', '.js', '.ts', '.jsx', '.tsx', '.go',
-  '.java', '.php', '.rb', '.yaml', '.yml', '.json',
+  '.py',
+  '.js',
+  '.ts',
+  '.jsx',
+  '.tsx',
+  '.go',
+  '.java',
+  '.php',
+  '.rb',
+  '.yaml',
+  '.yml',
+  '.json',
 ]);
 const DEFAULT_EXCLUDES = [
-  '.git', 'node_modules', '__pycache__', '.venv', 'venv',
-  'dist', 'build', '.tox', 'tests', 'test', '__tests__', 'spec',
+  '.git',
+  'node_modules',
+  '__pycache__',
+  '.venv',
+  'venv',
+  'dist',
+  'build',
+  '.tox',
+  'tests',
+  'test',
+  '__tests__',
+  'spec',
 ];
 
 function scanFile(filePath, rules) {
   const findings = [];
   const ext = path.extname(filePath).toLowerCase();
   let content;
-  try { content = fs.readFileSync(filePath, 'utf-8'); } catch { return findings; }
+  try {
+    content = fs.readFileSync(filePath, 'utf-8');
+  } catch {
+    return findings;
+  }
   const lines = content.split('\n');
 
   for (const rule of rules) {
@@ -176,9 +200,8 @@ function scanFile(filePath, rules) {
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       const stripped = line.trim();
-      const isComment = stripped.startsWith('#') ||
-        stripped.startsWith('//') || stripped.startsWith('*') ||
-        stripped.startsWith('/*');
+      const isComment =
+        stripped.startsWith('#') || stripped.startsWith('//') || stripped.startsWith('*') || stripped.startsWith('/*');
       if (isComment) continue;
       const ruleDefRe = /^\s*(id|pattern|severity|message|recommendation|extensions|excludePattern|category)\s*:/;
       if (ruleDefRe.test(stripped)) continue;
@@ -186,11 +209,14 @@ function scanFile(filePath, rules) {
       if (rule.pattern.test(line)) {
         rule.pattern.lastIndex = 0;
         if (rule.excludePattern && rule.excludePattern.test(line)) {
-          rule.excludePattern.lastIndex = 0; continue;
+          rule.excludePattern.lastIndex = 0;
+          continue;
         }
         findings.push({
-          severity: rule.severity, category: rule.category,
-          message: rule.message, file_path: filePath,
+          severity: rule.severity,
+          category: rule.category,
+          message: rule.message,
+          file_path: filePath,
           line_number: i + 1,
           line_content: stripped.slice(0, 100),
           recommendation: rule.recommendation,
@@ -204,12 +230,17 @@ function scanFile(filePath, rules) {
 function walkDir(dir, excludeDirs) {
   const results = [];
   let entries;
-  try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return results; }
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return results;
+  }
   for (const entry of entries) {
     if (excludeDirs.includes(entry.name)) continue;
     const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) { results.push(...walkDir(full, excludeDirs)); }
-    else if (entry.isFile()) {
+    if (entry.isDirectory()) {
+      results.push(...walkDir(full, excludeDirs));
+    } else if (entry.isFile()) {
       if (CODE_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) {
         results.push(full);
       }
@@ -223,32 +254,25 @@ function scanDirectory(scanPath, excludeDirs) {
   const findings = [];
   const files = walkDir(resolved, excludeDirs);
   for (const f of files) findings.push(...scanFile(f, SECURITY_RULES));
-  findings.sort((a, b) =>
-    (SEVERITY_ORDER[a.severity] ?? 9) - (SEVERITY_ORDER[b.severity] ?? 9));
-  const passed = !findings.some(
-    f => f.severity === 'critical' || f.severity === 'high'
-  );
+  findings.sort((a, b) => (SEVERITY_ORDER[a.severity] ?? 9) - (SEVERITY_ORDER[b.severity] ?? 9));
+  const passed = !findings.some((f) => f.severity === 'critical' || f.severity === 'high');
   return { scan_path: resolved, files_scanned: files.length, passed, findings };
 }
 
-const { buildReport, countBySeverity, parseCliArgs } = require(
-  path.join(__dirname, '..', '..', 'lib', 'shared.js')
-);
+const { buildReport, countBySeverity, parseCliArgs } = require(path.join(__dirname, '..', '..', 'lib', 'shared.js'));
 
 function formatReport(result, verbose) {
   const counts = countBySeverity(result.findings);
   const fields = {
-    '扫描路径': result.scan_path,
-    '扫描文件': result.files_scanned,
-    '扫描结果': result.passed ? '\u2713 通过' : '\u2717 发现高危问题',
-    '统计': `严重: ${counts.critical || 0} | 高危: ${counts.high || 0}` +
+    扫描路径: result.scan_path,
+    扫描文件: result.files_scanned,
+    扫描结果: result.passed ? '\u2713 通过' : '\u2717 发现高危问题',
+    统计:
+      `严重: ${counts.critical || 0} | 高危: ${counts.high || 0}` +
       ` | 中危: ${counts.medium || 0} | 低危: ${counts.low || 0}`,
   };
-  return buildReport(
-    '代码安全扫描报告', fields, result.findings, verbose, 'category'
-  );
+  return buildReport('代码安全扫描报告', fields, result.findings, verbose, 'category');
 }
-
 
 function main() {
   const opts = parseCliArgs(process.argv, { exclude: [] });
@@ -263,13 +287,19 @@ function main() {
   const result = scanDirectory(scanPath, excludeDirs);
 
   if (jsonOut) {
-    console.log(JSON.stringify({
-      scan_path: result.scan_path,
-      files_scanned: result.files_scanned,
-      passed: result.passed,
-      counts: countBySeverity(result.findings),
-      findings: result.findings,
-    }, null, 2));
+    console.log(
+      JSON.stringify(
+        {
+          scan_path: result.scan_path,
+          files_scanned: result.files_scanned,
+          passed: result.passed,
+          counts: countBySeverity(result.findings),
+          findings: result.findings,
+        },
+        null,
+        2
+      )
+    );
   } else {
     console.log(formatReport(result, verbose));
   }

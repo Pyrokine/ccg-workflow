@@ -73,9 +73,10 @@ function findClaudeSessionJsonl() {
     process.exit(1);
   }
 
-  const files = fs.readdirSync(projectDir)
-    .filter(f => f.endsWith('.jsonl'))
-    .map(f => ({
+  const files = fs
+    .readdirSync(projectDir)
+    .filter((f) => f.endsWith('.jsonl'))
+    .map((f) => ({
       full: path.join(projectDir, f),
       mtime: fs.statSync(path.join(projectDir, f)).mtimeMs,
     }))
@@ -103,7 +104,11 @@ function findCodexSessionJsonl() {
 
   function scan(dir) {
     let entries;
-    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
     for (const entry of entries) {
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {
@@ -129,7 +134,7 @@ function findCodexSessionJsonl() {
 
 function readJsonlLines(filePath) {
   const content = fs.readFileSync(filePath, 'utf8');
-  return content.split('\n').filter(line => line.trim() !== '');
+  return content.split('\n').filter((line) => line.trim() !== '');
 }
 
 function writeJsonlLines(filePath, lines) {
@@ -143,9 +148,7 @@ function isClaudeAssistant(obj) {
 }
 
 function isCodexAssistant(obj) {
-  return obj.type === 'response_item'
-    && obj.payload?.role === 'assistant'
-    && Array.isArray(obj.payload?.content);
+  return obj.type === 'response_item' && obj.payload?.role === 'assistant' && Array.isArray(obj.payload?.content);
 }
 
 // ─── 整体替换为同意模板 ──────────────────────────────────
@@ -166,9 +169,7 @@ function main() {
   const { dryRun } = parseArgs(process.argv);
   const runtime = detectRuntime();
 
-  const jsonlPath = runtime === 'codex'
-    ? findCodexSessionJsonl()
-    : findClaudeSessionJsonl();
+  const jsonlPath = runtime === 'codex' ? findCodexSessionJsonl() : findClaudeSessionJsonl();
 
   const isAssistant = runtime === 'codex' ? isCodexAssistant : isClaudeAssistant;
   const overwriteMessage = runtime === 'codex' ? overwriteCodexMessage : overwriteClaudeMessage;
@@ -191,7 +192,7 @@ function main() {
         targetIdx = i;
         // 提取原文预览
         const content = runtime === 'codex' ? obj.payload.content : obj.message.content;
-        const textBlock = content.find(b => b.type === 'text' || b.type === 'output_text');
+        const textBlock = content.find((b) => b.type === 'text' || b.type === 'output_text');
         originalPreview = textBlock?.text?.slice(0, 120) || '[无文本]';
         break;
       }

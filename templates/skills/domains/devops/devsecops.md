@@ -5,7 +5,6 @@ description: DevSecOps。CI/CD安全、供应链安全、合规自动化。当�
 
 # 🔧 炼器秘典 · DevSecOps
 
-
 ## 安全左移
 
 ```
@@ -22,6 +21,7 @@ description: DevSecOps。CI/CD安全、供应链安全、合规自动化。当�
 ## CI/CD 安全
 
 ### GitHub Actions
+
 ```yaml
 name: Security Pipeline
 
@@ -58,6 +58,7 @@ jobs:
 ```
 
 ### GitLab CI
+
 ```yaml
 stages:
   - test
@@ -87,6 +88,7 @@ container_scan:
 ## 安全扫描工具
 
 ### SAST (静态分析)
+
 ```yaml
 工具:
   - Semgrep: 多语言，规则丰富
@@ -101,6 +103,7 @@ container_scan:
 ```
 
 ### SCA (依赖扫描)
+
 ```yaml
 工具:
   - Trivy: 全能扫描
@@ -115,6 +118,7 @@ container_scan:
 ```
 
 ### DAST (动态分析)
+
 ```yaml
 工具:
   - OWASP ZAP
@@ -130,6 +134,7 @@ container_scan:
 ## 供应链安全
 
 ### 依赖管理
+
 ```yaml
 原则:
   - 锁定依赖版本
@@ -144,6 +149,7 @@ container_scan:
 ```
 
 ### 镜像安全
+
 ```yaml
 原则:
   - 使用官方基础镜像
@@ -158,6 +164,7 @@ container_scan:
 ```
 
 ### SBOM (软件物料清单)
+
 ```bash
 # 生成 SBOM
 syft packages dir:. -o spdx-json > sbom.json

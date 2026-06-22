@@ -21,6 +21,7 @@ $ARGUMENTS
 ## 多模型调用规范
 
 **工作目录**：
+
 - `{{WORKDIR}}`：**必须通过 Bash 执行 `pwd`（Unix）或 `cd`（Windows CMD）获取当前工作目录的绝对路径**，禁止从 `$HOME` 或环境变量推断
 - 如果用户通过 `/add-dir` 添加了多个工作区，先用 Glob/Grep 确定任务相关的工作区
 - 如果无法确定，用 `AskUserQuestion` 询问用户选择目标工作区
@@ -30,7 +31,7 @@ $ARGUMENTS
 ```
 # 复用会话调用（推荐）- 原型生成（Implementation Prototype）
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend <{{BACKEND_PRIMARY}}|{{FRONTEND_PRIMARY}}> {{GEMINI_MODEL_FLAG}}resume <SESSION_ID> - \"{{WORKDIR}}\" <<'EOF'
+  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend <{{BACKEND_PRIMARY}}|{{FRONTEND_PRIMARY}}> resume <SESSION_ID> - \"{{WORKDIR}}\" <<'EOF'
 ROLE_FILE: <角色提示词路径>
 <TASK>
 需求：<任务描述>
@@ -45,7 +46,7 @@ EOF",
 
 # 新会话调用 - 原型生成（Implementation Prototype）
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend <{{BACKEND_PRIMARY}}|{{FRONTEND_PRIMARY}}> {{GEMINI_MODEL_FLAG}}- \"{{WORKDIR}}\" <<'EOF'
+  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend <{{BACKEND_PRIMARY}}|{{FRONTEND_PRIMARY}}> - \"{{WORKDIR}}\" <<'EOF'
 ROLE_FILE: <角色提示词路径>
 <TASK>
 需求：<任务描述>
@@ -63,7 +64,7 @@ EOF",
 
 ```
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend <{{BACKEND_PRIMARY}}|{{FRONTEND_PRIMARY}}> {{GEMINI_MODEL_FLAG}}resume <SESSION_ID> - \"{{WORKDIR}}\" <<'EOF'
+  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend <{{BACKEND_PRIMARY}}|{{FRONTEND_PRIMARY}}> resume <SESSION_ID> - \"{{WORKDIR}}\" <<'EOF'
 ROLE_FILE: <角色提示词路径>
 <TASK>
 Scope: Audit the final code changes.
@@ -86,10 +87,10 @@ EOF",
 
 **角色提示词**：
 
-| 阶段 | 后端 | 前端 |
-|------|-------|--------|
+| 阶段 | 后端                                                        | 前端                                                        |
+|----|-----------------------------------------------------------|-----------------------------------------------------------|
 | 实施 | `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/architect.md` | `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/frontend.md` |
-| 审查 | `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/reviewer.md` | `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/reviewer.md` |
+| 审查 | `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/reviewer.md`  | `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/reviewer.md` |
 
 **会话复用**：如果 `/ccg:plan` 提供了 SESSION_ID，使用 `resume <SESSION_ID>` 复用上下文。
 
@@ -100,11 +101,14 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 ```
 
 **重要**：
+
 - 必须指定 `timeout: 600000`，否则默认只有 30 秒会导致提前超时
 - 若 10 分钟后仍未完成，继续用 `TaskOutput` 轮询，**绝对不要 Kill 进程**
 - 若因等待时间过长跳过了等待，**必须调用 `AskUserQuestion` 询问用户选择继续等待还是 Kill Task**
-- ⛔ **前端模型失败必须重试**：若 {{FRONTEND_PRIMARY}} 调用失败（非零退出码或输出包含错误信息），最多重试 2 次（间隔 5 秒）。仅当 3 次全部失败时才跳过前端模型结果并使用单模型结果继续。
-- ⛔ **后端模型结果必须等待**：{{BACKEND_PRIMARY}} 执行时间较长（5-15 分钟）属于正常。TaskOutput 超时后必须继续用 TaskOutput 轮询，**绝对禁止在后端模型未返回结果时直接跳过或继续下一阶段**。已启动的任务若被跳过 = 浪费 token + 丢失结果。
+- ⛔ **前端模型失败必须重试**：若 {{FRONTEND_PRIMARY}} 调用失败（非零退出码或输出包含错误信息），最多重试 2 次（间隔 5 秒）。仅当
+  3 次全部失败时才跳过前端模型结果并使用单模型结果继续。
+- ⛔ **后端模型结果必须等待**：{{BACKEND_PRIMARY}} 执行时间较长（5-15 分钟）属于正常。TaskOutput 超时后必须继续用 TaskOutput
+  轮询，**绝对禁止在后端模型未返回结果时直接跳过或继续下一阶段**。已启动的任务若被跳过 = 浪费 token + 丢失结果。
 
 ---
 
@@ -117,21 +121,21 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 `[模式：准备]`
 
 1. **识别输入类型**：
-   - 计划文件路径（如 `.claude/plan/xxx.md`）
-   - 直接的任务描述
+    - 计划文件路径（如 `.claude/plan/xxx.md`）
+    - 直接的任务描述
 
 2. **读取计划内容**：
-   - 若提供了计划文件路径，读取并解析
-   - 提取：任务类型、实施步骤、关键文件、SESSION_ID
+    - 若提供了计划文件路径，读取并解析
+    - 提取：任务类型、实施步骤、关键文件、SESSION_ID
 
 3. **执行前确认**：
-   - 若输入为"直接任务描述"或计划中缺失 `SESSION_ID` / 关键文件：先向用户确认补全信息
-   - 若无法确认用户是否已对计划回复 "Y"：必须二次询问确认后再进入下一阶段
+    - 若输入为"直接任务描述"或计划中缺失 `SESSION_ID` / 关键文件：先向用户确认补全信息
+    - 若无法确认用户是否已对计划回复 "Y"：必须二次询问确认后再进入下一阶段
 
 4. **任务类型判断**：
 
    | 任务类型 | 判断依据 | 路由 |
-   |----------|----------|------|
+            |----------|----------|------|
    | **前端** | 页面、组件、UI、样式、布局 | {{FRONTEND_PRIMARY}} |
    | **后端** | API、接口、数据库、逻辑、算法 | {{BACKEND_PRIMARY}} |
    | **全栈** | 同时包含前后端 | {{BACKEND_PRIMARY}} ∥ {{FRONTEND_PRIMARY}} 并行 |
@@ -154,12 +158,14 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 ```
 
 **检索策略**：
+
 - 从计划的"关键文件"表格提取目标路径
 - 构建语义查询覆盖：入口文件、依赖模块、相关类型定义
 - 若检索结果不足，可追加 1-2 次递归检索
 - **禁止**使用 Bash + find/ls 手动探索项目结构
 
 **检索完成后**：
+
 - 整理检索到的代码片段
 - 确认已获取实施所需的完整上下文
 - 进入 Phase 3
@@ -194,8 +200,8 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 #### Route C: 全栈 → 并行调用
 
 1. **并行调用**（`run_in_background: true`）：
-   - {{FRONTEND_PRIMARY}}：处理前端部分
-   - {{BACKEND_PRIMARY}}：处理后端部分
+    - {{FRONTEND_PRIMARY}}：处理前端部分
+    - {{BACKEND_PRIMARY}}：处理后端部分
 2. 用 `TaskOutput` 等待两个模型的完整结果
 3. 各自使用计划中对应的 `SESSION_ID` 进行 `resume`（若缺失则创建新会话）
 
@@ -212,27 +218,27 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 1. **读取 Diff**：解析外部模型返回的 Unified Diff Patch
 
 2. **思维沙箱**：
-   - 模拟应用 Diff 到目标文件
-   - 检查逻辑一致性
-   - 识别潜在冲突或副作用
+    - 模拟应用 Diff 到目标文件
+    - 检查逻辑一致性
+    - 识别潜在冲突或副作用
 
 3. **重构清理**：
-   - 将"脏原型"重构为**高可读、高可维护性、企业发布级代码**
-   - 去除冗余代码
-   - 确保符合项目现有代码规范
-   - **非必要不生成注释与文档**，代码自解释
+    - 将"脏原型"重构为**高可读、高可维护性、企业发布级代码**
+    - 去除冗余代码
+    - 确保符合项目现有代码规范
+    - **非必要不生成注释与文档**，代码自解释
 
 4. **最小作用域**：
-   - 变更仅限需求范围
-   - **强制审查**变更是否引入副作用
-   - 做针对性修正
+    - 变更仅限需求范围
+    - **强制审查**变更是否引入副作用
+    - 做针对性修正
 
 5. **应用变更**：
-   - 使用 Edit/Write 工具执行实际修改
-   - **仅修改必要的代码**，严禁影响用户现有的其他功能
+    - 使用 Edit/Write 工具执行实际修改
+    - **仅修改必要的代码**，严禁影响用户现有的其他功能
 6. **自检验证**（强烈建议）：
-   - 运行项目既有的 lint / typecheck / tests（优先最小相关范围）
-   - 若失败：优先修复回归，再继续进入 Phase 5
+    - 运行项目既有的 lint / typecheck / tests（优先最小相关范围）
+    - 若失败：优先修复回归，再继续进入 Phase 5
 
 ---
 
@@ -245,14 +251,14 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 **变更生效后，强制立即并行调用** {{BACKEND_PRIMARY}} 和 {{FRONTEND_PRIMARY}} 进行 Code Review：
 
 1. **{{BACKEND_PRIMARY}} 审查**（`run_in_background: true`）：
-   - ROLE_FILE: `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/reviewer.md`
-   - 输入：变更的 Diff + 目标文件
-   - 关注：安全性、性能、错误处理、逻辑正确性
+    - ROLE_FILE: `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/reviewer.md`
+    - 输入：变更的 Diff + 目标文件
+    - 关注：安全性、性能、错误处理、逻辑正确性
 
 2. **{{FRONTEND_PRIMARY}} 审查**（`run_in_background: true`）：
-   - ROLE_FILE: `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/reviewer.md`
-   - 输入：变更的 Diff + 目标文件
-   - 关注：可访问性、设计一致性、用户体验
+    - ROLE_FILE: `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/reviewer.md`
+    - 输入：变更的 Diff + 目标文件
+    - 关注：可访问性、设计一致性、用户体验
 
 用 `TaskOutput` 等待两个模型的完整审查结果。优先复用 Phase 3 的会话（`resume <SESSION_ID>`）以保持上下文一致。
 

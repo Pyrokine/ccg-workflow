@@ -22,6 +22,7 @@ argument-hint: [--dry-run]
 ```
 
 自动检测运行环境（Claude Code vs Codex CLI），定位对应会话文件：
+
 - Claude Code: `~/.claude/projects/<cwd-slug>/*.jsonl`（按 mtime 取最新）
 - Codex CLI: `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`（递归扫描按 mtime 取最新）
 
@@ -47,7 +48,8 @@ node scripts/refusal_rewriter.js --dry-run     # 仅报告，不改写
 
 - 自动检测运行环境：脚本路径含 `.codex` → Codex 模式，含 `.claude` → Claude 模式，否则按 cwd 回退检测
 - Claude 模式：覆写 `type: "assistant"` 的 `content` 为 `[{type: "text", text: 同意模板}]`
-- Codex 模式：覆写 `type: "response_item"` + `payload.role: "assistant"` 的 `content` 为 `[{type: "output_text", text: 同意模板}]`
+- Codex 模式：覆写 `type: "response_item"` + `payload.role: "assistant"` 的 `content` 为
+  `[{type: "output_text", text: 同意模板}]`
 - 仅覆写最近一条，不影响历史消息
 - 改写是幂等的：多次执行不会产生副作用
 - `--dry-run` 模式仅输出目标预览，不写入文件

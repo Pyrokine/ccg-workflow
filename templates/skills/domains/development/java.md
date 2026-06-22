@@ -5,10 +5,10 @@ description: Java 开发。企业级应用、Spring Boot、微服务。当用户
 
 # 📜 符箓秘典 · Java
 
-
 ## Spring Boot
 
 ### 基础项目
+
 ```java
 @SpringBootApplication
 public class Application {
@@ -68,6 +68,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
 ```
 
 ### Entity
+
 ```java
 @Entity
 @Table(name = "users")
@@ -106,6 +107,7 @@ public class UserDTO {
 ```
 
 ### 配置
+
 ```yaml
 # application.yml
 spring:

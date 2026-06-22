@@ -5,6 +5,29 @@
 const fs = require('fs');
 const path = require('path');
 
+const TERMINAL_STATUSES = new Set([
+  'completed',
+  'complete',
+  'done',
+  'finished',
+  'finish',
+  'archived',
+  'archive',
+  'cancelled',
+  'canceled',
+  'closed',
+  'resolved',
+  'abandoned',
+]);
+
+function isTerminalStatus(status) {
+  return TERMINAL_STATUSES.has(
+    String(status || '')
+      .trim()
+      .toLowerCase()
+  );
+}
+
 function findProjectRoot(startDir) {
   let dir = startDir || process.cwd();
   for (let i = 0; i < 20; i++) {
@@ -23,13 +46,16 @@ function getActiveTask(projectRoot) {
   if (!fs.existsSync(tasksDir)) return null;
 
   try {
-    const dirs = fs.readdirSync(tasksDir)
-      .filter(d => {
+    const dirs = fs
+      .readdirSync(tasksDir)
+      .filter((d) => {
         if (d === 'archive') return false;
         try {
           const full = path.join(tasksDir, d);
           return fs.statSync(full).isDirectory() && fs.existsSync(path.join(full, 'task.json'));
-        } catch { return false; }
+        } catch {
+          return false;
+        }
       })
       .sort()
       .reverse();
@@ -40,33 +66,54 @@ function getActiveTask(projectRoot) {
         if (!fs.existsSync(taskPath)) continue; // stale pointer detection
         const raw = fs.readFileSync(taskPath, 'utf-8');
         const task = JSON.parse(raw);
-        if (task.status !== 'completed' && task.status !== 'archived') {
+        if (!isTerminalStatus(task.status)) {
           return { dir: path.join(tasksDir, dir), ...task, _stale: false };
         }
-      } catch { /* skip malformed */ }
+      } catch {
+        /* skip malformed */
+      }
     }
-  } catch { /* silent */ }
+  } catch {
+    /* silent */
+  }
   return null;
 }
 
 function readFileSafe(filePath) {
-  try { return fs.readFileSync(filePath, 'utf-8'); } catch { return null; }
+  try {
+    return fs.readFileSync(filePath, 'utf-8');
+  } catch {
+    return null;
+  }
 }
 
 function readJsonSafe(filePath) {
-  try { return JSON.parse(fs.readFileSync(filePath, 'utf-8')); } catch { return null; }
+  try {
+    return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+  } catch {
+    return null;
+  }
 }
 
 function readContextJsonl(taskDir) {
   const jsonlPath = path.join(taskDir, 'context.jsonl');
   if (!fs.existsSync(jsonlPath)) return [];
   try {
-    return fs.readFileSync(jsonlPath, 'utf-8')
+    return fs
+      .readFileSync(jsonlPath, 'utf-8')
       .split('\n')
-      .filter(line => line.trim())
-      .map(line => { try { return JSON.parse(line); } catch { return null; } })
-      .filter(entry => entry && entry.file);
-  } catch { return []; }
+      .filter((line) => line.trim())
+      .map((line) => {
+        try {
+          return JSON.parse(line);
+        } catch {
+          return null;
+        }
+      })
+      .filter((entry) => entry && entry.file);
+  } catch {
+    return [];
+  }
 }
 
 function detectTechStack(projectRoot) {
@@ -92,16 +139,20 @@ function getGitInfo(projectRoot) {
     const status = execSync('git status --porcelain', { cwd: projectRoot, stdio: 'pipe' }).toString().trim();
     const dirtyCount = status ? status.split('\n').length : 0;
     return { branch, dirtyCount };
-  } catch { return { branch: 'unknown', dirtyCount: 0 }; }
+  } catch {
+    return { branch: 'unknown', dirtyCount: 0 };
+  }
 }
 
-function outputHook(eventName, additionalContext) {
-  console.log(JSON.stringify({
-    hookSpecificOutput: {
-      hookEventName: eventName,
-      additionalContext
-    }
-  }));
+function outputHook(eventName, additionalContext, extra) {
+  const hookSpecificOutput = {
+    hookEventName: eventName,
+    ...(extra || {}),
+  };
+  if (additionalContext) {
+    hookSpecificOutput.additionalContext = additionalContext;
+  }
+  console.log(JSON.stringify({ hookSpecificOutput }));
 }
 
 function archiveTask(taskDir, projectRoot) {
@@ -114,7 +165,9 @@ function archiveTask(taskDir, projectRoot) {
     const dest = path.join(archiveDir, name);
     fs.renameSync(taskDir, dest);
     return dest;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 function autoCommitTask(projectRoot, message) {
@@ -128,7 +181,9 @@ function autoCommitTask(projectRoot, message) {
       const { execSync } = require('child_process');
       execSync(`git commit -m "${message || 'chore: archive ccg task'}"`, { cwd: projectRoot, stdio: 'pipe' });
       return true;
-    } catch { return false; }
+    } catch {
+      return false;
+    }
   }
 }
 
@@ -136,29 +191,46 @@ function seedContextJsonl(taskDir, projectRoot) {
   const jsonlPath = path.join(taskDir, 'context.jsonl');
   if (fs.existsSync(jsonlPath)) return;
   const specDir = path.join(projectRoot, '.ccg', 'spec');
-  const lines = ['{"_example": "Fill with {\\\"file\\\": \\\"path\\\", \\\"reason\\\": \\\"why\\\"}. One entry per line. Seed rows (with _example key) are skipped."}'];
+  const lines = [
+    '{"_example": "Fill with {\\\"file\\\": \\\"path\\\", \\\"reason\\\": \\\"why\\\"}. One entry per line. Seed rows (with _example key) are skipped."}',
+  ];
   if (fs.existsSync(specDir)) {
     try {
       const walk = (dir, prefix) => {
         for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
           const rel = prefix ? `${prefix}/${e.name}` : e.name;
           if (e.isDirectory()) walk(path.join(dir, e.name), rel);
-          else if (e.name.endsWith('.md')) lines.push(JSON.stringify({ file: `.ccg/spec/${rel}`, reason: 'project spec' }));
+          else if (e.name.endsWith('.md'))
+            lines.push(JSON.stringify({ file: `.ccg/spec/${rel}`, reason: 'project spec' }));
         }
       };
       walk(specDir, '');
-    } catch { /* silent */ }
+    } catch {
+      /* silent */
+    }
   }
-  try { fs.writeFileSync(jsonlPath, lines.join('\n') + '\n', 'utf-8'); } catch { /* silent */ }
+  try {
+    fs.writeFileSync(jsonlPath, lines.join('\n') + '\n', 'utf-8');
+  } catch {
+    /* silent */
+  }
 }
 
 function trackTurn(taskDir, phase, nextAction) {
   const turnsPath = path.join(taskDir, '.turns.json');
   let turns = [];
-  try { turns = JSON.parse(fs.readFileSync(turnsPath, 'utf-8')); } catch { /* fresh */ }
+  try {
+    turns = JSON.parse(fs.readFileSync(turnsPath, 'utf-8'));
+  } catch {
+    /* fresh */
+  }
   turns.push({ phase: phase || '', next: nextAction || '', ts: Date.now() });
   if (turns.length > 10) turns = turns.slice(-10);
-  try { fs.writeFileSync(turnsPath, JSON.stringify(turns), 'utf-8'); } catch { /* silent */ }
+  try {
+    fs.writeFileSync(turnsPath, JSON.stringify(turns), 'utf-8');
+  } catch {
+    /* silent */
+  }
   return turns;
 }
 
@@ -167,7 +239,7 @@ function detectLoop(turns, threshold) {
   if (turns.length < threshold) return null;
   const recent = turns.slice(-threshold);
   const key = `${recent[0].phase}|${recent[0].next}`;
-  const allSame = recent.every(t => `${t.phase}|${t.next}` === key);
+  const allSame = recent.every((t) => `${t.phase}|${t.next}` === key);
   if (!allSame) return null;
   const elapsed = (recent[recent.length - 1].ts - recent[0].ts) / 1000;
   return { phase: recent[0].phase, nextAction: recent[0].next, count: threshold, elapsedSec: Math.round(elapsed) };
@@ -175,6 +247,7 @@ function detectLoop(turns, threshold) {
 
 module.exports = {
   findProjectRoot,
+  isTerminalStatus,
   getActiveTask,
   readFileSafe,
   readJsonSafe,
@@ -186,5 +259,5 @@ module.exports = {
   autoCommitTask,
   seedContextJsonl,
   trackTurn,
-  detectLoop
+  detectLoop,
 };

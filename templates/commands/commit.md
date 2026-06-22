@@ -14,15 +14,15 @@ description: '智能 Git 提交：分析改动生成 Conventional Commit 信息�
 
 ## 选项
 
-| 选项 | 说明 |
-|------|------|
-| `--no-verify` | 跳过 Git 钩子 |
-| `--all` | 暂存所有改动 |
-| `--amend` | 修补上次提交 |
-| `--signoff` | 附加签名 |
-| `--emoji` | 包含 emoji 前缀 |
-| `--scope <scope>` | 指定作用域 |
-| `--type <type>` | 指定提交类型 |
+| 选项                | 说明          |
+|-------------------|-------------|
+| `--no-verify`     | 跳过 Git 钩子   |
+| `--all`           | 暂存所有改动      |
+| `--amend`         | 修补上次提交      |
+| `--signoff`       | 附加签名        |
+| `--emoji`         | 包含 emoji 前缀 |
+| `--scope <scope>` | 指定作用域       |
+| `--type <type>`   | 指定提交类型      |
 
 ---
 
@@ -42,14 +42,15 @@ description: '智能 Git 提交：分析改动生成 Conventional Commit 信息�
 
 1. 获取已暂存与未暂存改动
 2. 若暂存区为空：
-   - `--all` → 执行 `git add -A`
-   - 否则提示选择
+    - `--all` → 执行 `git add -A`
+    - 否则提示选择
 
 ### ✂️ 阶段 3：拆分建议
 
 `[模式：建议]`
 
 按以下维度聚类：
+
 - 关注点（源代码 vs 文档/测试）
 - 文件模式（不同目录/包）
 - 改动类型（新增 vs 删除）
@@ -73,6 +74,7 @@ description: '智能 Git 提交：分析改动生成 Conventional Commit 信息�
 `[模式：上下文归档]`
 
 **前置判断**：
+
 - 若 `.context/` 目录不存在 → 在提交成功后输出提示：`💡 建议执行 /ccg:context init 启用决策追踪`，不阻断
 - 若 `.context/` 存在 → 执行以下步骤
 
@@ -81,12 +83,13 @@ description: '智能 Git 提交：分析改动生成 Conventional Commit 信息�
 1. 获取当前分支名：`git branch --show-current`
 2. 获取暂存区变更：`git diff --cached --stat` + `git diff --cached`（完整 diff）
 3. **分析 diff 生成 ContextEntry**：
-   - `summary`：从阶段 4 生成的 commit message 中取首行
-   - `decisions`：分析 diff 中的关键变更（新增依赖、架构调整、接口变更、配置修改），推断决策理由
-   - `bugs`：若 commit type 为 `fix`，从 diff 中提取 bug 症状、根因、修复方式
-   - `changes.files`：从 `git diff --cached --name-only` 提取
-   - `tests`：若变更包含测试文件，记录测试相关信息
-4. **合并 session.log**（可选）：若 `.context/current/branches/<branch>/session.log` 存在且非空，将其中的手动记录合并到 decisions/bugs 中，然后清空 session.log
+    - `summary`：从阶段 4 生成的 commit message 中取首行
+    - `decisions`：分析 diff 中的关键变更（新增依赖、架构调整、接口变更、配置修改），推断决策理由
+    - `bugs`：若 commit type 为 `fix`，从 diff 中提取 bug 症状、根因、修复方式
+    - `changes.files`：从 `git diff --cached --name-only` 提取
+    - `tests`：若变更包含测试文件，记录测试相关信息
+4. **合并 session.log**（可选）：若 `.context/current/branches/<branch>/session.log` 存在且非空，将其中的手动记录合并到
+   decisions/bugs 中，然后清空 session.log
 5. **脱敏**：扫描 token/key/password/secret 模式 → 替换为 `[REDACTED]`
 6. **追加**：将 ContextEntry 作为一行追加到 `.context/history/commits.jsonl`
 7. **重生成**：更新 `.context/history/commits.md` 人类视图
@@ -109,18 +112,18 @@ git commit [-S] [--no-verify] [-s] -F .git/COMMIT_EDITMSG
 
 ## Type 与 Emoji 映射
 
-| Emoji | Type | 说明 |
-|-------|------|------|
-| ✨ | `feat` | 新增功能 |
-| 🐛 | `fix` | 缺陷修复 |
-| 📝 | `docs` | 文档更新 |
-| 🎨 | `style` | 代码格式 |
-| ♻️ | `refactor` | 重构 |
-| ⚡️ | `perf` | 性能优化 |
-| ✅ | `test` | 测试相关 |
-| 🔧 | `chore` | 构建/工具 |
-| 👷 | `ci` | CI/CD |
-| ⏪️ | `revert` | 回滚 |
+| Emoji | Type       | 说明    |
+|-------|------------|-------|
+| ✨     | `feat`     | 新增功能  |
+| 🐛    | `fix`      | 缺陷修复  |
+| 📝    | `docs`     | 文档更新  |
+| 🎨    | `style`    | 代码格式  |
+| ♻️    | `refactor` | 重构    |
+| ⚡️    | `perf`     | 性能优化  |
+| ✅     | `test`     | 测试相关  |
+| 🔧    | `chore`    | 构建/工具 |
+| 👷    | `ci`       | CI/CD |
+| ⏪️    | `revert`   | 回滚    |
 
 ---
 

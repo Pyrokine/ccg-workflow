@@ -21,6 +21,7 @@ description: '前端专项工作流（研究→构思→计划→执行→优化
 你是**前端编排者**，协调多模型完成 UI/UX 任务（研究 → 构思 → 计划 → 执行 → 优化 → 评审），用中文协助用户。
 
 **协作模型**：
+
 - **{{FRONTEND_PRIMARY}}** – 前端 UI/UX（**前端权威，可信赖**）
 - **{{BACKEND_PRIMARY}}** – 后端视角（**前端意见仅供参考**）
 - **Claude (自己)** – 编排、计划、执行、交付
@@ -30,6 +31,7 @@ description: '前端专项工作流（研究→构思→计划→执行→优化
 ## 多模型调用规范
 
 **工作目录**：
+
 - `{{WORKDIR}}`：**必须通过 Bash 执行 `pwd`（Unix）或 `cd`（Windows CMD）获取当前工作目录的绝对路径**，禁止从 `$HOME` 或环境变量推断
 - 如果用户通过 `/add-dir` 添加了多个工作区，先用 Glob/Grep 确定任务相关的工作区
 - 如果无法确定，用 `AskUserQuestion` 询问用户选择目标工作区
@@ -39,7 +41,7 @@ description: '前端专项工作流（研究→构思→计划→执行→优化
 ```
 # 新会话调用
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend {{FRONTEND_PRIMARY}} {{GEMINI_MODEL_FLAG}}- \"{{WORKDIR}}\" <<'EOF'
+  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend {{FRONTEND_PRIMARY}} - \"{{WORKDIR}}\" <<'EOF'
 ROLE_FILE: <角色提示词路径>
 <TASK>
 需求：<增强后的需求（如未增强则用 $ARGUMENTS）>
@@ -54,7 +56,7 @@ EOF",
 
 # 复用会话调用
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend {{FRONTEND_PRIMARY}} {{GEMINI_MODEL_FLAG}}resume <GEMINI_SESSION> - \"{{WORKDIR}}\" <<'EOF'
+  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend {{FRONTEND_PRIMARY}} resume <FRONTEND_SESSION> - \"{{WORKDIR}}\" <<'EOF'
 ROLE_FILE: <角色提示词路径>
 <TASK>
 需求：<增强后的需求（如未增强则用 $ARGUMENTS）>
@@ -70,15 +72,18 @@ EOF",
 
 **角色提示词**：
 
-| 阶段 | 前端 |
-|------|--------|
-| 分析 | `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/analyzer.md` |
+| 阶段 | 前端                                                         |
+|----|------------------------------------------------------------|
+| 分析 | `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/analyzer.md`  |
 | 规划 | `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/architect.md` |
-| 审查 | `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/reviewer.md` |
+| 审查 | `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/reviewer.md`  |
 
-**会话复用**：每次调用返回 `SESSION_ID: xxx`，后续阶段用 `resume xxx` 复用上下文。阶段 2 保存 `GEMINI_SESSION`，阶段 3 和 5 使用 `resume` 复用。
+**会话复用**：每次调用返回 `SESSION_ID: xxx`，后续阶段用 `resume xxx` 复用上下文。阶段 2 保存 `FRONTEND_SESSION`，阶段 3 和
+5
+使用 `resume` 复用。
 
-⛔ **前端模型失败必须重试**：若前端模型调用失败（非零退出码或输出包含错误信息），最多重试 2 次（间隔 5 秒）。仅当 3 次全部失败时才报告错误并终止。
+⛔ **前端模型失败必须重试**：若前端模型调用失败（非零退出码或输出包含错误信息），最多重试 2 次（间隔 5 秒）。仅当 3
+次全部失败时才报告错误并终止。
 
 ---
 
@@ -94,7 +99,9 @@ EOF",
 
 ### 🔍 阶段 0：Prompt 增强（可选）
 
-`[模式：准备]` - **Prompt 增强**（按 `/ccg:enhance` 的逻辑执行）：分析 $ARGUMENTS 的意图、缺失信息、隐含假设，补全为结构化需求（明确目标、技术约束、范围边界、验收标准），**用增强结果替代原始 $ARGUMENTS，后续调用 {{FRONTEND_PRIMARY}} 时传入增强后的需求**
+`[模式：准备]` - **Prompt 增强**（按 `/ccg:enhance`
+的逻辑执行）：分析 $ARGUMENTS 的意图、缺失信息、隐含假设，补全为结构化需求（明确目标、技术约束、范围边界、验收标准），**用增强结果替代原始 $
+ARGUMENTS，后续调用 {{FRONTEND_PRIMARY}} 时传入增强后的需求**
 
 ### 🔍 阶段 1：研究
 
@@ -108,12 +115,13 @@ EOF",
 `[模式：构思]` - {{FRONTEND_PRIMARY}} 主导分析
 
 **⚠️ 必须调用 {{FRONTEND_PRIMARY}}**（参照上方调用规范）：
+
 - ROLE_FILE: `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/analyzer.md`
 - 需求：增强后的需求（如未增强则用 $ARGUMENTS）
 - 上下文：阶段 1 收集的项目上下文
 - OUTPUT: UI 可行性分析、推荐方案（至少 2 个）、用户体验评估
 
-**📌 保存 SESSION_ID**（`GEMINI_SESSION`）用于后续阶段复用。
+**📌 保存 SESSION_ID**（`FRONTEND_SESSION`）用于后续阶段复用。
 
 输出方案（至少 2 个），等待用户选择。
 
@@ -121,7 +129,8 @@ EOF",
 
 `[模式：计划]` - {{FRONTEND_PRIMARY}} 主导规划
 
-**⚠️ 必须调用 {{FRONTEND_PRIMARY}}**（使用 `resume <GEMINI_SESSION>` 复用会话）：
+**⚠️ 必须调用 {{FRONTEND_PRIMARY}}**（使用 `resume <FRONTEND_SESSION>` 复用会话）：
+
 - ROLE_FILE: `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/architect.md`
 - 需求：用户选择的方案
 - 上下文：阶段 2 的分析结果
@@ -142,6 +151,7 @@ Claude 综合规划，请求用户批准后存入 `.claude/plan/任务名.md`
 `[模式：优化]` - {{FRONTEND_PRIMARY}} 主导审查
 
 **⚠️ 必须调用 {{FRONTEND_PRIMARY}}**（参照上方调用规范）：
+
 - ROLE_FILE: `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/reviewer.md`
 - 需求：审查以下前端代码变更
 - 上下文：git diff 或代码内容

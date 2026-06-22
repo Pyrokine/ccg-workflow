@@ -34,6 +34,7 @@ Reference: [references/tokens.css](references/tokens.css)
 ## Component Examples
 
 ### Card
+
 ```css
 .nb-card {
   background: var(--nb-white);
@@ -45,6 +46,7 @@ Reference: [references/tokens.css](references/tokens.css)
 ```
 
 ### Button
+
 ```css
 .nb-btn {
   background: var(--nb-yellow);
@@ -68,6 +70,7 @@ Reference: [references/tokens.css](references/tokens.css)
 ```
 
 ### Navbar
+
 ```css
 .nb-nav {
   background: var(--nb-bg);
@@ -80,6 +83,7 @@ Reference: [references/tokens.css](references/tokens.css)
 ```
 
 ### Input
+
 ```css
 .nb-input {
   background: var(--nb-white);
@@ -97,6 +101,7 @@ Reference: [references/tokens.css](references/tokens.css)
 ```
 
 ### Badge
+
 ```css
 .nb-badge {
   background: var(--nb-pink);

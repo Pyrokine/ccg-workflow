@@ -5,18 +5,17 @@ description: 性能优化秘典。性能分析方法论、Profiling、火焰图�
 
 # 🔧 炼器秘典 · 性能优化
 
-
 ## 性能分析方法论
 
 ### USE 方法 (Utilization, Saturation, Errors)
 
 对每个资源检查三个维度：
 
-| 维度 | 含义 | 工具 |
-|------|------|------|
-| Utilization | 资源繁忙时间占比 | `top`, `vmstat`, `iostat` |
-| Saturation | 排队等待的工作量 | `vmstat`(r列), `iostat`(avgqu-sz) |
-| Errors | 错误事件计数 | `dmesg`, 应用日志 |
+| 维度          | 含义       | 工具                               |
+|-------------|----------|----------------------------------|
+| Utilization | 资源繁忙时间占比 | `top`, `vmstat`, `iostat`        |
+| Saturation  | 排队等待的工作量 | `vmstat`(r列), `iostat`(avgqu-sz) |
+| Errors      | 错误事件计数   | `dmesg`, 应用日志                    |
 
 ```bash
 # CPU USE
@@ -40,10 +39,10 @@ netstat -s | grep -i error  # Errors
 
 面向服务的性能指标：
 
-| 维度 | 含义 | 示例 |
-|------|------|------|
-| Rate | 每秒请求数 | QPS/RPS |
-| Errors | 每秒错误数 | 5xx/s |
+| 维度       | 含义     | 示例          |
+|----------|--------|-------------|
+| Rate     | 每秒请求数  | QPS/RPS     |
+| Errors   | 每秒错误数  | 5xx/s       |
 | Duration | 请求延迟分布 | P50/P95/P99 |
 
 ```promql
@@ -59,14 +58,14 @@ histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m]))  # P99
 
 ### CPU Profiling
 
-| 语言 | 工具 | 命令 |
-|------|------|------|
-| Python | cProfile / py-spy | `py-spy record -o profile.svg -- python app.py` |
-| Go | pprof | `go tool pprof http://localhost:6060/debug/pprof/profile` |
-| Java | async-profiler | `./profiler.sh -d 30 -f flame.html <pid>` |
-| Node.js | clinic.js | `clinic flame -- node app.js` |
-| Rust | cargo-flamegraph | `cargo flamegraph` |
-| 系统级 | perf | `perf record -g -p <pid> -- sleep 30` |
+| 语言      | 工具                | 命令                                                        |
+|---------|-------------------|-----------------------------------------------------------|
+| Python  | cProfile / py-spy | `py-spy record -o profile.svg -- python app.py`           |
+| Go      | pprof             | `go tool pprof http://localhost:6060/debug/pprof/profile` |
+| Java    | async-profiler    | `./profiler.sh -d 30 -f flame.html <pid>`                 |
+| Node.js | clinic.js         | `clinic flame -- node app.js`                             |
+| Rust    | cargo-flamegraph  | `cargo flamegraph`                                        |
+| 系统级     | perf              | `perf record -g -p <pid> -- sleep 30`                     |
 
 ### Memory Profiling
 
@@ -121,11 +120,11 @@ perf script | stackcollapse-perf.pl | flamegraph.pl > flame.svg
 
 ### 解读要点
 
-| 特征 | 含义 | 行动 |
-|------|------|------|
-| 宽平顶 | 该函数自身耗时大 | 优化该函数逻辑 |
-| 宽塔形 | 调用链深但每层都耗时 | 减少调用层级 |
-| 多个窄尖峰 | 多处小开销累积 | 关注热路径 |
+| 特征    | 含义         | 行动      |
+|-------|------------|---------|
+| 宽平顶   | 该函数自身耗时大   | 优化该函数逻辑 |
+| 宽塔形   | 调用链深但每层都耗时 | 减少调用层级  |
+| 多个窄尖峰 | 多处小开销累积    | 关注热路径   |
 
 ---
 
@@ -182,30 +181,30 @@ fn bench_sort(b: &mut Bencher) {
 
 ### CPU 密集型
 
-| 问题 | 优化 |
-|------|------|
-| 热循环 | 算法优化、减少分支 |
+| 问题       | 优化                       |
+|----------|--------------------------|
+| 热循环      | 算法优化、减少分支                |
 | 序列化/反序列化 | 换用高效格式(protobuf/msgpack) |
-| 正则表达式 | 预编译、简化模式 |
-| 加密运算 | 硬件加速(AES-NI) |
+| 正则表达式    | 预编译、简化模式                 |
+| 加密运算     | 硬件加速(AES-NI)             |
 
 ### I/O 密集型
 
-| 问题 | 优化 |
-|------|------|
+| 问题       | 优化                     |
+|----------|------------------------|
 | 同步阻塞 I/O | 异步 I/O (asyncio/epoll) |
-| 频繁小文件读写 | 批量合并、缓冲区 |
-| 网络往返 | 连接池、批量请求、Pipeline |
-| DNS 解析 | 本地缓存 |
+| 频繁小文件读写  | 批量合并、缓冲区               |
+| 网络往返     | 连接池、批量请求、Pipeline      |
+| DNS 解析   | 本地缓存                   |
 
 ### 内存相关
 
-| 问题 | 优化 |
-|------|------|
-| 内存泄漏 | Profiling 定位 + 修复引用 |
-| GC 压力 | 减少分配、对象池 |
-| 缓存未命中 | 数据局部性、紧凑布局 |
-| 大对象 | 流式处理、分片 |
+| 问题    | 优化                  |
+|-------|---------------------|
+| 内存泄漏  | Profiling 定位 + 修复引用 |
+| GC 压力 | 减少分配、对象池            |
+| 缓存未命中 | 数据局部性、紧凑布局          |
+| 大对象   | 流式处理、分片             |
 
 ---
 
@@ -277,12 +276,12 @@ pool_size = (core_count * 2) + effective_spindle_count
 
 ### 测试类型
 
-| 类型 | 用户数 | 持续时间 | 目标 |
-|------|--------|----------|------|
+| 类型   | 用户数  | 持续时间     | 目标     |
+|------|------|----------|--------|
 | 负载测试 | 预期峰值 | 30min-2h | 验证性能指标 |
-| 压力测试 | 超出峰值 | 1-3h | 找到崩溃点 |
-| 浸泡测试 | 正常负载 | 8-72h | 检测内存泄漏 |
-| 峰值测试 | 瞬间激增 | 短时间 | 测试弹性 |
+| 压力测试 | 超出峰值 | 1-3h     | 找到崩溃点  |
+| 浸泡测试 | 正常负载 | 8-72h    | 检测内存泄漏 |
+| 峰值测试 | 瞬间激增 | 短时间      | 测试弹性   |
 
 ### k6 核心模式
 
@@ -303,20 +302,20 @@ export const options = {
 
 ### 性能基准阈值
 
-| 场景 | P95响应时间 | 错误率 | 吞吐量 |
-|------|-------------|--------|--------|
-| API查询 | <200ms | <0.1% | >1000 RPS |
-| API写入 | <500ms | <0.5% | >500 RPS |
-| 页面加载 | <2s | <1% | >100 RPS |
+| 场景    | P95响应时间 | 错误率   | 吞吐量       |
+|-------|---------|-------|-----------|
+| API查询 | <200ms  | <0.1% | >1000 RPS |
+| API写入 | <500ms  | <0.5% | >500 RPS  |
+| 页面加载  | <2s     | <1%   | >100 RPS  |
 
 ### 工具选型
 
-| 工具 | 语言 | 适用场景 |
-|------|------|----------|
-| k6 | JavaScript | 现代化、DevOps集成、云原生 |
-| JMeter | Java/GUI | 功能全面、插件丰富 |
-| Gatling | Scala | 高性能、大规模测试 |
-| Locust | Python | Python生态、分布式 |
+| 工具      | 语言         | 适用场景             |
+|---------|------------|------------------|
+| k6      | JavaScript | 现代化、DevOps集成、云原生 |
+| JMeter  | Java/GUI   | 功能全面、插件丰富        |
+| Gatling | Scala      | 高性能、大规模测试        |
+| Locust  | Python     | Python生态、分布式     |
 
 ### 渐进式测试流程
 

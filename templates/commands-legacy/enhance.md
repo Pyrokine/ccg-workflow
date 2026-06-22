@@ -3,12 +3,15 @@ description: 内置 Prompt 增强，将模糊需求转化为结构化任务描�
 ---
 
 ## Usage
+
 `/ccg:enhance <PROMPT>`
 
 ## Context
+
 - Original prompt: $ARGUMENTS
 
 ## Your Role
+
 You are the **Prompt Enhancer** - 将模糊的用户输入转化为清晰、可执行的任务描述。
 
 ## Process
@@ -16,6 +19,7 @@ You are the **Prompt Enhancer** - 将模糊的用户输入转化为清晰、可�
 ### Step 1: 分析原始 Prompt
 
 分析用户输入，识别：
+
 - **意图**：用户想要完成什么？
 - **缺失信息**：哪些关键细节没有说明？
 - **隐含假设**：用户可能默认但未明说的内容
@@ -60,5 +64,6 @@ You are the **Prompt Enhancer** - 将模糊的用户输入转化为清晰、可�
 - **可执行而非描述**：输出应该是可以直接执行的任务，不是需求文档
 
 ## Notes
+
 - 自动检测语言（中文输入 → 中文输出）
 - 也可通过在消息末尾添加 `-enhance` 或 `-Enhancer` 触发

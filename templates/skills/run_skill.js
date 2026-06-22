@@ -32,13 +32,21 @@ function discoverSkills(skillsDir) {
   const found = {};
   const toolsDir = join(skillsDir, 'tools');
   let entries;
-  try { entries = readdirSync(toolsDir).sort(); } catch { return found; }
+  try {
+    entries = readdirSync(toolsDir).sort();
+  } catch {
+    return found;
+  }
 
   for (const name of entries) {
     const scriptsDir = join(toolsDir, name, 'scripts');
     let scripts;
-    try { scripts = readdirSync(scriptsDir); } catch { continue; }
-    const jsFile = scripts.find(f => f.endsWith('.js'));
+    try {
+      scripts = readdirSync(scriptsDir);
+    } catch {
+      continue;
+    }
+    const jsFile = scripts.find((f) => f.endsWith('.js'));
     if (jsFile) found[name] = join(scriptsDir, jsFile);
   }
   return found;
@@ -57,11 +65,13 @@ function getScriptPath(skillName) {
 
 function sleepMs(ms) {
   const end = Date.now() + ms;
-  while (Date.now() < end) { /* busy wait */ }
+  while (Date.now() < end) {
+    /* busy wait */
+  }
 }
 
 function acquireTargetLock(args) {
-  const target = args.find(a => !a.startsWith('-')) || process.cwd();
+  const target = args.find((a) => !a.startsWith('-')) || process.cwd();
   const hash = createHash('md5').update(resolve(target)).digest('hex').slice(0, 12);
   const lockPath = join(tmpdir(), `sage_skill_${hash}.lock`);
 
@@ -73,8 +83,14 @@ function acquireTargetLock(args) {
       return { fd, lockPath };
     } catch (e) {
       if (e.code !== 'EEXIST') return { fd: null, lockPath: null };
-      if (first) { console.log(`⏳ 等待锁释放: ${target}`); first = false; }
-      if (Date.now() >= deadline) { console.error(`⏳ 等待锁超时: ${target}`); process.exit(1); }
+      if (first) {
+        console.log(`⏳ 等待锁释放: ${target}`);
+        first = false;
+      }
+      if (Date.now() >= deadline) {
+        console.error(`⏳ 等待锁超时: ${target}`);
+        process.exit(1);
+      }
       sleepMs(200);
     }
   }
@@ -82,10 +98,14 @@ function acquireTargetLock(args) {
 
 function releaseLock({ fd, lockPath }) {
   if (fd !== null) {
-    try { closeSync(fd); } catch {}
+    try {
+      closeSync(fd);
+    } catch {}
   }
   if (lockPath) {
-    try { unlinkSync(lockPath); } catch {}
+    try {
+      unlinkSync(lockPath);
+    } catch {}
   }
 }
 

@@ -8,18 +8,17 @@ disable-model-invocation: false
 
 # 🔧 炼器秘典 · DevOps 能力中枢
 
-
 ## 能力矩阵
 
-| Skill | 定位 | 核心能力 |
-|-------|------|----------|
-| [git-workflow](git-workflow.md) | 版本控制 | Git、分支策略、PR |
-| [testing](testing.md) | 软件测试 | 单元测试、集成测试、TDD、测试策略、E2E测试 |
-| [devsecops](devsecops.md) | 安全开发 | CI/CD安全、供应链安全 |
-| [database](database.md) | 数据库 | SQL、NoSQL、优化 |
-| [performance](performance.md) | 性能优化 | Profiling、火焰图、基准测试、负载测试、性能测试 |
-| [observability](observability.md) | 可观测性 | 日志、指标、追踪、SLO |
-| [cost-optimization](cost-optimization.md) | 成本优化 | FinOps、右尺寸、Spot、伸缩 |
+| Skill                                     | 定位   | 核心能力                         |
+|-------------------------------------------|------|------------------------------|
+| [git-workflow](git-workflow.md)           | 版本控制 | Git、分支策略、PR                  |
+| [testing](testing.md)                     | 软件测试 | 单元测试、集成测试、TDD、测试策略、E2E测试     |
+| [devsecops](devsecops.md)                 | 安全开发 | CI/CD安全、供应链安全                |
+| [database](database.md)                   | 数据库  | SQL、NoSQL、优化                 |
+| [performance](performance.md)             | 性能优化 | Profiling、火焰图、基准测试、负载测试、性能测试 |
+| [observability](observability.md)         | 可观测性 | 日志、指标、追踪、SLO                 |
+| [cost-optimization](cost-optimization.md) | 成本优化 | FinOps、右尺寸、Spot、伸缩           |
 
 ## DevOps 原则
 

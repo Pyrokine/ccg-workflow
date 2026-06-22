@@ -2,13 +2,13 @@
 
 ## 安装层级
 
-| 安装命令 | 包含内容 |
-|---------|---------|
-| `pip install scrapling` | 仅核心解析器（Selector），无网络抓取能力 |
+| 安装命令                                | 包含内容                                                                      |
+|-------------------------------------|---------------------------------------------------------------------------|
+| `pip install scrapling`             | 仅核心解析器（Selector），无网络抓取能力                                                  |
 | `pip install "scrapling[fetchers]"` | + Fetcher/StealthyFetcher/DynamicFetcher（curl_cffi, Playwright, Camoufox） |
-| `pip install "scrapling[ai]"` | + AI 功能（transformers） |
-| `pip install "scrapling[shell]"` | + 交互式 shell |
-| `pip install "scrapling[all]"` | 全部功能 |
+| `pip install "scrapling[ai]"`       | + AI 功能（transformers）                                                     |
+| `pip install "scrapling[shell]"`    | + 交互式 shell                                                               |
+| `pip install "scrapling[all]"`      | 全部功能                                                                      |
 
 **推荐**: 大多数场景使用 `scrapling[fetchers]` 即可。
 

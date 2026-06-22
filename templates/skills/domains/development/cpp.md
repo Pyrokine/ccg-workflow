@@ -5,10 +5,10 @@ description: C/C++ 开发。系统编程、性能优化、内存管理。当用�
 
 # 📜 符箓秘典 · C/C++
 
-
 ## 现代 C++ (C++17/20)
 
 ### 智能指针
+
 ```cpp
 #include <memory>
 
@@ -28,6 +28,7 @@ if (auto locked = weak.lock()) {
 ```
 
 ### 容器与算法
+
 ```cpp
 #include <vector>
 #include <algorithm>
@@ -50,6 +51,7 @@ auto squared = nums | std::views::transform([](int n) { return n * n; });
 ```
 
 ### Lambda 表达式
+
 ```cpp
 // 基础 lambda
 auto add = [](int a, int b) { return a + b; };
@@ -66,6 +68,7 @@ auto generic = [](auto a, auto b) { return a + b; };
 ```
 
 ### 并发编程
+
 ```cpp
 #include <thread>
 #include <mutex>
@@ -99,6 +102,7 @@ cv.wait(lock, []() { return ready; });
 ## 内存管理
 
 ### RAII 模式
+
 ```cpp
 class FileHandle {
 public:
@@ -125,6 +129,7 @@ private:
 ```
 
 ### 内存安全检查
+
 ```bash
 # AddressSanitizer
 g++ -fsanitize=address -g main.cpp -o main
@@ -141,6 +146,7 @@ cppcheck main.cpp
 ## CMake
 
 ### CMakeLists.txt
+
 ```cmake
 cmake_minimum_required(VERSION 3.16)
 project(MyProject VERSION 1.0.0 LANGUAGES CXX)
@@ -176,6 +182,7 @@ add_test(NAME MyTests COMMAND tests)
 ```
 
 ### 构建
+
 ```bash
 mkdir build && cd build
 cmake ..
@@ -186,6 +193,7 @@ ctest  # 运行测试
 ## 测试
 
 ### Google Test
+
 ```cpp
 #include <gtest/gtest.h>
 
@@ -233,14 +241,14 @@ myproject/
 
 ## 常用库
 
-| 库 | 用途 |
-|---|------|
-| Boost | 通用库集合 |
-| fmt | 格式化输出 |
-| spdlog | 日志 |
-| nlohmann/json | JSON |
-| Catch2/GTest | 测试 |
-| OpenSSL | 加密 |
+| 库             | 用途    |
+|---------------|-------|
+| Boost         | 通用库集合 |
+| fmt           | 格式化输出 |
+| spdlog        | 日志    |
+| nlohmann/json | JSON  |
+| Catch2/GTest  | 测试    |
+| OpenSSL       | 加密    |
 
 ---
 

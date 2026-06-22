@@ -5,7 +5,6 @@ description: 威胁情报。OSINT、威胁狩猎、情报分析、IOC管理。�
 
 # 👁 天眼秘典 · 威胁情报 (Threat Intelligence)
 
-
 ## 情报层次
 
 ```
@@ -29,6 +28,7 @@ description: 威胁情报。OSINT、威胁狩猎、情报分析、IOC管理。�
 ## OSINT 信息收集
 
 ### 域名/IP 情报
+
 ```bash
 # DNS 查询
 dig +short example.com
@@ -45,6 +45,7 @@ amass enum -d example.com
 ```
 
 ### 在线情报平台
+
 ```yaml
 IP/域名信誉:
   - VirusTotal: https://www.virustotal.com
@@ -66,6 +67,7 @@ IP/域名信誉:
 ```
 
 ### 搜索引擎 Dorking
+
 ```
 # Google Dorks
 site:example.com filetype:pdf
@@ -85,6 +87,7 @@ services.tls.certificates.leaf.subject.common_name:example.com
 ```
 
 ### 社交媒体情报
+
 ```yaml
 平台:
   - LinkedIn: 员工信息、组织架构
@@ -102,6 +105,7 @@ GitHub Dorks:
 ## IOC 管理
 
 ### IOC 类型
+
 ```yaml
 网络层:
   - IP 地址
@@ -122,6 +126,7 @@ GitHub Dorks:
 ```
 
 ### IOC 格式 (STIX/TAXII)
+
 ```json
 {
   "type": "indicator",
@@ -139,6 +144,7 @@ GitHub Dorks:
 ```
 
 ### IOC 自动化查询
+
 ```python
 #!/usr/bin/env python3
 """IOC 批量查询"""
@@ -178,6 +184,7 @@ class IOCChecker:
 ## ATT&CK 映射
 
 ### TTP 分析
+
 ```yaml
 # 攻击者画像
 APT_Profile:
@@ -206,6 +213,7 @@ APT_Profile:
 ```
 
 ### ATT&CK Navigator
+
 ```python
 # 生成 ATT&CK Navigator 层
 def generate_navigator_layer(techniques):
@@ -229,6 +237,7 @@ def generate_navigator_layer(techniques):
 ## 威胁狩猎
 
 ### 狩猎流程
+
 ```
 假设生成 → 数据收集 → 分析调查 → 发现验证 → 知识沉淀
     │           │           │           │           │
@@ -236,6 +245,7 @@ def generate_navigator_layer(techniques):
 ```
 
 ### 狩猎假设模板
+
 ```yaml
 hypothesis: "攻击者可能通过 PowerShell 下载执行恶意代码"
 technique: T1059.001
@@ -256,6 +266,7 @@ response:
 ```
 
 ### 狩猎查询库
+
 ```sql
 -- 异常 PowerShell 执行
 SELECT timestamp, hostname, user, command_line
@@ -283,6 +294,7 @@ WHERE file_path LIKE '%\Temp\%'
 ## 情报共享
 
 ### MISP 集成
+
 ```python
 from pymisp import PyMISP
 
@@ -308,39 +320,43 @@ misp.tag(event, 'misp-galaxy:mitre-attack-pattern="T1566"')
 
 ## 工具清单
 
-| 工具 | 用途 |
-|------|------|
-| MISP | 威胁情报平台 |
-| OpenCTI | 威胁情报管理 |
-| TheHive | 事件响应平台 |
-| Maltego | 关系分析 |
-| Shodan | 网络空间搜索 |
-| VirusTotal | 恶意软件分析 |
+| 工具               | 用途      |
+|------------------|---------|
+| MISP             | 威胁情报平台  |
+| OpenCTI          | 威胁情报管理  |
+| TheHive          | 事件响应平台  |
+| Maltego          | 关系分析    |
+| Shodan           | 网络空间搜索  |
+| VirusTotal       | 恶意软件分析  |
 | ATT&CK Navigator | TTP 可视化 |
 
 ## 威胁建模
 
 ### 建模流程
+
 ```
 资产识别 → 架构分解 → 威胁枚举 → 风险评级 → 缓解措施 → 验证
 ```
 
 ### STRIDE 速查
-| 威胁 | 含义 | 缓解 |
-|------|------|------|
-| Spoofing | 身份伪造 | 强认证、MFA |
-| Tampering | 数据篡改 | 完整性校验、签名 |
-| Repudiation | 否认操作 | 审计日志、数字签名 |
-| Info Disclosure | 信息泄露 | 加密、访问控制 |
-| DoS | 拒绝服务 | 限流、冗余 |
-| EoP | 权限提升 | 最小权限、输入验证 |
+
+| 威胁              | 含义   | 缓解        |
+|-----------------|------|-----------|
+| Spoofing        | 身份伪造 | 强认证、MFA   |
+| Tampering       | 数据篡改 | 完整性校验、签名  |
+| Repudiation     | 否认操作 | 审计日志、数字签名 |
+| Info Disclosure | 信息泄露 | 加密、访问控制   |
+| DoS             | 拒绝服务 | 限流、冗余     |
+| EoP             | 权限提升 | 最小权限、输入验证 |
 
 ### PASTA 七阶段
+
 ```
 定义目标 → 技术范围 → 应用分解 → 威胁分析 → 漏洞分析 → 攻击建模 → 风险管理
 ```
 
 ### 攻击树建模
+
 ```yaml
 # OR节点: 任一子成功即成功, 风险=1-∏(1-Pi)
 # AND节点: 全部子成功才成功, 风险=∏Pi
@@ -348,12 +364,14 @@ misp.tag(event, 'misp-galaxy:mitre-attack-pattern="T1566"')
 ```
 
 ### 风险矩阵
+
 ```
 >=15 严重(立即) / >=10 高(优先) / >=6 中(计划) / <6 低(监控)
 风险分 = 可能性(1-5) x 影响(1-5)
 ```
 
 ### 威胁建模检查清单
+
 ```yaml
 准备: 识别关键资产 + 定义安全目标 + 组建跨职能团队
 建模: 数据流图+信任边界 + STRIDE/PASTA枚举 + 风险评级 + 缓解措施
@@ -361,12 +379,13 @@ misp.tag(event, 'misp-galaxy:mitre-attack-pattern="T1566"')
 ```
 
 ### 工具
-| 工具 | 特点 |
-|------|------|
-| Microsoft Threat Modeling Tool | STRIDE 自动化 |
-| OWASP Threat Dragon | 开源、DFD 支持 |
-| Threagile | CLI、代码化建模 |
-| PyTM | Python 编程式建模 |
+
+| 工具                             | 特点           |
+|--------------------------------|--------------|
+| Microsoft Threat Modeling Tool | STRIDE 自动化   |
+| OWASP Threat Dragon            | 开源、DFD 支持    |
+| Threagile                      | CLI、代码化建模    |
+| PyTM                           | Python 编程式建模 |
 
 ---
 

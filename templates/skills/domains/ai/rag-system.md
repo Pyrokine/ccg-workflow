@@ -14,6 +14,7 @@ description: RAG 检索增强生成架构。向量数据库、Embedding、检索
 ```
 
 ### 核心流程
+
 ```python
 from langchain.embeddings import OpenAIEmbeddings
 from langchain.vectorstores import Chroma
@@ -52,16 +53,17 @@ print(result["result"])
 
 ## 向量数据库对比
 
-| 数据库 | 类型 | 索引算法 | 适用场景 | 部署 |
-|--------|------|----------|----------|------|
-| Pinecone | 托管 | HNSW | 生产级、高并发 | 云端 |
-| Weaviate | 开源 | HNSW | 多模态、GraphQL | 自托管/云 |
-| Qdrant | 开源 | HNSW | 高性能、过滤 | 自托管/云 |
-| Chroma | 开源 | HNSW | 快速原型、本地 | 本地/内存 |
-| Milvus | 开源 | IVF/HNSW | 大规模、分布式 | 自托管 |
-| Faiss | 库 | IVF/PQ | 研究、离线 | 本地 |
+| 数据库      | 类型 | 索引算法     | 适用场景        | 部署    |
+|----------|----|----------|-------------|-------|
+| Pinecone | 托管 | HNSW     | 生产级、高并发     | 云端    |
+| Weaviate | 开源 | HNSW     | 多模态、GraphQL | 自托管/云 |
+| Qdrant   | 开源 | HNSW     | 高性能、过滤      | 自托管/云 |
+| Chroma   | 开源 | HNSW     | 快速原型、本地     | 本地/内存 |
+| Milvus   | 开源 | IVF/HNSW | 大规模、分布式     | 自托管   |
+| Faiss    | 库  | IVF/PQ   | 研究、离线       | 本地    |
 
 ### Pinecone 示例
+
 ```python
 import pinecone
 from langchain.vectorstores import Pinecone
@@ -84,6 +86,7 @@ vectorstore = Pinecone.from_documents(
 ```
 
 ### Qdrant 示例
+
 ```python
 from qdrant_client import QdrantClient
 from langchain.vectorstores import Qdrant
@@ -108,15 +111,17 @@ results = vectorstore.similarity_search(
 ## Embedding 模型选择
 
 ### 模型对比
-| 模型 | 维度 | 性能 | 成本 | 适用场景 |
-|------|------|------|------|----------|
-| OpenAI ada-002 | 1536 | 高 | 中 | 通用、多语言 |
-| Cohere embed-v3 | 1024 | 高 | 中 | 多语言、压缩 |
-| BGE-large-zh | 1024 | 高 | 免费 | 中文优化 |
-| E5-large-v2 | 1024 | 中 | 免费 | 开源、通用 |
-| text2vec-base | 768 | 中 | 免费 | 中文、轻量 |
+
+| 模型              | 维度   | 性能 | 成本 | 适用场景   |
+|-----------------|------|----|----|--------|
+| OpenAI ada-002  | 1536 | 高  | 中  | 通用、多语言 |
+| Cohere embed-v3 | 1024 | 高  | 中  | 多语言、压缩 |
+| BGE-large-zh    | 1024 | 高  | 免费 | 中文优化   |
+| E5-large-v2     | 1024 | 中  | 免费 | 开源、通用  |
+| text2vec-base   | 768  | 中  | 免费 | 中文、轻量  |
 
 ### 本地 Embedding
+
 ```python
 from langchain.embeddings import HuggingFaceEmbeddings
 
@@ -136,6 +141,7 @@ query_vector = embeddings.embed_query("为这个句子生成表示")
 ```
 
 ### 多模态 Embedding
+
 ```python
 from langchain.embeddings import OpenAIEmbeddings
 
@@ -156,6 +162,7 @@ class MultiModalEmbedding:
 ## 检索策略
 
 ### Dense 检索（向量）
+
 ```python
 # 余弦相似度检索
 retriever = vectorstore.as_retriever(
@@ -177,6 +184,7 @@ retriever = vectorstore.as_retriever(
 ```
 
 ### Sparse 检索（BM25）
+
 ```python
 from langchain.retrievers import BM25Retriever
 
@@ -188,6 +196,7 @@ results = bm25_retriever.get_relevant_documents("RAG 系统")
 ```
 
 ### Hybrid 混合检索
+
 ```python
 from langchain.retrievers import EnsembleRetriever
 
@@ -201,6 +210,7 @@ results = ensemble_retriever.get_relevant_documents("查询")
 ```
 
 ### 多路召回
+
 ```python
 class MultiRecallRetriever:
     def __init__(self, vector_store, bm25_retriever, graph_retriever):
@@ -224,6 +234,7 @@ class MultiRecallRetriever:
 ## 重排算法
 
 ### Cross-Encoder 重排
+
 ```python
 from sentence_transformers import CrossEncoder
 
@@ -246,6 +257,7 @@ final_docs = reranker.rerank(query, initial_docs, top_k=5)
 ```
 
 ### Cohere Rerank API
+
 ```python
 import cohere
 
@@ -263,6 +275,7 @@ def cohere_rerank(query: str, documents: list, top_k: int = 5):
 ```
 
 ### LLM 重排
+
 ```python
 from langchain.chat_models import ChatOpenAI
 
@@ -285,6 +298,7 @@ def llm_rerank(query: str, documents: list, top_k: int = 3):
 ## 文档切分策略
 
 ### 递归切分
+
 ```python
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
@@ -297,6 +311,7 @@ splitter = RecursiveCharacterTextSplitter(
 ```
 
 ### 语义切分
+
 ```python
 from langchain.text_splitter import SemanticChunker
 
@@ -310,6 +325,7 @@ chunks = semantic_splitter.split_text(long_text)
 ```
 
 ### Markdown 结构化切分
+
 ```python
 from langchain.text_splitter import MarkdownHeaderTextSplitter
 
@@ -326,6 +342,7 @@ chunks = markdown_splitter.split_text(markdown_text)
 ## 查询优化
 
 ### 查询改写
+
 ```python
 from langchain.prompts import ChatPromptTemplate
 
@@ -347,6 +364,7 @@ def rewrite_query(query: str):
 ```
 
 ### 多查询生成
+
 ```python
 from langchain.retrievers.multi_query import MultiQueryRetriever
 
@@ -360,6 +378,7 @@ results = multi_query_retriever.get_relevant_documents("RAG 是什么？")
 ```
 
 ### HyDE（假设文档嵌入）
+
 ```python
 def hyde_retrieval(query: str):
     # 1. 让 LLM 生成假设答案
@@ -374,6 +393,7 @@ def hyde_retrieval(query: str):
 ## 上下文压缩
 
 ### LLM 压缩器
+
 ```python
 from langchain.retrievers import ContextualCompressionRetriever
 from langchain.retrievers.document_compressors import LLMChainExtractor
@@ -390,6 +410,7 @@ compressed_docs = compression_retriever.get_relevant_documents(query)
 ```
 
 ### Embedding 过滤
+
 ```python
 from langchain.retrievers.document_compressors import EmbeddingsFilter
 
@@ -407,6 +428,7 @@ compression_retriever = ContextualCompressionRetriever(
 ## 完整 RAG Pipeline
 
 ### LangChain 实现
+
 ```python
 from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
@@ -433,6 +455,7 @@ result2 = qa_chain({"question": "它有什么优势？"})  # 自动引用上下�
 ```
 
 ### LlamaIndex 实现
+
 ```python
 from llama_index import VectorStoreIndex, ServiceContext
 from llama_index.llms import OpenAI
@@ -464,6 +487,7 @@ print(response.source_nodes)  # 引用来源
 ## 高级 RAG 模式
 
 ### Self-RAG（自我反思）
+
 ```python
 class SelfRAG:
     def __init__(self, llm, retriever):
@@ -492,6 +516,7 @@ class SelfRAG:
 ```
 
 ### RAPTOR（递归摘要）
+
 ```python
 from langchain.chains.summarize import load_summarize_chain
 
@@ -518,15 +543,15 @@ def raptor_indexing(documents, levels=3):
 
 ## 工具与框架
 
-| 工具 | 类型 | 特点 |
-|------|------|------|
-| LangChain | 框架 | 生态丰富、组件化 |
-| LlamaIndex | 框架 | 索引优化、查询引擎 |
-| Haystack | 框架 | 生产级、Pipeline |
-| Pinecone | 向量库 | 托管、高性能 |
-| Qdrant | 向量库 | 开源、过滤强 |
-| Weaviate | 向量库 | 多模态、GraphQL |
-| Cohere | API | Embedding + Rerank |
+| 工具         | 类型  | 特点                 |
+|------------|-----|--------------------|
+| LangChain  | 框架  | 生态丰富、组件化           |
+| LlamaIndex | 框架  | 索引优化、查询引擎          |
+| Haystack   | 框架  | 生产级、Pipeline       |
+| Pinecone   | 向量库 | 托管、高性能             |
+| Qdrant     | 向量库 | 开源、过滤强             |
+| Weaviate   | 向量库 | 多模态、GraphQL        |
+| Cohere     | API | Embedding + Rerank |
 
 ## 最佳实践
 

@@ -11,10 +11,7 @@
 try {
   const path = require('path');
   const fs = require('fs');
-  const {
-    findProjectRoot, getActiveTask, readFileSafe,
-    readContextJsonl, outputHook
-  } = require('./task-utils.js');
+  const { findProjectRoot, getActiveTask, readFileSafe, readContextJsonl, outputHook } = require('./task-utils.js');
 
   let inputData = '';
   if (!process.stdin.isTTY) {
@@ -25,15 +22,17 @@ try {
   try {
     const parsed = JSON.parse(inputData);
     toolInput = parsed.tool_input || parsed.input || parsed;
-  } catch { /* not JSON */ }
+  } catch {
+    /* not JSON */
+  }
 
   // Determine trigger type
   const command = toolInput.command || '';
   const teamName = toolInput.team_name || '';
-  const agentName = toolInput.name || '';
+  const agentName = toolInput.name || toolInput.subagent_type || '';
 
   const isCodeagentCall = command.includes('codeagent-wrapper');
-  const isTeamSpawn = !!teamName;
+  const isTeamSpawn = !!teamName || (typeof toolInput.prompt === 'string' && !!toolInput.subagent_type);
 
   if (!isCodeagentCall && !isTeamSpawn) {
     process.exit(0);
@@ -48,19 +47,19 @@ try {
 
   // --- Role detection ---
   const ROLE_FILE_MAP = {
-    'reviewer': 'review',
-    'analyzer': 'research',
-    'debugger': 'debug',
-    'tester': 'review',
-    'architect': 'implement',
-    'optimizer': 'implement',
-    'frontend': 'implement'
+    reviewer: 'review',
+    analyzer: 'research',
+    debugger: 'debug',
+    tester: 'review',
+    architect: 'implement',
+    optimizer: 'implement',
+    frontend: 'implement',
   };
   const AGENT_NAME_PATTERNS = [
     { pattern: /dev|builder|fix|impl/i, role: 'implement' },
     { pattern: /review|check|audit/i, role: 'review' },
     { pattern: /research|scout|explore|analy/i, role: 'research' },
-    { pattern: /debug|diagnos/i, role: 'debug' }
+    { pattern: /debug|diagnos/i, role: 'debug' },
   ];
 
   let detectedRole = 'implement'; // default
@@ -93,7 +92,7 @@ Agent role: ${detectedRole}
 
   // Read context.jsonl with role-based filtering
   const allEntries = readContextJsonl(task.dir);
-  const entries = allEntries.filter(entry => {
+  const entries = allEntries.filter((entry) => {
     if (!entry.roles || !Array.isArray(entry.roles) || entry.roles.length === 0) {
       return true; // no roles field = inject to all
     }
@@ -103,9 +102,7 @@ Agent role: ${detectedRole}
   if (entries.length > 0) {
     const specContents = [];
     for (const entry of entries) {
-      const filePath = path.isAbsolute(entry.file)
-        ? entry.file
-        : path.join(root, entry.file);
+      const filePath = path.isAbsolute(entry.file) ? entry.file : path.join(root, entry.file);
       const content = readFileSafe(filePath);
       if (content) {
         specContents.push(`--- ${entry.file} (${entry.reason || 'context'}) ---\n${content}`);
@@ -139,23 +136,37 @@ Agent role: ${detectedRole}
     const researchDir = path.join(task.dir, 'research');
     if (fs.existsSync(researchDir)) {
       try {
-        const researchFiles = fs.readdirSync(researchDir).filter(f => f.endsWith('.md'));
+        const researchFiles = fs.readdirSync(researchDir).filter((f) => f.endsWith('.md'));
         if (researchFiles.length > 0) {
-          const researchContents = researchFiles.map(f => {
-            const content = readFileSafe(path.join(researchDir, f));
-            return content ? `--- research/${f} ---\n${content.substring(0, 1500)}` : null;
-          }).filter(Boolean);
+          const researchContents = researchFiles
+            .map((f) => {
+              const content = readFileSafe(path.join(researchDir, f));
+              return content ? `--- research/${f} ---\n${content.substring(0, 1500)}` : null;
+            })
+            .filter(Boolean);
           if (researchContents.length > 0) {
             contextParts.push(`<ccg-research>\n${researchContents.join('\n\n')}\n</ccg-research>`);
           }
         }
-      } catch { /* silent */ }
+      } catch {
+        /* silent */
+      }
     }
   }
 
   if (contextParts.length === 0) process.exit(0);
 
-  outputHook('PreToolUse', contextParts.join('\n\n'));
+  const injectedContext = `<ccg-injected-context>\n${contextParts.join('\n\n')}\n</ccg-injected-context>`;
+  if (isTeamSpawn && typeof toolInput.prompt === 'string') {
+    outputHook('PreToolUse', null, {
+      updatedInput: {
+        ...toolInput,
+        prompt: `${injectedContext}\n\n---\n\n${toolInput.prompt}`,
+      },
+    });
+  } else {
+    outputHook('PreToolUse', injectedContext);
+  }
 } catch {
   process.exit(0);
 }

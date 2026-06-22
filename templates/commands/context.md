@@ -14,16 +14,17 @@ description: '项目上下文管理：初始化 .context 目录、记录决策�
 
 ## 子命令
 
-| 子命令 | 说明 |
-|--------|------|
-| `init` | 初始化 `.context/` 目录结构 |
-| `log <message>` | （可选）手动追加备注到 session.log，commit 时会合并 |
-| `show` | 查看当前分支的 session.log |
-| `compress` | 压缩 session.log → uncommit.md（手动预览用） |
-| `history` | 查看 history/commits.md |
-| `squash <ids...>` | 合并多条 history 记录（配合 git squash） |
+| 子命令               | 说明                                  |
+|-------------------|-------------------------------------|
+| `init`            | 初始化 `.context/` 目录结构                |
+| `log <message>`   | （可选）手动追加备注到 session.log，commit 时会合并 |
+| `show`            | 查看当前分支的 session.log                 |
+| `compress`        | 压缩 session.log → uncommit.md（手动预览用） |
+| `history`         | 查看 history/commits.md               |
+| `squash <ids...>` | 合并多条 history 记录（配合 git squash）      |
 
-> **核心用法**：`init` 一次，之后只管开发。`/ccg:commit` 提交时自动从 git diff 分析决策并归档到 history/。`log` 仅在你想手动补充备注时使用。
+> **核心用法**：`init` 一次，之后只管开发。`/ccg:commit` 提交时自动从 git diff 分析决策并归档到 history/。`log`
+> 仅在你想手动补充备注时使用。
 
 ---
 
@@ -272,9 +273,9 @@ history/archives/*.jsonl merge=union
 1. 接收 Context-Id 列表
 2. 从 `commits.jsonl` 读取对应条目
 3. 生成新的聚合 ContextEntry：
-   - 新 `context_id`（UUIDv7）
-   - `Context-Refs` = 所有被 squash 的 ids
-   - 合并 decisions / bugs / changes
+    - 新 `context_id`（UUIDv7）
+    - `Context-Refs` = 所有被 squash 的 ids
+    - 合并 decisions / bugs / changes
 4. 追加到 `commits.jsonl`
 5. 重生成 `commits.md`
 

@@ -15,13 +15,14 @@ function parseCliArgs(argv, extraFlags) {
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '-v' || args[i] === '--verbose') result.verbose = true;
     else if (args[i] === '--json') result.json = true;
-    else if (args[i] === '-h' || args[i] === '--help') { result.help = true; }
-    else if (args[i] === '--mode' && args[i + 1]) { result.mode = args[++i]; }
-    else if (args[i] === '--exclude') {
+    else if (args[i] === '-h' || args[i] === '--help') {
+      result.help = true;
+    } else if (args[i] === '--mode' && args[i + 1]) {
+      result.mode = args[++i];
+    } else if (args[i] === '--exclude') {
       result.exclude = result.exclude || [];
       while (i + 1 < args.length && !args[i + 1].startsWith('-')) result.exclude.push(args[++i]);
-    }
-    else if (!args[i].startsWith('-')) result.target = args[i];
+    } else if (!args[i].startsWith('-')) result.target = args[i];
   }
   return result;
 }
@@ -31,8 +32,13 @@ function parseCliArgs(argv, extraFlags) {
 const SEP = '='.repeat(60);
 const DASH = '-'.repeat(40);
 const ICONS = {
-  error: '\u2717', warning: '\u26A0', info: '\u2139',
-  critical: '\u{1F534}', high: '\u{1F7E0}', medium: '\u{1F7E1}', low: '\u{1F535}'
+  error: '\u2717',
+  warning: '\u26A0',
+  info: '\u2139',
+  critical: '\u{1F534}',
+  high: '\u{1F7E0}',
+  medium: '\u{1F7E1}',
+  low: '\u{1F535}',
 };
 
 function reportHeader(title, fields) {
@@ -54,8 +60,9 @@ function reportIssues(issues, verbose, groupBy) {
       const items = groups[cat];
       lines.push(`\n【${cat}】(${items.length} 个)`);
       for (const i of items.slice(0, 10)) {
-        lines.push(`  ${ICONS[i.severity] || '\u2139'} ` +
-          `${i.file_path || ''}${i.line_number ? ':' + i.line_number : ''}`);
+        lines.push(
+          `  ${ICONS[i.severity] || '\u2139'} ` + `${i.file_path || ''}${i.line_number ? ':' + i.line_number : ''}`
+        );
         lines.push(`    ${i.message}`);
         if (verbose && i.suggestion) lines.push(`    \u{1F4A1} ${i.suggestion}`);
         if (verbose && i.recommendation) lines.push(`    \u{1F4A1} ${i.recommendation}`);
@@ -72,7 +79,9 @@ function reportIssues(issues, verbose, groupBy) {
   return lines;
 }
 
-function reportFooter() { return ['\n' + SEP]; }
+function reportFooter() {
+  return ['\n' + SEP];
+}
 
 function buildReport(title, fields, issues, verbose, groupBy) {
   return [...reportHeader(title, fields), ...reportIssues(issues, verbose, groupBy), ...reportFooter()].join('\n');
@@ -89,10 +98,18 @@ function countBySeverity(issues, field) {
 
 function hasFatal(issues, fatalLevels) {
   fatalLevels = fatalLevels || ['error'];
-  return issues.some(i => fatalLevels.includes(i.severity));
+  return issues.some((i) => fatalLevels.includes(i.severity));
 }
 
 module.exports = {
-  parseCliArgs, buildReport, reportHeader, reportIssues,
-  reportFooter, countBySeverity, hasFatal, SEP, DASH, ICONS
+  parseCliArgs,
+  buildReport,
+  reportHeader,
+  reportIssues,
+  reportFooter,
+  countBySeverity,
+  hasFatal,
+  SEP,
+  DASH,
+  ICONS,
 };

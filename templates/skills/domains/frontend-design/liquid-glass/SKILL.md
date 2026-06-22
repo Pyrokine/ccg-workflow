@@ -30,14 +30,14 @@ Import the token file in your CSS:
 
 All tokens are defined in `references/tokens.css`. Key categories:
 
-| Category | Prefix | Example |
-|---|---|---|
-| Glass backgrounds | `--lg-bg-*` | `--lg-bg-primary` |
-| Blur | `--lg-blur-*` | `--lg-blur-md` |
-| Borders | `--lg-border-*` | `--lg-border-color` |
-| Shadows | `--lg-shadow-*` | `--lg-shadow-elevated` |
-| Radius | `--lg-radius-*` | `--lg-radius-lg` |
-| Animation | `--lg-duration-*` | `--lg-duration-normal` |
+| Category          | Prefix            | Example                |
+|-------------------|-------------------|------------------------|
+| Glass backgrounds | `--lg-bg-*`       | `--lg-bg-primary`      |
+| Blur              | `--lg-blur-*`     | `--lg-blur-md`         |
+| Borders           | `--lg-border-*`   | `--lg-border-color`    |
+| Shadows           | `--lg-shadow-*`   | `--lg-shadow-elevated` |
+| Radius            | `--lg-radius-*`   | `--lg-radius-lg`       |
+| Animation         | `--lg-duration-*` | `--lg-duration-normal` |
 
 ## Component Patterns
 
@@ -106,7 +106,8 @@ All tokens are defined in `references/tokens.css`. Key categories:
 
 ## Dark / Light Mode
 
-Tokens auto-switch via `prefers-color-scheme`. Light mode uses white-tinted glass; dark mode uses dark-tinted glass with higher blur to maintain readability.
+Tokens auto-switch via `prefers-color-scheme`. Light mode uses white-tinted glass; dark mode uses dark-tinted glass with
+higher blur to maintain readability.
 
 ```css
 /* Force a mode on a subtree */

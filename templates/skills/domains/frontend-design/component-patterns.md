@@ -3,6 +3,7 @@
 ## 布局模板
 
 ### 经典布局模式
+
 圣杯布局(header/nav/main/aside/footer)、卡片网格、侧边栏、仪表盘。优先使用Grid，Flexbox做一维布局。
 
 ```css
@@ -25,6 +26,7 @@
 ```
 
 ### Flexbox卡片网格
+
 ```css
 .card-grid {
   display: flex;
@@ -43,6 +45,7 @@
 ## 响应式设计
 
 ### 响应式断点策略
+
 移动优先：320px基准→640px(sm)→768px(md)→1024px(lg)→1280px(xl)。使用em单位断点(除以16)。优先容器查询。
 
 ```css
@@ -64,6 +67,7 @@
 ## 交互模式
 
 ### 微交互设计原则
+
 反馈即时(<100ms)、过渡流畅(200-300ms)、状态清晰(hover/active/focus)、减少认知负担。
 
 ```css
@@ -86,6 +90,7 @@
 ## 动画
 
 ### CSS关键帧动画
+
 ```css
 @keyframes fadeInUp {
   from {
@@ -108,6 +113,7 @@
 ```
 
 ### Framer Motion模板
+
 ```javascript
 const fadeInUp = {
   initial: { opacity: 0, y: 20 },
@@ -125,6 +131,7 @@ const stagger = {
 ## 表单设计
 
 ### 表单UX模式
+
 标签上置、内联验证、清晰错误提示、禁用状态明显、必填标记、合理分组、自动聚焦首字段。
 
 ```css
@@ -150,6 +157,7 @@ const stagger = {
 ## 卡片组件
 
 ### 玻璃拟态卡片
+
 ```css
 .glass-card {
   background: rgba(255, 255, 255, 0.1);
@@ -164,6 +172,7 @@ const stagger = {
 ## 导航模式
 
 ### 响应式导航栏
+
 ```css
 .nav {
   display: flex;

@@ -5,10 +5,10 @@ description: Go 开发。高并发、微服务、云原生、CLI工具。当用�
 
 # 📜 符箓秘典 · Go
 
-
 ## Web 框架
 
 ### Gin
+
 ```go
 package main
 
@@ -58,6 +58,7 @@ func createUser(c *gin.Context) {
 ```
 
 ### Echo
+
 ```go
 package main
 
@@ -88,6 +89,7 @@ func getUser(c echo.Context) error {
 ## 并发编程
 
 ### Goroutine & Channel
+
 ```go
 package main
 
@@ -256,6 +258,7 @@ go test -race  # 竞态检测
 ## CLI 工具
 
 ### Cobra
+
 ```go
 package main
 
@@ -309,15 +312,15 @@ myproject/
 
 ## 常用库
 
-| 库 | 用途 |
-|---|------|
-| gin/echo | Web 框架 |
-| gorm | ORM |
-| cobra | CLI |
-| viper | 配置 |
-| zap/zerolog | 日志 |
-| testify | 测试 |
-| wire | 依赖注入 |
+| 库           | 用途     |
+|-------------|--------|
+| gin/echo    | Web 框架 |
+| gorm        | ORM    |
+| cobra       | CLI    |
+| viper       | 配置     |
+| zap/zerolog | 日志     |
+| testify     | 测试     |
+| wire        | 依赖注入   |
 
 ---
 

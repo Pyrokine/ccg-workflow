@@ -5,10 +5,10 @@ description: API 设计。RESTful、GraphQL、OpenAPI、版本管理。当用户
 
 # 🏗 阵法秘典 · API 设计
 
-
 ## RESTful 设计
 
 ### 资源命名
+
 ```yaml
 # 使用名词复数
 GET    /users          # 获取用户列表
@@ -29,6 +29,7 @@ POST   /createUser     # ❌ 动词
 ```
 
 ### HTTP 状态码
+
 ```yaml
 2xx 成功:
   200: OK
@@ -50,6 +51,7 @@ POST   /createUser     # ❌ 动词
 ```
 
 ### 响应格式
+
 ```json
 // 成功响应
 {

@@ -5,10 +5,10 @@ description: 云原生架构。容器、Kubernetes、Serverless、微服务。�
 
 # 🏗 阵法秘典 · 云原生架构
 
-
 ## Docker
 
 ### Dockerfile
+
 ```dockerfile
 # 多阶段构建
 FROM node:18-alpine AS builder
@@ -28,6 +28,7 @@ CMD ["node", "dist/main.js"]
 ```
 
 ### Docker Compose
+
 ```yaml
 version: '3.8'
 services:
@@ -58,6 +59,7 @@ volumes:
 ```
 
 ### 安全最佳实践
+
 ```yaml
 镜像安全:
   - 使用官方基础镜像
@@ -75,6 +77,7 @@ volumes:
 ## Kubernetes
 
 ### 基础资源
+
 ```yaml
 # Deployment
 apiVersion: apps/v1
@@ -155,6 +158,7 @@ spec:
 ```
 
 ### 配置管理
+
 ```yaml
 # ConfigMap
 apiVersion: v1
@@ -176,6 +180,7 @@ stringData:
 ```
 
 ### 安全策略
+
 ```yaml
 # NetworkPolicy
 apiVersion: networking.k8s.io/v1
@@ -217,6 +222,7 @@ metadata:
 ## Serverless
 
 ### AWS Lambda
+
 ```python
 import json
 
@@ -231,6 +237,7 @@ def handler(event, context):
 ```
 
 ### Serverless Framework
+
 ```yaml
 service: myapp
 

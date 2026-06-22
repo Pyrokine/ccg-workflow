@@ -7,13 +7,34 @@ Not a rigid state machine — adapts to task complexity and progress.
 Hook type: UserPromptSubmit
 """
 
+import glob
 import json
 import os
-import sys
-import glob
 import subprocess
-from pathlib import Path
+import sys
 from datetime import datetime
+from pathlib import Path
+
+TERMINAL_STATUSES = {
+    "completed",
+    "complete",
+    "done",
+    "finished",
+    "finish",
+    "archived",
+    "archive",
+    "cancelled",
+    "canceled",
+    "closed",
+    "resolved",
+    "abandoned",
+}
+
+
+def is_terminal_status(
+        status
+):
+    return str(status or "").strip().lower() in TERMINAL_STATUSES
 
 
 def find_project_root():
@@ -29,7 +50,9 @@ def find_project_root():
     return None
 
 
-def get_active_task(root):
+def get_active_task(
+        root
+):
     """Find the most recent in_progress task."""
     tasks_dir = os.path.join(root, ".ccg", "tasks")
     if not os.path.isdir(tasks_dir):
@@ -43,7 +66,7 @@ def get_active_task(root):
         try:
             with open(task_file) as f:
                 task = json.load(f)
-            if task.get("status") not in ("completed", "archived"):
+            if not is_terminal_status(task.get("status")):
                 task["_dir"] = os.path.join(tasks_dir, name)
                 task["_name"] = name
                 return task
@@ -52,7 +75,9 @@ def get_active_task(root):
     return None
 
 
-def detect_progress(root):
+def detect_progress(
+        root
+):
     """Detect what Codex has done so far in this session."""
     signals = {
         "has_dirty_files": False,
@@ -97,14 +122,20 @@ def detect_progress(root):
     return signals
 
 
-def assess_complexity(task):
+def assess_complexity(
+        task
+):
     """Get complexity from task.json or default to M."""
     if not task:
         return "M"
     return task.get("complexity", "M")
 
 
-def build_guidance(task, progress, root):
+def build_guidance(
+        task,
+        progress,
+        root
+):
     """Build adaptive guidance based on task state + progress."""
     parts = []
     complexity = assess_complexity(task)
@@ -127,8 +158,10 @@ def build_guidance(task, progress, root):
     if phase == "analysis":
         if complexity in ("M", "L", "XL"):
             parts.append("")
-            parts.append(f"⛔ {complexity} complexity: you MUST call BOTH Gemini AND Claude for parallel analysis before coding.")
-            parts.append("Use the dual-model parallel template in AGENTS.md: --backend gemini & --backend claude with & + wait.")
+            parts.append(
+                f"⛔ {complexity} complexity: you MUST call BOTH Antigravity AND Claude for parallel analysis before coding.")
+            parts.append(
+                "Use the dual-model parallel template in AGENTS.md: --backend antigravity & --backend claude with & + wait.")
 
     # Phase: implementation — coding in progress
     elif phase == "implementation":
@@ -146,17 +179,20 @@ def build_guidance(task, progress, root):
     # Big changes without review
     if progress["changed_lines"] > 30 and phase != "review":
         parts.append("")
-        parts.append(f"⚠️ {progress['changed_lines']} lines changed. When done coding, you MUST call BOTH Gemini AND Claude for dual-model review. Not just one — both.")
+        parts.append(
+            f"⚠️ {progress['changed_lines']} lines changed. When done coding, you MUST call BOTH Antigravity AND Claude for dual-model review. Not just one — both.")
 
     # Review phase: enforce dual model
     if phase == "review":
         parts.append("")
-        parts.append("⛔ Review phase: call BOTH Gemini (--backend gemini) AND Claude (--backend claude) with reviewer role. Two models, not one.")
+        parts.append(
+            "⛔ Review phase: call BOTH Antigravity (--backend antigravity) AND Claude (--backend claude) with reviewer role. Two models, not one.")
 
     # High-risk files detected
     if progress["high_risk_files"] and phase not in ("review", "completed"):
         parts.append("")
-        parts.append("⚠️ High-risk files detected (auth/db/crypto). External model security review is REQUIRED before delivery.")
+        parts.append(
+            "⚠️ High-risk files detected (auth/db/crypto). External model security review is REQUIRED before delivery.")
 
     # Has dirty files but hasn't run tests
     if progress["has_dirty_files"] and not progress["has_test_output"]:
@@ -177,10 +213,11 @@ def build_guidance(task, progress, root):
             parts.append(f"Spec files available: {', '.join(specs)} — read before writing code.")
 
     # --- Archive reminder ---
-    if phase == "completed" or (task.get("status") == "completed"):
+    if phase == "completed" or is_terminal_status(task.get("status")):
         parts.append("")
         parts.append("⛔ Task completed. You MUST archive it now:")
-        parts.append(f"  mkdir -p .ccg/tasks/archive/$(date +%Y-%m) && mv .ccg/tasks/{task['_name']} .ccg/tasks/archive/$(date +%Y-%m)/")
+        parts.append(
+            f"  mkdir -p .ccg/tasks/archive/$(date +%Y-%m) && mv .ccg/tasks/{task['_name']} .ccg/tasks/archive/$(date +%Y-%m)/")
         parts.append("  git add .ccg/tasks/ && git commit -m \"chore: archive ccg task\"")
 
     return parts
