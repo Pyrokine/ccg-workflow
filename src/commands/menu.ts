@@ -1,23 +1,31 @@
 import ansis from 'ansis'
+import fs from 'fs-extra'
 import inquirer from 'inquirer'
-import ora from 'ora'
 import { exec, spawn } from 'node:child_process'
-import { promisify } from 'node:util'
 import { homedir } from 'node:os'
 import { fileURLToPath } from 'node:url'
+import { promisify } from 'node:util'
+import ora from 'ora'
 import { dirname, join } from 'pathe'
-import fs from 'fs-extra'
-import { parse as parseTOML } from 'smol-toml'
 import { version } from '../../package.json'
-import { configMcp } from './config-mcp'
 import { i18n } from '../i18n'
+import type { ModelType } from '../types'
+import { normalizeModelName, normalizeRoutingForInstall, readCcgConfig, writeCcgConfig } from '../utils/config'
 import { installCodexMode, uninstallCodexMode, uninstallWorkflows } from '../utils/installer'
-import { readCcgConfig, writeCcgConfig } from '../utils/config'
+import { isWindows } from '../utils/platform'
+import { configMcp } from './config-mcp'
 import { init } from './init'
 import { update } from './update'
-import { isWindows } from '../utils/platform'
 
 const execAsync = promisify(exec)
+const ANSI_ESCAPE_RE = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g')
+type ClaudeSettings = {
+  env?: Record<string, string>
+  permissions?: { allow?: string[]; [key: string]: unknown }
+  outputStyle?: string
+  statusLine?: { type: string; command: string; padding: number }
+  [key: string]: unknown
+}
 
 // ═══════════════════════════════════════════════════════
 // UI Helpers
@@ -27,23 +35,22 @@ const execAsync = promisify(exec)
  * Get visual display width of a string (CJK = 2, ASCII = 1)
  */
 function visWidth(s: string): number {
-  const stripped = s.replace(/\x1B\[[0-9;]*m/g, '')
+  const stripped = s.replace(ANSI_ESCAPE_RE, '')
   let w = 0
   for (const ch of stripped) {
     const code = ch.codePointAt(0) || 0
     // CJK Unified Ideographs + common fullwidth ranges
     if (
-      (code >= 0x2E80 && code <= 0x9FFF)
-      || (code >= 0xF900 && code <= 0xFAFF)
-      || (code >= 0xFE30 && code <= 0xFE4F)
-      || (code >= 0xFF00 && code <= 0xFF60)
-      || (code >= 0xFFE0 && code <= 0xFFE6)
-      || (code >= 0x1F300 && code <= 0x1F9FF) // Emojis
-      || (code >= 0x20000 && code <= 0x2FA1F) // CJK Extension B+
+      (code >= 0x2e80 && code <= 0x9fff) ||
+      (code >= 0xf900 && code <= 0xfaff) ||
+      (code >= 0xfe30 && code <= 0xfe4f) ||
+      (code >= 0xff00 && code <= 0xff60) ||
+      (code >= 0xffe0 && code <= 0xffe6) ||
+      (code >= 0x1f300 && code <= 0x1f9ff) || // Emojis
+      (code >= 0x20000 && code <= 0x2fa1f) // CJK Extension B+
     ) {
       w += 2
-    }
-    else {
+    } else {
       w += 1
     }
   }
@@ -101,7 +108,7 @@ function drawHeader(statusParts: string[]): void {
     console.log(boxRow(centerLine(ansis.bold.white(line), INNER_W)))
   }
   console.log(empty)
-  console.log(boxRow(centerLine(ansis.gray('Claude + Codex + Gemini'), INNER_W)))
+  console.log(boxRow(centerLine(ansis.gray('Claude + Codex + Antigravity'), INNER_W)))
   console.log(boxRow(centerLine(ansis.gray('Multi-Model Collaboration'), INNER_W)))
   console.log(empty)
   if (statusParts.length > 0) {
@@ -135,11 +142,7 @@ export async function showMainMenu(): Promise<void> {
     const mcpProvider = config?.mcp?.provider || '—'
 
     // Build status parts
-    const statusParts = [
-      ansis.green(`v${version}`),
-      ansis.white(`${cmdCount} commands`),
-      ansis.yellow(lang),
-    ]
+    const statusParts = [ansis.green(`v${version}`), ansis.white(`${cmdCount} commands`), ansis.yellow(lang)]
     if (mcpProvider && mcpProvider !== '—' && mcpProvider !== 'skip') {
       statusParts.push(ansis.magenta(mcpProvider))
     }
@@ -154,33 +157,39 @@ export async function showMainMenu(): Promise<void> {
       value: key,
     })
 
-    const { action } = await inquirer.prompt([{
-      type: 'list',
-      name: 'action',
-      message: i18n.t('menu:title'),
-      pageSize: 20,
-      choices: [
-        groupSep(isZh ? 'Claude Code' : 'Claude Code'),
-        item('1', i18n.t('menu:options.init'), isZh ? '安装 CCG 工作流' : 'Install CCG workflows'),
-        item('2', i18n.t('menu:options.update'), isZh ? '更新到最新版本' : 'Update to latest version'),
-        item('3', i18n.t('menu:options.configMcp'), isZh ? '代码检索 MCP 工具' : 'Code retrieval MCP tool'),
-        item('4', i18n.t('menu:options.configApi'), isZh ? '自定义 API 端点' : 'Custom API endpoint'),
-        item('5', i18n.t('menu:options.configStyle'), isZh ? '选择输出人格' : 'Choose output personality'),
-        item('6', i18n.t('menu:options.configModel'), isZh ? '前端/后端模型切换' : 'Switch frontend/backend models'),
+    const { action } = await inquirer.prompt([
+      {
+        type: 'select',
+        name: 'action',
+        message: i18n.t('menu:title'),
+        pageSize: 20,
+        choices: [
+          groupSep(isZh ? 'Claude Code' : 'Claude Code'),
+          item('1', i18n.t('menu:options.init'), isZh ? '安装 CCG 工作流' : 'Install CCG workflows'),
+          item('2', i18n.t('menu:options.update'), isZh ? '更新到最新版本' : 'Update to latest version'),
+          item('3', i18n.t('menu:options.configMcp'), isZh ? '代码检索 MCP 工具' : 'Code retrieval MCP tool'),
+          item('4', i18n.t('menu:options.configApi'), isZh ? '自定义 API 端点' : 'Custom API endpoint'),
+          item('5', i18n.t('menu:options.configStyle'), isZh ? '选择输出人格' : 'Choose output personality'),
+          item('6', i18n.t('menu:options.configModel'), isZh ? '前端/后端模型切换' : 'Switch frontend/backend models'),
 
-        groupSep(isZh ? '其他工具' : 'Tools'),
-        item('X', isZh ? 'Codex 模式' : 'Codex Mode', isZh ? '安装 Codex 主导的多模型编排' : 'Install Codex-led multi-model orchestration'),
-        item('T', i18n.t('menu:options.tools'), 'ccusage, CCometixLine'),
-        item('C', i18n.t('menu:options.installClaude'), isZh ? '安装/重装 CLI' : 'Install/reinstall CLI'),
+          groupSep(isZh ? '其他工具' : 'Tools'),
+          item(
+            'X',
+            isZh ? 'Codex 模式' : 'Codex Mode',
+            isZh ? '安装 Codex 主导的多模型编排' : 'Install Codex-led multi-model orchestration'
+          ),
+          item('T', i18n.t('menu:options.tools'), 'ccusage, CCometixLine'),
+          item('C', i18n.t('menu:options.installClaude'), isZh ? '安装/重装 CLI' : 'Install/reinstall CLI'),
 
-        groupSep('CCG'),
-        item('H', i18n.t('menu:options.help'), isZh ? '查看全部斜杠命令' : 'View all slash commands'),
-        item('-', i18n.t('menu:options.uninstall'), isZh ? '移除 CCG 配置' : 'Remove CCG config'),
+          groupSep('CCG'),
+          item('H', i18n.t('menu:options.help'), isZh ? '查看全部斜杠命令' : 'View all slash commands'),
+          item('-', i18n.t('menu:options.uninstall'), isZh ? '移除 CCG 配置' : 'Remove CCG config'),
 
-        new inquirer.Separator(ansis.gray('─'.repeat(42))),
-        { name: `  ${ansis.red('Q.')} ${i18n.t('menu:options.exit')}`, value: 'Q' },
-      ],
-    }])
+          new inquirer.Separator(ansis.gray('─'.repeat(42))),
+          { name: `  ${ansis.red('Q.')} ${i18n.t('menu:options.exit')}`, value: 'Q' },
+        ],
+      },
+    ])
 
     switch (action) {
       case '1':
@@ -225,11 +234,13 @@ export async function showMainMenu(): Promise<void> {
 
     // Pause after action so user can see results
     console.log()
-    await inquirer.prompt([{
-      type: 'input',
-      name: 'continue',
-      message: ansis.gray(i18n.t('common:pressEnterToReturn')),
-    }])
+    await inquirer.prompt([
+      {
+        type: 'input',
+        name: 'continue',
+        message: ansis.gray(i18n.t('common:pressEnterToReturn')),
+      },
+    ])
   }
 }
 
@@ -240,9 +251,6 @@ export async function showMainMenu(): Promise<void> {
 // ═══════════════════════════════════════════════════════
 
 function showHelp(): void {
-  const config = readCcgConfigSync()
-  const isZh = (config?.general?.language || 'zh-CN') === 'zh-CN'
-
   console.log()
   console.log(ansis.cyan.bold(`  ${i18n.t('menu:help.title')}`))
   console.log()
@@ -291,20 +299,6 @@ function showHelp(): void {
   console.log()
 }
 
-/**
- * Synchronous config read for non-async contexts (help display)
- */
-function readCcgConfigSync(): any {
-  try {
-    const configPath = join(homedir(), '.claude', '.ccg', 'config.toml')
-    if (fs.pathExistsSync(configPath)) {
-      return parseTOML(fs.readFileSync(configPath, 'utf-8'))
-    }
-  }
-  catch { /* ignore */ }
-  return null
-}
-
 // ═══════════════════════════════════════════════════════
 // API Configuration
 // ═══════════════════════════════════════════════════════
@@ -315,7 +309,7 @@ async function configApi(): Promise<void> {
   console.log()
 
   const settingsPath = join(homedir(), '.claude', 'settings.json')
-  let settings: Record<string, any> = {}
+  let settings: ClaudeSettings = {}
 
   if (await fs.pathExists(settingsPath)) {
     settings = await fs.readJson(settingsPath)
@@ -326,51 +320,54 @@ async function configApi(): Promise<void> {
   const currentKey = settings.env?.ANTHROPIC_AUTH_TOKEN || settings.env?.ANTHROPIC_API_KEY
   if (currentUrl || currentKey) {
     console.log(ansis.gray(`  ${i18n.t('menu:api.currentConfig')}`))
-    if (currentUrl)
-      console.log(ansis.gray(`    URL: ${currentUrl}`))
-    if (currentKey)
-      console.log(ansis.gray(`    Key: ${currentKey.slice(0, 8)}...${currentKey.slice(-4)}`))
+    if (currentUrl) console.log(ansis.gray(`    URL: ${currentUrl}`))
+    if (currentKey) console.log(ansis.gray(`    Key: ${currentKey.slice(0, 8)}...${currentKey.slice(-4)}`))
     console.log()
   }
 
-  const { apiProvider } = await inquirer.prompt([{
-    type: 'list',
-    name: 'apiProvider',
-    message: i18n.t('menu:api.providerPrompt'),
-    choices: [
-      { name: `${ansis.green('●')} ${i18n.t('menu:api.officialOption')}`, value: 'official' },
-      { name: `${ansis.cyan('●')} ${i18n.t('menu:api.thirdPartyOption')}`, value: 'thirdparty' },
-      { name: `${ansis.yellow('★')} ${i18n.t('menu:api.sponsor302AI')} ${ansis.gray('— https://share.302.ai/oUDqQ6')}`, value: '302ai' },
-    ],
-  }])
+  const { apiProvider } = await inquirer.prompt([
+    {
+      type: 'select',
+      name: 'apiProvider',
+      message: i18n.t('menu:api.providerPrompt'),
+      choices: [
+        { name: `${ansis.green('●')} ${i18n.t('menu:api.officialOption')}`, value: 'official' },
+        { name: `${ansis.cyan('●')} ${i18n.t('menu:api.thirdPartyOption')}`, value: 'thirdparty' },
+        {
+          name: `${ansis.yellow('★')} ${i18n.t('menu:api.sponsor302AI')} ${ansis.gray('— https://share.302.ai/oUDqQ6')}`,
+          value: '302ai',
+        },
+      ],
+    },
+  ])
 
   if (apiProvider === 'official') {
     // Clear third-party config, let Claude Code use official auth
-    if (!settings.env)
-      settings.env = {}
+    if (!settings.env) settings.env = {}
     delete settings.env.ANTHROPIC_BASE_URL
     delete settings.env.ANTHROPIC_AUTH_TOKEN
     delete settings.env.ANTHROPIC_API_KEY
-  }
-  else if (apiProvider === '302ai') {
+  } else if (apiProvider === '302ai') {
     console.log()
-    console.log(`    ${ansis.yellow('★')} ${i18n.t('menu:api.sponsor302AIGetKey')}: ${ansis.cyan.underline('https://share.302.ai/oUDqQ6')}`)
+    console.log(
+      `    ${ansis.yellow('★')} ${i18n.t('menu:api.sponsor302AIGetKey')}: ${ansis.cyan.underline('https://share.302.ai/oUDqQ6')}`
+    )
     console.log()
-    const { key } = await inquirer.prompt([{
-      type: 'password',
-      name: 'key',
-      message: `302.AI API Key ${ansis.gray(`(${i18n.t('menu:api.keyRequired')})`)}`,
-      mask: '*',
-      validate: (v: string) => v.trim() !== '' || i18n.t('menu:api.enterKey'),
-    }])
+    const { key } = await inquirer.prompt([
+      {
+        type: 'password',
+        name: 'key',
+        message: `302.AI API Key ${ansis.gray(`(${i18n.t('menu:api.keyRequired')})`)}`,
+        mask: '*',
+        validate: (v: string) => v.trim() !== '' || i18n.t('menu:api.enterKey'),
+      },
+    ])
 
-    if (!settings.env)
-      settings.env = {}
+    if (!settings.env) settings.env = {}
     settings.env.ANTHROPIC_BASE_URL = 'https://api.302.ai/cc'
     settings.env.ANTHROPIC_AUTH_TOKEN = key.trim()
     delete settings.env.ANTHROPIC_API_KEY
-  }
-  else {
+  } else {
     const answers = await inquirer.prompt([
       {
         type: 'input',
@@ -388,8 +385,7 @@ async function configApi(): Promise<void> {
       },
     ])
 
-    if (!settings.env)
-      settings.env = {}
+    if (!settings.env) settings.env = {}
     settings.env.ANTHROPIC_BASE_URL = answers.url.trim()
     settings.env.ANTHROPIC_AUTH_TOKEN = answers.key.trim()
     delete settings.env.ANTHROPIC_API_KEY
@@ -403,17 +399,15 @@ async function configApi(): Promise<void> {
   settings.env.MCP_TIMEOUT = '60000'
 
   // codeagent-wrapper permission allowlist
-  if (!settings.permissions)
-    settings.permissions = {}
-  if (!settings.permissions.allow)
-    settings.permissions.allow = []
+  if (!settings.permissions) settings.permissions = {}
+  if (!settings.permissions.allow) settings.permissions.allow = []
   const wrapperPerms = [
-    'Bash(~/.claude/bin/codeagent-wrapper --backend gemini*)',
+    'Bash(~/.claude/bin/codeagent-wrapper --backend antigravity*)',
+    'Bash(~/.claude/bin/codeagent-wrapper --backend agy*)',
     'Bash(~/.claude/bin/codeagent-wrapper --backend codex*)',
   ]
   for (const perm of wrapperPerms) {
-    if (!settings.permissions.allow.includes(perm))
-      settings.permissions.allow.push(perm)
+    if (!settings.permissions.allow.includes(perm)) settings.permissions.allow.push(perm)
   }
 
   await fs.ensureDir(join(homedir(), '.claude'))
@@ -446,82 +440,52 @@ const OUTPUT_STYLES = [
 
 async function configModelRouting(): Promise<void> {
   const config = await readCcgConfig()
-  const isZh = (config?.general?.language || 'zh-CN') === 'zh-CN'
 
   console.log()
   console.log(ansis.cyan.bold(`  ${i18n.t('init:model.title')}`))
   console.log()
 
   // Show current routing
-  const currentFrontend = config?.routing?.frontend?.primary || 'antigravity'
-  const currentBackend = config?.routing?.backend?.primary || 'codex'
-  const currentGeminiModel = config?.routing?.geminiModel || 'gemini-3.1-pro-preview'
+  const currentFrontend = normalizeModelName(config?.routing?.frontend?.primary) || 'antigravity'
+  const currentBackend = normalizeModelName(config?.routing?.backend?.primary) || 'codex'
 
+  console.log(ansis.yellow(`  ${i18n.t('init:model.geminiDisabled')}`))
+  console.log()
   console.log(ansis.gray(`  ${i18n.t('init:model.currentRouting')}:`))
   console.log(`  ${ansis.cyan('Frontend:')} ${ansis.green(currentFrontend)}`)
   console.log(`  ${ansis.cyan('Backend:')}  ${ansis.blue(currentBackend)}`)
-  if (currentFrontend === 'gemini' || currentBackend === 'gemini') {
-    console.log(`  ${ansis.cyan('Gemini:')}   ${ansis.gray(currentGeminiModel)}`)
-  }
   console.log()
 
   // Frontend model selection
-  const { selectedFrontend } = await inquirer.prompt([{
-    type: 'list',
-    name: 'selectedFrontend',
-    message: i18n.t('init:model.selectFrontend'),
-    choices: [
-      { name: `Antigravity ${ansis.green(`(${i18n.t('init:model.recommended')})`)}`, value: 'antigravity' },
-      { name: 'Gemini', value: 'gemini' },
-      { name: 'Codex', value: 'codex' },
-    ],
-    default: currentFrontend,
-  }])
+  const { selectedFrontend } = await inquirer.prompt<{ selectedFrontend: ModelType }>([
+    {
+      type: 'select',
+      name: 'selectedFrontend',
+      message: i18n.t('init:model.selectFrontend'),
+      choices: [
+        { name: `Antigravity ${ansis.green(`(${i18n.t('init:model.recommended')})`)}`, value: 'antigravity' },
+        { name: 'Codex', value: 'codex' },
+      ],
+      default: currentFrontend,
+    },
+  ])
 
   // Backend model selection
-  const { selectedBackend } = await inquirer.prompt([{
-    type: 'list',
-    name: 'selectedBackend',
-    message: i18n.t('init:model.selectBackend'),
-    choices: [
-      { name: `Codex ${ansis.green(`(${i18n.t('init:model.recommended')})`)}`, value: 'codex' },
-      { name: 'Antigravity', value: 'antigravity' },
-      { name: 'Gemini', value: 'gemini' },
-    ],
-    default: currentBackend,
-  }])
-
-  // Gemini model name (if gemini is selected for any role)
-  let geminiModel = currentGeminiModel
-  if (selectedFrontend === 'gemini' || selectedBackend === 'gemini') {
-    const { selectedGeminiModel } = await inquirer.prompt([{
-      type: 'list',
-      name: 'selectedGeminiModel',
-      message: i18n.t('init:model.selectGeminiModel'),
+  const { selectedBackend } = await inquirer.prompt<{ selectedBackend: ModelType }>([
+    {
+      type: 'select',
+      name: 'selectedBackend',
+      message: i18n.t('init:model.selectBackend'),
       choices: [
-        { name: `gemini-3.1-pro-preview ${ansis.green(`(${i18n.t('init:model.recommended')})`)}`, value: 'gemini-3.1-pro-preview' },
-        { name: 'gemini-2.5-flash', value: 'gemini-2.5-flash' },
-        { name: `${i18n.t('init:model.custom')}`, value: 'custom' },
+        { name: `Codex ${ansis.green(`(${i18n.t('init:model.recommended')})`)}`, value: 'codex' },
+        { name: 'Claude', value: 'claude' },
       ],
-      default: currentGeminiModel,
-    }])
-
-    if (selectedGeminiModel === 'custom') {
-      const { customModel } = await inquirer.prompt([{
-        type: 'input',
-        name: 'customModel',
-        message: i18n.t('init:model.enterCustomModel'),
-        validate: (v: string) => v.trim() !== '' || i18n.t('init:model.enterCustomModel'),
-      }])
-      geminiModel = customModel.trim()
-    }
-    else {
-      geminiModel = selectedGeminiModel
-    }
-  }
+      default: currentBackend,
+    },
+  ])
 
   // Check if anything changed
-  if (selectedFrontend === currentFrontend && selectedBackend === currentBackend && geminiModel === currentGeminiModel) {
+  if (selectedFrontend === currentFrontend && selectedBackend === currentBackend) {
     console.log(ansis.gray(`  ${i18n.t('common:configNotModified')}`))
     return
   }
@@ -529,20 +493,25 @@ async function configModelRouting(): Promise<void> {
   // Update config.toml
   if (config) {
     config.routing.frontend = {
-      models: [selectedFrontend as any],
-      primary: selectedFrontend as any,
+      models: [selectedFrontend],
+      primary: selectedFrontend,
       strategy: 'fallback',
     }
     config.routing.backend = {
-      models: [selectedBackend as any],
-      primary: selectedBackend as any,
+      models: [selectedBackend],
+      primary: selectedBackend,
       strategy: 'fallback',
     }
     config.routing.review = {
-      models: [...new Set([selectedFrontend, selectedBackend])] as any,
+      models: [...new Set<ModelType>([selectedBackend, selectedFrontend])],
       strategy: 'parallel',
     }
-    config.routing.geminiModel = geminiModel
+    const existingProxy = normalizeRoutingForInstall(config.routing).proxy
+    if (existingProxy) {
+      config.routing.proxy = existingProxy
+    } else {
+      delete config.routing.proxy
+    }
     await writeCcgConfig(config)
   }
 
@@ -559,8 +528,7 @@ async function configModelRouting(): Promise<void> {
       env: { ...process.env, CCG_UPDATE_MODE: 'true' },
     })
     spinner.succeed(i18n.t('init:model.reinstallDone'))
-  }
-  catch {
+  } catch {
     spinner.fail(i18n.t('init:model.reinstallFailed'))
   }
 
@@ -573,7 +541,7 @@ async function configOutputStyle(): Promise<void> {
   console.log()
 
   const settingsPath = join(homedir(), '.claude', 'settings.json')
-  let settings: Record<string, any> = {}
+  let settings: ClaudeSettings = {}
   if (await fs.pathExists(settingsPath)) {
     settings = await fs.readJson(settingsPath)
   }
@@ -582,16 +550,18 @@ async function configOutputStyle(): Promise<void> {
   console.log(ansis.gray(`  ${i18n.t('menu:style.currentStyle')}: ${currentStyle}`))
   console.log()
 
-  const { style } = await inquirer.prompt([{
-    type: 'list',
-    name: 'style',
-    message: i18n.t('menu:style.selectStyle'),
-    choices: OUTPUT_STYLES.map(s => ({
-      name: `${i18n.t(s.nameKey)} ${ansis.gray(`- ${i18n.t(s.descKey)}`)}`,
-      value: s.id,
-    })),
-    default: currentStyle,
-  }])
+  const { style } = await inquirer.prompt([
+    {
+      type: 'select',
+      name: 'style',
+      message: i18n.t('menu:style.selectStyle'),
+      choices: OUTPUT_STYLES.map((s) => ({
+        name: `${i18n.t(s.nameKey)} ${ansis.gray(`- ${i18n.t(s.descKey)}`)}`,
+        value: s.id,
+      })),
+      default: currentStyle,
+    },
+  ])
 
   if (style === currentStyle) {
     console.log(ansis.gray(i18n.t('menu:style.notChanged')))
@@ -606,7 +576,7 @@ async function configOutputStyle(): Promise<void> {
     const __filename = fileURLToPath(import.meta.url)
     const __dirname = dirname(__filename)
     let pkgRoot = dirname(dirname(__dirname))
-    if (!await fs.pathExists(join(pkgRoot, 'templates'))) {
+    if (!(await fs.pathExists(join(pkgRoot, 'templates')))) {
       pkgRoot = dirname(pkgRoot)
     }
     const templatePath = join(pkgRoot, 'templates', 'output-styles', `${style}.md`)
@@ -621,8 +591,7 @@ async function configOutputStyle(): Promise<void> {
   // Update settings.json
   if (style === 'default') {
     delete settings.outputStyle
-  }
-  else {
+  } else {
     settings.outputStyle = style
   }
 
@@ -643,16 +612,23 @@ async function handleCodexMode(): Promise<void> {
   console.log(ansis.cyan.bold(isZh ? '  Codex 多模型编排模式' : '  Codex Multi-Model Orchestration Mode'))
   console.log()
 
-  const { action } = await inquirer.prompt([{
-    type: 'list',
-    name: 'action',
-    message: isZh ? '选择操作' : 'Select action',
-    choices: [
-      { name: isZh ? '安装 / 更新 Codex 模式' : 'Install / Update Codex Mode', value: 'install' },
-      { name: isZh ? '卸载 Codex 模式（只删 CCG 文件，保留用户配置）' : 'Uninstall Codex Mode (CCG files only, preserves user config)', value: 'uninstall' },
-      { name: isZh ? '返回' : 'Back', value: 'back' },
-    ],
-  }])
+  const { action } = await inquirer.prompt([
+    {
+      type: 'select',
+      name: 'action',
+      message: isZh ? '选择操作' : 'Select action',
+      choices: [
+        { name: isZh ? '安装 / 更新 Codex 模式' : 'Install / Update Codex Mode', value: 'install' },
+        {
+          name: isZh
+            ? '卸载 Codex 模式（只删 CCG 文件，保留用户配置）'
+            : 'Uninstall Codex Mode (CCG files only, preserves user config)',
+          value: 'uninstall',
+        },
+        { name: isZh ? '返回' : 'Back', value: 'back' },
+      ],
+    },
+  ])
 
   if (action === 'back') return
 
@@ -673,17 +649,17 @@ async function handleCodexMode(): Promise<void> {
           console.log(`  ${ansis.gray('○')} ${f}`)
         }
       }
-    }
-    else {
+    } else {
       spinner.fail(isZh ? '卸载失败' : 'Uninstall failed')
     }
     return
   }
 
   // Install
-  console.log(isZh
-    ? '  安装 CCG Codex 模式到 ~/.codex/，让 Codex CLI 作为主导者编排多模型。'
-    : '  Install CCG Codex mode to ~/.codex/, enabling Codex CLI as lead orchestrator.',
+  console.log(
+    isZh
+      ? '  安装 CCG Codex 模式到 ~/.codex/，让 Codex CLI 作为主导者编排多模型。'
+      : '  Install CCG Codex mode to ~/.codex/, enabling Codex CLI as lead orchestrator.'
   )
   console.log()
   console.log(isZh ? '  将安装:' : '  Will install:')
@@ -693,12 +669,14 @@ async function handleCodexMode(): Promise<void> {
   console.log('    ~/.codex/agents/ccg-*.toml       — sub-agent definitions')
   console.log()
 
-  const { confirm } = await inquirer.prompt([{
-    type: 'confirm',
-    name: 'confirm',
-    message: isZh ? '确认安装？' : 'Confirm install?',
-    default: true,
-  }])
+  const { confirm } = await inquirer.prompt([
+    {
+      type: 'confirm',
+      name: 'confirm',
+      message: isZh ? '确认安装？' : 'Confirm install?',
+      default: true,
+    },
+  ])
 
   if (!confirm) return
 
@@ -709,12 +687,14 @@ async function handleCodexMode(): Promise<void> {
     console.log()
     console.log(ansis.green(result.message))
     console.log()
-    console.log(ansis.yellow(isZh
-      ? '  使用方法: 在项目目录运行 codex，AGENTS.md 会自动生效'
-      : '  Usage: run codex in your project directory, AGENTS.md takes effect automatically',
-    ))
-  }
-  else {
+    console.log(
+      ansis.yellow(
+        isZh
+          ? '  使用方法: 在项目目录运行 codex，AGENTS.md 会自动生效'
+          : '  Usage: run codex in your project directory, AGENTS.md takes effect automatically'
+      )
+    )
+  } else {
     spinner.fail(result.message)
   }
 }
@@ -727,23 +707,21 @@ async function handleInstallClaude(): Promise<void> {
   console.log()
 
   // Check if already installed
-  let isInstalled = false
-  try {
-    await execAsync('claude --version', { timeout: 5000 })
-    isInstalled = true
-  }
-  catch {
-    isInstalled = false
-  }
+  const isInstalled = await execAsync('claude --version', { timeout: 5000 }).then(
+    () => true,
+    () => false
+  )
 
   if (isInstalled) {
     console.log(ansis.yellow(`  ⚠ ${i18n.t('menu:claude.alreadyInstalled')}`))
-    const { confirm } = await inquirer.prompt([{
-      type: 'confirm',
-      name: 'confirm',
-      message: i18n.t('menu:claude.reinstallPrompt'),
-      default: false,
-    }])
+    const { confirm } = await inquirer.prompt([
+      {
+        type: 'confirm',
+        name: 'confirm',
+        message: i18n.t('menu:claude.reinstallPrompt'),
+        default: false,
+      },
+    ])
 
     if (!confirm) {
       console.log(ansis.gray(`  ${i18n.t('common:cancelled')}`))
@@ -754,11 +732,12 @@ async function handleInstallClaude(): Promise<void> {
     console.log()
     console.log(ansis.yellow(`  ⏳ ${i18n.t('menu:claude.uninstalling')}`))
     try {
-      const uninstallCmd = isWindows() ? 'npm uninstall -g @anthropic-ai/claude-code' : 'sudo npm uninstall -g @anthropic-ai/claude-code'
+      const uninstallCmd = isWindows()
+        ? 'npm uninstall -g @anthropic-ai/claude-code'
+        : 'sudo npm uninstall -g @anthropic-ai/claude-code'
       await execAsync(uninstallCmd, { timeout: 60000 })
       console.log(ansis.green(`  ✓ ${i18n.t('menu:claude.uninstallSuccess')}`))
-    }
-    catch (e) {
+    } catch (e) {
       console.log(ansis.red(`  ✗ ${i18n.t('menu:claude.uninstallFailed', { error: String(e) })}`))
       return
     }
@@ -768,52 +747,55 @@ async function handleInstallClaude(): Promise<void> {
   const isMac = process.platform === 'darwin'
   const isLinux = process.platform === 'linux'
 
-  const { method } = await inquirer.prompt([{
-    type: 'list',
-    name: 'method',
-    message: i18n.t('menu:claude.selectMethod'),
-    choices: [
-      { name: `npm ${ansis.green('(⭐)')} ${ansis.gray('- npm install -g')}`, value: 'npm' },
-      ...((isMac || isLinux) ? [{ name: `homebrew ${ansis.gray('- brew install')}`, value: 'homebrew' }] : []),
-      ...((isMac || isLinux) ? [{ name: `curl ${ansis.gray('- official script')}`, value: 'curl' }] : []),
-      ...(isWindows() ? [
-        { name: `powershell ${ansis.gray('- Windows official')}`, value: 'powershell' },
-        { name: `cmd ${ansis.gray('- Command Prompt')}`, value: 'cmd' },
-      ] : []),
-      new inquirer.Separator(),
-      { name: `${ansis.gray(i18n.t('common:cancel'))}`, value: 'cancel' },
-    ],
-  }])
+  const { method } = await inquirer.prompt([
+    {
+      type: 'select',
+      name: 'method',
+      message: i18n.t('menu:claude.selectMethod'),
+      choices: [
+        { name: `npm ${ansis.green('(⭐)')} ${ansis.gray('- npm install -g')}`, value: 'npm' },
+        ...(isMac || isLinux ? [{ name: `homebrew ${ansis.gray('- brew install')}`, value: 'homebrew' }] : []),
+        ...(isMac || isLinux ? [{ name: `curl ${ansis.gray('- official script')}`, value: 'curl' }] : []),
+        ...(isWindows()
+          ? [
+              { name: `powershell ${ansis.gray('- Windows official')}`, value: 'powershell' },
+              { name: `cmd ${ansis.gray('- Command Prompt')}`, value: 'cmd' },
+            ]
+          : []),
+        new inquirer.Separator(),
+        { name: `${ansis.gray(i18n.t('common:cancel'))}`, value: 'cancel' },
+      ],
+    },
+  ])
 
-  if (method === 'cancel')
-    return
+  if (method === 'cancel') return
 
   console.log()
   console.log(ansis.yellow(`  ⏳ ${i18n.t('menu:claude.installing')}`))
 
   try {
     if (method === 'npm') {
-      const installCmd = isWindows() ? 'npm install -g @anthropic-ai/claude-code' : 'sudo npm install -g @anthropic-ai/claude-code'
+      const installCmd = isWindows()
+        ? 'npm install -g @anthropic-ai/claude-code'
+        : 'sudo npm install -g @anthropic-ai/claude-code'
       await execAsync(installCmd, { timeout: 300000 })
-    }
-    else if (method === 'homebrew') {
+    } else if (method === 'homebrew') {
       await execAsync('brew install --cask claude-code', { timeout: 300000 })
-    }
-    else if (method === 'curl') {
+    } else if (method === 'curl') {
       await execAsync('curl -fsSL https://claude.ai/install.sh | bash', { timeout: 300000 })
-    }
-    else if (method === 'powershell') {
+    } else if (method === 'powershell') {
       await execAsync('powershell -Command "irm https://claude.ai/install.ps1 | iex"', { timeout: 300000 })
-    }
-    else if (method === 'cmd') {
-      await execAsync('cmd /c "curl -fsSL https://claude.ai/install.cmd -o install.cmd && install.cmd && del install.cmd"', { timeout: 300000 })
+    } else if (method === 'cmd') {
+      await execAsync(
+        'cmd /c "curl -fsSL https://claude.ai/install.cmd -o install.cmd && install.cmd && del install.cmd"',
+        { timeout: 300000 }
+      )
     }
 
     console.log(ansis.green(`  ✓ ${i18n.t('menu:claude.installSuccess')}`))
     console.log()
     console.log(ansis.cyan(`  💡 ${i18n.t('menu:claude.runHint')}`))
-  }
-  catch (e) {
+  } catch (e) {
     console.log(ansis.red(`  ✗ ${i18n.t('menu:claude.installFailed', { error: String(e) })}`))
   }
 }
@@ -829,8 +811,7 @@ async function checkIfGlobalInstall(): Promise<boolean> {
   try {
     const { stdout } = await execAsync('npm list -g ccg-workflow --depth=0', { timeout: 5000 })
     return stdout.includes('ccg-workflow@')
-  }
-  catch {
+  } catch {
     return false
   }
 }
@@ -845,18 +826,24 @@ async function uninstall(): Promise<void> {
     console.log(ansis.yellow(`  ⚠️  ${i18n.t('menu:uninstall.globalDetected')}`))
     console.log()
     console.log(`  ${i18n.t('menu:uninstall.twoSteps')}`)
-    console.log(`    ${ansis.cyan(`1. ${i18n.t('menu:uninstall.step1')}`)} ${ansis.gray(`(${i18n.t('menu:uninstall.step1Hint')})`)}`)
-    console.log(`    ${ansis.cyan(`2. ${i18n.t('menu:uninstall.step2')}`)} ${ansis.gray(`(${i18n.t('menu:uninstall.step2Hint')})`)}`)
+    console.log(
+      `    ${ansis.cyan(`1. ${i18n.t('menu:uninstall.step1')}`)} ${ansis.gray(`(${i18n.t('menu:uninstall.step1Hint')})`)}`
+    )
+    console.log(
+      `    ${ansis.cyan(`2. ${i18n.t('menu:uninstall.step2')}`)} ${ansis.gray(`(${i18n.t('menu:uninstall.step2Hint')})`)}`
+    )
     console.log()
   }
 
   // Confirm uninstall
-  const { confirm } = await inquirer.prompt([{
-    type: 'confirm',
-    name: 'confirm',
-    message: isGlobalInstall ? i18n.t('menu:uninstall.continuePrompt') : i18n.t('menu:uninstall.confirm'),
-    default: false,
-  }])
+  const { confirm } = await inquirer.prompt([
+    {
+      type: 'confirm',
+      name: 'confirm',
+      message: isGlobalInstall ? i18n.t('menu:uninstall.continuePrompt') : i18n.t('menu:uninstall.confirm'),
+      default: false,
+    },
+  ])
 
   if (!confirm) {
     console.log(ansis.gray(`  ${i18n.t('menu:uninstall.cancelled')}`))
@@ -912,8 +899,7 @@ async function uninstall(): Promise<void> {
       console.log()
       console.log(ansis.gray(`  (${i18n.t('menu:uninstall.afterDone')})`))
     }
-  }
-  else {
+  } else {
     console.log(ansis.red(`  ${i18n.t('menu:uninstall.failed')}`))
     for (const error of result.errors) {
       console.log(ansis.red(`    ${error}`))
@@ -930,25 +916,28 @@ async function uninstall(): Promise<void> {
 async function handleTools(): Promise<void> {
   console.log()
 
-  const { tool } = await inquirer.prompt([{
-    type: 'list',
-    name: 'tool',
-    message: i18n.t('menu:tools.title'),
-    choices: [
-      { name: `${ansis.green('📊')} ccusage        ${ansis.gray(`${i18n.t('menu:tools.ccusage')}`)}`, value: 'ccusage' },
-      { name: `${ansis.blue('📟')} CCometixLine   ${ansis.gray(`${i18n.t('menu:tools.ccline')}`)}`, value: 'ccline' },
-      new inquirer.Separator(),
-      { name: `${ansis.gray(`← ${i18n.t('common:back')}`)}`, value: 'cancel' },
-    ],
-  }])
+  const { tool } = await inquirer.prompt([
+    {
+      type: 'select',
+      name: 'tool',
+      message: i18n.t('menu:tools.title'),
+      choices: [
+        {
+          name: `${ansis.green('📊')} ccusage        ${ansis.gray(`${i18n.t('menu:tools.ccusage')}`)}`,
+          value: 'ccusage',
+        },
+        { name: `${ansis.blue('📟')} CCometixLine   ${ansis.gray(`${i18n.t('menu:tools.ccline')}`)}`, value: 'ccline' },
+        new inquirer.Separator(),
+        { name: `${ansis.gray(`← ${i18n.t('common:back')}`)}`, value: 'cancel' },
+      ],
+    },
+  ])
 
-  if (tool === 'cancel')
-    return
+  if (tool === 'cancel') return
 
   if (tool === 'ccusage') {
     await runCcusage()
-  }
-  else if (tool === 'ccline') {
+  } else if (tool === 'ccline') {
     await handleCCometixLine()
   }
 }
@@ -972,25 +961,25 @@ async function runCcusage(): Promise<void> {
 async function handleCCometixLine(): Promise<void> {
   console.log()
 
-  const { action } = await inquirer.prompt([{
-    type: 'list',
-    name: 'action',
-    message: i18n.t('menu:tools.cclineAction'),
-    choices: [
-      { name: `${ansis.green('➜')} ${i18n.t('menu:tools.cclineInstall')}`, value: 'install' },
-      { name: `${ansis.red('✕')} ${i18n.t('menu:tools.cclineUninstall')}`, value: 'uninstall' },
-      new inquirer.Separator(),
-      { name: `${ansis.gray(`← ${i18n.t('common:back')}`)}`, value: 'cancel' },
-    ],
-  }])
+  const { action } = await inquirer.prompt([
+    {
+      type: 'select',
+      name: 'action',
+      message: i18n.t('menu:tools.cclineAction'),
+      choices: [
+        { name: `${ansis.green('➜')} ${i18n.t('menu:tools.cclineInstall')}`, value: 'install' },
+        { name: `${ansis.red('✕')} ${i18n.t('menu:tools.cclineUninstall')}`, value: 'uninstall' },
+        new inquirer.Separator(),
+        { name: `${ansis.gray(`← ${i18n.t('common:back')}`)}`, value: 'cancel' },
+      ],
+    },
+  ])
 
-  if (action === 'cancel')
-    return
+  if (action === 'cancel') return
 
   if (action === 'install') {
     await installCCometixLine()
-  }
-  else if (action === 'uninstall') {
+  } else if (action === 'uninstall') {
     await uninstallCCometixLine()
   }
 }
@@ -1005,7 +994,7 @@ async function installCCometixLine(): Promise<void> {
     console.log(ansis.green(`  ✓ ${i18n.t('menu:tools.cclineInstallSuccess')}`))
 
     const settingsPath = join(homedir(), '.claude', 'settings.json')
-    let settings: Record<string, any> = {}
+    let settings: ClaudeSettings = {}
 
     if (await fs.pathExists(settingsPath)) {
       settings = await fs.readJson(settingsPath)
@@ -1013,9 +1002,7 @@ async function installCCometixLine(): Promise<void> {
 
     settings.statusLine = {
       type: 'command',
-      command: isWindows()
-        ? '~/.claude/ccline/ccline.exe'
-        : '~/.claude/ccline/ccline',
+      command: isWindows() ? '~/.claude/ccline/ccline.exe' : '~/.claude/ccline/ccline',
       padding: 0,
     }
 
@@ -1025,8 +1012,7 @@ async function installCCometixLine(): Promise<void> {
 
     console.log()
     console.log(ansis.cyan(`  💡 ${i18n.t('common:restartToApply')}`))
-  }
-  catch (error) {
+  } catch (error) {
     console.log(ansis.red(`  ✗ ${i18n.t('menu:tools.cclineInstallFailed', { error: String(error) })}`))
   }
 }
@@ -1047,8 +1033,7 @@ async function uninstallCCometixLine(): Promise<void> {
     const uninstallCmd = isWindows() ? 'npm uninstall -g @cometix/ccline' : 'sudo npm uninstall -g @cometix/ccline'
     await execAsync(uninstallCmd, { timeout: 60000 })
     console.log(ansis.green(`  ✓ ${i18n.t('menu:tools.cclineUninstalled')}`))
-  }
-  catch (error) {
+  } catch (error) {
     console.log(ansis.red(`  ✗ ${i18n.t('menu:tools.cclineUninstallFailed', { error: String(error) })}`))
   }
 }

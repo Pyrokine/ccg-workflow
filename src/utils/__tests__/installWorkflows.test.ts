@@ -1,8 +1,8 @@
-import { readdirSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
-import { tmpdir } from 'node:os'
-import { afterAll, describe, expect, it } from 'vitest'
 import fs from 'fs-extra'
+import { readdirSync, readFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterAll, describe, expect, it } from 'vitest'
 import { getAllCommandIds, installWorkflows } from '../installer'
 
 const ALL_IDS = getAllCommandIds()
@@ -10,14 +10,11 @@ const ALL_IDS = getAllCommandIds()
 // Collect all .md files recursively
 function collectMdFiles(dir: string): string[] {
   const files: string[] = []
-  if (!fs.existsSync(dir))
-    return files
+  if (!fs.existsSync(dir)) return files
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const full = join(dir, entry.name)
-    if (entry.isDirectory())
-      files.push(...collectMdFiles(full))
-    else if (entry.name.endsWith('.md'))
-      files.push(full)
+    if (entry.isDirectory()) files.push(...collectMdFiles(full))
+    else if (entry.name.endsWith('.md')) files.push(full)
   }
   return files
 }
@@ -35,6 +32,7 @@ describe('installWorkflows E2E — mcpProvider="skip"', () => {
   it('installs all workflows without errors', async () => {
     const result = await installWorkflows(ALL_IDS, tmpDir, true, {
       mcpProvider: 'skip',
+      skipBinary: true,
     })
     expect(result.success).toBe(true)
     expect(result.errors).toEqual([])
@@ -82,7 +80,7 @@ describe('installWorkflows E2E — mcpProvider="skip"', () => {
 
   it('planner.md frontmatter has no MCP tool in tools declaration', async () => {
     const content = readFileSync(join(tmpDir, 'agents', 'ccg', 'planner.md'), 'utf-8')
-    const toolsLine = content.split('\n').find(l => l.startsWith('tools:'))
+    const toolsLine = content.split('\n').find((l) => l.startsWith('tools:'))
     expect(toolsLine).toBe('tools: Read, Write')
   })
 })
@@ -100,6 +98,7 @@ describe('installWorkflows E2E — mcpProvider="ace-tool" (control)', () => {
   it('installs all workflows and injects ace-tool references', async () => {
     const result = await installWorkflows(ALL_IDS, tmpDir, true, {
       mcpProvider: 'ace-tool',
+      skipBinary: true,
     })
     expect(result.success).toBe(true)
     expect(result.errors).toEqual([])

@@ -1,16 +1,24 @@
-import type { AceToolConfig, FastContextConfig } from '../types'
-import { homedir } from 'node:os'
 import fs from 'fs-extra'
+import { homedir } from 'node:os'
 import { join } from 'pathe'
 import { parse as parseToml, stringify as stringifyToml } from 'smol-toml'
-import { type McpServerConfig, backupClaudeCodeConfig, buildMcpServerConfig, fixWindowsMcpConfig, mergeMcpServers, readClaudeCodeConfig, writeClaudeCodeConfig } from './mcp'
+import type { AceToolConfig, FastContextConfig } from '../types'
+import {
+  backupClaudeCodeConfig,
+  buildMcpServerConfig,
+  fixWindowsMcpConfig,
+  type McpServerConfig,
+  mergeMcpServers,
+  readClaudeCodeConfig,
+  writeClaudeCodeConfig,
+} from './mcp'
 import { isWindows } from './platform'
 
 // ═══════════════════════════════════════════════════════
 // Shared types & helpers
 // ═══════════════════════════════════════════════════════
 
-type McpInstallResult = { success: boolean, message: string, configPath?: string }
+type McpInstallResult = { success: boolean; message: string; configPath?: string }
 
 /**
  * Common pipeline for installing an MCP server into ~/.claude.json:
@@ -21,7 +29,7 @@ type McpInstallResult = { success: boolean, message: string, configPath?: string
 async function configureMcpInClaude(
   serverId: string,
   serverConfig: McpServerConfig,
-  label: string,
+  label: string
 ): Promise<McpInstallResult> {
   try {
     let existingConfig = await readClaudeCodeConfig()
@@ -58,8 +66,7 @@ async function configureMcpInClaude(
         : `${label} configured successfully`,
       configPath: join(homedir(), '.claude.json'),
     }
-  }
-  catch (error) {
+  } catch (error) {
     return {
       success: false,
       message: `Failed to configure ${label}: ${error}`,
@@ -74,7 +81,7 @@ async function configureMcpInClaude(
 /**
  * Uninstall ace-tool MCP configuration from ~/.claude.json
  */
-export async function uninstallAceTool(): Promise<{ success: boolean, message: string }> {
+export async function uninstallAceTool(): Promise<{ success: boolean; message: string }> {
   try {
     const existingConfig = await readClaudeCodeConfig()
 
@@ -91,8 +98,7 @@ export async function uninstallAceTool(): Promise<{ success: boolean, message: s
     await writeClaudeCodeConfig(existingConfig)
 
     return { success: true, message: 'ace-tool MCP removed from ~/.claude.json' }
-  }
-  catch (error) {
+  } catch (error) {
     return { success: false, message: `Failed to uninstall ace-tool: ${error}` }
   }
 }
@@ -156,18 +162,15 @@ export async function installContextWeaver(config: ContextWeaverConfig): Promise
     try {
       execSync('npm install -g @hsingjui/contextweaver', { stdio: 'pipe' })
       console.log('  ✓ ContextWeaver CLI 安装成功')
-    }
-    catch {
+    } catch {
       if (process.platform !== 'win32') {
         try {
           execSync('sudo npm install -g @hsingjui/contextweaver', { stdio: 'pipe' })
           console.log('  ✓ ContextWeaver CLI 安装成功 (sudo)')
-        }
-        catch {
+        } catch {
           console.log('  ⚠ ContextWeaver CLI 安装失败，请手动运行: npm install -g @hsingjui/contextweaver')
         }
-      }
-      else {
+      } else {
         console.log('  ⚠ ContextWeaver CLI 安装失败，请手动运行: npm install -g @hsingjui/contextweaver')
       }
     }
@@ -200,8 +203,7 @@ RERANK_TOP_N=20
       args: ['mcp'],
     })
     return await configureMcpInClaude('contextweaver', serverConfig, 'ContextWeaver MCP')
-  }
-  catch (error) {
+  } catch (error) {
     return { success: false, message: `Failed to configure ContextWeaver: ${error}` }
   }
 }
@@ -210,7 +212,7 @@ RERANK_TOP_N=20
  * Uninstall ContextWeaver MCP from Claude Code.
  * Delegates to generic uninstallMcpServer.
  */
-export function uninstallContextWeaver(): Promise<{ success: boolean, message: string }> {
+export function uninstallContextWeaver(): Promise<{ success: boolean; message: string }> {
   return uninstallMcpServer('contextweaver')
 }
 
@@ -241,7 +243,7 @@ export async function installFastContext(config: FastContextConfig): Promise<Mcp
  * Uninstall Fast Context MCP from Claude Code.
  * Delegates to generic uninstallMcpServer.
  */
-export function uninstallFastContext(): Promise<{ success: boolean, message: string }> {
+export function uninstallFastContext(): Promise<{ success: boolean; message: string }> {
   return uninstallMcpServer('fast-context')
 }
 
@@ -256,8 +258,8 @@ export async function installMcpServer(
   id: string,
   command: string,
   args: string[],
-  env: Record<string, string> = {},
-): Promise<{ success: boolean, message: string }> {
+  env: Record<string, string> = {}
+): Promise<{ success: boolean; message: string }> {
   const serverConfig = buildMcpServerConfig({ type: 'stdio', command, args, env })
   return configureMcpInClaude(id, serverConfig, id)
 }
@@ -265,7 +267,7 @@ export async function installMcpServer(
 /**
  * Uninstall a generic MCP server from Claude Code
  */
-export async function uninstallMcpServer(id: string): Promise<{ success: boolean, message: string }> {
+export async function uninstallMcpServer(id: string): Promise<{ success: boolean; message: string }> {
   try {
     const existingConfig = await readClaudeCodeConfig()
     if (existingConfig?.mcpServers?.[id]) {
@@ -273,40 +275,34 @@ export async function uninstallMcpServer(id: string): Promise<{ success: boolean
       await writeClaudeCodeConfig(existingConfig)
     }
     return { success: true, message: `${id} MCP uninstalled successfully` }
-  }
-  catch (error) {
+  } catch (error) {
     return { success: false, message: `Failed to uninstall ${id}: ${error}` }
   }
 }
 
 // ═══════════════════════════════════════════════════════
 // MCP Sync — Mirror CCG-relevant MCP servers
-// to Codex (~/.codex/config.toml) and Gemini (~/.gemini/settings.json)
+// to Codex (~/.codex/config.toml)
 // ═══════════════════════════════════════════════════════
 
-/** MCP server IDs that CCG manages and should sync to Codex/Gemini */
-const CCG_MCP_IDS = new Set([
-  'grok-search',
-  'context7',
-  'ace-tool',
-  'ace-tool-rs',
-  'contextweaver',
-  'fast-context',
-])
+/** MCP server IDs that CCG manages and should sync to Codex */
+const CCG_MCP_IDS = new Set(['grok-search', 'context7', 'ace-tool', 'ace-tool-rs', 'contextweaver', 'fast-context'])
 
-type SyncResult = { success: boolean, message: string, synced: string[], removed: string[] }
+type SyncResult = { success: boolean; message: string; synced: string[]; removed: string[] }
+type McpServerMap = Record<string, Record<string, unknown>>
+type CodexConfig = Record<string, unknown> & { mcp_servers?: McpServerMap }
 
 /**
  * Read Claude's MCP config and filter to CCG-managed servers.
  */
-async function getCcgMcpServersFromClaude(): Promise<Record<string, any>> {
+async function getCcgMcpServersFromClaude(): Promise<McpServerMap> {
   const claudeConfig = await readClaudeCodeConfig()
   const claudeMcpServers = claudeConfig?.mcpServers || {}
 
-  const serversToSync: Record<string, any> = {}
+  const serversToSync: McpServerMap = {}
   for (const [id, config] of Object.entries(claudeMcpServers)) {
     if (CCG_MCP_IDS.has(id) && config) {
-      serversToSync[id] = config
+      serversToSync[id] = config as unknown as Record<string, unknown>
     }
   }
   return serversToSync
@@ -317,9 +313,9 @@ async function getCcgMcpServersFromClaude(): Promise<Record<string, any>> {
  * Returns { synced, removed } arrays. Mutates targetServers in place.
  */
 function mirrorCcgServers(
-  serversToSync: Record<string, any>,
-  targetServers: Record<string, any>,
-): { synced: string[], removed: string[] } {
+  serversToSync: McpServerMap,
+  targetServers: McpServerMap
+): { synced: string[]; removed: string[] } {
   const synced: string[] = []
   const removed: string[] = []
 
@@ -366,21 +362,19 @@ export async function syncMcpToCodex(): Promise<SyncResult> {
     const codexConfigPath = join(codexConfigDir, 'config.toml')
     await fs.ensureDir(codexConfigDir)
 
-    let codexConfig: Record<string, any> = {}
+    let codexConfig: CodexConfig = {}
     if (await fs.pathExists(codexConfigPath)) {
       const content = await fs.readFile(codexConfigPath, 'utf-8')
-      codexConfig = parseToml(content) as Record<string, any>
+      codexConfig = parseToml(content) as unknown as CodexConfig
     }
 
-    if (!codexConfig.mcp_servers) {
-      codexConfig.mcp_servers = {}
-    }
+    codexConfig.mcp_servers ||= {}
 
     // Codex needs field-level copy (TOML compatibility: filter null/undefined)
-    const codexServersToSync: Record<string, any> = {}
+    const codexServersToSync: McpServerMap = {}
     for (const [id, server] of Object.entries(serversToSync)) {
-      const entry: Record<string, any> = {}
-      for (const [key, value] of Object.entries(server as Record<string, any>)) {
+      const entry: Record<string, unknown> = {}
+      for (const [key, value] of Object.entries(server)) {
         if (value !== null && value !== undefined) {
           entry[key] = value
         }
@@ -400,45 +394,7 @@ export async function syncMcpToCodex(): Promise<SyncResult> {
     await fs.rename(tmpPath, codexConfigPath)
 
     return { success: true, message: formatSyncMessage('Codex', synced, removed), synced, removed }
-  }
-  catch (error) {
+  } catch (error) {
     return { success: false, message: `Failed to sync MCP to Codex: ${error}`, synced: [], removed: [] }
-  }
-}
-
-/**
- * Sync (mirror) CCG-managed MCP servers from Claude's ~/.claude.json
- * to Gemini CLI's ~/.gemini/settings.json
- */
-export async function syncMcpToGemini(): Promise<SyncResult> {
-  try {
-    const serversToSync = await getCcgMcpServersFromClaude()
-
-    // Read or create Gemini settings
-    const geminiDir = join(homedir(), '.gemini')
-    const geminiSettingsPath = join(geminiDir, 'settings.json')
-    await fs.ensureDir(geminiDir)
-
-    let geminiSettings: Record<string, any> = {}
-    if (await fs.pathExists(geminiSettingsPath)) {
-      geminiSettings = await fs.readJSON(geminiSettingsPath)
-    }
-
-    if (!geminiSettings.mcpServers) {
-      geminiSettings.mcpServers = {}
-    }
-
-    const { synced, removed } = mirrorCcgServers(serversToSync, geminiSettings.mcpServers)
-
-    if (synced.length === 0 && removed.length === 0) {
-      return { success: true, message: 'No CCG MCP servers to sync to Gemini', synced: [], removed: [] }
-    }
-
-    await fs.writeJSON(geminiSettingsPath, geminiSettings, { spaces: 2 })
-
-    return { success: true, message: formatSyncMessage('Gemini', synced, removed), synced, removed }
-  }
-  catch (error) {
-    return { success: false, message: `Failed to sync MCP to Gemini: ${error}`, synced: [], removed: [] }
   }
 }

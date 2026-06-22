@@ -1,10 +1,11 @@
-import type { InstallResult } from '../types'
-import { homedir } from 'node:os'
 import ansis from 'ansis'
 import fs from 'fs-extra'
+import { homedir } from 'node:os'
 import { basename, join } from 'pathe'
+import type { InstallResult } from '../types'
+import { normalizeRoutingForInstall, readCcgConfig } from './config'
 import { getLegacyCommandIds, getWorkflowById } from './installer-data'
-import { PACKAGE_ROOT, injectConfigVariables, replaceHomePathsInTemplate } from './installer-template'
+import { injectConfigVariables, PACKAGE_ROOT, replaceHomePathsInTemplate } from './installer-template'
 import { installSkillCommands } from './skill-registry'
 
 // ═══════════════════════════════════════════════════════
@@ -32,7 +33,6 @@ export {
   installFastContext,
   installMcpServer,
   syncMcpToCodex,
-  syncMcpToGemini,
   uninstallAceTool,
   uninstallContextWeaver,
   uninstallFastContext,
@@ -40,16 +40,9 @@ export {
 } from './installer-mcp'
 export type { ContextWeaverConfig } from './installer-mcp'
 
-export {
-  removeFastContextPrompt,
-  writeFastContextPrompt,
-} from './installer-prompt'
+export { removeFastContextPrompt, writeFastContextPrompt } from './installer-prompt'
 
-export {
-  collectInvocableSkills,
-  collectSkills,
-  parseFrontmatter,
-} from './skill-registry'
+export { collectInvocableSkills, collectSkills, parseFrontmatter } from './skill-registry'
 export type { SkillMeta } from './skill-registry'
 
 // ═══════════════════════════════════════════════════════
@@ -61,7 +54,7 @@ export type { SkillMeta } from './skill-registry'
  * Must match the `version` constant in codeagent-wrapper/main.go.
  * When this differs from the installed binary, update triggers re-download.
  */
-const EXPECTED_BINARY_VERSION = '5.11.0'
+const EXPECTED_BINARY_VERSION = '5.11.1-aug.1'
 
 // ═══════════════════════════════════════════════════════
 // Install context — shared across sub-functions
@@ -70,14 +63,15 @@ const EXPECTED_BINARY_VERSION = '5.11.0'
 interface InstallConfig {
   routing: {
     mode: string
-    frontend: { models: string[], primary: string }
-    backend: { models: string[], primary: string }
-    review: { models: string[] }
-    geminiModel?: string
+    frontend: { models: string[]; primary: string }
+    backend: { models: string[]; primary: string }
+    review: { models: string[]; strategy?: string }
+    proxy?: { models?: string[]; http?: string; https?: string }
   }
   liteMode: boolean
   mcpProvider: string
   skipImpeccable?: boolean
+  skipBinary?: boolean
 }
 
 interface InstallContext {
@@ -92,13 +86,17 @@ interface InstallContext {
 // Binary download
 // ═══════════════════════════════════════════════════════
 
-const GITHUB_REPO = 'fengshao1227/ccg-workflow'
+const GITHUB_REPO = 'Pyrokine/ccg-workflow'
 const RELEASE_TAG = 'preset'
 
-/** Download sources: R2 CDN first (China-friendly) → GitHub fallback (global) */
+/** Download sources: fork GitHub Release first → R2 mirror fallback. */
 const BINARY_SOURCES = [
+  {
+    name: 'GitHub Release',
+    url: `https://github.com/${GITHUB_REPO}/releases/download/${RELEASE_TAG}`,
+    timeoutMs: 120_000,
+  },
   { name: 'Cloudflare CDN', url: 'https://github.20031227.xyz/preset', timeoutMs: 30_000 },
-  { name: 'GitHub Release', url: `https://github.com/${GITHUB_REPO}/releases/download/${RELEASE_TAG}`, timeoutMs: 120_000 },
 ]
 
 /**
@@ -113,17 +111,16 @@ async function downloadFromUrl(url: string, destPath: string, timeoutMs: number,
     try {
       // Prefer curl — auto-reads HTTPS_PROXY / ALL_PROXY for proxy support
       const { execSync } = await import('node:child_process')
-      execSync(
-        `curl -fsSL --max-time ${timeoutSec} -o "${destPath}" "${url}"`,
-        { stdio: 'pipe', timeout: timeoutMs + 5000 },
-      )
+      execSync(`curl -fsSL --max-time ${timeoutSec} -o "${destPath}" "${url}"`, {
+        stdio: 'pipe',
+        timeout: timeoutMs + 5000,
+      })
 
       if (process.platform !== 'win32') {
         await fs.chmod(destPath, 0o755)
       }
       return true
-    }
-    catch {
+    } catch {
       // curl failed — try Node.js fetch as fallback (no proxy support)
       try {
         const controller = new AbortController()
@@ -133,7 +130,7 @@ async function downloadFromUrl(url: string, destPath: string, timeoutMs: number,
         if (!response.ok) {
           clearTimeout(timer)
           if (attempt < maxAttempts) {
-            await new Promise(resolve => setTimeout(resolve, attempt * 2000))
+            await new Promise((resolve) => setTimeout(resolve, attempt * 2000))
             continue
           }
           return false
@@ -147,10 +144,9 @@ async function downloadFromUrl(url: string, destPath: string, timeoutMs: number,
           await fs.chmod(destPath, 0o755)
         }
         return true
-      }
-      catch {
+      } catch {
         if (attempt < maxAttempts) {
-          await new Promise(resolve => setTimeout(resolve, attempt * 2000))
+          await new Promise((resolve) => setTimeout(resolve, attempt * 2000))
           continue
         }
         return false
@@ -185,7 +181,7 @@ async function copyMdTemplates(
   ctx: InstallContext,
   srcDir: string,
   destDir: string,
-  options: { inject?: boolean } = {},
+  options: { inject?: boolean } = {}
 ): Promise<string[]> {
   const installed: string[] = []
   if (!(await fs.pathExists(srcDir))) {
@@ -208,6 +204,27 @@ async function copyMdTemplates(
     }
   }
   return installed
+}
+
+async function createCodexInstallConfig(): Promise<InstallConfig> {
+  const config = await readCcgConfig()
+  return {
+    routing: normalizeRoutingForInstall(config?.routing),
+    liteMode: config?.performance?.liteMode ?? true,
+    mcpProvider: config?.mcp?.provider || 'fast-context',
+    skipImpeccable: config?.performance?.skipImpeccable ?? false,
+    skipBinary: false,
+  }
+}
+
+function renderCodexTemplate(content: string, config: InstallConfig): string {
+  const userHome = homedir().replace(/\\/g, '/')
+  return injectConfigVariables(content, config).replace(/~\//g, `${userHome}/`)
+}
+
+async function writeRenderedCodexFile(src: string, dest: string, config: InstallConfig): Promise<void> {
+  const content = renderCodexTemplate(await fs.readFile(src, 'utf-8'), config)
+  await fs.writeFile(dest, content, 'utf-8')
 }
 
 // ═══════════════════════════════════════════════════════
@@ -243,8 +260,7 @@ async function installCommandFiles(ctx: InstallContext, workflowIds: string[]): 
             await fs.writeFile(destFile, content, 'utf-8')
           }
           ctx.result.installedCommands.push(cmd)
-        }
-        else {
+        } else {
           const placeholder = `---
 description: "${workflow.descriptionEn}"
 ---
@@ -258,8 +274,7 @@ ${workflow.description}
           await fs.writeFile(destFile, placeholder, 'utf-8')
           ctx.result.installedCommands.push(cmd)
         }
-      }
-      catch (error) {
+      } catch (error) {
         ctx.result.errors.push(`Failed to install ${cmd}: ${error}`)
         ctx.result.success = false
       }
@@ -272,21 +287,17 @@ ${workflow.description}
  */
 async function installAgentFiles(ctx: InstallContext): Promise<void> {
   try {
-    await copyMdTemplates(
-      ctx,
-      join(ctx.templateDir, 'commands', 'agents'),
-      join(ctx.installDir, 'agents', 'ccg'),
-      { inject: true },
-    )
-  }
-  catch (error) {
+    await copyMdTemplates(ctx, join(ctx.templateDir, 'commands', 'agents'), join(ctx.installDir, 'agents', 'ccg'), {
+      inject: true,
+    })
+  } catch (error) {
     ctx.result.errors.push(`Failed to install agents: ${error}`)
     ctx.result.success = false
   }
 }
 
 /**
- * Install expert prompt .md files from templates/prompts/{codex,gemini,claude}/
+ * Install expert prompt .md files from templates/prompts/{codex,claude,antigravity}/
  */
 async function installPromptFiles(ctx: InstallContext): Promise<void> {
   const promptsTemplateDir = join(ctx.templateDir, 'prompts')
@@ -296,18 +307,13 @@ async function installPromptFiles(ctx: InstallContext): Promise<void> {
     return
   }
 
-  for (const model of ['codex', 'gemini', 'claude', 'antigravity']) {
+  for (const model of ['codex', 'claude', 'antigravity']) {
     try {
-      const installed = await copyMdTemplates(
-        ctx,
-        join(promptsTemplateDir, model),
-        join(promptsDir, model),
-      )
+      const installed = await copyMdTemplates(ctx, join(promptsTemplateDir, model), join(promptsDir, model))
       for (const name of installed) {
         ctx.result.installedPrompts.push(`${model}/${name}`)
       }
-    }
-    catch (error) {
+    } catch (error) {
       ctx.result.errors.push(`Failed to install ${model} prompts: ${error}`)
       ctx.result.success = false
     }
@@ -324,14 +330,12 @@ async function collectSkillNames(dir: string, depth = 0): Promise<string[]> {
     const entries = await fs.readdir(dir, { withFileTypes: true })
     for (const entry of entries) {
       if (entry.isDirectory()) {
-        names.push(...await collectSkillNames(join(dir, entry.name), depth + 1))
-      }
-      else if (entry.name === 'SKILL.md' && depth > 0) {
+        names.push(...(await collectSkillNames(join(dir, entry.name), depth + 1)))
+      } else if (entry.name === 'SKILL.md' && depth > 0) {
         names.push(basename(dir))
       }
     }
-  }
-  catch (error) {
+  } catch (error) {
     // Only suppress ENOENT (dir not found); log other errors that indicate real problems
     const code = (error as NodeJS.ErrnoException).code
     if (code !== 'ENOENT') {
@@ -347,7 +351,7 @@ async function collectSkillNames(dir: string, depth = 0): Promise<string[]> {
 async function removeDirCollectMdNames(dir: string): Promise<string[]> {
   if (!(await fs.pathExists(dir))) return []
   const files = await fs.readdir(dir)
-  const names = files.filter(f => f.endsWith('.md')).map(f => f.replace('.md', ''))
+  const names = files.filter((f) => f.endsWith('.md')).map((f) => f.replace('.md', ''))
   await fs.remove(dir)
   return names
 }
@@ -370,8 +374,7 @@ async function installSkillFiles(ctx: InstallContext): Promise<void> {
     // Migration: move old v1.7.73 layout into skills/ccg/ namespace
     const oldSkillsRoot = join(ctx.installDir, 'skills')
     const ccgLegacyItems = ['tools', 'orchestration', 'SKILL.md', 'run_skill.js']
-    const needsMigration = !await fs.pathExists(skillsDestDir)
-      && await fs.pathExists(join(oldSkillsRoot, 'tools'))
+    const needsMigration = !(await fs.pathExists(skillsDestDir)) && (await fs.pathExists(join(oldSkillsRoot, 'tools')))
     if (needsMigration) {
       await fs.ensureDir(skillsDestDir)
       for (const item of ccgLegacyItems) {
@@ -380,8 +383,7 @@ async function installSkillFiles(ctx: InstallContext): Promise<void> {
         if (await fs.pathExists(oldPath)) {
           try {
             await fs.move(oldPath, newPath, { overwrite: true })
-          }
-          catch (moveErr) {
+          } catch (moveErr) {
             // Windows: file locking can cause move to fail — log but continue
             ctx.result.errors.push(`Skills migration: failed to move ${item}: ${moveErr}`)
           }
@@ -411,8 +413,7 @@ async function installSkillFiles(ctx: InstallContext): Promise<void> {
         const fullPath = join(dir, entry.name)
         if (entry.isDirectory()) {
           await replacePathsInDir(fullPath)
-        }
-        else if (entry.name.endsWith('.md')) {
+        } else if (entry.name.endsWith('.md')) {
           const content = await fs.readFile(fullPath, 'utf-8')
           const processed = replaceHomePathsInTemplate(content, ctx.installDir)
           if (processed !== content) {
@@ -429,13 +430,12 @@ async function installSkillFiles(ctx: InstallContext): Promise<void> {
 
     if (installedSkills.length === 0) {
       ctx.result.errors.push(
-        `Skills copy completed but no SKILL.md found in ${skillsDestDir}. `
-        + `Possible cause: file locking (antivirus), permission denied, or path too long. `
-        + `Try running as administrator or disabling antivirus real-time scanning temporarily.`,
+        `Skills copy completed but no SKILL.md found in ${skillsDestDir}. ` +
+          `Possible cause: file locking (antivirus), permission denied, or path too long. ` +
+          `Try running as administrator or disabling antivirus real-time scanning temporarily.`
       )
     }
-  }
-  catch (error) {
+  } catch (error) {
     ctx.result.errors.push(`Failed to install skills: ${error}`)
     ctx.result.success = false
   }
@@ -475,15 +475,14 @@ async function installSkillGeneratedCommands(ctx: InstallContext): Promise<void>
       skillsInstallDir,
       commandsDir,
       existingCommandNames,
-      skipCategories,
+      skipCategories
     )
 
     if (generated.length > 0) {
       ctx.result.installedCommands.push(...generated)
       ctx.result.installedSkillCommands = generated.length
     }
-  }
-  catch (error) {
+  } catch (error) {
     // Non-fatal: skill command generation failure shouldn't block installation
     ctx.result.errors.push(`Skill Registry command generation warning: ${error}`)
   }
@@ -494,19 +493,20 @@ async function installSkillGeneratedCommands(ctx: InstallContext): Promise<void>
  * These enable Codex CLI as an alternative lead orchestrator (Codex-led multi-model mode).
  * Files are installed to ~/.codex/ (global) and user copies AGENTS.md to project root.
  */
-export async function installCodexMode(): Promise<{ success: boolean, message: string }> {
+export async function installCodexMode(): Promise<{ success: boolean; message: string }> {
   const codexTemplateDir = join(PACKAGE_ROOT, 'templates', 'codex')
   if (!(await fs.pathExists(codexTemplateDir))) {
     return { success: false, message: 'Codex template directory not found' }
   }
 
   try {
+    const config = await createCodexInstallConfig()
     const codexHome = join(homedir(), '.codex')
     await fs.ensureDir(join(codexHome, 'agents'))
 
     const configSrc = join(codexTemplateDir, 'config.toml')
     const configDest = join(codexHome, 'config.toml')
-    if (await fs.pathExists(configSrc) && !(await fs.pathExists(configDest))) {
+    if ((await fs.pathExists(configSrc)) && !(await fs.pathExists(configDest))) {
       await fs.copy(configSrc, configDest)
     }
 
@@ -517,28 +517,31 @@ export async function installCodexMode(): Promise<{ success: boolean, message: s
 
     const agentsMdSrc = join(codexTemplateDir, 'AGENTS.md')
     if (await fs.pathExists(agentsMdSrc)) {
-      await fs.copy(agentsMdSrc, join(codexHome, 'AGENTS.md'), { overwrite: true })
+      await writeRenderedCodexFile(agentsMdSrc, join(codexHome, 'AGENTS.md'), config)
     }
 
     // hooks/
     const hooksSrc = join(codexTemplateDir, 'hooks')
     if (await fs.pathExists(hooksSrc)) {
       await fs.ensureDir(join(codexHome, 'hooks'))
-      await fs.copy(hooksSrc, join(codexHome, 'hooks'), { overwrite: true })
+      await writeRenderedCodexFile(
+        join(hooksSrc, 'ccg-workflow.py'),
+        join(codexHome, 'hooks', 'ccg-workflow.py'),
+        config
+      )
     }
 
     // hooks.json
     const hooksJsonSrc = join(codexTemplateDir, 'hooks.json')
     if (await fs.pathExists(hooksJsonSrc)) {
-      await fs.copy(hooksJsonSrc, join(codexHome, 'hooks.json'), { overwrite: true })
+      await writeRenderedCodexFile(hooksJsonSrc, join(codexHome, 'hooks.json'), config)
     }
 
     return {
       success: true,
       message: `Codex mode installed:\n  ~/.codex/AGENTS.md\n  ~/.codex/config.toml\n  ~/.codex/hooks.json\n  ~/.codex/hooks/ccg-workflow.py\n  ~/.codex/agents/ccg-implement.toml\n  ~/.codex/agents/ccg-review.toml\n  ~/.codex/agents/ccg-research.toml`,
     }
-  }
-  catch (error) {
+  } catch (error) {
     return { success: false, message: `Failed to install Codex mode: ${error}` }
   }
 }
@@ -546,7 +549,7 @@ export async function installCodexMode(): Promise<{ success: boolean, message: s
 /**
  * Uninstall CCG Codex mode — only removes files installed by CCG, preserves user files.
  */
-export async function uninstallCodexMode(): Promise<{ success: boolean, removed: string[], skipped: string[] }> {
+export async function uninstallCodexMode(): Promise<{ success: boolean; removed: string[]; skipped: string[] }> {
   const codexHome = join(homedir(), '.codex')
   const removed: string[] = []
   const skipped: string[] = []
@@ -576,8 +579,7 @@ export async function uninstallCodexMode(): Promise<{ success: boolean, removed:
       if (content.includes('<!-- CCG:START')) {
         await fs.remove(agentsMd)
         removed.push('~/.codex/AGENTS.md')
-      }
-      else {
+      } else {
         skipped.push('~/.codex/AGENTS.md (not managed by CCG)')
       }
     }
@@ -598,8 +600,7 @@ export async function uninstallCodexMode(): Promise<{ success: boolean, removed:
     }
 
     return { success: true, removed, skipped }
-  }
-  catch (error) {
+  } catch (error) {
     return { success: false, removed, skipped: [...skipped, `Error: ${error}`] }
   }
 }
@@ -609,6 +610,7 @@ async function _installCodexFilesInternal(ctx: InstallContext): Promise<void> {
   if (!(await fs.pathExists(codexTemplateDir))) return
 
   try {
+    const config = ctx.config
     const codexHome = join(homedir(), '.codex')
     await fs.ensureDir(join(codexHome, 'agents'))
 
@@ -630,10 +632,26 @@ async function _installCodexFilesInternal(ctx: InstallContext): Promise<void> {
     // AGENTS.md → ~/.codex/AGENTS.md (global fallback)
     const agentsMdSrc = join(codexTemplateDir, 'AGENTS.md')
     if (await fs.pathExists(agentsMdSrc)) {
-      await fs.copy(agentsMdSrc, join(codexHome, 'AGENTS.md'), { overwrite: true })
+      await writeRenderedCodexFile(agentsMdSrc, join(codexHome, 'AGENTS.md'), config)
     }
-  }
-  catch (error) {
+
+    // hooks/
+    const hooksSrc = join(codexTemplateDir, 'hooks')
+    if (await fs.pathExists(hooksSrc)) {
+      await fs.ensureDir(join(codexHome, 'hooks'))
+      await writeRenderedCodexFile(
+        join(hooksSrc, 'ccg-workflow.py'),
+        join(codexHome, 'hooks', 'ccg-workflow.py'),
+        config
+      )
+    }
+
+    // hooks.json
+    const hooksJsonSrc = join(codexTemplateDir, 'hooks.json')
+    if (await fs.pathExists(hooksJsonSrc)) {
+      await writeRenderedCodexFile(hooksJsonSrc, join(codexHome, 'hooks.json'), config)
+    }
+  } catch (error) {
     // Non-fatal: Codex mode is optional
     ctx.result.errors.push(`Codex files install warning: ${error}`)
   }
@@ -644,14 +662,9 @@ async function _installCodexFilesInternal(ctx: InstallContext): Promise<void> {
  */
 async function installRuleFiles(ctx: InstallContext): Promise<void> {
   try {
-    const installed = await copyMdTemplates(
-      ctx,
-      join(ctx.templateDir, 'rules'),
-      join(ctx.installDir, 'rules'),
-    )
+    const installed = await copyMdTemplates(ctx, join(ctx.templateDir, 'rules'), join(ctx.installDir, 'rules'))
     if (installed.length > 0) ctx.result.installedRules = true
-  }
-  catch (error) {
+  } catch (error) {
     ctx.result.errors.push(`Failed to install rules: ${error}`)
   }
 }
@@ -681,8 +694,7 @@ export async function verifyBinary(installDir: string): Promise<boolean> {
     const { execSync } = await import('node:child_process')
     execSync(`"${wrapperPath}" --version`, { stdio: 'pipe' })
     return true
-  }
-  catch {
+  } catch {
     return false
   }
 }
@@ -701,8 +713,7 @@ export async function verifyBinaryVersion(installDir: string): Promise<boolean> 
     const output = execSync(`"${wrapperPath}" --version`, { stdio: 'pipe' }).toString().trim()
     const version = output.replace(/^.*version\s*/, '')
     return version === EXPECTED_BINARY_VERSION
-  }
-  catch {
+  } catch {
     return false
   }
 }
@@ -713,11 +724,18 @@ export async function verifyBinaryVersion(installDir: string): Promise<boolean> 
  */
 export function showBinaryDownloadWarning(binDir: string): void {
   const binaryExt = process.platform === 'win32' ? '.exe' : ''
-  const platformLabel = process.platform === 'darwin'
-    ? (process.arch === 'arm64' ? 'darwin-arm64' : 'darwin-amd64')
-    : process.platform === 'linux'
-      ? (process.arch === 'arm64' ? 'linux-arm64' : 'linux-amd64')
-      : (process.arch === 'arm64' ? 'windows-arm64' : 'windows-amd64')
+  const platformLabel =
+    process.platform === 'darwin'
+      ? process.arch === 'arm64'
+        ? 'darwin-arm64'
+        : 'darwin-amd64'
+      : process.platform === 'linux'
+        ? process.arch === 'arm64'
+          ? 'linux-arm64'
+          : 'linux-amd64'
+        : process.arch === 'arm64'
+          ? 'windows-arm64'
+          : 'windows-amd64'
   const binaryFileName = `codeagent-wrapper-${platformLabel}${binaryExt}`
   const destFileName = `codeagent-wrapper${binaryExt}`
   const releaseUrl = `https://github.com/${GITHUB_REPO}/releases/tag/${RELEASE_TAG}`
@@ -728,7 +746,7 @@ export function showBinaryDownloadWarning(binDir: string): void {
   console.log(ansis.red.bold(`  ║     Binary download failed (network issue)                 ║`))
   console.log(ansis.red.bold(`  ╚════════════════════════════════════════════════════════════╝`))
   console.log()
-  console.log(ansis.yellow(`  多模型协作命令 (/ccg:workflow, /ccg:plan 等) 需要此文件才能工作。`))
+  console.log(ansis.yellow(`  多模型协作命令 (/ccg:workflow, /ccg:plan 等) 需要此文件才能工作`))
   console.log(ansis.yellow(`  Multi-model commands require this binary to work.`))
   console.log()
   console.log(ansis.cyan(`  手动修复 / Manual fix:`))
@@ -738,9 +756,8 @@ export function showBinaryDownloadWarning(binDir: string): void {
   console.log(ansis.gray(`       → 找到 ${ansis.white(binaryFileName)} 并下载`))
   console.log()
   console.log(ansis.white(`    2. 放到 / Place at:`))
-  const displayPath = process.platform === 'win32'
-    ? `${binDir.replace(/\//g, '\\')}\\${destFileName}`
-    : `${binDir}/${destFileName}`
+  const displayPath =
+    process.platform === 'win32' ? `${binDir.replace(/\//g, '\\')}\\${destFileName}` : `${binDir}/${destFileName}`
   console.log(ansis.cyan(`       ${displayPath}`))
   console.log()
   if (process.platform !== 'win32') {
@@ -787,8 +804,7 @@ async function installBinaryFile(ctx: InstallContext): Promise<void> {
           return
         }
         // Version mismatch — fall through to re-download
-      }
-      catch {
+      } catch {
         // Binary exists but broken — fall through to re-download
       }
     }
@@ -796,21 +812,18 @@ async function installBinaryFile(ctx: InstallContext): Promise<void> {
     const installed = await downloadBinaryFromRelease(binaryName, destBinary)
 
     if (installed) {
-      try {
-        const { execSync } = await import('node:child_process')
-        execSync(`"${destBinary}" --version`, { stdio: 'pipe' })
+      if (await verifyBinaryVersion(ctx.installDir)) {
         ctx.result.binPath = binDir
         ctx.result.binInstalled = true
+      } else {
+        ctx.result.errors.push(`Binary verification failed: expected codeagent-wrapper ${EXPECTED_BINARY_VERSION}`)
       }
-      catch (verifyError) {
-        ctx.result.errors.push(`Binary verification failed (non-blocking): ${verifyError}`)
-      }
+    } else {
+      ctx.result.errors.push(
+        `Failed to download binary: ${binaryName} from GitHub Release (after 3 attempts). Check network or visit https://github.com/${GITHUB_REPO}/releases/tag/${RELEASE_TAG}`
+      )
     }
-    else {
-      ctx.result.errors.push(`Failed to download binary: ${binaryName} from GitHub Release (after 3 attempts). Check network or visit https://github.com/${GITHUB_REPO}/releases/tag/${RELEASE_TAG}`)
-    }
-  }
-  catch (error) {
+  } catch (error) {
     ctx.result.errors.push(`Failed to install codeagent-wrapper (non-blocking): ${error}`)
   }
 }
@@ -818,30 +831,6 @@ async function installBinaryFile(ctx: InstallContext): Promise<void> {
 // ═══════════════════════════════════════════════════════
 // CCG 3.0 Engine installation
 // ═══════════════════════════════════════════════════════
-
-/**
- * Install the unified /ccg entry point command.
- * Installed to ~/.claude/commands/ccg.md (NOT commands/ccg/) for clean /ccg invocation.
- */
-async function installCcgEntryCommand(ctx: InstallContext): Promise<void> {
-  const srcFile = join(ctx.templateDir, 'commands', 'ccg.md')
-  const destFile = join(ctx.installDir, 'commands', 'ccg.md')
-
-  try {
-    if (await fs.pathExists(srcFile)) {
-      if (ctx.force || !(await fs.pathExists(destFile))) {
-        let content = await fs.readFile(srcFile, 'utf-8')
-        content = injectConfigVariables(content, ctx.config)
-        content = replaceHomePathsInTemplate(content, ctx.installDir)
-        await fs.writeFile(destFile, content, 'utf-8')
-      }
-      ctx.result.installedCommands.push('ccg (unified entry)')
-    }
-  }
-  catch (error) {
-    ctx.result.errors.push(`Failed to install /ccg entry: ${error}`)
-  }
-}
 
 /**
  * Install engine files from templates/engine/ → ~/.claude/.ccg/engine/
@@ -864,8 +853,7 @@ async function installEngineFiles(ctx: InstallContext): Promise<void> {
     if (await fs.pathExists(strategiesSrc)) {
       await copyMdTemplates(ctx, strategiesSrc, strategiesDest, { inject: true })
     }
-  }
-  catch (error) {
+  } catch (error) {
     ctx.result.errors.push(`Failed to install engine files: ${error}`)
   }
 }
@@ -894,8 +882,7 @@ async function installHookScripts(ctx: InstallContext): Promise<void> {
         await fs.copy(src, dest, { overwrite: true })
       }
     }
-  }
-  catch (error) {
+  } catch (error) {
     ctx.result.errors.push(`Failed to install hook scripts: ${error}`)
   }
 }
@@ -913,8 +900,7 @@ async function registerHooksInSettings(ctx: InstallContext): Promise<void> {
     if (await fs.pathExists(settingsPath)) {
       try {
         settings = JSON.parse(await fs.readFile(settingsPath, 'utf-8'))
-      }
-      catch {
+      } catch {
         settings = {}
       }
     }
@@ -940,16 +926,14 @@ async function registerHooksInSettings(ctx: InstallContext): Promise<void> {
 
     for (const [event, def] of Object.entries(ccgHookDefs)) {
       const eventHooks = (hooks[event] || []) as Record<string, unknown>[]
-      const ccgCommand = (def.hooks[0] as Record<string, unknown>).command as string
       const existingIdx = eventHooks.findIndex((h) => {
         const hHooks = (h.hooks || []) as Record<string, unknown>[]
-        return hHooks.some(hh => typeof hh.command === 'string' && hh.command.includes('hooks/ccg/'))
+        return hHooks.some((hh) => typeof hh.command === 'string' && hh.command.includes('hooks/ccg/'))
       })
 
       if (existingIdx >= 0) {
         eventHooks[existingIdx] = def
-      }
-      else {
+      } else {
         eventHooks.push(def)
       }
       hooks[event] = eventHooks
@@ -957,8 +941,7 @@ async function registerHooksInSettings(ctx: InstallContext): Promise<void> {
 
     settings.hooks = hooks
     await fs.writeFile(settingsPath, JSON.stringify(settings, null, 2), 'utf-8')
-  }
-  catch (error) {
+  } catch (error) {
     ctx.result.errors.push(`Failed to register hooks in settings.json: ${error}`)
   }
 }
@@ -974,28 +957,31 @@ export async function installWorkflows(
   config?: {
     routing?: {
       mode?: string
-      frontend?: { models?: string[], primary?: string }
-      backend?: { models?: string[], primary?: string }
-      review?: { models?: string[] }
+      frontend?: { models?: string[]; primary?: string }
+      backend?: { models?: string[]; primary?: string }
+      review?: { models?: string[]; strategy?: string }
+      proxy?: { models?: string[]; http?: string; https?: string }
     }
     liteMode?: boolean
     mcpProvider?: string
     skipImpeccable?: boolean
-  },
+    skipBinary?: boolean
+  }
 ): Promise<InstallResult> {
   const ctx: InstallContext = {
     installDir,
     force,
     config: {
-      routing: config?.routing as InstallConfig['routing'] || {
+      routing: (config?.routing as InstallConfig['routing']) || {
         mode: 'smart',
-        frontend: { models: ['antigravity'], primary: 'antigravity' },
+        frontend: { models: ['antigravity', 'codex'], primary: 'antigravity' },
         backend: { models: ['codex'], primary: 'codex' },
-        review: { models: ['codex', 'antigravity'] },
+        review: { models: ['codex', 'antigravity'], strategy: 'single' },
       },
-      liteMode: config?.liteMode || false,
+      liteMode: config?.liteMode ?? true,
       mcpProvider: config?.mcpProvider || 'fast-context',
       skipImpeccable: config?.skipImpeccable || false,
+      skipBinary: config?.skipBinary || false,
     },
     templateDir: join(PACKAGE_ROOT, 'templates'),
     result: {
@@ -1012,9 +998,10 @@ export async function installWorkflows(
   // if PACKAGE_ROOT resolved wrong, templateDir doesn't exist and every
   // sub-step silently returns empty results while reporting success.
   if (!(await fs.pathExists(ctx.templateDir))) {
-    const errorMsg = `Template directory not found: ${ctx.templateDir} (PACKAGE_ROOT=${PACKAGE_ROOT}). `
-      + `This usually means the npm package is incomplete or the cache is corrupted. `
-      + `Try: npm cache clean --force && npx ccg-workflow@latest`
+    const errorMsg =
+      `Template directory not found: ${ctx.templateDir} (PACKAGE_ROOT=${PACKAGE_ROOT}). ` +
+      `This usually means the npm package is incomplete or the cache is corrupted. ` +
+      `Try: npm cache clean --force && npx ccg-workflow@latest`
     ctx.result.errors.push(errorMsg)
     ctx.result.success = false
     return ctx.result
@@ -1036,15 +1023,17 @@ export async function installWorkflows(
   await installSkillFiles(ctx)
   await installSkillGeneratedCommands(ctx)
   await installRuleFiles(ctx)
-  await installBinaryFile(ctx)
+  if (!ctx.config.skipBinary) {
+    await installBinaryFile(ctx)
+  }
 
   // ── Post-flight: validate installation produced results ──
   // Catch the case where all sub-steps silently returned empty
   if (ctx.result.installedCommands.length === 0 && ctx.result.errors.length === 0) {
     ctx.result.errors.push(
-      `No commands were installed (expected ${workflowIds.length}). `
-      + `Template dir: ${ctx.templateDir}. `
-      + `This may indicate a corrupted package or file permission issue.`,
+      `No commands were installed (expected ${workflowIds.length}). ` +
+        `Template dir: ${ctx.templateDir}. ` +
+        `This may indicate a corrupted package or file permission issue.`
     )
     ctx.result.success = false
   }
@@ -1064,6 +1053,7 @@ export interface UninstallResult {
   removedAgents: string[]
   removedSkills: string[]
   removedRules: boolean
+  removedHooks: boolean
   removedBin: boolean
   errors: string[]
 }
@@ -1072,7 +1062,10 @@ export interface UninstallResult {
  * Uninstall workflows by removing their command files.
  * @param options.preserveBinary — when true, skip binary removal (used during update)
  */
-export async function uninstallWorkflows(installDir: string, options?: { preserveBinary?: boolean }): Promise<UninstallResult> {
+export async function uninstallWorkflows(
+  installDir: string,
+  options?: { preserveBinary?: boolean }
+): Promise<UninstallResult> {
   const result: UninstallResult = {
     success: true,
     removedCommands: [],
@@ -1080,6 +1073,7 @@ export async function uninstallWorkflows(installDir: string, options?: { preserv
     removedAgents: [],
     removedSkills: [],
     removedRules: false,
+    removedHooks: false,
     removedBin: false,
     errors: [],
   }
@@ -1088,14 +1082,15 @@ export async function uninstallWorkflows(installDir: string, options?: { preserv
   const agentsDir = join(installDir, 'agents', 'ccg')
   const skillsDir = join(installDir, 'skills', 'ccg')
   const rulesDir = join(installDir, 'rules')
+  const hooksDir = join(installDir, 'hooks', 'ccg')
+  const settingsPath = join(installDir, 'settings.json')
   const binDir = join(installDir, 'bin')
   const ccgConfigDir = join(installDir, '.ccg')
 
   // Remove CCG commands directory
   try {
     result.removedCommands = await removeDirCollectMdNames(commandsDir)
-  }
-  catch (error) {
+  } catch (error) {
     result.errors.push(`Failed to remove commands directory: ${error}`)
     result.success = false
   }
@@ -1103,8 +1098,7 @@ export async function uninstallWorkflows(installDir: string, options?: { preserv
   // Remove CCG agents directory
   try {
     result.removedAgents = await removeDirCollectMdNames(agentsDir)
-  }
-  catch (error) {
+  } catch (error) {
     result.errors.push(`Failed to remove agents directory: ${error}`)
     result.success = false
   }
@@ -1114,8 +1108,7 @@ export async function uninstallWorkflows(installDir: string, options?: { preserv
     try {
       result.removedSkills = await collectSkillNames(skillsDir)
       await fs.remove(skillsDir)
-    }
-    catch (error) {
+    } catch (error) {
       result.errors.push(`Failed to remove skills: ${error}`)
       result.success = false
     }
@@ -1131,14 +1124,64 @@ export async function uninstallWorkflows(installDir: string, options?: { preserv
           result.removedRules = true
         }
       }
-    }
-    catch (error) {
+    } catch (error) {
       result.errors.push(`Failed to remove rules: ${error}`)
     }
   }
 
+  // Remove CCG hook scripts and deregister CCG hook entries
+  if (await fs.pathExists(hooksDir)) {
+    try {
+      await fs.remove(hooksDir)
+      result.removedHooks = true
+    } catch (error) {
+      result.errors.push(`Failed to remove hooks: ${error}`)
+      result.success = false
+    }
+  }
+
+  if (await fs.pathExists(settingsPath)) {
+    try {
+      const settings = await fs.readJson(settingsPath)
+      const hooks = settings.hooks && typeof settings.hooks === 'object' ? settings.hooks : null
+      let changed = false
+      if (hooks) {
+        for (const event of Object.keys(hooks)) {
+          const eventHooks = Array.isArray(hooks[event]) ? hooks[event] : []
+          const kept = eventHooks
+            .map((entry: Record<string, unknown>) => {
+              const commands = Array.isArray(entry.hooks) ? entry.hooks : []
+              const keptCommands = commands.filter((hook) => {
+                const command = typeof hook?.command === 'string' ? hook.command : ''
+                return !command.includes('hooks/ccg/') && !command.includes('hooks\\ccg\\')
+              })
+              if (keptCommands.length !== commands.length) changed = true
+              return keptCommands.length > 0 ? { ...entry, hooks: keptCommands } : null
+            })
+            .filter(Boolean)
+          if (kept.length > 0) {
+            hooks[event] = kept
+          } else {
+            delete hooks[event]
+            if (eventHooks.length > 0) changed = true
+          }
+        }
+        if (Object.keys(hooks).length === 0) {
+          delete settings.hooks
+          changed = true
+        }
+        if (changed) {
+          await fs.writeJson(settingsPath, settings, { spaces: 2 })
+          result.removedHooks = true
+        }
+      }
+    } catch (error) {
+      result.errors.push(`Failed to deregister hooks from settings.json: ${error}`)
+    }
+  }
+
   // Remove codeagent-wrapper binary (skip during update to avoid unnecessary re-download)
-  if (!options?.preserveBinary && await fs.pathExists(binDir)) {
+  if (!options?.preserveBinary && (await fs.pathExists(binDir))) {
     try {
       const wrapperName = process.platform === 'win32' ? 'codeagent-wrapper.exe' : 'codeagent-wrapper'
       const wrapperPath = join(binDir, wrapperName)
@@ -1146,8 +1189,7 @@ export async function uninstallWorkflows(installDir: string, options?: { preserv
         await fs.remove(wrapperPath)
         result.removedBin = true
       }
-    }
-    catch (error) {
+    } catch (error) {
       result.errors.push(`Failed to remove binary: ${error}`)
       result.success = false
     }
@@ -1158,8 +1200,7 @@ export async function uninstallWorkflows(installDir: string, options?: { preserv
     try {
       await fs.remove(ccgConfigDir)
       result.removedPrompts.push('ALL_PROMPTS_AND_CONFIGS')
-    }
-    catch (error) {
+    } catch (error) {
       result.errors.push(`Failed to remove .ccg directory: ${error}`)
     }
   }

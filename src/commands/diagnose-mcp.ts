@@ -20,20 +20,17 @@ export async function diagnoseMcp(): Promise<void> {
   for (const issue of issues) {
     if (issue.startsWith('✅')) {
       console.log(ansis.green(`  ${issue}`))
-    }
-    else if (issue.startsWith('⚠️')) {
+    } else if (issue.startsWith('⚠️')) {
       console.log(ansis.yellow(`  ${issue}`))
-    }
-    else if (issue.startsWith('❌')) {
+    } else if (issue.startsWith('❌')) {
       console.log(ansis.red(`  ${issue}`))
-    }
-    else {
+    } else {
       console.log(`  ${issue}`)
     }
   }
 
   // Offer to fix Windows issues
-  if (isWindows() && issues.some(i => i.includes('not properly wrapped'))) {
+  if (isWindows() && issues.some((i) => i.includes('not properly wrapped'))) {
     console.log()
     console.log(ansis.yellow('  💡 Tip: Run the following command to fix Windows MCP configuration:'))
     console.log(ansis.gray('     npx ccg fix-mcp'))
@@ -82,8 +79,7 @@ export async function fixMcp(): Promise<void> {
     console.log(ansis.gray('  Run diagnostics again to verify:'))
     console.log(ansis.gray('     npx ccg diagnose-mcp'))
     console.log()
-  }
-  catch (error) {
+  } catch (error) {
     console.log(ansis.red(`  ❌ Failed to fix MCP configuration: ${error}`))
     console.log()
   }

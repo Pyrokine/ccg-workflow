@@ -55,8 +55,7 @@ export async function migrateToV1_4_0(): Promise<MigrationResult> {
           // Copy file or directory
           await fs.copy(srcFile, destFile)
           result.migratedFiles.push(`~/.ccg/${file} → ~/.claude/.ccg/${file}`)
-        }
-        catch (error) {
+        } catch (error) {
           result.errors.push(`Failed to migrate ${file}: ${error}`)
           result.success = false
         }
@@ -68,17 +67,14 @@ export async function migrateToV1_4_0(): Promise<MigrationResult> {
         if (remaining.length === 0) {
           await fs.remove(oldCcgDir)
           result.migratedFiles.push('Removed old ~/.ccg/ directory')
-        }
-        else {
+        } else {
           result.skipped.push(`~/.ccg/ (not empty, keeping for safety)`)
         }
-      }
-      catch (error) {
+      } catch (error) {
         // It's okay if we can't remove the old directory
         result.skipped.push(`~/.ccg/ (could not remove: ${error})`)
       }
-    }
-    else {
+    } else {
       result.skipped.push('~/.ccg/ (does not exist, nothing to migrate)')
     }
 
@@ -88,8 +84,7 @@ export async function migrateToV1_4_0(): Promise<MigrationResult> {
         // Skip if destination already exists
         if (await fs.pathExists(newPromptsDir)) {
           result.skipped.push('~/.claude/prompts/ccg/ (already exists in new location)')
-        }
-        else {
+        } else {
           await fs.copy(oldPromptsDir, newPromptsDir)
           result.migratedFiles.push('~/.claude/prompts/ccg/ → ~/.claude/.ccg/prompts/')
 
@@ -105,17 +100,14 @@ export async function migrateToV1_4_0(): Promise<MigrationResult> {
             result.migratedFiles.push('Removed empty ~/.claude/prompts/ directory')
           }
         }
-      }
-      catch (error) {
+      } catch (error) {
         result.errors.push(`Failed to migrate prompts: ${error}`)
         result.success = false
       }
-    }
-    else {
+    } else {
       result.skipped.push('~/.claude/prompts/ccg/ (does not exist, nothing to migrate)')
     }
-  }
-  catch (error) {
+  } catch (error) {
     result.errors.push(`Migration failed: ${error}`)
     result.success = false
   }
@@ -140,8 +132,7 @@ export async function needsMigration(): Promise<boolean> {
         if (major >= 2) return false
       }
     }
-  }
-  catch {
+  } catch {
     // Config read failed, fall through to directory checks
   }
 

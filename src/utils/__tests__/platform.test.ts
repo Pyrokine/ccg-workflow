@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getMcpCommand, getPlatformName, getPathSeparator, isLinux, isMacOS, isWindows } from '../platform'
+import { getMcpCommand, getPathSeparator, getPlatformName, isLinux, isMacOS, isWindows } from '../platform'
 
 // Note: these tests run on the actual platform, so we test based on current OS
 
@@ -38,8 +38,7 @@ describe('getMcpCommand', () => {
     it('does not wrap unknown commands on Windows', () => {
       expect(getMcpCommand('custom-tool')).toEqual(['custom-tool'])
     })
-  }
-  else {
+  } else {
     it('returns command as-is on Unix', () => {
       expect(getMcpCommand('npx')).toEqual(['npx'])
     })
@@ -71,8 +70,7 @@ describe('getPathSeparator', () => {
     const sep = getPathSeparator()
     if (process.platform === 'win32') {
       expect(sep).toBe('\\')
-    }
-    else {
+    } else {
       expect(sep).toBe('/')
     }
   })

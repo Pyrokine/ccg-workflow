@@ -2,7 +2,7 @@
 export type SupportedLang = 'zh-CN' | 'en'
 
 // 模型类型
-export type ModelType = 'codex' | 'gemini' | 'claude' | 'antigravity'
+export type ModelType = 'codex' | 'claude' | 'antigravity'
 
 // 协作模式
 export type CollaborationMode = 'parallel' | 'smart' | 'sequential'
@@ -24,10 +24,14 @@ export interface ModelRouting {
   }
   review: {
     models: ModelType[]
-    strategy: 'parallel'
+    strategy: 'parallel' | 'fallback' | 'single'
+  }
+  proxy?: {
+    models: ModelType[]
+    http: string
+    https: string
   }
   mode: CollaborationMode
-  geminiModel?: string // Gemini 具体型号（默认 gemini-3.1-pro-preview）
 }
 
 // CCG 配置

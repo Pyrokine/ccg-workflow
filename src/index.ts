@@ -1,4 +1,4 @@
-// CCG - Claude + Codex + Gemini Multi-Model Collaboration System
+// CCG - Claude + Codex + Antigravity Multi-Model Collaboration System
 export * from './types'
 export { init } from './commands/init'
 export { showMainMenu } from './commands/menu'
@@ -23,13 +23,5 @@ export {
   uninstallWorkflows,
   uninstallAceTool,
 } from './utils/installer'
-export {
-  migrateToV1_4_0,
-  needsMigration,
-} from './utils/migration'
-export {
-  getCurrentVersion,
-  getLatestVersion,
-  checkForUpdates,
-  compareVersions,
-} from './utils/version'
+export { migrateToV1_4_0, needsMigration } from './utils/migration'
+export { getCurrentVersion, getLatestVersion, checkForUpdates, compareVersions } from './utils/version'

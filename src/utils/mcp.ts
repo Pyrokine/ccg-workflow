@@ -3,9 +3,9 @@
  * Adapted from zcf project's claude-config.ts and features.ts
  */
 
+import fs from 'fs-extra'
 import { homedir } from 'node:os'
 import { join } from 'pathe'
-import fs from 'fs-extra'
 import { getMcpCommand, isWindows } from './platform'
 
 /**
@@ -34,7 +34,7 @@ export interface ClaudeCodeConfig {
   primaryApiKey?: string
   installMethod?: 'npm-global' | 'native'
   // ... other fields preserved
-  [key: string]: any
+  [key: string]: unknown
 }
 
 /**
@@ -57,8 +57,7 @@ export async function readClaudeCodeConfig(): Promise<ClaudeCodeConfig | null> {
 
     const content = await fs.readFile(configPath, 'utf-8')
     return JSON.parse(content) as ClaudeCodeConfig
-  }
-  catch (error) {
+  } catch (error) {
     console.error('Failed to read Claude Code config:', error)
     return null
   }
@@ -72,9 +71,8 @@ export async function writeClaudeCodeConfig(config: ClaudeCodeConfig): Promise<v
 
   try {
     await fs.writeFile(configPath, JSON.stringify(config, null, 2), 'utf-8')
-  }
-  catch (error) {
-    throw new Error(`Failed to write Claude Code config: ${error}`)
+  } catch (error) {
+    throw new Error('Failed to write Claude Code config', { cause: error })
   }
 }
 
@@ -117,7 +115,7 @@ export function buildMcpServerConfig(
   baseConfig: McpServerConfig,
   apiKey?: string,
   placeholder: string = 'YOUR_API_KEY',
-  envVarName?: string,
+  envVarName?: string
 ): McpServerConfig {
   // Deep clone to avoid mutation
   const config = JSON.parse(JSON.stringify(baseConfig)) as McpServerConfig
@@ -137,7 +135,7 @@ export function buildMcpServerConfig(
 
   // Method 2: Replace placeholder in args (legacy)
   if (config.args) {
-    config.args = config.args.map(arg => arg.replace(placeholder, apiKey))
+    config.args = config.args.map((arg) => arg.replace(placeholder, apiKey))
   }
 
   // Method 3: Replace placeholder in URL (for SSE services)
@@ -205,7 +203,7 @@ export function fixWindowsMcpConfig(config: ClaudeCodeConfig): ClaudeCodeConfig 
   const fixed = JSON.parse(JSON.stringify(config)) as ClaudeCodeConfig
 
   // Fix each MCP server configuration
-  for (const [serverName, serverConfig] of Object.entries(fixed.mcpServers || {})) {
+  for (const [_serverName, serverConfig] of Object.entries(fixed.mcpServers || {})) {
     if (serverConfig && typeof serverConfig === 'object' && 'command' in serverConfig) {
       const mcpConfig = serverConfig as McpServerConfig
       // 先尝试修复损坏的配置
@@ -228,7 +226,7 @@ export function fixWindowsMcpConfig(config: ClaudeCodeConfig): ClaudeCodeConfig 
  */
 export function mergeMcpServers(
   existing: ClaudeCodeConfig | null,
-  newServers: Record<string, McpServerConfig>,
+  newServers: Record<string, McpServerConfig>
 ): ClaudeCodeConfig {
   const config: ClaudeCodeConfig = existing || { mcpServers: {} }
 
@@ -262,8 +260,7 @@ export async function backupClaudeCodeConfig(): Promise<string | null> {
 
     await fs.copy(configPath, backupPath)
     return backupPath
-  }
-  catch (error) {
+  } catch (error) {
     console.error('Failed to backup Claude Code config:', error)
     return null
   }

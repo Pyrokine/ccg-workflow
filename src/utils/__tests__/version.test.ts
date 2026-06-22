@@ -60,4 +60,14 @@ describe('compareVersions', () => {
   it('handles large patch numbers', () => {
     expect(compareVersions('1.7.100', '1.7.99')).toBe(1)
   })
+
+  it('treats fork suffix as same upstream base when only one side has suffix', () => {
+    expect(compareVersions('3.1.6', '3.1.6-aug.1')).toBe(0)
+    expect(compareVersions('3.1.6-aug.1', '3.1.6')).toBe(0)
+  })
+
+  it('compares fork suffix revisions when both sides have suffixes', () => {
+    expect(compareVersions('3.1.6-aug.2', '3.1.6-aug.1')).toBe(1)
+    expect(compareVersions('3.1.6-aug.1', '3.1.6-aug.2')).toBe(-1)
+  })
 })

@@ -1,15 +1,42 @@
-import type { CollaborationMode, InitOptions, ModelRouting, ModelType, SupportedLang } from '../types'
 import ansis from 'ansis'
 import fs from 'fs-extra'
 import inquirer from 'inquirer'
-import ora from 'ora'
 import { homedir } from 'node:os'
+import ora from 'ora'
 import { join } from 'pathe'
 import { i18n, initI18n } from '../i18n'
-import { createDefaultConfig, ensureCcgDir, getCcgDir, readCcgConfig, writeCcgConfig } from '../utils/config'
-import { getAllCommandIds, getCoreCommandIds, installAceTool, installAceToolRs, installContextWeaver, installFastContext, installMcpServer, installWorkflows, showBinaryDownloadWarning, syncMcpToCodex, syncMcpToGemini, writeFastContextPrompt } from '../utils/installer'
-import { isWindows } from '../utils/platform'
+import type { CollaborationMode, InitOptions, ModelRouting, ModelType, SupportedLang } from '../types'
+import {
+  createDefaultConfig,
+  ensureCcgDir,
+  normalizeModelNames,
+  normalizeRoutingForInstall,
+  readCcgConfig,
+  writeCcgConfig,
+} from '../utils/config'
+import {
+  getAllCommandIds,
+  getCoreCommandIds,
+  installAceTool,
+  installContextWeaver,
+  installFastContext,
+  installMcpServer,
+  installWorkflows,
+  showBinaryDownloadWarning,
+  syncMcpToCodex,
+  writeFastContextPrompt,
+} from '../utils/installer'
 import { migrateToV1_4_0, needsMigration } from '../utils/migration'
+
+type ClaudeHookCommand = { command?: string; [key: string]: unknown }
+type ClaudeHook = { matcher?: string; hooks?: ClaudeHookCommand[]; [key: string]: unknown }
+type ClaudeSettings = {
+  hooks?: { PreToolUse?: ClaudeHook[]; [key: string]: unknown }
+  permissions?: { allow?: string[]; [key: string]: unknown }
+  env?: Record<string, string>
+  [key: string]: unknown
+}
+type NavigationChoice = InstanceType<typeof inquirer.Separator> | { name: string; value: string }
 
 /**
  * Auto-approve codeagent-wrapper Bash commands in settings.json.
@@ -18,7 +45,7 @@ import { migrateToV1_4_0, needsMigration } from '../utils/migration'
  * Old Hook-based approach and old permission entries are automatically cleaned up.
  */
 async function installHook(settingsPath: string): Promise<'permission'> {
-  let settings: Record<string, any> = {}
+  let settings: ClaudeSettings = {}
   if (await fs.pathExists(settingsPath)) {
     settings = await fs.readJSON(settingsPath)
   }
@@ -28,15 +55,13 @@ async function installHook(settingsPath: string): Promise<'permission'> {
   // Remove old Hook if it exists (migration from ≤v1.7.88)
   if (settings.hooks?.PreToolUse) {
     const hookIdx = settings.hooks.PreToolUse.findIndex(
-      (h: any) => h.matcher === 'Bash' && h.hooks?.some((hh: any) => hh.command?.includes('codeagent-wrapper')),
+      (h) => h.matcher === 'Bash' && h.hooks?.some((hh) => hh.command?.includes('codeagent-wrapper'))
     )
     if (hookIdx >= 0) {
       settings.hooks.PreToolUse.splice(hookIdx, 1)
       // Clean up empty arrays/objects
-      if (settings.hooks.PreToolUse.length === 0)
-        delete settings.hooks.PreToolUse
-      if (settings.hooks && Object.keys(settings.hooks).length === 0)
-        delete settings.hooks
+      if (settings.hooks.PreToolUse.length === 0) delete settings.hooks.PreToolUse
+      if (settings.hooks && Object.keys(settings.hooks).length === 0) delete settings.hooks
     }
   }
 
@@ -50,10 +75,8 @@ async function installHook(settingsPath: string): Promise<'permission'> {
   }
 
   // Add permissions.allow entry
-  if (!settings.permissions)
-    settings.permissions = {}
-  if (!settings.permissions.allow)
-    settings.permissions.allow = []
+  if (!settings.permissions) settings.permissions = {}
+  if (!settings.permissions.allow) settings.permissions.allow = []
 
   const permEntry = 'Bash(*codeagent-wrapper*)'
   if (!settings.permissions.allow.includes(permEntry)) {
@@ -77,7 +100,10 @@ async function appendGrokSearchPrompt(): Promise<void> {
   if (await fs.pathExists(claudeMdPath)) {
     const content = await fs.readFile(claudeMdPath, 'utf-8')
     if (content.includes('CCG-GROK-SEARCH-PROMPT')) {
-      const cleaned = content.replace(/\n*<!-- CCG-GROK-SEARCH-PROMPT-START -->[\s\S]*?<!-- CCG-GROK-SEARCH-PROMPT-END -->\n*/g, '')
+      const cleaned = content.replace(
+        /\n*<!-- CCG-GROK-SEARCH-PROMPT-START -->[\s\S]*?<!-- CCG-GROK-SEARCH-PROMPT-END -->\n*/g,
+        ''
+      )
       await fs.writeFile(claudeMdPath, cleaned, 'utf-8')
     }
   }
@@ -141,8 +167,8 @@ const CANCEL_SENTINEL = '__ccg_cancel__'
  * Build navigation sentinels to append to a step's first list prompt.
  * Always includes cancel; includes back only when canGoBack is true.
  */
-function navSentinels(canGoBack: boolean): any[] {
-  const items: any[] = [new inquirer.Separator()]
+function navSentinels(canGoBack: boolean): NavigationChoice[] {
+  const items: NavigationChoice[] = [new inquirer.Separator()]
   if (canGoBack) {
     items.push({
       name: `${ansis.cyan('←')} ${i18n.t('init:nav.back')}`,
@@ -164,28 +190,24 @@ async function installGrokSearchMcp(keys: {
   firecrawlKey?: string
   grokApiUrl?: string
   grokApiKey?: string
-}): Promise<{ success: boolean, message: string }> {
+}): Promise<{ success: boolean; message: string }> {
   const env: Record<string, string> = {}
-  if (keys.tavilyKey)
-    env.TAVILY_API_KEY = keys.tavilyKey
-  if (keys.firecrawlKey)
-    env.FIRECRAWL_API_KEY = keys.firecrawlKey
-  if (keys.grokApiUrl)
-    env.GROK_API_URL = keys.grokApiUrl
-  if (keys.grokApiKey)
-    env.GROK_API_KEY = keys.grokApiKey
+  if (keys.tavilyKey) env.TAVILY_API_KEY = keys.tavilyKey
+  if (keys.firecrawlKey) env.FIRECRAWL_API_KEY = keys.firecrawlKey
+  if (keys.grokApiUrl) env.GROK_API_URL = keys.grokApiUrl
+  if (keys.grokApiKey) env.GROK_API_KEY = keys.grokApiKey
 
   return installMcpServer(
     'grok-search',
     'uvx',
     ['--from', 'git+https://github.com/GuDaStudio/GrokSearch@grok-with-tavily', 'grok-search'],
-    env,
+    env
   )
 }
 
 export async function init(options: InitOptions = {}): Promise<void> {
   console.log()
-  console.log(ansis.cyan.bold(`  CCG - Claude + Codex + Gemini`))
+  console.log(ansis.cyan.bold(`  CCG - Claude + Codex + Antigravity`))
   console.log(ansis.gray(`  Multi-Model Collaboration Workflow`))
   console.log()
 
@@ -203,58 +225,61 @@ export async function init(options: InitOptions = {}): Promise<void> {
       // Use saved language
       language = savedLang
       await initI18n(language)
-    }
-    else {
+    } else {
       // First time user: ask for language
-      const { selectedLang } = await inquirer.prompt([{
-        type: 'list',
-        name: 'selectedLang',
-        message: '选择语言 / Select language',
-        choices: [
-          { name: `简体中文`, value: 'zh-CN' },
-          { name: `English`, value: 'en' },
-        ],
-        default: 'zh-CN',
-      }])
+      const { selectedLang } = await inquirer.prompt([
+        {
+          type: 'select',
+          name: 'selectedLang',
+          message: '选择语言 / Select language',
+          choices: [
+            { name: `简体中文`, value: 'zh-CN' },
+            { name: `English`, value: 'en' },
+          ],
+          default: 'zh-CN',
+        },
+      ])
       language = selectedLang
       await initI18n(language)
     }
-  }
-  else if (options.lang) {
+  } else if (options.lang) {
     language = options.lang
     await initI18n(language)
   }
 
   // Model routing configuration (user-selectable since v2.1.0)
-  let frontendModels: ModelType[] = ['antigravity']
-  let backendModels: ModelType[] = ['codex']
-  let geminiModel = 'gemini-3.1-pro-preview'
+  let frontendModels: ModelType[] = normalizeModelNames(options.frontend, ['antigravity'])
+  let backendModels: ModelType[] = normalizeModelNames(options.backend, ['codex'])
+  let routingProxy: ModelRouting['proxy']
   const mode: CollaborationMode = 'smart'
   let selectedWorkflows = getCoreCommandIds()
-  let installMode: 'v3' | 'legacy' = 'v3'
 
   // Non-interactive mode: preserve existing config
   if (options.skipPrompt) {
     const existingConfig = await readCcgConfig()
     if (existingConfig?.routing) {
-      frontendModels = existingConfig.routing.frontend?.models || ['antigravity']
-      backendModels = existingConfig.routing.backend?.models || ['codex']
-      geminiModel = existingConfig.routing.geminiModel || 'gemini-3.1-pro-preview'
+      const routing = normalizeRoutingForInstall(existingConfig.routing)
+      frontendModels = options.frontend
+        ? normalizeModelNames(options.frontend, routing.frontend.models)
+        : routing.frontend.models
+      backendModels = options.backend
+        ? normalizeModelNames(options.backend, routing.backend.models)
+        : routing.backend.models
+      routingProxy = routing.proxy
     }
     // Preserve install mode: if existing install has legacy commands, keep them
     if (existingConfig?.workflows?.installed) {
-      const hadLegacy = existingConfig.workflows.installed.some(
-        (w: string) => ['workflow', 'plan', 'execute', 'frontend', 'backend', 'feat', 'debug', 'team'].includes(w),
+      const hadLegacy = existingConfig.workflows.installed.some((w: string) =>
+        ['workflow', 'plan', 'execute', 'frontend', 'backend', 'feat', 'debug', 'team'].includes(w)
       )
       if (hadLegacy) {
         selectedWorkflows = getAllCommandIds()
-        installMode = 'legacy'
       }
     }
   }
 
   // Performance mode selection
-  let liteMode = false
+  let liteMode = true
   let skipImpeccable = false
 
   // MCP Tool Selection
@@ -306,14 +331,14 @@ export async function init(options: InitOptions = {}): Promise<void> {
 
     // Initialize from existing config so re-running init shows saved values as defaults
     if (existingConfig?.routing) {
-      const ef = existingConfig.routing.frontend?.primary
-      const eb = existingConfig.routing.backend?.primary
-      if (ef)
-        frontendModels = [ef]
-      if (eb)
-        backendModels = [eb]
-      if (existingConfig.routing.geminiModel)
-        geminiModel = existingConfig.routing.geminiModel
+      const routing = normalizeRoutingForInstall(existingConfig.routing)
+      frontendModels = options.frontend
+        ? normalizeModelNames(options.frontend, routing.frontend.models)
+        : routing.frontend.models
+      backendModels = options.backend
+        ? normalizeModelNames(options.backend, routing.backend.models)
+        : routing.backend.models
+      routingProxy = routing.proxy
     }
     if (existingConfig?.performance?.liteMode !== undefined) {
       liteMode = existingConfig.performance.liteMode
@@ -326,23 +351,26 @@ export async function init(options: InitOptions = {}): Promise<void> {
       console.log(ansis.cyan.bold(`  🔑 Step 1/4 — ${i18n.t('init:api.title')}`))
       console.log()
 
-      const { apiProvider } = await inquirer.prompt([{
-        type: 'list',
-        name: 'apiProvider',
-        message: i18n.t('init:api.providerPrompt'),
-        choices: [
-          { name: `${ansis.green('●')} ${i18n.t('init:api.officialOption')}`, value: 'official' },
-          { name: `${ansis.cyan('●')} ${i18n.t('init:api.thirdPartyOption')}`, value: 'thirdparty' },
-          { name: `${ansis.yellow('★')} ${i18n.t('init:api.sponsor302AI')} ${ansis.gray('— https://share.302.ai/oUDqQ6')}`, value: '302ai' },
-          { name: `${ansis.gray('○')} ${i18n.t('init:api.skipOption')}`, value: 'skip' },
-          ...navSentinels(canGoBack),
-        ],
-      }])
+      const { apiProvider } = await inquirer.prompt([
+        {
+          type: 'select',
+          name: 'apiProvider',
+          message: i18n.t('init:api.providerPrompt'),
+          choices: [
+            { name: `${ansis.green('●')} ${i18n.t('init:api.officialOption')}`, value: 'official' },
+            { name: `${ansis.cyan('●')} ${i18n.t('init:api.thirdPartyOption')}`, value: 'thirdparty' },
+            {
+              name: `${ansis.yellow('★')} ${i18n.t('init:api.sponsor302AI')} ${ansis.gray('— https://share.302.ai/oUDqQ6')}`,
+              value: '302ai',
+            },
+            { name: `${ansis.gray('○')} ${i18n.t('init:api.skipOption')}`, value: 'skip' },
+            ...navSentinels(canGoBack),
+          ],
+        },
+      ])
 
-      if (apiProvider === BACK_SENTINEL)
-        return 'back'
-      if (apiProvider === CANCEL_SENTINEL)
-        return 'cancel'
+      if (apiProvider === BACK_SENTINEL) return 'back'
+      if (apiProvider === CANCEL_SENTINEL) return 'cancel'
 
       // Clear stale values before collecting fresh input
       apiUrl = ''
@@ -351,18 +379,21 @@ export async function init(options: InitOptions = {}): Promise<void> {
       if (apiProvider === '302ai') {
         apiUrl = 'https://api.302.ai/cc'
         console.log()
-        console.log(`    ${ansis.yellow('★')} ${i18n.t('init:api.sponsor302AIGetKey')}: ${ansis.cyan.underline('https://share.302.ai/oUDqQ6')}`)
+        console.log(
+          `    ${ansis.yellow('★')} ${i18n.t('init:api.sponsor302AIGetKey')}: ${ansis.cyan.underline('https://share.302.ai/oUDqQ6')}`
+        )
         console.log()
-        const { key } = await inquirer.prompt([{
-          type: 'password',
-          name: 'key',
-          message: `302.AI API Key ${ansis.gray(`(${i18n.t('init:api.keyRequired')})`)}`,
-          mask: '*',
-          validate: (v: string) => v.trim() !== '' || i18n.t('init:api.enterKey'),
-        }])
+        const { key } = await inquirer.prompt([
+          {
+            type: 'password',
+            name: 'key',
+            message: `302.AI API Key ${ansis.gray(`(${i18n.t('init:api.keyRequired')})`)}`,
+            mask: '*',
+            validate: (v: string) => v.trim() !== '' || i18n.t('init:api.enterKey'),
+          },
+        ])
         apiKey = key?.trim() || ''
-      }
-      else if (apiProvider === 'thirdparty') {
+      } else if (apiProvider === 'thirdparty') {
         const apiAnswers = await inquirer.prompt([
           {
             type: 'input',
@@ -380,8 +411,7 @@ export async function init(options: InitOptions = {}): Promise<void> {
         ])
         apiUrl = apiAnswers.url?.trim() || ''
         apiKey = apiAnswers.key?.trim() || ''
-      }
-      else if (apiProvider === 'skip') {
+      } else if (apiProvider === 'skip') {
         console.log()
         console.log(`    ${ansis.gray('○')} ${i18n.t('init:api.skipNoticeTitle')}`)
       }
@@ -394,66 +424,44 @@ export async function init(options: InitOptions = {}): Promise<void> {
       console.log(ansis.cyan.bold(`  🧠 Step 2/4 — ${i18n.t('init:model.title')}`))
       console.log()
 
-      const { selectedFrontend } = await inquirer.prompt([{
-        type: 'list',
-        name: 'selectedFrontend',
-        message: i18n.t('init:model.selectFrontend'),
-        choices: [
-          { name: `Antigravity ${ansis.green(`(${i18n.t('init:model.recommended')})`)}`, value: 'antigravity' as ModelType },
-          { name: 'Gemini', value: 'gemini' as ModelType },
-          { name: 'Codex', value: 'codex' as ModelType },
-          ...navSentinels(canGoBack),
-        ],
-        default: frontendModels[0] || 'antigravity',
-      }])
+      console.log(ansis.yellow(`  ${i18n.t('init:model.geminiDisabled')}`))
+      console.log()
 
-      if (selectedFrontend === BACK_SENTINEL)
-        return 'back'
-      if (selectedFrontend === CANCEL_SENTINEL)
-        return 'cancel'
+      const { selectedFrontend } = await inquirer.prompt([
+        {
+          type: 'select',
+          name: 'selectedFrontend',
+          message: i18n.t('init:model.selectFrontend'),
+          choices: [
+            {
+              name: `Antigravity ${ansis.green(`(${i18n.t('init:model.recommended')})`)}`,
+              value: 'antigravity' as ModelType,
+            },
+            { name: 'Codex', value: 'codex' as ModelType },
+            ...navSentinels(canGoBack),
+          ],
+          default: frontendModels[0] || 'antigravity',
+        },
+      ])
 
-      const { selectedBackend } = await inquirer.prompt([{
-        type: 'list',
-        name: 'selectedBackend',
-        message: i18n.t('init:model.selectBackend'),
-        choices: [
-          { name: `Codex ${ansis.green(`(${i18n.t('init:model.recommended')})`)}`, value: 'codex' as ModelType },
-          { name: 'Antigravity', value: 'antigravity' as ModelType },
-          { name: 'Gemini', value: 'gemini' as ModelType },
-        ],
-        default: backendModels[0] || 'codex',
-      }])
+      if (selectedFrontend === BACK_SENTINEL) return 'back'
+      if (selectedFrontend === CANCEL_SENTINEL) return 'cancel'
+
+      const { selectedBackend } = await inquirer.prompt([
+        {
+          type: 'select',
+          name: 'selectedBackend',
+          message: i18n.t('init:model.selectBackend'),
+          choices: [
+            { name: `Codex ${ansis.green(`(${i18n.t('init:model.recommended')})`)}`, value: 'codex' as ModelType },
+            { name: 'Claude', value: 'claude' as ModelType },
+          ],
+          default: backendModels[0] || 'codex',
+        },
+      ])
 
       frontendModels = [selectedFrontend]
       backendModels = [selectedBackend]
-
-      if (selectedFrontend === 'gemini' || selectedBackend === 'gemini') {
-        const { selectedGeminiModel } = await inquirer.prompt([{
-          type: 'list',
-          name: 'selectedGeminiModel',
-          message: i18n.t('init:model.selectGeminiModel'),
-          choices: [
-            { name: `gemini-3.1-pro-preview ${ansis.green(`(${i18n.t('init:model.recommended')})`)}`, value: 'gemini-3.1-pro-preview' },
-            { name: 'gemini-2.5-flash', value: 'gemini-2.5-flash' },
-            { name: `${i18n.t('init:model.custom')}`, value: 'custom' },
-          ],
-          default: geminiModel || 'gemini-3.1-pro-preview',
-        }])
-
-        if (selectedGeminiModel === 'custom') {
-          const { customModel } = await inquirer.prompt([{
-            type: 'input',
-            name: 'customModel',
-            message: i18n.t('init:model.enterCustomModel'),
-            default: geminiModel || '',
-            validate: (v: string) => v.trim() !== '' || i18n.t('init:model.enterCustomModel'),
-          }])
-          geminiModel = customModel.trim()
-        }
-        else {
-          geminiModel = selectedGeminiModel
-        }
-      }
       return 'next'
     }
 
@@ -469,20 +477,20 @@ export async function init(options: InitOptions = {}): Promise<void> {
 
       // Pre-step gate: since the main prompt is a checkbox (can't embed
       // navigation sentinels cleanly), ask a single-choice list first.
-      const { gate } = await inquirer.prompt([{
-        type: 'list',
-        name: 'gate',
-        message: i18n.t('init:mcp.gatePrompt'),
-        choices: [
-          { name: `${ansis.green('●')} ${i18n.t('init:mcp.gateContinue')}`, value: 'continue' },
-          ...navSentinels(canGoBack),
-        ],
-      }])
+      const { gate } = await inquirer.prompt([
+        {
+          type: 'select',
+          name: 'gate',
+          message: i18n.t('init:mcp.gatePrompt'),
+          choices: [
+            { name: `${ansis.green('●')} ${i18n.t('init:mcp.gateContinue')}`, value: 'continue' },
+            ...navSentinels(canGoBack),
+          ],
+        },
+      ])
 
-      if (gate === BACK_SENTINEL)
-        return 'back'
-      if (gate === CANCEL_SENTINEL)
-        return 'cancel'
+      if (gate === BACK_SENTINEL) return 'back'
+      if (gate === CANCEL_SENTINEL) return 'cancel'
 
       // Reset MCP state before re-collecting
       aceToolBaseUrl = ''
@@ -497,35 +505,37 @@ export async function init(options: InitOptions = {}): Promise<void> {
       grokApiUrl = ''
       grokApiKey = ''
 
-      const { selectedTools } = await inquirer.prompt([{
-        type: 'checkbox',
-        name: 'selectedTools',
-        message: i18n.t('init:mcp.selectTools'),
-        choices: [
-          {
-            name: `fast-context ${ansis.green(`(${i18n.t('common:recommended')})`)} ${ansis.gray('— AI 驱动语义搜索')}`,
-            value: 'fast-context',
-            checked: true,
-          },
-          {
-            name: `ace-tool ${ansis.gray('— search_context 代码检索')}`,
-            value: 'ace-tool',
-          },
-          {
-            name: `context7 ${ansis.green('(free)')} ${ansis.gray('— 库文档查询')}`,
-            value: 'context7',
-            checked: true,
-          },
-          {
-            name: `grok-search ${ansis.gray('— 联网搜索 (需 API Key)')}`,
-            value: 'grok-search',
-          },
-          {
-            name: `contextweaver ${ansis.gray('— 硅基流动嵌入检索 (需 API Key)')}`,
-            value: 'contextweaver',
-          },
-        ],
-      }]) as { selectedTools: string[] }
+      const { selectedTools } = (await inquirer.prompt([
+        {
+          type: 'checkbox',
+          name: 'selectedTools',
+          message: i18n.t('init:mcp.selectTools'),
+          choices: [
+            {
+              name: `fast-context ${ansis.green(`(${i18n.t('common:recommended')})`)} ${ansis.gray('— AI 驱动语义搜索')}`,
+              value: 'fast-context',
+              checked: true,
+            },
+            {
+              name: `ace-tool ${ansis.gray('— search_context 代码检索')}`,
+              value: 'ace-tool',
+            },
+            {
+              name: `context7 ${ansis.green('(free)')} ${ansis.gray('— 库文档查询')}`,
+              value: 'context7',
+              checked: true,
+            },
+            {
+              name: `grok-search ${ansis.gray('— 联网搜索 (需 API Key)')}`,
+              value: 'grok-search',
+            },
+            {
+              name: `contextweaver ${ansis.gray('— 硅基流动嵌入检索 (需 API Key)')}`,
+              value: 'contextweaver',
+            },
+          ],
+        },
+      ])) as { selectedTools: string[] }
 
       const hasAceTool = selectedTools.includes('ace-tool')
       const hasFastContext = selectedTools.includes('fast-context')
@@ -535,14 +545,11 @@ export async function init(options: InitOptions = {}): Promise<void> {
 
       if (hasAceTool) {
         mcpProvider = 'ace-tool'
-      }
-      else if (hasFastContext) {
+      } else if (hasFastContext) {
         mcpProvider = 'fast-context'
-      }
-      else if (hasContextWeaver) {
+      } else if (hasContextWeaver) {
         mcpProvider = 'contextweaver'
-      }
-      else {
+      } else {
         mcpProvider = 'skip'
       }
 
@@ -550,8 +557,12 @@ export async function init(options: InitOptions = {}): Promise<void> {
         console.log()
         console.log(ansis.cyan.bold(`  🔧 ace-tool MCP`))
         console.log()
-        console.log(`     ${ansis.gray('•')} ${ansis.cyan(i18n.t('init:mcp.officialService'))}: ${ansis.underline('https://augmentcode.com/')}`)
-        console.log(`     ${ansis.gray('•')} ${ansis.cyan(i18n.t('init:mcp.proxyService'))} ${ansis.yellow(`(${i18n.t('init:mcp.noSignup')})`)}: ${ansis.underline('https://acemcp.heroman.wtf/')}`)
+        console.log(
+          `     ${ansis.gray('•')} ${ansis.cyan(i18n.t('init:mcp.officialService'))}: ${ansis.underline('https://augmentcode.com/')}`
+        )
+        console.log(
+          `     ${ansis.gray('•')} ${ansis.cyan(i18n.t('init:mcp.proxyService'))} ${ansis.yellow(`(${i18n.t('init:mcp.noSignup')})`)}: ${ansis.underline('https://acemcp.heroman.wtf/')}`
+        )
         console.log()
 
         const aceAnswers = await inquirer.prompt([
@@ -587,11 +598,14 @@ export async function init(options: InitOptions = {}): Promise<void> {
             default: '',
           },
           {
-            type: 'list',
+            type: 'select',
             name: 'includeSnippets',
             message: i18n.t('init:mcp.fcSnippetMode'),
             choices: [
-              { name: `${i18n.t('init:mcp.fcPathOnly')} ${ansis.gray(`(${i18n.t('init:mcp.fcSaveToken')})`)}`, value: false },
+              {
+                name: `${i18n.t('init:mcp.fcPathOnly')} ${ansis.gray(`(${i18n.t('init:mcp.fcSaveToken')})`)}`,
+                value: false,
+              },
               { name: i18n.t('init:mcp.fcFullSnippet'), value: true },
             ],
           },
@@ -604,18 +618,22 @@ export async function init(options: InitOptions = {}): Promise<void> {
         console.log()
         console.log(ansis.cyan.bold(`  🔧 ContextWeaver MCP`))
         console.log()
-        console.log(`     ${ansis.gray('1.')} ${i18n.t('init:mcp.siliconflowStep1', { url: ansis.underline('https://siliconflow.cn/') })}`)
+        console.log(
+          `     ${ansis.gray('1.')} ${i18n.t('init:mcp.siliconflowStep1', { url: ansis.underline('https://siliconflow.cn/') })}`
+        )
         console.log(`     ${ansis.gray('2.')} ${i18n.t('init:mcp.siliconflowStep2')}`)
         console.log(`     ${ansis.gray('3.')} ${i18n.t('init:mcp.siliconflowStep3')}`)
         console.log()
 
-        const cwAnswers = await inquirer.prompt([{
-          type: 'password',
-          name: 'apiKey',
-          message: `SiliconFlow API Key ${ansis.gray('(sk-xxx)')}`,
-          mask: '*',
-          validate: (input: string) => input.trim() !== '' || i18n.t('init:mcp.enterApiKey'),
-        }])
+        const cwAnswers = await inquirer.prompt([
+          {
+            type: 'password',
+            name: 'apiKey',
+            message: `SiliconFlow API Key ${ansis.gray('(sk-xxx)')}`,
+            mask: '*',
+            validate: (input: string) => input.trim() !== '' || i18n.t('init:mcp.enterApiKey'),
+          },
+        ])
         contextWeaverApiKey = cwAnswers.apiKey || ''
       }
 
@@ -623,16 +641,40 @@ export async function init(options: InitOptions = {}): Promise<void> {
         console.log()
         console.log(ansis.cyan.bold(`  🔍 grok-search MCP`))
         console.log()
-        console.log(`     Tavily: ${ansis.underline('https://www.tavily.com/')} ${ansis.gray(`(${i18n.t('init:grok.tavilyHint')})`)}`)
-        console.log(`     Firecrawl: ${ansis.underline('https://www.firecrawl.dev/')} ${ansis.gray(`(${i18n.t('init:grok.firecrawlHint')})`)}`)
+        console.log(
+          `     Tavily: ${ansis.underline('https://www.tavily.com/')} ${ansis.gray(`(${i18n.t('init:grok.tavilyHint')})`)}`
+        )
+        console.log(
+          `     Firecrawl: ${ansis.underline('https://www.firecrawl.dev/')} ${ansis.gray(`(${i18n.t('init:grok.firecrawlHint')})`)}`
+        )
         console.log(`     Grok API: ${ansis.gray(i18n.t('init:grok.grokHint'))}`)
         console.log()
 
         const grokAnswers = await inquirer.prompt([
-          { type: 'input', name: 'grokApiUrl', message: `GROK_API_URL ${ansis.gray(`(${i18n.t('init:grok.optional')})`)}`, default: '' },
-          { type: 'password', name: 'grokApiKey', message: `GROK_API_KEY ${ansis.gray(`(${i18n.t('init:grok.optional')})`)}`, mask: '*' },
-          { type: 'password', name: 'tavilyKey', message: `TAVILY_API_KEY ${ansis.gray(`(${i18n.t('init:grok.optional')})`)}`, mask: '*' },
-          { type: 'password', name: 'firecrawlKey', message: `FIRECRAWL_API_KEY ${ansis.gray(`(${i18n.t('init:grok.optional')})`)}`, mask: '*' },
+          {
+            type: 'input',
+            name: 'grokApiUrl',
+            message: `GROK_API_URL ${ansis.gray(`(${i18n.t('init:grok.optional')})`)}`,
+            default: '',
+          },
+          {
+            type: 'password',
+            name: 'grokApiKey',
+            message: `GROK_API_KEY ${ansis.gray(`(${i18n.t('init:grok.optional')})`)}`,
+            mask: '*',
+          },
+          {
+            type: 'password',
+            name: 'tavilyKey',
+            message: `TAVILY_API_KEY ${ansis.gray(`(${i18n.t('init:grok.optional')})`)}`,
+            mask: '*',
+          },
+          {
+            type: 'password',
+            name: 'firecrawlKey',
+            message: `FIRECRAWL_API_KEY ${ansis.gray(`(${i18n.t('init:grok.optional')})`)}`,
+            mask: '*',
+          },
         ])
 
         tavilyKey = grokAnswers.tavilyKey?.trim() || ''
@@ -648,48 +690,50 @@ export async function init(options: InitOptions = {}): Promise<void> {
       console.log(ansis.cyan.bold(`  ⚡ Step 4/4 — ${i18n.t('init:perf.title')}`))
       console.log()
 
-      const { perfMode } = await inquirer.prompt([{
-        type: 'list',
-        name: 'perfMode',
-        message: i18n.t('init:perf.selectMode'),
-        choices: [
-          { name: `${ansis.green('●')} ${i18n.t('init:perf.standardOption')}`, value: 'standard' },
-          { name: `${ansis.cyan('●')} ${i18n.t('init:perf.liteOption')}`, value: 'lite' },
-          ...navSentinels(canGoBack),
-        ],
-        default: liteMode ? 'lite' : 'standard',
-      }])
+      const { perfMode } = await inquirer.prompt([
+        {
+          type: 'select',
+          name: 'perfMode',
+          message: i18n.t('init:perf.selectMode'),
+          choices: [
+            { name: `${ansis.green('●')} ${i18n.t('init:perf.standardOption')}`, value: 'standard' },
+            { name: `${ansis.cyan('●')} ${i18n.t('init:perf.liteOption')}`, value: 'lite' },
+            ...navSentinels(canGoBack),
+          ],
+          default: liteMode ? 'lite' : 'standard',
+        },
+      ])
 
-      if (perfMode === BACK_SENTINEL)
-        return 'back'
-      if (perfMode === CANCEL_SENTINEL)
-        return 'cancel'
+      if (perfMode === BACK_SENTINEL) return 'back'
+      if (perfMode === CANCEL_SENTINEL) return 'cancel'
 
       liteMode = perfMode === 'lite'
 
       // Version mode: v3 (smart entry + engine) or legacy (all 30 commands)
-      const { versionMode } = await inquirer.prompt([{
-        type: 'list',
-        name: 'versionMode',
-        message: '安装模式',
-        choices: [
-          { name: `${ansis.green('v3 新版')} — /ccg:go 智能入口 + Hook 引擎 + 12 核心命令（推荐）`, value: 'v3' },
-          { name: `${ansis.gray('旧版兼容')} — 新版全部 + 18 个旧版命令（workflow/debug/team 等）`, value: 'legacy' },
-        ],
-        default: 'v3',
-      }])
-      installMode = versionMode
+      const { versionMode } = await inquirer.prompt([
+        {
+          type: 'select',
+          name: 'versionMode',
+          message: '安装模式',
+          choices: [
+            { name: `${ansis.green('v3 新版')} — /ccg:go 智能入口 + Hook 引擎 + 12 核心命令（推荐）`, value: 'v3' },
+            { name: `${ansis.gray('旧版兼容')} — 新版全部 + 18 个旧版命令（workflow/debug/team 等）`, value: 'legacy' },
+          ],
+          default: 'v3',
+        },
+      ])
       if (versionMode === 'legacy') {
         selectedWorkflows = getAllCommandIds()
-        const { includeImpeccable } = await inquirer.prompt([{
-          type: 'confirm',
-          name: 'includeImpeccable',
-          message: i18n.t('init:commands.includeImpeccable'),
-          default: !skipImpeccable,
-        }])
+        const { includeImpeccable } = await inquirer.prompt([
+          {
+            type: 'confirm',
+            name: 'includeImpeccable',
+            message: i18n.t('init:commands.includeImpeccable'),
+            default: !skipImpeccable,
+          },
+        ])
         skipImpeccable = !includeImpeccable
-      }
-      else {
+      } else {
         selectedWorkflows = getCoreCommandIds()
         skipImpeccable = true
       }
@@ -705,51 +749,57 @@ export async function init(options: InitOptions = {}): Promise<void> {
       const fmName = frontendModels[0].charAt(0).toUpperCase() + frontendModels[0].slice(1)
       const bmName = backendModels[0].charAt(0).toUpperCase() + backendModels[0].slice(1)
       const apiLabel = (() => {
-        if (apiUrl && apiKey)
-          return `${ansis.green('●')} ${apiUrl} ${ansis.gray('+ ***')}`
-        if (apiUrl)
-          return `${ansis.green('●')} ${apiUrl}`
+        if (apiUrl && apiKey) return `${ansis.green('●')} ${apiUrl} ${ansis.gray('+ ***')}`
+        if (apiUrl) return `${ansis.green('●')} ${apiUrl}`
         return `${ansis.gray('○')} ${i18n.t('init:summary.apiSelfManaged')}`
       })()
       console.log(`  ${ansis.cyan(i18n.t('init:summary.apiProvider'))}  ${apiLabel}`)
-      console.log(`  ${ansis.cyan(i18n.t('init:summary.modelRouting'))}  ${ansis.green(fmName)} (Frontend) + ${ansis.blue(bmName)} (Backend)`)
-      if (frontendModels[0] === 'gemini' || backendModels[0] === 'gemini') {
-        console.log(`  ${ansis.cyan(i18n.t('init:summary.geminiModel'))}   ${ansis.gray(geminiModel)}`)
-      }
+      console.log(
+        `  ${ansis.cyan(i18n.t('init:summary.modelRouting'))}  ${ansis.green(fmName)} (Frontend) + ${ansis.blue(bmName)} (Backend)`
+      )
       console.log(`  ${ansis.cyan(i18n.t('init:summary.commandCount'))}  ${ansis.yellow(workflowsCount.toString())}`)
       const mcpSummary = (() => {
-        if (mcpProvider === 'fast-context')
-          return ansis.green('fast-context')
+        if (mcpProvider === 'fast-context') return ansis.green('fast-context')
         if (mcpProvider === 'ace-tool' || mcpProvider === 'ace-tool-rs')
-          return aceToolToken ? ansis.green(mcpProvider) : ansis.yellow(`${mcpProvider} (${i18n.t('init:summary.pendingConfig')})`)
+          return aceToolToken
+            ? ansis.green(mcpProvider)
+            : ansis.yellow(`${mcpProvider} (${i18n.t('init:summary.pendingConfig')})`)
         if (mcpProvider === 'contextweaver')
-          return contextWeaverApiKey ? ansis.green('contextweaver') : ansis.yellow(`contextweaver (${i18n.t('init:summary.pendingConfig')})`)
+          return contextWeaverApiKey
+            ? ansis.green('contextweaver')
+            : ansis.yellow(`contextweaver (${i18n.t('init:summary.pendingConfig')})`)
         return ansis.gray(i18n.t('init:summary.skipped'))
       })()
       console.log(`  ${ansis.cyan(i18n.t('init:summary.mcpTool'))}      ${mcpSummary}`)
-      console.log(`  ${ansis.cyan(i18n.t('init:summary.webUI'))}        ${liteMode ? ansis.gray(i18n.t('init:summary.disabled')) : ansis.green(i18n.t('init:summary.enabled'))}`)
+      console.log(
+        `  ${ansis.cyan(i18n.t('init:summary.webUI'))}        ${liteMode ? ansis.gray(i18n.t('init:summary.disabled')) : ansis.green(i18n.t('init:summary.enabled'))}`
+      )
       if (wantGrokSearch) {
-        console.log(`  ${ansis.cyan('grok-search')}    ${tavilyKey ? ansis.green('✓') : ansis.yellow(`(${i18n.t('init:summary.pendingConfig')})`)}`)
+        console.log(
+          `  ${ansis.cyan('grok-search')}    ${tavilyKey ? ansis.green('✓') : ansis.yellow(`(${i18n.t('init:summary.pendingConfig')})`)}`
+        )
       }
       console.log(ansis.yellow('━'.repeat(50)))
       console.log()
 
-      const { action } = await inquirer.prompt([{
-        type: 'list',
-        name: 'action',
-        message: i18n.t('init:summaryMenu.prompt'),
-        choices: [
-          { name: `${ansis.green('✓')} ${i18n.t('init:summaryMenu.confirm')}`, value: 'confirm' },
-          new inquirer.Separator(),
-          { name: `${ansis.cyan('✎')} ${i18n.t('init:summaryMenu.editApi')}`, value: 'api' },
-          { name: `${ansis.cyan('✎')} ${i18n.t('init:summaryMenu.editModel')}`, value: 'model' },
-          { name: `${ansis.cyan('✎')} ${i18n.t('init:summaryMenu.editMcp')}`, value: 'mcp' },
-          { name: `${ansis.cyan('✎')} ${i18n.t('init:summaryMenu.editPerf')}`, value: 'perf' },
-          new inquirer.Separator(),
-          { name: `${ansis.red('×')} ${i18n.t('init:summaryMenu.cancel')}`, value: 'cancel' },
-        ],
-        default: 'confirm',
-      }])
+      const { action } = await inquirer.prompt([
+        {
+          type: 'select',
+          name: 'action',
+          message: i18n.t('init:summaryMenu.prompt'),
+          choices: [
+            { name: `${ansis.green('✓')} ${i18n.t('init:summaryMenu.confirm')}`, value: 'confirm' },
+            new inquirer.Separator(),
+            { name: `${ansis.cyan('✎')} ${i18n.t('init:summaryMenu.editApi')}`, value: 'api' },
+            { name: `${ansis.cyan('✎')} ${i18n.t('init:summaryMenu.editModel')}`, value: 'model' },
+            { name: `${ansis.cyan('✎')} ${i18n.t('init:summaryMenu.editMcp')}`, value: 'mcp' },
+            { name: `${ansis.cyan('✎')} ${i18n.t('init:summaryMenu.editPerf')}`, value: 'perf' },
+            new inquirer.Separator(),
+            { name: `${ansis.red('×')} ${i18n.t('init:summaryMenu.cancel')}`, value: 'cancel' },
+          ],
+          default: 'confirm',
+        },
+      ])
       return action as SummaryAction
     }
 
@@ -798,12 +848,10 @@ export async function init(options: InitOptions = {}): Promise<void> {
           // Returned from a summary-triggered jump — go back to summary
           jumpingToSummary = false
           stepIdx = stepOrder.length
-        }
-        else {
+        } else {
           stepIdx++
         }
-      }
-      else {
+      } else {
         // Summary stage
         const summaryAction = await runSummaryStep(selectedWorkflows.length)
         if (summaryAction === 'confirm') {
@@ -833,11 +881,11 @@ export async function init(options: InitOptions = {}): Promise<void> {
       strategy: 'fallback',
     },
     review: {
-      models: [...new Set([...frontendModels, ...backendModels])],
+      models: [...new Set([...backendModels, ...frontendModels])],
       strategy: 'parallel',
     },
+    ...(routingProxy ? { proxy: routingProxy } : {}),
     mode,
-    geminiModel,
   }
 
   // Summary + confirmation handled by runSummaryStep() inside the state
@@ -850,8 +898,12 @@ export async function init(options: InitOptions = {}): Promise<void> {
     console.log()
     const fmName = frontendModels[0].charAt(0).toUpperCase() + frontendModels[0].slice(1)
     const bmName = backendModels[0].charAt(0).toUpperCase() + backendModels[0].slice(1)
-    console.log(`  ${ansis.cyan(i18n.t('init:summary.modelRouting'))}  ${ansis.green(fmName)} (Frontend) + ${ansis.blue(bmName)} (Backend)`)
-    console.log(`  ${ansis.cyan(i18n.t('init:summary.commandCount'))}  ${ansis.yellow(selectedWorkflows.length.toString())}`)
+    console.log(
+      `  ${ansis.cyan(i18n.t('init:summary.modelRouting'))}  ${ansis.green(fmName)} (Frontend) + ${ansis.blue(bmName)} (Backend)`
+    )
+    console.log(
+      `  ${ansis.cyan(i18n.t('init:summary.commandCount'))}  ${ansis.yellow(selectedWorkflows.length.toString())}`
+    )
     console.log(ansis.yellow('━'.repeat(50)))
     console.log()
   }
@@ -925,8 +977,7 @@ export async function init(options: InitOptions = {}): Promise<void> {
       const aceResult = await installAceTool({ baseUrl: aceToolBaseUrl, token: aceToolToken })
       if (aceResult.success) {
         console.log(`    ${ansis.green('✓')} ace-tool MCP ${ansis.gray(`→ ${aceResult.configPath}`)}`)
-      }
-      else {
+      } else {
         console.log(`    ${ansis.yellow('⚠')} ace-tool: ${ansis.gray(aceResult.message)}`)
       }
     }
@@ -941,9 +992,10 @@ export async function init(options: InitOptions = {}): Promise<void> {
         console.log(`    ${ansis.green('✓')} fast-context MCP ${ansis.gray(`→ ${fcResult.configPath}`)}`)
         // Write search guidance — auxiliary mode if ace-tool is primary
         await writeFastContextPrompt(mcpProvider === 'ace-tool' || mcpProvider === 'ace-tool-rs')
-        console.log(`    ${ansis.green('✓')} ${i18n.t('init:mcp.fcPromptInjected')} ${ansis.gray('→ ~/.claude/rules/ + ~/.codex/ + ~/.gemini/')}`)
-      }
-      else {
+        console.log(
+          `    ${ansis.green('✓')} ${i18n.t('init:mcp.fcPromptInjected')} ${ansis.gray('→ ~/.claude/rules/ + ~/.codex/')}`
+        )
+      } else {
         console.log(`    ${ansis.yellow('⚠')} fast-context: ${ansis.gray(fcResult.message)}`)
       }
     }
@@ -954,8 +1006,7 @@ export async function init(options: InitOptions = {}): Promise<void> {
       const cwResult = await installContextWeaver({ siliconflowApiKey: contextWeaverApiKey })
       if (cwResult.success) {
         console.log(`    ${ansis.green('✓')} ContextWeaver MCP ${ansis.gray(`→ ${cwResult.configPath}`)}`)
-      }
-      else {
+      } else {
         console.log(`    ${ansis.yellow('⚠')} ContextWeaver: ${ansis.gray(cwResult.message)}`)
       }
     }
@@ -967,12 +1018,11 @@ export async function init(options: InitOptions = {}): Promise<void> {
 
     // Save API configuration if provided
     if (apiUrl && apiKey) {
-      let settings: Record<string, any> = {}
+      let settings: ClaudeSettings = {}
       if (await fs.pathExists(settingsPath)) {
         settings = await fs.readJSON(settingsPath)
       }
-      if (!settings.env)
-        settings.env = {}
+      if (!settings.env) settings.env = {}
       settings.env.ANTHROPIC_BASE_URL = apiUrl
       settings.env.ANTHROPIC_AUTH_TOKEN = apiKey
       delete settings.env.ANTHROPIC_API_KEY
@@ -983,17 +1033,15 @@ export async function init(options: InitOptions = {}): Promise<void> {
       settings.env.CLAUDE_CODE_ATTRIBUTION_HEADER = '0'
       settings.env.MCP_TIMEOUT = '60000'
       // codeagent-wrapper permission allowlist
-      if (!settings.permissions)
-        settings.permissions = {}
-      if (!settings.permissions.allow)
-        settings.permissions.allow = []
+      if (!settings.permissions) settings.permissions = {}
+      if (!settings.permissions.allow) settings.permissions.allow = []
       const wrapperPerms = [
-        'Bash(~/.claude/bin/codeagent-wrapper --backend gemini*)',
+        'Bash(~/.claude/bin/codeagent-wrapper --backend antigravity*)',
+        'Bash(~/.claude/bin/codeagent-wrapper --backend agy*)',
         'Bash(~/.claude/bin/codeagent-wrapper --backend codex*)',
       ]
       for (const perm of wrapperPerms) {
-        if (!settings.permissions.allow.includes(perm))
-          settings.permissions.allow.push(perm)
+        if (!settings.permissions.allow.includes(perm)) settings.permissions.allow.push(perm)
       }
       await fs.writeJSON(settingsPath, settings, { spaces: 2 })
       console.log()
@@ -1020,9 +1068,10 @@ export async function init(options: InitOptions = {}): Promise<void> {
         await appendGrokSearchPrompt()
         console.log()
         console.log(`    ${ansis.green('✓')} grok-search MCP ${ansis.gray('→ ~/.claude.json')}`)
-        console.log(`    ${ansis.green('✓')} ${i18n.t('init:grok.promptAppended')} ${ansis.gray('→ ~/.claude/rules/ccg-grok-search.md')}`)
-      }
-      else {
+        console.log(
+          `    ${ansis.green('✓')} ${i18n.t('init:grok.promptAppended')} ${ansis.gray('→ ~/.claude/rules/ccg-grok-search.md')}`
+        )
+      } else {
         console.log()
         console.log(`    ${ansis.yellow('⚠')} grok-search MCP ${i18n.t('init:grok.installFailed')}`)
         console.log(ansis.gray(`      ${grokResult.message}`))
@@ -1031,16 +1080,11 @@ export async function init(options: InitOptions = {}): Promise<void> {
 
     // Install context7 MCP + Codex sync (skip when --skip-mcp is passed)
     if (!options.skipMcp) {
-      const context7Result = await installMcpServer(
-        'context7',
-        'npx',
-        ['-y', '@upstash/context7-mcp@latest'],
-      )
+      const context7Result = await installMcpServer('context7', 'npx', ['-y', '@upstash/context7-mcp@latest'])
       if (context7Result.success) {
         console.log()
         console.log(`    ${ansis.green('✓')} context7 MCP ${ansis.gray('→ ~/.claude.json')}`)
-      }
-      else {
+      } else {
         console.log()
         console.log(`    ${ansis.yellow('⚠')} context7 MCP install failed`)
         console.log(ansis.gray(`      ${context7Result.message}`))
@@ -1053,26 +1097,13 @@ export async function init(options: InitOptions = {}): Promise<void> {
       const codexSyncResult = await syncMcpToCodex()
       if (codexSyncResult.success && codexSyncResult.synced.length > 0) {
         console.log()
-        console.log(`    ${ansis.green('✓')} Codex MCP sync: ${codexSyncResult.synced.join(', ')} ${ansis.gray('→ ~/.codex/config.toml')}`)
-      }
-      else if (!codexSyncResult.success) {
+        console.log(
+          `    ${ansis.green('✓')} Codex MCP sync: ${codexSyncResult.synced.join(', ')} ${ansis.gray('→ ~/.codex/config.toml')}`
+        )
+      } else if (!codexSyncResult.success) {
         console.log()
         console.log(`    ${ansis.yellow('⚠')} Codex MCP sync failed`)
         console.log(ansis.gray(`      ${codexSyncResult.message}`))
-      }
-
-      // ═══════════════════════════════════════════════════════
-      // Sync MCP servers to Gemini (~/.gemini/settings.json)
-      // ═══════════════════════════════════════════════════════
-      const geminiSyncResult = await syncMcpToGemini()
-      if (geminiSyncResult.success && geminiSyncResult.synced.length > 0) {
-        console.log()
-        console.log(`    ${ansis.green('✓')} Gemini MCP sync: ${geminiSyncResult.synced.join(', ')} ${ansis.gray('→ ~/.gemini/settings.json')}`)
-      }
-      else if (!geminiSyncResult.success) {
-        console.log()
-        console.log(`    ${ansis.yellow('⚠')} Gemini MCP sync failed`)
-        console.log(ansis.gray(`      ${geminiSyncResult.message}`))
       }
     }
 
@@ -1093,8 +1124,7 @@ export async function init(options: InitOptions = {}): Promise<void> {
       const grouped: Record<string, string[]> = {}
       result.installedPrompts.forEach((p) => {
         const [model, role] = p.split('/')
-        if (!grouped[model])
-          grouped[model] = []
+        if (!grouped[model]) grouped[model] = []
         grouped[model].push(role)
       })
       Object.entries(grouped).forEach(([model, roles]) => {
@@ -1126,8 +1156,7 @@ export async function init(options: InitOptions = {}): Promise<void> {
         console.log(ansis.red.bold(`  ╔════════════════════════════════════════════════════════════╗`))
         console.log(ansis.red.bold(`  ║  ⚠  安装出现错误 / Installation errors detected           ║`))
         console.log(ansis.red.bold(`  ╚════════════════════════════════════════════════════════════╝`))
-      }
-      else {
+      } else {
         console.log(ansis.yellow(`  ⚠ ${i18n.t('init:installationErrors')}`))
       }
       result.errors.forEach((error) => {
@@ -1155,7 +1184,10 @@ export async function init(options: InitOptions = {}): Promise<void> {
         try {
           const { execSync } = await import('node:child_process')
           const psFlags = '-NoProfile -NonInteractive -ExecutionPolicy Bypass'
-          const currentPath = execSync(`powershell ${psFlags} -Command "[System.Environment]::GetEnvironmentVariable('PATH', 'User')"`, { encoding: 'utf-8' }).trim()
+          const currentPath = execSync(
+            `powershell ${psFlags} -Command "[System.Environment]::GetEnvironmentVariable('PATH', 'User')"`,
+            { encoding: 'utf-8' }
+          ).trim()
           const currentPathNorm = currentPath.toLowerCase().replace(/\\$/g, '')
           const windowsPathNorm = windowsPath.toLowerCase()
 
@@ -1167,12 +1199,10 @@ export async function init(options: InitOptions = {}): Promise<void> {
             execSync(`powershell ${psFlags} -Command "${psScript}"`, { stdio: 'pipe' })
             console.log(`    ${ansis.green('✓')} PATH ${ansis.gray('→ User env')}`)
           }
-        }
-        catch {
+        } catch {
           // Silently ignore PATH config errors on Windows
         }
-      }
-      else if (!options.skipPrompt) {
+      } else if (!options.skipPrompt) {
         const exportCommand = `export PATH="${result.binPath}:$PATH"`
         const shell = process.env.SHELL || ''
         const isZsh = shell.includes('zsh')
@@ -1180,8 +1210,8 @@ export async function init(options: InitOptions = {}): Promise<void> {
         const isMacDefaultZsh = process.platform === 'darwin' && !shell
 
         if (isZsh || isBash || isMacDefaultZsh) {
-          const shellRc = (isZsh || isMacDefaultZsh) ? join(homedir(), '.zshrc') : join(homedir(), '.bashrc')
-          const shellRcDisplay = (isZsh || isMacDefaultZsh) ? '~/.zshrc' : '~/.bashrc'
+          const shellRc = isZsh || isMacDefaultZsh ? join(homedir(), '.zshrc') : join(homedir(), '.bashrc')
+          const shellRcDisplay = isZsh || isMacDefaultZsh ? '~/.zshrc' : '~/.bashrc'
 
           try {
             let rcContent = ''
@@ -1190,53 +1220,62 @@ export async function init(options: InitOptions = {}): Promise<void> {
             }
 
             if (rcContent.includes(result.binPath) || rcContent.includes('/.claude/bin')) {
-              console.log(`    ${ansis.green('✓')} PATH ${ansis.gray(`→ ${shellRcDisplay} (${i18n.t('init:pathAlreadyConfigured', { file: shellRcDisplay })})`)}`)
-            }
-            else {
+              console.log(
+                `    ${ansis.green('✓')} PATH ${ansis.gray(`→ ${shellRcDisplay} (${i18n.t('init:pathAlreadyConfigured', { file: shellRcDisplay })})`)}`
+              )
+            } else {
               const configLine = `\n# CCG multi-model collaboration system\n${exportCommand}\n`
               await fs.appendFile(shellRc, configLine, 'utf-8')
               console.log(`    ${ansis.green('✓')} PATH ${ansis.gray(`→ ${shellRcDisplay}`)}`)
             }
-          }
-          catch {
+          } catch {
             // Silently ignore PATH config errors
           }
-        }
-        else {
+        } else {
           console.log(`    ${ansis.yellow('⚠')} PATH ${ansis.gray(`→ ${i18n.t('init:addToPathManually')}`)}`)
           console.log(`      ${ansis.cyan(exportCommand)}`)
         }
       }
-    }
-    else {
+    } else {
       // Binary download failed — show prominent warning with manual fix instructions
       showBinaryDownloadWarning(join(installDir, 'bin'))
     }
 
     // Show MCP resources if user skipped installation
-    if (mcpProvider === 'skip' || ((mcpProvider === 'ace-tool' || mcpProvider === 'ace-tool-rs') && !aceToolToken) || (mcpProvider === 'contextweaver' && !contextWeaverApiKey)) {
+    if (
+      mcpProvider === 'skip' ||
+      ((mcpProvider === 'ace-tool' || mcpProvider === 'ace-tool-rs') && !aceToolToken) ||
+      (mcpProvider === 'contextweaver' && !contextWeaverApiKey)
+    ) {
       console.log()
       console.log(ansis.cyan.bold(`  📖 ${i18n.t('init:mcp.mcpOptions')}`))
       console.log()
       console.log(ansis.gray(`     ${i18n.t('init:mcp.mcpOptionsHint')}`))
       console.log()
-      console.log(`     ${ansis.green('1.')} ${ansis.cyan('fast-context')} ${ansis.yellow('(推荐)')}: Windsurf Fast Context`)
+      console.log(
+        `     ${ansis.green('1.')} ${ansis.cyan('fast-context')} ${ansis.yellow('(推荐)')}: Windsurf Fast Context`
+      )
       console.log(`        ${ansis.gray('AI 驱动代码搜索，需 Windsurf 账号，免费/低成本')}`)
       console.log()
-      console.log(`     ${ansis.green('2.')} ${ansis.cyan('ace-tool / ace-tool-rs')}: ${ansis.underline('https://augmentcode.com/')}`)
+      console.log(
+        `     ${ansis.green('2.')} ${ansis.cyan('ace-tool / ace-tool-rs')}: ${ansis.underline('https://augmentcode.com/')}`
+      )
       console.log(`        ${ansis.gray(i18n.t('init:mcp.promptEnhancement'))}`)
       console.log()
-      console.log(`     ${ansis.green('3.')} ${ansis.cyan('ace-tool ' + i18n.t('init:mcp.proxyService'))} ${ansis.yellow(`(${i18n.t('init:mcp.noSignup')})`)}: ${ansis.underline('https://acemcp.heroman.wtf/')}`)
+      console.log(
+        `     ${ansis.green('3.')} ${ansis.cyan('ace-tool ' + i18n.t('init:mcp.proxyService'))} ${ansis.yellow(`(${i18n.t('init:mcp.noSignup')})`)}: ${ansis.underline('https://acemcp.heroman.wtf/')}`
+      )
       console.log(`        ${ansis.gray(i18n.t('init:mcp.communityProxy'))}`)
       console.log()
-      console.log(`     ${ansis.green('4.')} ${ansis.cyan('ContextWeaver')} ${ansis.yellow(`(${i18n.t('init:mcp.freeQuota')})`)}: ${ansis.underline('https://siliconflow.cn/')}`)
+      console.log(
+        `     ${ansis.green('4.')} ${ansis.cyan('ContextWeaver')} ${ansis.yellow(`(${i18n.t('init:mcp.freeQuota')})`)}: ${ansis.underline('https://siliconflow.cn/')}`
+      )
       console.log(`        ${ansis.gray(i18n.t('init:mcp.localEngine'))}`)
       console.log()
     }
 
     console.log()
-  }
-  catch (error) {
+  } catch (error) {
     spinner.fail(ansis.red(i18n.t('init:installFailed')))
     console.error(error)
   }

@@ -1,18 +1,20 @@
-import type { CAC } from 'cac'
-import type { CliOptions } from './types'
 import ansis from 'ansis'
+import type { CAC } from 'cac'
 import { version } from '../package.json'
 import { configMcp } from './commands/config-mcp'
 import { diagnoseMcp, fixMcp } from './commands/diagnose-mcp'
 import { init } from './commands/init'
 import { showMainMenu } from './commands/menu'
 import { i18n, initI18n } from './i18n'
+import type { CliOptions } from './types'
 import { readCcgConfig } from './utils/config'
 
-function customizeHelp(sections: any[]): any[] {
+type HelpSection = { title?: string; body: string }
+
+function customizeHelp(sections: HelpSection[]): HelpSection[] {
   sections.unshift({
     title: '',
-    body: ansis.cyan.bold(`CCG - Claude + Codex + Gemini v${version}`),
+    body: ansis.cyan.bold(`CCG - Claude + Codex + Antigravity v${version}`),
   })
 
   sections.push({
@@ -58,7 +60,7 @@ function customizeHelp(sections: any[]): any[] {
       `  ${ansis.cyan('npx ccg i')}`,
       '',
       ansis.gray(`  # ${i18n.t('cli:help.exampleDescriptions.customModels')}`),
-      `  ${ansis.cyan('npx ccg i --frontend gemini,codex --backend codex,gemini')}`,
+      `  ${ansis.cyan('npx ccg i --frontend antigravity,codex --backend codex')}`,
       '',
       ansis.gray(`  # ${i18n.t('cli:help.exampleDescriptions.parallelMode')}`),
       `  ${ansis.cyan('npx ccg i --mode parallel')}`,
@@ -74,8 +76,7 @@ export async function setupCommands(cli: CAC): Promise<void> {
     const config = await readCcgConfig()
     const defaultLang = config?.general?.language || 'zh-CN'
     await initI18n(defaultLang)
-  }
-  catch {
+  } catch {
     await initI18n('zh-CN')
   }
 
@@ -111,18 +112,14 @@ export async function setupCommands(cli: CAC): Promise<void> {
     })
 
   // Diagnose MCP command
-  cli
-    .command('diagnose-mcp', i18n.t('cli:help.commandDescriptions.diagnoseMcp'))
-    .action(async () => {
-      await diagnoseMcp()
-    })
+  cli.command('diagnose-mcp', i18n.t('cli:help.commandDescriptions.diagnoseMcp')).action(async () => {
+    await diagnoseMcp()
+  })
 
   // Fix MCP command (Windows only)
-  cli
-    .command('fix-mcp', i18n.t('cli:help.commandDescriptions.fixMcp'))
-    .action(async () => {
-      await fixMcp()
-    })
+  cli.command('fix-mcp', i18n.t('cli:help.commandDescriptions.fixMcp')).action(async () => {
+    await fixMcp()
+  })
 
   // Config MCP command
   cli
@@ -130,13 +127,12 @@ export async function setupCommands(cli: CAC): Promise<void> {
     .action(async (subcommand: string) => {
       if (subcommand === 'mcp') {
         await configMcp()
-      }
-      else {
+      } else {
         console.log(ansis.red(i18n.t('common:unknownSubcommand', { subcommand })))
         console.log(ansis.gray(i18n.t('common:availableSubcommands', { list: 'mcp' })))
       }
     })
 
-  cli.help(sections => customizeHelp(sections))
+  cli.help((sections) => customizeHelp(sections))
   cli.version(version)
 }

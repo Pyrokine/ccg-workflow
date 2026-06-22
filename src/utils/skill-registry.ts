@@ -9,7 +9,7 @@
  */
 
 import fs from 'fs-extra'
-import { basename, join, relative, sep } from 'pathe'
+import { join, relative, sep } from 'pathe'
 
 // ═══════════════════════════════════════════════════════
 // Types
@@ -97,12 +97,12 @@ function inferCategory(relPath: string): SkillCategory {
 function listScriptEntries(skillDir: string): string[] {
   const scriptsDir = join(skillDir, 'scripts')
   try {
-    return fs.readdirSync(scriptsDir)
+    return fs
+      .readdirSync(scriptsDir)
       .filter((name: string) => name.endsWith('.js'))
       .sort()
       .map((name: string) => join(scriptsDir, name))
-  }
-  catch {
+  } catch {
     return []
   }
 }
@@ -110,11 +110,14 @@ function listScriptEntries(skillDir: string): string[] {
 function normalizeAllowedTools(value: string | undefined): string[] {
   if (!value || value.trim() === '') return [...DEFAULT_ALLOWED_TOOLS]
 
-  const tools = value.split(',').map(t => t.trim()).filter(Boolean)
+  const tools = value
+    .split(',')
+    .map((t) => t.trim())
+    .filter(Boolean)
   if (tools.length === 0) return [...DEFAULT_ALLOWED_TOOLS]
 
   // Validate tool names but don't throw — just filter invalid ones
-  return tools.filter(t => TOOL_NAME_RE.test(t))
+  return tools.filter((t) => TOOL_NAME_RE.test(t))
 }
 
 function normalizeSkillRecord(skillsDir: string, skillDir: string, meta: Record<string, string>): SkillMeta | null {
@@ -140,7 +143,10 @@ function normalizeSkillRecord(skillsDir: string, skillDir: string, meta: Record<
     allowedTools: normalizeAllowedTools(meta['allowed-tools']),
     argumentHint: meta['argument-hint'] || '',
     aliases: meta.aliases
-      ? meta.aliases.split(',').map(a => a.trim()).filter(Boolean)
+      ? meta.aliases
+          .split(',')
+          .map((a) => a.trim())
+          .filter(Boolean)
       : [],
     category: inferCategory(relPath),
     runtimeType: scriptEntries.length === 1 ? 'scripted' : 'knowledge',
@@ -174,8 +180,7 @@ export function collectSkills(skillsDir: string): SkillMeta[] {
             results.push(skill)
           }
         }
-      }
-      catch {
+      } catch {
         // Skip unparseable skills
       }
     }
@@ -183,8 +188,7 @@ export function collectSkills(skillsDir: string): SkillMeta[] {
     let entries: fs.Dirent[]
     try {
       entries = fs.readdirSync(dir, { withFileTypes: true }) as fs.Dirent[]
-    }
-    catch {
+    } catch {
       return
     }
 
@@ -203,7 +207,7 @@ export function collectSkills(skillsDir: string): SkillMeta[] {
  * Collect only user-invocable skills.
  */
 export function collectInvocableSkills(skillsDir: string): SkillMeta[] {
-  return collectSkills(skillsDir).filter(s => s.userInvocable)
+  return collectSkills(skillsDir).filter((s) => s.userInvocable)
 }
 
 // ═══════════════════════════════════════════════════════
@@ -222,11 +226,7 @@ export function generateCommandContent(skill: SkillMeta, skillsInstallDir: strin
 
   // Frontmatter is REQUIRED — CC command parser fails on files without it,
   // cascading to break ALL commands in the same directory (and beyond).
-  const frontmatter = [
-    '---',
-    `description: '${skill.description.replace(/'/g, "''")}'`,
-    '---',
-  ].join('\n')
+  const frontmatter = ['---', `description: '${skill.description.replace(/'/g, "''")}'`, '---'].join('\n')
 
   if (skill.runtimeType === 'scripted') {
     return [
@@ -280,10 +280,9 @@ export async function installSkillCommands(
   skillsInstallDir: string,
   commandsDir: string,
   existingCommandNames: Set<string>,
-  skipCategories: SkillCategory[] = [],
+  skipCategories: SkillCategory[] = []
 ): Promise<string[]> {
-  const invocableSkills = collectInvocableSkills(skillsTemplateDir)
-    .filter(s => !skipCategories.includes(s.category))
+  const invocableSkills = collectInvocableSkills(skillsTemplateDir).filter((s) => !skipCategories.includes(s.category))
   const generated: string[] = []
 
   await fs.ensureDir(commandsDir)

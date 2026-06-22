@@ -1,8 +1,8 @@
-import { exec } from 'node:child_process'
-import { promisify } from 'node:util'
 import fs from 'fs-extra'
-import { dirname, join } from 'pathe'
+import { exec } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+import { promisify } from 'node:util'
+import { dirname, join } from 'pathe'
 import { version as bundledVersion } from '../../package.json'
 
 const execAsync = promisify(exec)
@@ -40,8 +40,7 @@ async function readPackageVersion(pkgPath: string): Promise<string | null> {
     }
     const pkg = await fs.readJSON(pkgPath)
     return pkg.version || null
-  }
-  catch {
+  } catch {
     return null
   }
 }
@@ -79,8 +78,7 @@ export async function getLatestVersion(packageName = 'ccg-workflow'): Promise<st
   try {
     const { stdout } = await execAsync(`npm view ${packageName} version`)
     return stdout.trim()
-  }
-  catch {
+  } catch {
     return null
   }
 }
@@ -90,20 +88,31 @@ export async function getLatestVersion(packageName = 'ccg-workflow'): Promise<st
  * @returns 1 if v1 > v2, -1 if v1 < v2, 0 if equal
  */
 export function compareVersions(v1: string, v2: string): number {
-  const parts1 = v1.split('.').map(Number)
-  const parts2 = v2.split('.').map(Number)
+  const parsed1 = parseVersion(v1)
+  const parsed2 = parseVersion(v2)
 
-  for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
-    const num1 = parts1[i] || 0
-    const num2 = parts2[i] || 0
+  for (let i = 0; i < Math.max(parsed1.parts.length, parsed2.parts.length); i++) {
+    const num1 = parsed1.parts[i] || 0
+    const num2 = parsed2.parts[i] || 0
 
-    if (num1 > num2)
-      return 1
-    if (num1 < num2)
-      return -1
+    if (num1 > num2) return 1
+    if (num1 < num2) return -1
   }
 
+  if (!parsed1.suffix || !parsed2.suffix) return 0
+
+  const suffixOrder = parsed1.suffix.localeCompare(parsed2.suffix, undefined, { numeric: true })
+  if (suffixOrder > 0) return 1
+  if (suffixOrder < 0) return -1
   return 0
+}
+
+function parseVersion(version: string): { parts: number[]; suffix: string } {
+  const [base, suffix = ''] = version.split('-', 2)
+  return {
+    parts: base.split('.').map((part) => Number(part) || 0),
+    suffix,
+  }
 }
 
 /**
@@ -140,10 +149,5 @@ export async function checkForUpdates(): Promise<{
 export async function getChangelog(fromVersion: string, toVersion: string): Promise<string[]> {
   // In a real implementation, this would fetch from CHANGELOG.md or GitHub releases
   // For now, return a placeholder
-  return [
-    `升级从 v${fromVersion} 到 v${toVersion}`,
-    '• 优化命令模板',
-    '• 更新专家提示词',
-    '• 修复已知问题',
-  ]
+  return [`升级从 v${fromVersion} 到 v${toVersion}`, '• 优化命令模板', '• 更新专家提示词', '• 修复已知问题']
 }

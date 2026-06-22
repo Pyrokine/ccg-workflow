@@ -1,9 +1,16 @@
-import { readdirSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
-import { tmpdir } from 'node:os'
-import { afterAll, describe, expect, it } from 'vitest'
 import fs from 'fs-extra'
-import { getAllCommandIds, getWorkflowById, getWorkflowConfigs, injectConfigVariables, installWorkflows, uninstallWorkflows } from '../installer'
+import { readdirSync, readFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterAll, describe, expect, it } from 'vitest'
+import {
+  getAllCommandIds,
+  getWorkflowById,
+  getWorkflowConfigs,
+  injectConfigVariables,
+  installWorkflows,
+  uninstallWorkflows,
+} from '../installer'
 
 // Helper: find package root
 function findPackageRoot(): string {
@@ -12,8 +19,7 @@ function findPackageRoot(): string {
     try {
       readFileSync(join(dir, 'package.json'))
       return dir
-    }
-    catch {
+    } catch {
       dir = join(dir, '..')
     }
   }
@@ -43,7 +49,7 @@ describe('workflow registry', () => {
         const legacyPath = join(LEGACY_TEMPLATES_DIR, `${cmd}.md`)
         expect(
           fs.existsSync(corePath) || fs.existsSync(legacyPath),
-          `template missing: ${cmd}.md (checked commands/ and commands-legacy/)`,
+          `template missing: ${cmd}.md (checked commands/ and commands-legacy/)`
         ).toBe(true)
       }
     }
@@ -51,20 +57,18 @@ describe('workflow registry', () => {
 
   it('every template file has a matching workflow config', () => {
     const coreFiles = readdirSync(TEMPLATES_DIR)
-      .filter(f => f.endsWith('.md'))
-      .map(f => f.replace('.md', ''))
+      .filter((f) => f.endsWith('.md'))
+      .map((f) => f.replace('.md', ''))
     const legacyFiles = fs.existsSync(LEGACY_TEMPLATES_DIR)
-      ? readdirSync(LEGACY_TEMPLATES_DIR).filter(f => f.endsWith('.md')).map(f => f.replace('.md', ''))
+      ? readdirSync(LEGACY_TEMPLATES_DIR)
+          .filter((f) => f.endsWith('.md'))
+          .map((f) => f.replace('.md', ''))
       : []
     const allTemplates = [...coreFiles, ...legacyFiles]
-    const allCommands = getAllCommandIds()
-      .flatMap(id => getWorkflowById(id)!.commands)
+    const allCommands = getAllCommandIds().flatMap((id) => getWorkflowById(id)!.commands)
 
     for (const template of allTemplates) {
-      expect(
-        allCommands.includes(template),
-        `template "${template}.md" has no workflow config`,
-      ).toBe(true)
+      expect(allCommands.includes(template), `template "${template}.md" has no workflow config`).toBe(true)
     }
   })
 
@@ -100,9 +104,9 @@ describe('injectConfigVariables — routing variables', () => {
   it('injects frontend primary model', () => {
     const input = 'primary: {{FRONTEND_PRIMARY}}'
     const result = injectConfigVariables(input, {
-      routing: { frontend: { models: ['gemini'], primary: 'gemini' } },
+      routing: { frontend: { models: ['antigravity'], primary: 'antigravity' } },
     })
-    expect(result).toBe('primary: gemini')
+    expect(result).toBe('primary: antigravity')
   })
 
   it('injects backend primary model', () => {
@@ -116,17 +120,33 @@ describe('injectConfigVariables — routing variables', () => {
   it('injects frontend models as JSON', () => {
     const input = 'models: {{FRONTEND_MODELS}}'
     const result = injectConfigVariables(input, {
-      routing: { frontend: { models: ['gemini', 'claude'] } },
+      routing: { frontend: { models: ['antigravity', 'claude'] } },
     })
-    expect(result).toBe('models: ["gemini","claude"]')
+    expect(result).toBe('models: ["antigravity","claude"]')
   })
 
   it('injects review models', () => {
     const input = 'review: {{REVIEW_MODELS}}'
     const result = injectConfigVariables(input, {
-      routing: { review: { models: ['codex', 'gemini'] } },
+      routing: { review: { models: ['codex', 'antigravity'] } },
     })
-    expect(result).toBe('review: ["codex","gemini"]')
+    expect(result).toBe('review: ["codex","antigravity"]')
+  })
+
+  it('injects review primary and secondary models', () => {
+    const input = '{{REVIEW_PRIMARY}} / {{REVIEW_SECONDARY}}'
+    const result = injectConfigVariables(input, {
+      routing: { review: { models: ['codex', 'antigravity'] } },
+    })
+    expect(result).toBe('codex / antigravity')
+  })
+
+  it('strips gemini model flag placeholder', () => {
+    const input = '--backend {{REVIEW_SECONDARY}} {{GEMINI_MODEL_FLAG}}- "/workdir"'
+    const result = injectConfigVariables(input, {
+      routing: { review: { models: ['codex', 'antigravity'] } },
+    })
+    expect(result).toBe('--backend antigravity - "/workdir"')
   })
 
   it('injects routing mode', () => {
@@ -157,10 +177,10 @@ describe('injectConfigVariables — liteMode', () => {
     expect(result).toBe('codeagent-wrapper --backend codex')
   })
 
-  it('injects empty string when liteMode is not specified', () => {
+  it('injects --lite flag when liteMode is not specified', () => {
     const input = 'codeagent-wrapper {{LITE_MODE_FLAG}}--backend codex'
     const result = injectConfigVariables(input, {})
-    expect(result).toBe('codeagent-wrapper --backend codex')
+    expect(result).toBe('codeagent-wrapper --lite --backend codex')
   })
 })
 
@@ -174,8 +194,7 @@ describe('template variable completeness', () => {
       const fullPath = join(dir, entry.name)
       if (entry.isDirectory()) {
         files.push(...collectTemplateFiles(fullPath))
-      }
-      else if (entry.name.endsWith('.md')) {
+      } else if (entry.name.endsWith('.md')) {
         files.push(fullPath)
       }
     }
@@ -188,6 +207,16 @@ describe('template variable completeness', () => {
     expect(allTemplates.length).toBeGreaterThan(0)
   })
 
+  it('all codeagent-wrapper backend invocations include lite flag placeholder', () => {
+    for (const file of allTemplates) {
+      const content = readFileSync(file, 'utf-8')
+      const relativePath = file.replace(PACKAGE_ROOT + '/', '')
+      const invocations = content.match(/codeagent-wrapper[^\n"]*--backend[^\n"]*/g) || []
+      const missing = invocations.filter((cmd) => !cmd.includes('{{LITE_MODE_FLAG}}'))
+      expect(missing, `${relativePath}: ${missing.join('\n')}`).toEqual([])
+    }
+  })
+
   for (const file of allTemplates) {
     const relativePath = file.replace(PACKAGE_ROOT + '/', '')
 
@@ -196,9 +225,9 @@ describe('template variable completeness', () => {
       const result = injectConfigVariables(content, {
         routing: {
           mode: 'smart',
-          frontend: { models: ['gemini'], primary: 'gemini' },
+          frontend: { models: ['antigravity', 'codex'], primary: 'antigravity' },
           backend: { models: ['codex'], primary: 'codex' },
-          review: { models: ['codex', 'gemini'] },
+          review: { models: ['codex', 'antigravity'] },
         },
         liteMode: false,
         mcpProvider: 'ace-tool',
@@ -207,9 +236,7 @@ describe('template variable completeness', () => {
       // Find any remaining {{ }} template variables
       const remaining = result.match(/\{\{[A-Z_]+\}\}/g) || []
       // Filter out known non-CCG variables (user-facing placeholders like {{项目路径}})
-      const ccgVars = remaining.filter(v =>
-        !v.includes('项目') && !v.includes('相关') && !v.includes('WORKDIR'),
-      )
+      const ccgVars = remaining.filter((v) => !v.includes('项目') && !v.includes('相关') && !v.includes('WORKDIR'))
       expect(ccgVars, `unprocessed variables in ${relativePath}: ${ccgVars.join(', ')}`).toEqual([])
     })
   }
@@ -228,6 +255,7 @@ describe('installWorkflows E2E — mcpProvider="contextweaver"', () => {
   it('installs all workflows without errors', async () => {
     const result = await installWorkflows(getAllCommandIds(), tmpDir, true, {
       mcpProvider: 'contextweaver',
+      skipBinary: true,
     })
     expect(result.success).toBe(true)
     expect(result.errors).toEqual([])
@@ -260,6 +288,7 @@ describe('uninstallWorkflows E2E', () => {
     // First install
     const installResult = await installWorkflows(getAllCommandIds(), tmpDir, true, {
       mcpProvider: 'ace-tool',
+      skipBinary: true,
     })
     expect(installResult.success).toBe(true)
 
@@ -273,6 +302,38 @@ describe('uninstallWorkflows E2E', () => {
 
     // Verify commands directory removed
     expect(fs.existsSync(join(tmpDir, 'commands', 'ccg'))).toBe(false)
+  })
+
+  it('uninstall removes CCG hooks and preserves user hooks', async () => {
+    const hookDir = join(tmpDir, 'hooks', 'ccg')
+    await fs.ensureDir(hookDir)
+    await fs.writeFile(join(hookDir, 'workflow-state.js'), '// ccg hook')
+    await fs.writeJson(join(tmpDir, 'settings.json'), {
+      hooks: {
+        SessionStart: [
+          {
+            hooks: [
+              { type: 'command', command: `node ${join(tmpDir, 'hooks', 'ccg', 'workflow-state.js')}` },
+              { type: 'command', command: 'node /tmp/user-hook.js' },
+            ],
+          },
+        ],
+        Stop: [
+          {
+            hooks: [{ type: 'command', command: 'node C:\\Users\\x\\.claude\\hooks\\ccg\\workflow-state.js' }],
+          },
+        ],
+      },
+    })
+
+    const result = await uninstallWorkflows(tmpDir)
+    expect(result.success).toBe(true)
+    expect(result.removedHooks).toBe(true)
+    expect(fs.existsSync(hookDir)).toBe(false)
+
+    const settings = await fs.readJson(join(tmpDir, 'settings.json'))
+    expect(settings.hooks.SessionStart[0].hooks).toEqual([{ type: 'command', command: 'node /tmp/user-hook.js' }])
+    expect(settings.hooks.Stop).toBeUndefined()
   })
 
   it('uninstall on empty dir succeeds without errors', async () => {
@@ -295,14 +356,21 @@ describe('installWorkflows — binary installation', () => {
   })
 
   it('installs codeagent-wrapper binary for current platform', async () => {
+    const binaryName = process.platform === 'win32' ? 'codeagent-wrapper.exe' : 'codeagent-wrapper'
+    const binDir = join(tmpDir, 'bin')
+    const binaryPath = join(binDir, binaryName)
+    await fs.ensureDir(binDir)
+    await fs.writeFile(binaryPath, '#!/usr/bin/env sh\necho "codeagent-wrapper version 5.11.1-aug.1"\n', 'utf-8')
+    if (process.platform !== 'win32') {
+      await fs.chmod(binaryPath, 0o755)
+    }
+
     const result = await installWorkflows(['workflow'], tmpDir, true, {
       mcpProvider: 'skip',
     })
 
     expect(result.binInstalled).toBe(true)
     expect(result.binPath).toBeTruthy()
-
-    const binaryName = process.platform === 'win32' ? 'codeagent-wrapper.exe' : 'codeagent-wrapper'
     expect(fs.existsSync(join(result.binPath!, binaryName))).toBe(true)
   })
 })
@@ -317,23 +385,22 @@ describe('installWorkflows — prompts installation', () => {
     await fs.remove(tmpDir)
   })
 
-  it('installs codex, gemini, and claude prompts', async () => {
+  it('installs codex, antigravity, and claude prompts', async () => {
     const result = await installWorkflows(getAllCommandIds(), tmpDir, true, {
       mcpProvider: 'skip',
+      skipBinary: true,
     })
     expect(result.success).toBe(true)
     expect(result.installedPrompts.length).toBeGreaterThan(0)
 
-    // Check model directories exist
     const promptsDir = join(tmpDir, '.ccg', 'prompts')
     expect(fs.existsSync(join(promptsDir, 'codex'))).toBe(true)
-    expect(fs.existsSync(join(promptsDir, 'gemini'))).toBe(true)
+    expect(fs.existsSync(join(promptsDir, 'antigravity'))).toBe(true)
 
-    // Check at least one prompt per model
-    const codexFiles = readdirSync(join(promptsDir, 'codex')).filter(f => f.endsWith('.md'))
-    const geminiFiles = readdirSync(join(promptsDir, 'gemini')).filter(f => f.endsWith('.md'))
+    const codexFiles = readdirSync(join(promptsDir, 'codex')).filter((f) => f.endsWith('.md'))
+    const antigravityFiles = readdirSync(join(promptsDir, 'antigravity')).filter((f) => f.endsWith('.md'))
     expect(codexFiles.length).toBeGreaterThanOrEqual(5)
-    expect(geminiFiles.length).toBeGreaterThanOrEqual(5)
+    expect(antigravityFiles.length).toBeGreaterThanOrEqual(5)
   })
 })
 
@@ -350,6 +417,7 @@ describe('skills namespace isolation', () => {
   it('installs skills under skills/ccg/ namespace', async () => {
     const result = await installWorkflows(['workflow'], tmpDir, true, {
       mcpProvider: 'skip',
+      skipBinary: true,
     })
     expect(result.success).toBe(true)
     expect(result.installedSkills).toBeGreaterThanOrEqual(6)
@@ -400,6 +468,7 @@ describe('skills namespace isolation', () => {
     // Install triggers migration
     const result = await installWorkflows(['workflow'], migrateDir, true, {
       mcpProvider: 'skip',
+      skipBinary: true,
     })
     expect(result.success).toBe(true)
 

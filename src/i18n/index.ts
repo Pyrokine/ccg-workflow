@@ -1,5 +1,5 @@
-import type { SupportedLang } from '../types'
 import i18next from 'i18next'
+import type { SupportedLang } from '../types'
 
 export const i18n = i18next
 
@@ -110,7 +110,6 @@ const zhCN = {
       selected: '个已选择',
       apiProvider: 'API 提供方',
       modelRouting: '模型路由',
-      geminiModel: 'Gemini 型号',
       commandCount: '命令数量',
       mcpTool: 'MCP 工具',
       webUI: 'Web UI',
@@ -212,10 +211,8 @@ const zhCN = {
       title: '模型路由配置',
       selectFrontend: '选择前端模型',
       selectBackend: '选择后端模型',
-      selectGeminiModel: 'Gemini 模型型号',
+      geminiDisabled: 'Gemini CLI 已禁用：2026-06-18 后 consumer OAuth 请求不再处理，CCG 改用 Antigravity。',
       recommended: '推荐',
-      custom: '自定义...',
-      enterCustomModel: '输入自定义 Gemini 模型名称',
       currentRouting: '当前模型路由',
       routingUpdated: '模型路由已更新',
       reinstalling: '正在重装模板以应用新配置...',
@@ -250,7 +247,7 @@ const zhCN = {
     },
     models: {
       codex: 'Codex - 擅长后端逻辑、算法、调试',
-      gemini: 'Gemini - 擅长前端UI、CSS、组件设计',
+      antigravity: 'Antigravity - 前端 UI、CSS、组件设计',
       claude: 'Claude - 擅长编排、重构、文档生成',
     },
     workflows: {
@@ -602,7 +599,6 @@ const en: typeof zhCN = {
       selected: 'selected',
       apiProvider: 'API Provider',
       modelRouting: 'Model Routing',
-      geminiModel: 'Gemini Model',
       commandCount: 'Commands',
       mcpTool: 'MCP Tool',
       webUI: 'Web UI',
@@ -684,7 +680,7 @@ const en: typeof zhCN = {
       thirdPartyOption: 'Third-party API proxy (custom URL + Key)',
       sponsor302AI: '302.AI (Pay-as-you-go Enterprise AI Resource Hub)',
       sponsor302AIGetKey: 'Get API Key',
-      skipOption: 'Skip — I\'ve already configured API via cc-switch / other tools',
+      skipOption: "Skip — I've already configured API via cc-switch / other tools",
       skipNoticeTitle: 'API configuration skipped — CCG will not touch ANTHROPIC_* in settings.json',
       urlPrompt: 'API URL',
       urlRequired: 'Required',
@@ -704,10 +700,9 @@ const en: typeof zhCN = {
       title: 'Model Routing',
       selectFrontend: 'Select frontend model',
       selectBackend: 'Select backend model',
-      selectGeminiModel: 'Gemini model name',
+      geminiDisabled:
+        'Gemini CLI is disabled: consumer OAuth requests stopped being processed after 2026-06-18; CCG uses Antigravity instead.',
       recommended: 'Recommended',
-      custom: 'Custom...',
-      enterCustomModel: 'Enter custom Gemini model name',
       currentRouting: 'Current model routing',
       routingUpdated: 'Model routing updated',
       reinstalling: 'Reinstalling templates with new config...',
@@ -742,7 +737,7 @@ const en: typeof zhCN = {
     },
     models: {
       codex: 'Codex - Backend logic, algorithms, debugging',
-      gemini: 'Gemini - Frontend UI, CSS, component design',
+      antigravity: 'Antigravity - Frontend UI, CSS, component design',
       claude: 'Claude - Orchestration, refactoring, documentation',
     },
     workflows: {
@@ -969,7 +964,8 @@ const en: typeof zhCN = {
       step2: 'Uninstall npm global package',
       step2Hint: 'requires manual execution',
       continuePrompt: 'Continue removing workflow files?',
-      confirm: 'Are you sure you want to uninstall CCG? This will force remove all command directories, config files and data.',
+      confirm:
+        'Are you sure you want to uninstall CCG? This will force remove all command directories, config files and data.',
       alsoRemoveAceTool: 'Also remove ace-tool MCP configuration?',
       uninstalling: 'Uninstalling...',
       success: 'Workflow files removed',
@@ -1000,8 +996,7 @@ export async function initI18n(lang: SupportedLang = 'zh-CN'): Promise<void> {
         escapeValue: false,
       },
     })
-  }
-  else if (i18n.language !== lang) {
+  } else if (i18n.language !== lang) {
     await i18n.changeLanguage(lang)
   }
 }

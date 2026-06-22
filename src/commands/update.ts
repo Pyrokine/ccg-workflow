@@ -1,17 +1,16 @@
-import type { ModelRouting, ModelType } from '../types'
 import ansis from 'ansis'
-import { exec } from 'node:child_process'
-import { promisify } from 'node:util'
 import fs from 'fs-extra'
 import inquirer from 'inquirer'
-import ora from 'ora'
+import { exec } from 'node:child_process'
 import { homedir } from 'node:os'
+import { promisify } from 'node:util'
+import ora from 'ora'
 import { join } from 'pathe'
-import { checkForUpdates, compareVersions } from '../utils/version'
-import { showBinaryDownloadWarning, verifyBinary } from '../utils/installer'
-import { readCcgConfig, writeCcgConfig } from '../utils/config'
-import { migrateToV1_4_0, needsMigration } from '../utils/migration'
 import { i18n } from '../i18n'
+import { readCcgConfig } from '../utils/config'
+import { showBinaryDownloadWarning, verifyBinary } from '../utils/installer'
+import { migrateToV1_4_0, needsMigration } from '../utils/migration'
+import { checkForUpdates, compareVersions } from '../utils/version'
 
 const execAsync = promisify(exec)
 
@@ -55,22 +54,22 @@ export async function update(): Promise<void> {
     if (hasUpdate) {
       message = i18n.t('update:newVersionFound', { latest: latestVersion, current: currentVersion })
       defaultConfirm = true
-    }
-    else if (needsWorkflowUpdate) {
+    } else if (needsWorkflowUpdate) {
       message = i18n.t('update:localOutdated', { local: localVersion, current: currentVersion })
       defaultConfirm = true
-    }
-    else {
+    } else {
       message = i18n.t('update:alreadyLatest', { current: currentVersion })
       defaultConfirm = false
     }
 
-    const { confirmUpdate } = await inquirer.prompt([{
-      type: 'confirm',
-      name: 'confirmUpdate',
-      message,
-      default: defaultConfirm,
-    }])
+    const { confirmUpdate } = await inquirer.prompt([
+      {
+        type: 'confirm',
+        name: 'confirmUpdate',
+        message,
+        default: defaultConfirm,
+      },
+    ])
 
     if (!confirmUpdate) {
       console.log(ansis.gray(i18n.t('update:cancelled')))
@@ -80,98 +79,10 @@ export async function update(): Promise<void> {
     // Pass localVersion as fromVersion for accurate display
     const fromVersion = needsWorkflowUpdate ? localVersion : currentVersion
     await performUpdate(fromVersion, latestVersion || currentVersion, hasUpdate)
-  }
-  catch (error) {
+  } catch (error) {
     spinner.stop()
     console.log(ansis.red(`❌ ${i18n.t('update:error', { error: String(error) })}`))
   }
-}
-
-/**
- * Ask user if they want to reconfigure model routing
- */
-async function askReconfigureRouting(currentRouting?: ModelRouting): Promise<ModelRouting | null> {
-  console.log()
-  console.log(ansis.cyan.bold(`🔧 ${i18n.t('init:summary.modelRouting')}`))
-  console.log()
-
-  if (currentRouting) {
-    console.log(ansis.gray(`${i18n.t('menu:api.currentConfig')}`))
-    console.log(`  ${ansis.cyan('Frontend:')} ${currentRouting.frontend.models.map(m => ansis.green(m)).join(', ')}`)
-    console.log(`  ${ansis.cyan('Backend:')} ${currentRouting.backend.models.map(m => ansis.blue(m)).join(', ')}`)
-    console.log()
-  }
-
-  const { reconfigure } = await inquirer.prompt([{
-    type: 'confirm',
-    name: 'reconfigure',
-    message: i18n.t('init:selectFrontendModels'),
-    default: false,
-  }])
-
-  if (!reconfigure) {
-    return null
-  }
-
-  console.log()
-
-  // Frontend models selection
-  const { selectedFrontend } = await inquirer.prompt([{
-    type: 'checkbox',
-    name: 'selectedFrontend',
-    message: i18n.t('init:selectFrontendModels'),
-    choices: [
-      { name: 'Antigravity', value: 'antigravity' as ModelType, checked: currentRouting?.frontend.models.includes('antigravity') ?? true },
-      { name: 'Gemini', value: 'gemini' as ModelType, checked: currentRouting?.frontend.models.includes('gemini') ?? false },
-      { name: 'Claude', value: 'claude' as ModelType, checked: currentRouting?.frontend.models.includes('claude') ?? false },
-      { name: 'Codex', value: 'codex' as ModelType, checked: currentRouting?.frontend.models.includes('codex') ?? false },
-    ],
-    validate: (answer: string[]) => answer.length > 0 || i18n.t('init:validation.selectAtLeastOne'),
-  }])
-
-  // Backend models selection
-  const { selectedBackend } = await inquirer.prompt([{
-    type: 'checkbox',
-    name: 'selectedBackend',
-    message: i18n.t('init:selectBackendModels'),
-    choices: [
-      { name: 'Codex', value: 'codex' as ModelType, checked: currentRouting?.backend.models.includes('codex') ?? true },
-      { name: 'Antigravity', value: 'antigravity' as ModelType, checked: currentRouting?.backend.models.includes('antigravity') ?? false },
-      { name: 'Gemini', value: 'gemini' as ModelType, checked: currentRouting?.backend.models.includes('gemini') ?? false },
-      { name: 'Claude', value: 'claude' as ModelType, checked: currentRouting?.backend.models.includes('claude') ?? false },
-    ],
-    validate: (answer: string[]) => answer.length > 0 || i18n.t('init:validation.selectAtLeastOne'),
-  }])
-
-  const frontendModels = selectedFrontend as ModelType[]
-  const backendModels = selectedBackend as ModelType[]
-
-  // Build new routing config
-  const newRouting: ModelRouting = {
-    frontend: {
-      models: frontendModels,
-      primary: frontendModels[0],
-      strategy: frontendModels.length > 1 ? 'parallel' : 'fallback',
-    },
-    backend: {
-      models: backendModels,
-      primary: backendModels[0],
-      strategy: backendModels.length > 1 ? 'parallel' : 'fallback',
-    },
-    review: {
-      models: [...new Set([...frontendModels, ...backendModels])],
-      strategy: 'parallel',
-    },
-    mode: currentRouting?.mode || 'smart',
-  }
-
-  console.log()
-  console.log(ansis.green('✓ New config:'))
-  console.log(`  ${ansis.cyan('Frontend:')} ${frontendModels.map(m => ansis.green(m)).join(', ')}`)
-  console.log(`  ${ansis.cyan('Backend:')} ${backendModels.map(m => ansis.blue(m)).join(', ')}`)
-  console.log()
-
-  return newRouting
 }
 
 /**
@@ -181,8 +92,7 @@ async function checkIfGlobalInstall(): Promise<boolean> {
   try {
     const { stdout } = await execAsync('npm list -g ccg-workflow --depth=0', { timeout: 5000 })
     return stdout.includes('ccg-workflow@')
-  }
-  catch {
+  } catch {
     return false
   }
 }
@@ -205,8 +115,7 @@ async function performUpdate(fromVersion: string, toVersion: string, isNewVersio
     console.log(ansis.green(`✓ ${i18n.t('update:packageLatest')} (v${toVersion})`))
     console.log(ansis.yellow(`⚙️  ${i18n.t('update:workflowOnly')}`))
     console.log()
-  }
-  else if (isGlobalInstall && isNewVersion) {
+  } else if (isGlobalInstall && isNewVersion) {
     console.log(ansis.yellow(`⚠️  ${i18n.t('update:globalDetected')}`))
     console.log()
     console.log(`${i18n.t('update:recommendNpm')}`)
@@ -216,12 +125,14 @@ async function performUpdate(fromVersion: string, toVersion: string, isNewVersio
     console.log(ansis.gray(i18n.t('update:willUpdateBoth')))
     console.log()
 
-    const { useNpmUpdate } = await inquirer.prompt([{
-      type: 'confirm',
-      name: 'useNpmUpdate',
-      message: i18n.t('update:useNpmUpdate'),
-      default: true,
-    }])
+    const { useNpmUpdate } = await inquirer.prompt([
+      {
+        type: 'confirm',
+        name: 'useNpmUpdate',
+        message: i18n.t('update:useNpmUpdate'),
+        default: true,
+      },
+    ])
 
     if (useNpmUpdate) {
       console.log()
@@ -248,13 +159,11 @@ async function performUpdate(fromVersion: string, toVersion: string, isNewVersio
       spinner.text = i18n.t('update:clearingCache')
       try {
         await execAsync('npx clear-npx-cache', { timeout: 10000 })
-      }
-      catch {
+      } catch {
         const npxCachePath = join(homedir(), '.npm', '_npx')
         try {
           await fs.remove(npxCachePath)
-        }
-        catch {
+        } catch {
           // Cache clearing failed, but continue anyway
         }
       }
@@ -263,8 +172,7 @@ async function performUpdate(fromVersion: string, toVersion: string, isNewVersio
     spinner.text = i18n.t('update:downloading')
     await execAsync(`npx --yes ccg-workflow@latest --version`, { timeout: 60000 })
     spinner.succeed(i18n.t('update:downloadDone'))
-  }
-  catch (error) {
+  } catch (error) {
     spinner.fail(i18n.t('update:downloadFailed'))
     console.log(ansis.red(`${i18n.t('common:error')}: ${error}`))
     return
@@ -334,8 +242,7 @@ async function performUpdate(fromVersion: string, toVersion: string, isNewVersio
       }
     }
     spinner.succeed(i18n.t('update:oldRemoved'))
-  }
-  catch (error) {
+  } catch (error) {
     // Backup failed — restore what we moved and abort
     spinner.warn(`Backup failed: ${error}`)
     for (const dir of backedUp) {
@@ -344,8 +251,9 @@ async function performUpdate(fromVersion: string, toVersion: string, isNewVersio
         if (await fs.pathExists(backupPath)) {
           await fs.move(backupPath, dir)
         }
+      } catch {
+        /* best-effort restore */
       }
-      catch { /* best-effort restore */ }
     }
     console.log(ansis.yellow('  旧版本文件已保留 / Old files preserved'))
     return
@@ -366,8 +274,8 @@ async function performUpdate(fromVersion: string, toVersion: string, isNewVersio
 
     // Step 5: Verify new installation actually produced files
     const commandsDir = join(installDir, 'commands', 'ccg')
-    const hasCommands = await fs.pathExists(commandsDir)
-      && (await fs.readdir(commandsDir)).some(f => f.endsWith('.md'))
+    const hasCommands =
+      (await fs.pathExists(commandsDir)) && (await fs.readdir(commandsDir)).some((f) => f.endsWith('.md'))
 
     if (hasCommands) {
       installSuccess = true
@@ -382,14 +290,12 @@ async function performUpdate(fromVersion: string, toVersion: string, isNewVersio
           console.log(`  ${ansis.gray('•')} /ccg:${cmd}`)
         }
       }
-    }
-    else {
+    } else {
       // Subprocess reported success but no files were created
       spinner.fail(i18n.t('update:installFailed'))
       console.log(ansis.red('  Install subprocess completed but no command files were created'))
     }
-  }
-  catch (error) {
+  } catch (error) {
     spinner.fail(i18n.t('update:installFailed'))
     console.log(ansis.red(`${i18n.t('common:error')}: ${error}`))
   }
@@ -400,15 +306,15 @@ async function performUpdate(fromVersion: string, toVersion: string, isNewVersio
     for (const dir of backedUp) {
       try {
         await fs.remove(dir + BACKUP_SUFFIX)
+      } catch {
+        /* non-critical: stale backup files */
       }
-      catch { /* non-critical: stale backup files */ }
     }
 
     // Verify binary exists, is functional, AND version matches
     if (!(await verifyBinary(installDir))) {
       showBinaryDownloadWarning(join(installDir, 'bin'))
-    }
-    else {
+    } else {
       // Binary exists and runs, but check version
       const { verifyBinaryVersion } = await import('../utils/installer')
       const versionOk = await verifyBinaryVersion(installDir)
@@ -416,8 +322,7 @@ async function performUpdate(fromVersion: string, toVersion: string, isNewVersio
         showBinaryDownloadWarning(join(installDir, 'bin'))
       }
     }
-  }
-  else {
+  } else {
     // Failure: restore from backups so user still has a working installation
     console.log()
     console.log(ansis.yellow.bold('  ⚠ 正在恢复旧版本文件 / Restoring old version files...'))
@@ -433,8 +338,7 @@ async function performUpdate(fromVersion: string, toVersion: string, isNewVersio
           await fs.move(backupPath, dir)
           restored++
         }
-      }
-      catch (restoreErr) {
+      } catch (restoreErr) {
         console.log(ansis.red(`  Failed to restore ${dir}: ${restoreErr}`))
       }
     }
@@ -454,8 +358,7 @@ async function performUpdate(fromVersion: string, toVersion: string, isNewVersio
   console.log()
   if (isNewVersion) {
     console.log(ansis.gray(i18n.t('update:upgradedFromTo', { from: fromVersion, to: toVersion })))
-  }
-  else {
+  } else {
     console.log(ansis.gray(i18n.t('update:reinstalled', { version: toVersion })))
   }
   console.log()

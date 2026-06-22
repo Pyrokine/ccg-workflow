@@ -1,6 +1,6 @@
+import fs from 'fs-extra'
 import { homedir } from 'node:os'
 import { fileURLToPath } from 'node:url'
-import fs from 'fs-extra'
 import { dirname, join } from 'pathe'
 import { isWindows } from './platform'
 
@@ -32,11 +32,11 @@ function findPackageRoot(startDir: string): string {
 
   // Fallback: warn loudly — this is the root cause of "silent install failure"
   console.error(
-    `[CCG] ⚠ PACKAGE_ROOT resolution failed: could not find package.json with templates/ directory.\n`
-    + `  Start dir: ${startDir}\n`
-    + `  Last checked: ${dir}\n`
-    + `  This will cause commands/skills/prompts to not be installed.\n`
-    + `  Please report this issue at: https://github.com/fengshao1227/ccg-workflow/issues`,
+    `[CCG] ⚠ PACKAGE_ROOT resolution failed: could not find package.json with templates/ directory.\n` +
+      `  Start dir: ${startDir}\n` +
+      `  Last checked: ${dir}\n` +
+      `  This will cause commands/skills/prompts to not be installed.\n` +
+      `  Please report this issue at: https://github.com/fengshao1227/ccg-workflow/issues`
   )
   return startDir
 }
@@ -47,10 +47,10 @@ export const PACKAGE_ROOT = findPackageRoot(__dirname)
 // MCP provider registry — adding a new provider = 1 line
 // ═══════════════════════════════════════════════════════
 
-const MCP_PROVIDERS: Record<string, { tool: string, param: string }> = {
+const MCP_PROVIDERS: Record<string, { tool: string; param: string }> = {
   'ace-tool': { tool: 'mcp__ace-tool__search_context', param: 'query' },
   'ace-tool-rs': { tool: 'mcp__ace-tool__search_context', param: 'query' },
-  'contextweaver': { tool: 'mcp__contextweaver__codebase-retrieval', param: 'information_request' },
+  contextweaver: { tool: 'mcp__contextweaver__codebase-retrieval', param: 'information_request' },
   'fast-context': { tool: 'mcp__fast-context__fast_context_search', param: 'query' },
 }
 
@@ -61,24 +61,26 @@ const MCP_PROVIDERS: Record<string, { tool: string, param: string }> = {
  * Supported MCP providers: 'ace-tool' (default), 'ace-tool-rs', 'contextweaver',
  * 'fast-context', 'skip' (fallback to Glob+Grep).
  */
-export function injectConfigVariables(content: string, config: {
-  routing?: {
-    mode?: string
-    frontend?: { models?: string[], primary?: string }
-    backend?: { models?: string[], primary?: string }
-    review?: { models?: string[] }
-    geminiModel?: string
+export function injectConfigVariables(
+  content: string,
+  config: {
+    routing?: {
+      mode?: string
+      frontend?: { models?: string[]; primary?: string }
+      backend?: { models?: string[]; primary?: string }
+      review?: { models?: string[] }
+    }
+    liteMode?: boolean
+    mcpProvider?: string
   }
-  liteMode?: boolean
-  mcpProvider?: string
-}): string {
+): string {
   let processed = content
 
   // Model routing injection
   const routing = config.routing || {}
 
   // Frontend models
-  const frontendModels = routing.frontend?.models || ['antigravity']
+  const frontendModels = routing.frontend?.models || ['antigravity', 'codex']
   const frontendPrimary = routing.frontend?.primary || 'antigravity'
   processed = processed.replace(/\{\{FRONTEND_MODELS\}\}/g, JSON.stringify(frontendModels))
   processed = processed.replace(/\{\{FRONTEND_PRIMARY\}\}/g, frontendPrimary)
@@ -91,57 +93,21 @@ export function injectConfigVariables(content: string, config: {
 
   // Review models
   const reviewModels = routing.review?.models || ['codex', 'antigravity']
+  const reviewPrimary = reviewModels[0] || 'codex'
+  const reviewSecondary = reviewModels[1] || 'antigravity'
   processed = processed.replace(/\{\{REVIEW_MODELS\}\}/g, JSON.stringify(reviewModels))
+  processed = processed.replace(/\{\{REVIEW_PRIMARY\}\}/g, reviewPrimary)
+  processed = processed.replace(/\{\{REVIEW_SECONDARY\}\}/g, reviewSecondary)
 
   // Routing mode
   const routingMode = routing.mode || 'smart'
   processed = processed.replace(/\{\{ROUTING_MODE\}\}/g, routingMode)
 
-  // Gemini model flag — inject at install time with line-aware substitution.
-  //
-  // When gemini is used for any role, we need `--gemini-model <name>` on
-  // gemini invocations. But some command templates hard-code a non-gemini
-  // backend on the same line (e.g. `--backend {{BACKEND_PRIMARY}}` where
-  // BACKEND_PRIMARY=codex, see backend.md / codex-exec.md). On those lines
-  // the flag is useless — codeagent-wrapper warns and ignores it, but we
-  // should not emit the dead flag at all (issue #130).
-  //
-  // Strategy: after BACKEND_PRIMARY / FRONTEND_PRIMARY have already been
-  // substituted above, scan each line containing `{{GEMINI_MODEL_FLAG}}`:
-  //   - If the line hard-codes a non-gemini backend (`--backend codex`,
-  //     `--backend claude`, etc.) — strip the flag on that line.
-  //   - If the line uses a conditional expression (`--backend <codex|gemini>`)
-  //     or hard-codes gemini — keep the flag (AI picks at runtime).
-  const geminiModel = routing.geminiModel || 'gemini-3.1-pro-preview'
-  const usesGemini = frontendPrimary === 'gemini' || backendPrimary === 'gemini'
-
-  if (!usesGemini) {
-    // Neither frontend nor backend is gemini — no flag needed anywhere.
-    processed = processed.replace(/\{\{GEMINI_MODEL_FLAG\}\}/g, '')
-  }
-  else {
-    const geminiModelFlagValue = `--gemini-model ${geminiModel} `
-    // Match `--backend <bare-identifier>` (rejects conditional `<...|...>`
-    // because `<` is not in [a-z0-9-]).
-    const hardCodedBackendRe = /--backend\s+([a-z0-9-]+)(?:\s|$)/
-
-    processed = processed.split('\n').map((line) => {
-      if (!line.includes('{{GEMINI_MODEL_FLAG}}')) {
-        return line
-      }
-      const m = line.match(hardCodedBackendRe)
-      if (m && m[1] !== 'gemini') {
-        // Hard-coded non-gemini backend on this line — strip the flag.
-        return line.replace(/\{\{GEMINI_MODEL_FLAG\}\}/g, '')
-      }
-      // Conditional / gemini-hard-coded — keep the flag.
-      return line.replace(/\{\{GEMINI_MODEL_FLAG\}\}/g, geminiModelFlagValue)
-    }).join('\n')
-  }
+  processed = processed.replace(/\{\{GEMINI_MODEL_FLAG\}\}/g, '')
 
   // Lite mode flag for codeagent-wrapper
   // If liteMode is true, inject "--lite" flag
-  const liteModeFlag = config.liteMode ? '--lite ' : ''
+  const liteModeFlag = (config.liteMode ?? true) ? '--lite ' : ''
   processed = processed.replace(/\{\{LITE_MODE_FLAG\}\}/g, liteModeFlag)
 
   // MCP tool injection based on provider (registry-driven)
@@ -151,13 +117,12 @@ export function injectConfigVariables(content: string, config: {
     processed = processed.replace(/,\s*\{\{MCP_SEARCH_TOOL\}\}/g, '')
     processed = processed.replace(
       /```\n\{\{MCP_SEARCH_TOOL\}\}[\s\S]*?\n```/g,
-      '> MCP 未配置。使用 `Glob` 定位文件 + `Grep` 搜索关键符号 + `Read` 读取文件内容。',
+      '> MCP 未配置。使用 `Glob` 定位文件 + `Grep` 搜索关键符号 + `Read` 读取文件内容。'
     )
     processed = processed.replace(/`\{\{MCP_SEARCH_TOOL\}\}`/g, '`Glob + Grep`（MCP 未配置）')
     processed = processed.replace(/\{\{MCP_SEARCH_TOOL\}\}/g, 'Glob + Grep')
     processed = processed.replace(/\{\{MCP_SEARCH_PARAM\}\}/g, '')
-  }
-  else {
+  } else {
     // Registry lookup — adding a new MCP provider = 1 line
     const provider = MCP_PROVIDERS[mcpProvider] ?? MCP_PROVIDERS['ace-tool']
     processed = processed.replace(/\{\{MCP_SEARCH_TOOL\}\}/g, provider.tool)
