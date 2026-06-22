@@ -67,19 +67,23 @@ func TestLoggerCleanupOldLogsSkipsUnsafeAndHandlesAlreadyDeleted(t *testing.T) {
 	unsafePath := createTempLog(t, tempDir, fmt.Sprintf("%s-%d.log", primaryLogPrefix(), 222))
 	orphanPath := createTempLog(t, tempDir, fmt.Sprintf("%s-%d.log", primaryLogPrefix(), 111))
 
-	stubFileStat(t, func(path string) (os.FileInfo, error) {
-		if path == unsafePath {
-			return fakeFileInfo{mode: os.ModeSymlink}, nil
-		}
-		return os.Lstat(path)
-	})
+	stubFileStat(
+		t, func(path string) (os.FileInfo, error) {
+			if path == unsafePath {
+				return fakeFileInfo{mode: os.ModeSymlink}, nil
+			}
+			return os.Lstat(path)
+		},
+	)
 
-	stubProcessRunning(t, func(pid int) bool {
-		if pid == 111 {
-			_ = os.Remove(orphanPath)
-		}
-		return false
-	})
+	stubProcessRunning(
+		t, func(pid int) bool {
+			if pid == 111 {
+				_ = os.Remove(orphanPath)
+			}
+			return false
+		},
+	)
 
 	stats, err := cleanupOldLogs()
 	if err != nil {
@@ -120,39 +124,53 @@ func TestLoggerCleanupOldLogsSkipsUnsafeAndHandlesAlreadyDeleted(t *testing.T) {
 func TestLoggerIsUnsafeFileErrorPaths(t *testing.T) {
 	tempDir := t.TempDir()
 
-	t.Run("stat ErrNotExist", func(t *testing.T) {
-		stubFileStat(t, func(string) (os.FileInfo, error) {
-			return nil, os.ErrNotExist
-		})
+	t.Run(
+		"stat ErrNotExist", func(t *testing.T) {
+			stubFileStat(
+				t, func(string) (os.FileInfo, error) {
+					return nil, os.ErrNotExist
+				},
+			)
 
-		unsafe, reason := isUnsafeFile("missing.log", tempDir)
-		if !unsafe || reason != "" {
-			t.Fatalf("expected missing file to be skipped silently, got unsafe=%v reason=%q", unsafe, reason)
-		}
-	})
+			unsafe, reason := isUnsafeFile("missing.log", tempDir)
+			if !unsafe || reason != "" {
+				t.Fatalf("expected missing file to be skipped silently, got unsafe=%v reason=%q", unsafe, reason)
+			}
+		},
+	)
 
-	t.Run("stat error", func(t *testing.T) {
-		stubFileStat(t, func(string) (os.FileInfo, error) {
-			return nil, fmt.Errorf("boom")
-		})
+	t.Run(
+		"stat error", func(t *testing.T) {
+			stubFileStat(
+				t, func(string) (os.FileInfo, error) {
+					return nil, fmt.Errorf("boom")
+				},
+			)
 
-		unsafe, reason := isUnsafeFile("broken.log", tempDir)
-		if !unsafe || !strings.Contains(reason, "stat failed") {
-			t.Fatalf("expected stat failure to be unsafe, got unsafe=%v reason=%q", unsafe, reason)
-		}
-	})
+			unsafe, reason := isUnsafeFile("broken.log", tempDir)
+			if !unsafe || !strings.Contains(reason, "stat failed") {
+				t.Fatalf("expected stat failure to be unsafe, got unsafe=%v reason=%q", unsafe, reason)
+			}
+		},
+	)
 
-	t.Run("EvalSymlinks error", func(t *testing.T) {
-		stubFileStat(t, func(string) (os.FileInfo, error) {
-			return fakeFileInfo{}, nil
-		})
-		stubEvalSymlinks(t, func(string) (string, error) {
-			return "", fmt.Errorf("resolve failed")
-		})
+	t.Run(
+		"EvalSymlinks error", func(t *testing.T) {
+			stubFileStat(
+				t, func(string) (os.FileInfo, error) {
+					return fakeFileInfo{}, nil
+				},
+			)
+			stubEvalSymlinks(
+				t, func(string) (string, error) {
+					return "", fmt.Errorf("resolve failed")
+				},
+			)
 
-		unsafe, reason := isUnsafeFile("cannot-resolve.log", tempDir)
-		if !unsafe || !strings.Contains(reason, "path resolution failed") {
-			t.Fatalf("expected resolution failure to be unsafe, got unsafe=%v reason=%q", unsafe, reason)
-		}
-	})
+			unsafe, reason := isUnsafeFile("cannot-resolve.log", tempDir)
+			if !unsafe || !strings.Contains(reason, "path resolution failed") {
+				t.Fatalf("expected resolution failure to be unsafe, got unsafe=%v reason=%q", unsafe, reason)
+			}
+		},
+	)
 }

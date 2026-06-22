@@ -23,11 +23,13 @@ func TestExtractCoverage(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := extractCoverage(tt.in); got != tt.want {
-				t.Fatalf("extractCoverage(%q) = %q, want %q", tt.in, got, tt.want)
-			}
-		})
+		t.Run(
+			tt.name, func(t *testing.T) {
+				if got := extractCoverage(tt.in); got != tt.want {
+					t.Fatalf("extractCoverage(%q) = %q, want %q", tt.in, got, tt.want)
+				}
+			},
+		)
 	}
 }
 
@@ -46,12 +48,17 @@ func TestExtractTestResults(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			passed, failed := extractTestResults(tt.in)
-			if passed != tt.wantPassed || failed != tt.wantFailed {
-				t.Fatalf("extractTestResults(%q) = (%d, %d), want (%d, %d)", tt.in, passed, failed, tt.wantPassed, tt.wantFailed)
-			}
-		})
+		t.Run(
+			tt.name, func(t *testing.T) {
+				passed, failed := extractTestResults(tt.in)
+				if passed != tt.wantPassed || failed != tt.wantFailed {
+					t.Fatalf(
+						"extractTestResults(%q) = (%d, %d), want (%d, %d)", tt.in, passed, failed, tt.wantPassed,
+						tt.wantFailed,
+					)
+				}
+			},
+		)
 	}
 }
 
@@ -64,34 +71,41 @@ func TestExtractFilesChanged(t *testing.T) {
 		{"root file", "Modified: main.go\n", []string{"main.go"}},
 		{"path file", "Created: codeagent-wrapper/utils.go\n", []string{"codeagent-wrapper/utils.go"}},
 		{"at prefix", "Updated: @codeagent-wrapper/main.go\n", []string{"codeagent-wrapper/main.go"}},
-		{"token scan", "Files: @main.go, @codeagent-wrapper/utils.go\n", []string{"main.go", "codeagent-wrapper/utils.go"}},
+		{
+			"token scan", "Files: @main.go, @codeagent-wrapper/utils.go\n",
+			[]string{"main.go", "codeagent-wrapper/utils.go"},
+		},
 		{"space path", "Modified: dir/with space/file.go\n", []string{"dir/with space/file.go"}},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := extractFilesChanged(tt.in); !reflect.DeepEqual(got, tt.want) {
-				t.Fatalf("extractFilesChanged(%q) = %#v, want %#v", tt.in, got, tt.want)
-			}
-		})
+		t.Run(
+			tt.name, func(t *testing.T) {
+				if got := extractFilesChanged(tt.in); !reflect.DeepEqual(got, tt.want) {
+					t.Fatalf("extractFilesChanged(%q) = %#v, want %#v", tt.in, got, tt.want)
+				}
+			},
+		)
 	}
 
-	t.Run("limits to first 10", func(t *testing.T) {
-		var b strings.Builder
-		for i := 0; i < 12; i++ {
-			fmt.Fprintf(&b, "Modified: file%d.go\n", i)
-		}
-		got := extractFilesChanged(b.String())
-		if len(got) != 10 {
-			t.Fatalf("len(files)=%d, want 10: %#v", len(got), got)
-		}
-		for i := 0; i < 10; i++ {
-			want := fmt.Sprintf("file%d.go", i)
-			if got[i] != want {
-				t.Fatalf("files[%d]=%q, want %q", i, got[i], want)
+	t.Run(
+		"limits to first 10", func(t *testing.T) {
+			var b strings.Builder
+			for i := 0; i < 12; i++ {
+				fmt.Fprintf(&b, "Modified: file%d.go\n", i)
 			}
-		}
-	})
+			got := extractFilesChanged(b.String())
+			if len(got) != 10 {
+				t.Fatalf("len(files)=%d, want 10: %#v", len(got), got)
+			}
+			for i := 0; i < 10; i++ {
+				want := fmt.Sprintf("file%d.go", i)
+				if got[i] != want {
+					t.Fatalf("files[%d]=%q, want %q", i, got[i], want)
+				}
+			}
+		},
+	)
 }
 
 func TestSafeTruncate(t *testing.T) {
@@ -114,11 +128,13 @@ func TestSafeTruncate(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := safeTruncate(tt.in, tt.maxLen); got != tt.want {
-				t.Fatalf("safeTruncate(%q, %d) = %q, want %q", tt.in, tt.maxLen, got, tt.want)
-			}
-		})
+		t.Run(
+			tt.name, func(t *testing.T) {
+				if got := safeTruncate(tt.in, tt.maxLen); got != tt.want {
+					t.Fatalf("safeTruncate(%q, %d) = %q, want %q", tt.in, tt.maxLen, got, tt.want)
+				}
+			},
+		)
 	}
 }
 
@@ -134,10 +150,12 @@ func TestSanitizeOutput(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := sanitizeOutput(tt.in); got != tt.want {
-				t.Fatalf("sanitizeOutput(%q) = %q, want %q", tt.in, got, tt.want)
-			}
-		})
+		t.Run(
+			tt.name, func(t *testing.T) {
+				if got := sanitizeOutput(tt.in); got != tt.want {
+					t.Fatalf("sanitizeOutput(%q) = %q, want %q", tt.in, got, tt.want)
+				}
+			},
+		)
 	}
 }

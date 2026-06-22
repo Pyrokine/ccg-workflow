@@ -208,33 +208,35 @@ func (l *Logger) Close() error {
 
 	var closeErr error
 
-	l.closeOnce.Do(func() {
-		l.closed.Store(true)
-		close(l.done)
+	l.closeOnce.Do(
+		func() {
+			l.closed.Store(true)
+			close(l.done)
 
-		timeout := loggerCloseTimeout()
-		workerDone := make(chan struct{})
-		go func() {
-			l.workerWG.Wait()
-			close(workerDone)
-		}()
+			timeout := loggerCloseTimeout()
+			workerDone := make(chan struct{})
+			go func() {
+				l.workerWG.Wait()
+				close(workerDone)
+			}()
 
-		if timeout > 0 {
-			select {
-			case <-workerDone:
-				// Worker stopped gracefully
-			case <-time.After(timeout):
-				closeErr = fmt.Errorf("logger worker timeout during close")
-				return
+			if timeout > 0 {
+				select {
+				case <-workerDone:
+					// Worker stopped gracefully
+				case <-time.After(timeout):
+					closeErr = fmt.Errorf("logger worker timeout during close")
+					return
+				}
+			} else {
+				<-workerDone
 			}
-		} else {
-			<-workerDone
-		}
 
-		if l.workerErr != nil && closeErr == nil {
-			closeErr = l.workerErr
-		}
-	})
+			if l.workerErr != nil && closeErr == nil {
+				closeErr = l.workerErr
+			}
+		},
+	)
 
 	return closeErr
 }
@@ -652,7 +654,11 @@ func logConcurrencyState(event, taskID string, active, limit int) {
 	if logger == nil {
 		return
 	}
-	logger.Debug(fmt.Sprintf("parallel: %s task=%s active=%d limit=%s", event, taskID, active, renderWorkerLimit(limit)))
+	logger.Debug(
+		fmt.Sprintf(
+			"parallel: %s task=%s active=%d limit=%s", event, taskID, active, renderWorkerLimit(limit),
+		),
+	)
 }
 
 func renderWorkerLimit(limit int) string {

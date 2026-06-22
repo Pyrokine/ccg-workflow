@@ -80,11 +80,15 @@ func TestConcurrentStressLogger(t *testing.T) {
 
 	// 验证日志数量
 	if actualCount < totalExpected/10 {
-		t.Errorf("too many logs lost: got %d, want at least %d (10%% of %d)",
-			actualCount, totalExpected/10, totalExpected)
+		t.Errorf(
+			"too many logs lost: got %d, want at least %d (10%% of %d)",
+			actualCount, totalExpected/10, totalExpected,
+		)
 	}
-	t.Logf("Successfully wrote %d/%d logs (%.1f%%)",
-		actualCount, totalExpected, float64(actualCount)/float64(totalExpected)*100)
+	t.Logf(
+		"Successfully wrote %d/%d logs (%.1f%%)",
+		actualCount, totalExpected, float64(actualCount)/float64(totalExpected)*100,
+	)
 
 	// 验证日志格式（纯文本，无前缀）
 	formatRE := regexp.MustCompile(`^goroutine-\d+-msg-\d+$`)
@@ -159,8 +163,10 @@ func TestConcurrentBurstLogger(t *testing.T) {
 	if actualCount < totalLogs/10 {
 		t.Errorf("too many logs lost: got %d, want at least %d (10%% of %d)", actualCount, totalLogs/10, totalLogs)
 	}
-	t.Logf("Successfully wrote %d/%d logs (%.1f%%)",
-		actualCount, totalLogs, float64(actualCount)/float64(totalLogs)*100)
+	t.Logf(
+		"Successfully wrote %d/%d logs (%.1f%%)",
+		actualCount, totalLogs, float64(actualCount)/float64(totalLogs)*100,
+	)
 }
 
 // TestLoggerChannelCapacity 测试 channel 容量极限
@@ -317,13 +323,17 @@ func TestLoggerOrderPreservation(t *testing.T) {
 	for gid, seqs := range sequences {
 		for i := 0; i < len(seqs)-1; i++ {
 			if seqs[i] >= seqs[i+1] {
-				t.Errorf("Goroutine %d: out of order at index %d: %d >= %d",
-					gid, i, seqs[i], seqs[i+1])
+				t.Errorf(
+					"Goroutine %d: out of order at index %d: %d >= %d",
+					gid, i, seqs[i], seqs[i+1],
+				)
 			}
 		}
 		if len(seqs) != logsPerRoutine {
-			t.Errorf("Goroutine %d: missing logs, got %d, want %d",
-				gid, len(seqs), logsPerRoutine)
+			t.Errorf(
+				"Goroutine %d: missing logs, got %d, want %d",
+				gid, len(seqs), logsPerRoutine,
+			)
 		}
 	}
 
@@ -339,10 +349,12 @@ func TestConcurrentWorkerPoolLimit(t *testing.T) {
 		t.Fatal(err)
 	}
 	setLogger(logger)
-	t.Cleanup(func() {
-		_ = closeLogger()
-		_ = logger.RemoveLogFile()
-	})
+	t.Cleanup(
+		func() {
+			_ = closeLogger()
+			_ = logger.RemoveLogFile()
+		},
+	)
 
 	var active int64
 	var maxSeen int64

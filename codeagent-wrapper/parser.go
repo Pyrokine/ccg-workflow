@@ -32,8 +32,8 @@ type ClaudeEvent struct {
 	Result    string `json:"result,omitempty"`
 }
 
-// GeminiEvent for Gemini stream-json format
-type GeminiEvent struct {
+// ContentStreamEvent represents role/content JSON stream events.
+type ContentStreamEvent struct {
 	Type      string `json:"type"`
 	SessionID string `json:"session_id,omitempty"`
 	Role      string `json:"role,omitempty"`
@@ -83,8 +83,8 @@ type UnifiedEvent struct {
 	SessionID string `json:"session_id,omitempty"`
 	Result    string `json:"result,omitempty"`
 
-	// Gemini-specific fields
-	// Gemini CLI uses camelCase "sessionId" instead of snake_case "session_id"
+	// Role/content stream fields
+	// Some CLIs use camelCase "sessionId" instead of snake_case "session_id"
 	SessionIDCamel string `json:"sessionId,omitempty"`
 	Role           string `json:"role,omitempty"`
 	Content        string `json:"content,omitempty"`
@@ -93,7 +93,6 @@ type UnifiedEvent struct {
 }
 
 // GetSessionID returns the session ID from either snake_case or camelCase field.
-// Gemini CLI uses "sessionId" (camelCase), Claude/Codex use "session_id" (snake_case).
 func (e *UnifiedEvent) GetSessionID() string {
 	if e.SessionID != "" {
 		return e.SessionID
@@ -107,11 +106,26 @@ type ItemContent struct {
 	Text interface{} `json:"text"`
 }
 
-func parseJSONStreamInternal(r io.Reader, warnFn func(string), infoFn func(string), onMessage func(), onComplete func()) (message, threadID string) {
+func parseJSONStreamInternal(
+	r io.Reader,
+	warnFn func(string),
+	infoFn func(string),
+	onMessage func(),
+	onComplete func(),
+) (message, threadID string) {
 	return parseJSONStreamInternalWithContent(r, warnFn, infoFn, onMessage, onComplete, nil, nil, nil)
 }
 
-func parseJSONStreamInternalWithContent(r io.Reader, warnFn func(string), infoFn func(string), onMessage func(), onComplete func(), onContent func(content, contentType string), onProgress func(line string), onSessionStarted func(id string)) (message, threadID string) {
+func parseJSONStreamInternalWithContent(
+	r io.Reader,
+	warnFn func(string),
+	infoFn func(string),
+	onMessage func(),
+	onComplete func(),
+	onContent func(content, contentType string),
+	onProgress func(line string),
+	onSessionStarted func(id string),
+) (message, threadID string) {
 	reader := bufio.NewReaderSize(r, jsonLineReaderSize)
 
 	if warnFn == nil {
@@ -145,7 +159,7 @@ func parseJSONStreamInternalWithContent(r io.Reader, warnFn func(string), infoFn
 	var (
 		codexMessage  string
 		claudeMessage string
-		geminiBuffer  strings.Builder
+		contentBuffer strings.Builder
 	)
 
 	for {
@@ -165,14 +179,18 @@ func parseJSONStreamInternalWithContent(r io.Reader, warnFn func(string), infoFn
 		totalEvents++
 
 		if tooLong {
-			warnFn(fmt.Sprintf("Skipped overlong JSON line (> %d bytes): %s", jsonLineMaxBytes, truncateBytes(line, 100)))
+			warnFn(
+				fmt.Sprintf(
+					"Skipped overlong JSON line (> %d bytes): %s", jsonLineMaxBytes, truncateBytes(line, 100),
+				),
+			)
 			continue
 		}
 
 		// Single unmarshal for all backend types
 		var event UnifiedEvent
 		if err := json.Unmarshal(line, &event); err != nil {
-			// Gemini CLI sometimes prepends non-JSON text to the init event line
+			// Some CLIs prepend non-JSON text to an init event line
 			// e.g. "MCP issues detected. Run /mcp list for status.{"type":"init",...}"
 			// Try to extract JSON from the first '{' character
 			if idx := bytes.IndexByte(line, '{'); idx > 0 {
@@ -207,7 +225,7 @@ func parseJSONStreamInternalWithContent(r io.Reader, warnFn func(string), infoFn
 		if !isClaude && event.Type == "result" && event.GetSessionID() != "" && event.Status == "" {
 			isClaude = true
 		}
-		isGemini := event.Role != "" || event.Delta != nil || event.Status != "" ||
+		isContentStream := event.Role != "" || event.Delta != nil || event.Status != "" ||
 			(event.Type == "init" && event.GetSessionID() != "")
 
 		// Handle Codex events
@@ -218,7 +236,11 @@ func parseJSONStreamInternalWithContent(r io.Reader, warnFn func(string), infoFn
 			}
 
 			if len(details) > 0 {
-				infoFn(fmt.Sprintf("Parsed event #%d type=%s (%s)", totalEvents, event.Type, strings.Join(details, ", ")))
+				infoFn(
+					fmt.Sprintf(
+						"Parsed event #%d type=%s (%s)", totalEvents, event.Type, strings.Join(details, ", "),
+					),
+				)
 			} else {
 				infoFn(fmt.Sprintf("Parsed event #%d type=%s", totalEvents, event.Type))
 			}
@@ -244,7 +266,11 @@ func parseJSONStreamInternalWithContent(r io.Reader, warnFn func(string), infoFn
 				if event.Type == "thread.completed" {
 					eventName = "session_completed"
 				}
-				emitProgress(formatProgressLine(eventName, map[string]string{"total_events": strconv.Itoa(totalEvents)}))
+				emitProgress(
+					formatProgressLine(
+						eventName, map[string]string{"total_events": strconv.Itoa(totalEvents)},
+					),
+				)
 				notifyComplete()
 
 			case "item.completed":
@@ -264,14 +290,28 @@ func parseJSONStreamInternalWithContent(r io.Reader, warnFn func(string), infoFn
 					var item ItemContent
 					if err := json.Unmarshal(event.Item, &item); err == nil {
 						normalized := normalizeText(item.Text)
-						infoFn(fmt.Sprintf("item.completed event item_type=%s message_len=%d", itemType, len(normalized)))
+						infoFn(
+							fmt.Sprintf(
+								"item.completed event item_type=%s message_len=%d", itemType, len(normalized),
+							),
+						)
 						if normalized != "" {
 							if itemType == "agent_message" {
 								codexMessage = normalized
 								notifyMessage()
-								emitProgress(formatProgressLine("message", map[string]string{"text": strconv.Quote(safeProgressSnippet(normalized, 120))}))
+								emitProgress(
+									formatProgressLine(
+										"message",
+										map[string]string{"text": strconv.Quote(safeProgressSnippet(normalized, 120))},
+									),
+								)
 							} else {
-								emitProgress(formatProgressLine("reasoning", map[string]string{"text": strconv.Quote(safeProgressSnippet(normalized, 120))}))
+								emitProgress(
+									formatProgressLine(
+										"reasoning",
+										map[string]string{"text": strconv.Quote(safeProgressSnippet(normalized, 120))},
+									),
+								)
 							}
 							// Send content (Codex outputs complete blocks, not streaming deltas)
 							if onContent != nil {
@@ -297,7 +337,12 @@ func parseJSONStreamInternalWithContent(r io.Reader, warnFn func(string), infoFn
 						if cmdItem.AggregatedOutput != "" {
 							content.WriteString(cmdItem.AggregatedOutput)
 						}
-						infoFn(fmt.Sprintf("item.completed event item_type=command_execution cmd=%s exit=%v", cmdItem.Command, cmdItem.ExitCode))
+						infoFn(
+							fmt.Sprintf(
+								"item.completed event item_type=command_execution cmd=%s exit=%v", cmdItem.Command,
+								cmdItem.ExitCode,
+							),
+						)
 						fields := map[string]string{"cmd": strconv.Quote(safeProgressSnippet(cmdItem.Command, 120))}
 						if cmdItem.ExitCode != nil {
 							fields["exit"] = strconv.Itoa(*cmdItem.ExitCode)
@@ -324,7 +369,12 @@ func parseJSONStreamInternalWithContent(r io.Reader, warnFn func(string), infoFn
 				threadID = event.GetSessionID()
 			}
 
-			infoFn(fmt.Sprintf("Parsed Claude event #%d type=%s subtype=%s result_len=%d", totalEvents, event.Type, event.Subtype, len(event.Result)))
+			infoFn(
+				fmt.Sprintf(
+					"Parsed Claude event #%d type=%s subtype=%s result_len=%d", totalEvents, event.Type, event.Subtype,
+					len(event.Result),
+				),
+			)
 
 			if event.Result != "" {
 				claudeMessage = event.Result
@@ -341,14 +391,14 @@ func parseJSONStreamInternalWithContent(r io.Reader, warnFn func(string), infoFn
 			continue
 		}
 
-		// Handle Gemini events
-		if isGemini {
+		// Handle role/content stream events
+		if isContentStream {
 			if event.GetSessionID() != "" && threadID == "" {
 				threadID = event.GetSessionID()
 			}
 
 			if event.Content != "" {
-				geminiBuffer.WriteString(event.Content)
+				contentBuffer.WriteString(event.Content)
 				// Stream content to callback
 				if onContent != nil {
 					onContent(event.Content, "message")
@@ -368,7 +418,12 @@ func parseJSONStreamInternalWithContent(r io.Reader, warnFn func(string), infoFn
 				delta = *event.Delta
 			}
 
-			infoFn(fmt.Sprintf("Parsed Gemini event #%d type=%s role=%s delta=%t status=%s content_len=%d", totalEvents, event.Type, event.Role, delta, event.Status, len(event.Content)))
+			infoFn(
+				fmt.Sprintf(
+					"Parsed content stream event #%d type=%s role=%s delta=%t status=%s content_len=%d", totalEvents,
+					event.Type, event.Role, delta, event.Status, len(event.Content),
+				),
+			)
 			continue
 		}
 
@@ -377,15 +432,20 @@ func parseJSONStreamInternalWithContent(r io.Reader, warnFn func(string), infoFn
 	}
 
 	switch {
-	case geminiBuffer.Len() > 0:
-		message = geminiBuffer.String()
+	case contentBuffer.Len() > 0:
+		message = contentBuffer.String()
 	case claudeMessage != "":
 		message = claudeMessage
 	default:
 		message = codexMessage
 	}
 
-	infoFn(fmt.Sprintf("parseJSONStream completed: events=%d, message_len=%d, thread_id_found=%t", totalEvents, len(message), threadID != ""))
+	infoFn(
+		fmt.Sprintf(
+			"parseJSONStream completed: events=%d, message_len=%d, thread_id_found=%t", totalEvents, len(message),
+			threadID != "",
+		),
+	)
 	return message, threadID
 }
 

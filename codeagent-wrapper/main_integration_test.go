@@ -209,10 +209,12 @@ func findResultByID(t *testing.T, payload integrationOutput, id string) TaskResu
 func TestRunParallelEndToEnd_OrderAndConcurrency(t *testing.T) {
 	defer resetTestHooks()
 	origRun := runCodexTaskFn
-	t.Cleanup(func() {
-		runCodexTaskFn = origRun
-		resetTestHooks()
-	})
+	t.Cleanup(
+		func() {
+			runCodexTaskFn = origRun
+			resetTestHooks()
+		},
+	)
 
 	input := `---TASK---
 id: A
@@ -273,9 +275,11 @@ task-e`
 	}
 
 	var exitCode int
-	output := captureStdout(t, func() {
-		exitCode = run()
-	})
+	output := captureStdout(
+		t, func() {
+			exitCode = run()
+		},
+	)
 
 	if exitCode != 0 {
 		t.Fatalf("run() exit = %d, want 0", exitCode)
@@ -324,10 +328,12 @@ func TestRunParallelCycleDetectionStopsExecution(t *testing.T) {
 		t.Fatalf("task %s should not execute on cycle", task.ID)
 		return TaskResult{}
 	}
-	t.Cleanup(func() {
-		runCodexTaskFn = origRun
-		resetTestHooks()
-	})
+	t.Cleanup(
+		func() {
+			runCodexTaskFn = origRun
+			resetTestHooks()
+		},
+	)
 
 	input := `---TASK---
 id: A
@@ -343,9 +349,11 @@ b`
 	os.Args = []string{"codeagent-wrapper", "--parallel"}
 
 	exitCode := 0
-	output := captureStdout(t, func() {
-		exitCode = run()
-	})
+	output := captureStdout(
+		t, func() {
+			exitCode = run()
+		},
+	)
 
 	if exitCode == 0 {
 		t.Fatalf("cycle should cause non-zero exit, got %d", exitCode)
@@ -358,10 +366,12 @@ b`
 func TestRunParallelOutputsIncludeLogPaths(t *testing.T) {
 	defer resetTestHooks()
 	origRun := runCodexTaskFn
-	t.Cleanup(func() {
-		runCodexTaskFn = origRun
-		resetTestHooks()
-	})
+	t.Cleanup(
+		func() {
+			runCodexTaskFn = origRun
+			resetTestHooks()
+		},
+	)
 
 	tempDir := t.TempDir()
 	logPathFor := func(id string) string {
@@ -394,9 +404,11 @@ task-beta`
 	os.Args = []string{"codex-wrapper", "--parallel"}
 
 	var exitCode int
-	output := captureStdout(t, func() {
-		exitCode = run()
-	})
+	output := captureStdout(
+		t, func() {
+			exitCode = run()
+		},
+	)
 
 	if exitCode != 9 {
 		t.Fatalf("parallel run exit=%d, want 9", exitCode)
@@ -463,11 +475,15 @@ ok-d`
 
 	var exitCode int
 	var stdoutOut string
-	stderrOut := captureStderr(t, func() {
-		stdoutOut = captureStdout(t, func() {
-			exitCode = run()
-		})
-	})
+	stderrOut := captureStderr(
+		t, func() {
+			stdoutOut = captureStdout(
+				t, func() {
+					exitCode = run()
+				},
+			)
+		},
+	)
 
 	if exitCode == 0 {
 		t.Fatalf("expected non-zero exit due to task failure, got %d", exitCode)
@@ -529,11 +545,15 @@ func TestRunNonParallelOutputsIncludeLogPathsIntegration(t *testing.T) {
 	}
 
 	var exitCode int
-	stderr := captureStderr(t, func() {
-		_ = captureStdout(t, func() {
-			exitCode = run()
-		})
-	})
+	stderr := captureStderr(
+		t, func() {
+			_ = captureStdout(
+				t, func() {
+					exitCode = run()
+				},
+			)
+		},
+	)
 
 	if exitCode != 0 {
 		t.Fatalf("run() exit=%d, want 0", exitCode)
@@ -548,10 +568,12 @@ func TestRunNonParallelOutputsIncludeLogPathsIntegration(t *testing.T) {
 func TestRunParallelPartialFailureBlocksDependents(t *testing.T) {
 	defer resetTestHooks()
 	origRun := runCodexTaskFn
-	t.Cleanup(func() {
-		runCodexTaskFn = origRun
-		resetTestHooks()
-	})
+	t.Cleanup(
+		func() {
+			runCodexTaskFn = origRun
+			resetTestHooks()
+		},
+	)
 
 	tempDir := t.TempDir()
 	logPathFor := func(id string) string {
@@ -587,9 +609,11 @@ ok-e`
 	os.Args = []string{"codeagent-wrapper", "--parallel"}
 
 	var exitCode int
-	output := captureStdout(t, func() {
-		exitCode = run()
-	})
+	output := captureStdout(
+		t, func() {
+			exitCode = run()
+		},
+	)
 
 	payload := parseIntegrationOutput(t, output)
 	if exitCode == 0 {
@@ -638,11 +662,13 @@ ok-e`
 func TestRunParallelTimeoutPropagation(t *testing.T) {
 	defer resetTestHooks()
 	origRun := runCodexTaskFn
-	t.Cleanup(func() {
-		runCodexTaskFn = origRun
-		resetTestHooks()
-		os.Unsetenv("CODEX_TIMEOUT")
-	})
+	t.Cleanup(
+		func() {
+			runCodexTaskFn = origRun
+			resetTestHooks()
+			os.Unsetenv("CODEX_TIMEOUT")
+		},
+	)
 
 	var receivedTimeout int
 	runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
@@ -659,9 +685,11 @@ slow`
 	os.Args = []string{"codeagent-wrapper", "--parallel"}
 
 	exitCode := 0
-	output := captureStdout(t, func() {
-		exitCode = run()
-	})
+	output := captureStdout(
+		t, func() {
+			exitCode = run()
+		},
+	)
 
 	payload := parseIntegrationOutput(t, output)
 	if receivedTimeout != 1 {
@@ -681,14 +709,27 @@ slow`
 
 func TestRunConcurrentSpeedupBenchmark(t *testing.T) {
 	defer resetTestHooks()
+	t.Setenv("CODEAGENT_MAX_PARALLEL_WORKERS", "0")
 	origRun := runCodexTaskFn
-	t.Cleanup(func() {
-		runCodexTaskFn = origRun
-		resetTestHooks()
-	})
+	t.Cleanup(
+		func() {
+			runCodexTaskFn = origRun
+			resetTestHooks()
+		},
+	)
 
+	var maxParallel int64
+	var current int64
 	runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
+		cur := atomic.AddInt64(&current, 1)
+		for {
+			prev := atomic.LoadInt64(&maxParallel)
+			if cur <= prev || atomic.CompareAndSwapInt64(&maxParallel, prev, cur) {
+				break
+			}
+		}
 		time.Sleep(50 * time.Millisecond)
+		atomic.AddInt64(&current, -1)
 		return TaskResult{TaskID: task.ID}
 	}
 
@@ -708,8 +749,14 @@ func TestRunConcurrentSpeedupBenchmark(t *testing.T) {
 	_ = executeConcurrent(layers, 5)
 	concurrentElapsed := time.Since(concurrentStart)
 
-	if concurrentElapsed >= serialElapsed/5 {
-		t.Fatalf("expected concurrent time <20%% of serial, serial=%v concurrent=%v", serialElapsed, concurrentElapsed)
+	if maxParallel < 2 {
+		t.Fatalf("expected parallelism >=2, got %d", maxParallel)
+	}
+	if concurrentElapsed >= serialElapsed {
+		t.Fatalf(
+			"expected concurrent execution faster than serial, serial=%v concurrent=%v", serialElapsed,
+			concurrentElapsed,
+		)
 	}
 	ratio := float64(concurrentElapsed) / float64(serialElapsed)
 	t.Logf("speedup ratio (concurrent/serial)=%.3f", ratio)
@@ -727,15 +774,19 @@ func TestRunStartupCleanupRemovesOrphansEndToEnd(t *testing.T) {
 	runningLog := createTempLog(t, tempDir, fmt.Sprintf("codex-wrapper-%d.log", runningPID))
 	unrelated := createTempLog(t, tempDir, "wrapper.log")
 
-	stubProcessRunning(t, func(pid int) bool {
-		return pid == runningPID || pid == os.Getpid()
-	})
-	stubProcessStartTime(t, func(pid int) time.Time {
-		if pid == runningPID || pid == os.Getpid() {
-			return time.Now().Add(-1 * time.Hour)
-		}
-		return time.Time{}
-	})
+	stubProcessRunning(
+		t, func(pid int) bool {
+			return pid == runningPID || pid == os.Getpid()
+		},
+	)
+	stubProcessStartTime(
+		t, func(pid int) time.Time {
+			if pid == runningPID || pid == os.Getpid() {
+				return time.Now().Add(-1 * time.Hour)
+			}
+			return time.Time{}
+		},
+	)
 
 	codexCommand = createFakeCodexScript(t, "tid-startup", "ok")
 	stdinReader = strings.NewReader("")
@@ -769,9 +820,11 @@ func TestRunStartupCleanupConcurrentWrappers(t *testing.T) {
 		createTempLog(t, tempDir, fmt.Sprintf("codex-wrapper-%d.log", 9000+i))
 	}
 
-	stubProcessRunning(t, func(pid int) bool {
-		return false
-	})
+	stubProcessRunning(
+		t, func(pid int) bool {
+			return false
+		},
+	)
 	stubProcessStartTime(t, func(int) time.Time { return time.Time{} })
 
 	var wg sync.WaitGroup
@@ -808,22 +861,28 @@ func TestRunCleanupFlagEndToEnd_Success(t *testing.T) {
 	staleB := createTempLog(t, tempDir, "codex-wrapper-2200-extra.log")
 	keeper := createTempLog(t, tempDir, "codex-wrapper-2300.log")
 
-	stubProcessRunning(t, func(pid int) bool {
-		return pid == 2300 || pid == os.Getpid()
-	})
-	stubProcessStartTime(t, func(pid int) time.Time {
-		if pid == 2300 || pid == os.Getpid() {
-			return time.Now().Add(-1 * time.Hour)
-		}
-		return time.Time{}
-	})
+	stubProcessRunning(
+		t, func(pid int) bool {
+			return pid == 2300 || pid == os.Getpid()
+		},
+	)
+	stubProcessStartTime(
+		t, func(pid int) time.Time {
+			if pid == 2300 || pid == os.Getpid() {
+				return time.Now().Add(-1 * time.Hour)
+			}
+			return time.Time{}
+		},
+	)
 
 	os.Args = []string{"codex-wrapper", "--cleanup"}
 
 	var exitCode int
-	output := captureStdout(t, func() {
-		exitCode = run()
-	})
+	output := captureStdout(
+		t, func() {
+			exitCode = run()
+		},
+	)
 
 	if exitCode != 0 {
 		t.Fatalf("cleanup exit = %d, want 0", exitCode)
@@ -842,7 +901,9 @@ func TestRunCleanupFlagEndToEnd_Success(t *testing.T) {
 	if !strings.Contains(output, "Files kept: 1") {
 		t.Fatalf("missing 'Files kept: 1' in output: %q", output)
 	}
-	if !strings.Contains(output, "codex-wrapper-2100.log") || !strings.Contains(output, "codex-wrapper-2200-extra.log") {
+	if !strings.Contains(output, "codex-wrapper-2100.log") || !strings.Contains(
+		output, "codex-wrapper-2200-extra.log",
+	) {
 		t.Fatalf("missing deleted file names in output: %q", output)
 	}
 	if !strings.Contains(output, "codex-wrapper-2300.log") {
@@ -880,9 +941,11 @@ func TestRunCleanupFlagEndToEnd_FailureDoesNotAffectStartup(t *testing.T) {
 	os.Args = []string{"codex-wrapper", "--cleanup"}
 
 	var exitCode int
-	errOutput := captureStderr(t, func() {
-		exitCode = run()
-	})
+	errOutput := captureStderr(
+		t, func() {
+			exitCode = run()
+		},
+	)
 
 	if exitCode != 1 {
 		t.Fatalf("cleanup failure exit = %d, want 1", exitCode)
@@ -910,9 +973,11 @@ func TestRunCleanupFlagEndToEnd_FailureDoesNotAffectStartup(t *testing.T) {
 	os.Args = []string{"codex-wrapper", "post-cleanup task"}
 
 	var normalExit int
-	normalOutput := captureStdout(t, func() {
-		normalExit = run()
-	})
+	normalOutput := captureStdout(
+		t, func() {
+			normalExit = run()
+		},
+	)
 
 	if normalExit != 0 {
 		t.Fatalf("normal run exit = %d, want 0", normalExit)

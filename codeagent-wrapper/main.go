@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	version               = "5.11.0"
+	version               = "5.11.1-aug.1"
 	defaultWorkdir        = "."
 	defaultTimeout        = 7200 // seconds (2 hours)
 	defaultCoverageTarget = 90.0
@@ -33,9 +33,13 @@ const (
 
 var useASCIIMode = os.Getenv("CODEAGENT_ASCII_MODE") == "true"
 
-// Lite mode: disable WebServer, reduce logging, faster post-message delay
-// Can be enabled via --lite flag or CODEAGENT_LITE_MODE=true environment variable
-var liteMode = os.Getenv("CODEAGENT_LITE_MODE") == "true"
+func defaultLiteMode() bool {
+	return os.Getenv("CODEAGENT_LITE_MODE") != "false"
+}
+
+// Lite mode: disable WebServer, reduce logging, faster post-message delay.
+// Enabled by default; set CODEAGENT_LITE_MODE=false to opt into Web UI.
+var liteMode = defaultLiteMode()
 
 // Test hooks for dependency injection
 var (
@@ -197,9 +201,6 @@ func run() (exitCode int) {
 			fullOutput := false
 			var extras []string
 
-			// Check for gemini-model in parallel mode
-			geminiModelInParallel := false
-
 			for i := 0; i < len(args); i++ {
 				arg := args[i]
 				switch {
@@ -222,20 +223,18 @@ func run() (exitCode int) {
 					}
 					backendName = value
 				case arg == "--gemini-model" || strings.HasPrefix(arg, "--gemini-model="):
-					geminiModelInParallel = true
-					continue
+					fmt.Fprintln(os.Stderr, "ERROR: --gemini-model is disabled because Gemini CLI consumer OAuth requests stopped being processed after 2026-06-18; use --backend antigravity")
+					return 1
 				default:
 					extras = append(extras, arg)
 				}
 			}
 
-			// Warn about unsupported parameter
-			if geminiModelInParallel {
-				logWarn("--gemini-model parameter is not supported in parallel mode")
-			}
-
 			if len(extras) > 0 {
-				fmt.Fprintln(os.Stderr, "ERROR: --parallel reads its task configuration from stdin; only --backend and --full-output are allowed.")
+				fmt.Fprintln(
+					os.Stderr,
+					"ERROR: --parallel reads its task configuration from stdin; only --backend and --full-output are allowed.",
+				)
 				fmt.Fprintln(os.Stderr, "Usage examples:")
 				fmt.Fprintf(os.Stderr, "  %s --parallel < tasks.txt\n", name)
 				fmt.Fprintf(os.Stderr, "  echo '...' | %s --parallel\n", name)
@@ -333,14 +332,6 @@ func run() (exitCode int) {
 	}
 	logInfo(fmt.Sprintf("Parsed args: mode=%s, task_len=%d, backend=%s", cfg.Mode, len(cfg.Task), cfg.Backend))
 
-	// Log environment variable usage
-	if cfg.GeminiModel != "" {
-		envModel := strings.TrimSpace(os.Getenv("GEMINI_MODEL"))
-		if envModel != "" && envModel == cfg.GeminiModel {
-			logInfo(fmt.Sprintf("Gemini model from env: %s", cfg.GeminiModel))
-		}
-	}
-
 	backend, err := selectBackendFn(cfg.Backend)
 	if err != nil {
 		logError(err.Error())
@@ -360,16 +351,6 @@ func run() (exitCode int) {
 		buildCodexArgsFn = backend.BuildArgs
 	}
 	logInfo(fmt.Sprintf("Selected backend: %s", backend.Name()))
-
-	// Log model parameter usage
-	if cfg.GeminiModel != "" && cfg.Backend == "gemini" {
-		logInfo(fmt.Sprintf("Using Gemini model: %s", cfg.GeminiModel))
-	}
-
-	// Warn if model parameter used with non-gemini backend
-	if cfg.GeminiModel != "" && cfg.Backend != "gemini" {
-		logWarn("--gemini-model parameter is only effective with --backend gemini")
-	}
 
 	timeoutSec := resolveTimeout()
 	logInfo(fmt.Sprintf("Timeout: %ds", timeoutSec))
@@ -417,15 +398,10 @@ func run() (exitCode int) {
 	useStdin := cfg.ExplicitStdin || shouldUseStdin(taskText, piped)
 
 	targetArg := taskText
-	// Gemini/Antigravity CLI doesn't support "-" as stdin marker — pass text directly via -p.
-	promptBackend := cfg.Backend == "gemini" || cfg.Backend == "antigravity"
-	promptDirect := useStdin && promptBackend && !isWindows()
-	promptStdinPipe := useStdin && promptBackend && isWindows()
-	if useStdin && !promptDirect && !promptStdinPipe {
+	promptBackend := cfg.Backend == "antigravity" || cfg.Backend == "agy"
+	promptDirect := useStdin && promptBackend
+	if useStdin && !promptDirect {
 		targetArg = "-"
-	}
-	if promptStdinPipe {
-		targetArg = ""
 	}
 	codexArgs := buildCodexArgsFn(cfg, targetArg)
 
@@ -547,12 +523,15 @@ func runCleanupHook() {
 
 func printHelp() {
 	name := currentWrapperName()
-	help := fmt.Sprintf(`%[1]s - Go wrapper for AI CLI backends
+	help := fmt.Sprintf(
+		`%[1]s - Go wrapper for AI CLI backends
 
 Usage:
     %[1]s "task" [workdir]
     %[1]s --backend claude "task" [workdir]
-    %[1]s --lite "task" [workdir]     Lite mode (faster, no Web UI)
+    %[1]s --backend antigravity "task" [workdir]
+    %[1]s --backend antigravity - [workdir] <<'EOF'
+    %[1]s --lite "task" [workdir]     Lite mode is already the default
     %[1]s - [workdir]              Read task from stdin
     %[1]s resume <session_id> "task" [workdir]
     %[1]s resume <session_id> - [workdir]
@@ -568,12 +547,10 @@ Parallel mode examples:
     %[1]s --parallel <<'EOF'
 
 Options:
-    --lite, -L            Lite mode: disable Web UI, faster response
-    --backend <name>      Select backend (codex, gemini, claude)
-    --gemini-model <name> Specify Gemini model (gemini backend only)
-                          Can also be set via GEMINI_MODEL environment variable
-                          CLI parameter takes precedence over environment variable
-                          Examples: gemini-2.5-flash, gemini-1.5-pro
+    --lite, -L            Lite mode is default: disable Web UI, faster response
+    --backend <name>      Select backend (codex, antigravity, agy, claude)
+                          Gemini CLI is disabled because consumer OAuth requests stopped after 2026-06-18
+                          Do not pass backend CLI flags like --add-dir or -p to wrapper
     --progress            Emit compact progress lines to stderr during execution
 
 Environment Variables:
@@ -581,7 +558,7 @@ Environment Variables:
     CODEX_REQUIRE_APPROVAL     Require manual approval for file operations (default: false)
     CODEX_DISABLE_SKIP_GIT_CHECK  Disable skip-git-repo-check flag (default: false)
     CODEAGENT_ASCII_MODE       Use ASCII symbols instead of Unicode (PASS/WARN/FAIL)
-    CODEAGENT_LITE_MODE        Enable lite mode (true/false)
+    CODEAGENT_LITE_MODE        Lite mode is default; set false to enable Web UI
 
 Exit Codes:
     0    Success
@@ -589,6 +566,7 @@ Exit Codes:
     124  Timeout
     127  backend command not found
     130  Interrupted (Ctrl+C)
-    *    Passthrough from backend process`, name)
+    *    Passthrough from backend process`, name,
+	)
 	fmt.Println(help)
 }

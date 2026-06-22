@@ -100,10 +100,12 @@ func TestLoggerWithSuffixSanitizesUnsafeSuffix(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewLoggerWithSuffix(%q) error = %v", raw, err)
 	}
-	t.Cleanup(func() {
-		_ = logger.Close()
-		_ = os.Remove(logger.Path())
-	})
+	t.Cleanup(
+		func() {
+			_ = logger.Close()
+			_ = os.Remove(logger.Path())
+		},
+	)
 
 	wantBase := fmt.Sprintf("%s-%d-%s.log", primaryLogPrefix(), os.Getpid(), safe)
 	if gotBase := filepath.Base(logger.Path()); gotBase != wantBase {

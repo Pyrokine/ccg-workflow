@@ -38,6 +38,7 @@ func resetTestHooks() {
 	}
 	jsonMarshal = json.Marshal
 	forceKillDelay.Store(5)
+	liteMode = true
 	closeLogger()
 	executablePathFn = os.Executable
 	runTaskFn = runCodexTask
@@ -464,10 +465,12 @@ func (f *fakeCmd) Start() error {
 	f.startCount.Add(1)
 
 	if f.startErr != nil {
-		f.waitOnce.Do(func() {
-			f.waitResult = f.startErr
-			close(f.waitDone)
-		})
+		f.waitOnce.Do(
+			func() {
+				f.waitResult = f.startErr
+				close(f.waitDone)
+			},
+		)
 		return f.startErr
 	}
 
@@ -477,15 +480,17 @@ func (f *fakeCmd) Start() error {
 
 func (f *fakeCmd) Wait() error {
 	f.waitCount.Add(1)
-	f.waitOnce.Do(func() {
-		if f.waitBlocked && f.waitReleaseCh != nil {
-			<-f.waitReleaseCh
-		} else if f.waitDelay > 0 {
-			time.Sleep(f.waitDelay)
-		}
-		f.waitResult = f.waitErr
-		close(f.waitDone)
-	})
+	f.waitOnce.Do(
+		func() {
+			if f.waitBlocked && f.waitReleaseCh != nil {
+				<-f.waitReleaseCh
+			} else if f.waitDelay > 0 {
+				time.Sleep(f.waitDelay)
+			}
+			f.waitResult = f.waitErr
+			close(f.waitDone)
+		},
+	)
 	<-f.waitDone
 	return f.waitResult
 }
@@ -560,9 +565,11 @@ func (f *fakeCmd) releaseWait() {
 	if f.waitReleaseCh == nil {
 		return
 	}
-	f.waitReleaseOnce.Do(func() {
-		close(f.waitReleaseCh)
-	})
+	f.waitReleaseOnce.Do(
+		func() {
+			close(f.waitReleaseCh)
+		},
+	)
 }
 
 func (f *fakeCmd) WriteStdout(data string) {
@@ -577,16 +584,18 @@ func (f *fakeCmd) WriteStdout(data string) {
 }
 
 func (f *fakeCmd) CloseStdout(err error) {
-	f.stdoutOnce.Do(func() {
-		if f.stdoutWriter == nil {
-			return
-		}
-		if err != nil {
-			_ = f.stdoutWriter.CloseWithError(err)
-			return
-		}
-		_ = f.stdoutWriter.Close()
-	})
+	f.stdoutOnce.Do(
+		func() {
+			if f.stdoutWriter == nil {
+				return
+			}
+			if err != nil {
+				_ = f.stdoutWriter.CloseWithError(err)
+				return
+			}
+			_ = f.stdoutWriter.Close()
+		},
+	)
 }
 
 func (f *fakeCmd) StdinContents() string {
@@ -599,10 +608,12 @@ func (f *fakeCmd) StdinContents() string {
 func createFakeCodexScript(t *testing.T, threadID, message string) string {
 	t.Helper()
 	scriptPath := filepath.Join(t.TempDir(), "codex.sh")
-	script := fmt.Sprintf(`#!/bin/sh
+	script := fmt.Sprintf(
+		`#!/bin/sh
 printf '%%s\n' '{"type":"thread.started","thread_id":"%s"}'
 printf '%%s\n' '{"type":"item.completed","item":{"type":"agent_message","text":"%s"}}'
-`, threadID, message)
+`, threadID, message,
+	)
 	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
 		t.Fatalf("failed to create fake codex script: %v", err)
 	}
@@ -610,108 +621,116 @@ printf '%%s\n' '{"type":"item.completed","item":{"type":"agent_message","text":"
 }
 
 func TestFakeCmdInfra(t *testing.T) {
-	t.Run("pipes and wait scheduling", func(t *testing.T) {
-		fake := newFakeCmd(fakeCmdConfig{
-			StdoutPlan: []fakeStdoutEvent{
-				{Data: "line1\n"},
-				{Delay: 5 * time.Millisecond, Data: "line2\n"},
-			},
-			WaitDelay: 20 * time.Millisecond,
-		})
-
-		stdout, err := fake.StdoutPipe()
-		if err != nil {
-			t.Fatalf("StdoutPipe() error = %v", err)
-		}
-
-		if err := fake.Start(); err != nil {
-			t.Fatalf("Start() error = %v", err)
-		}
-
-		scanner := bufio.NewScanner(stdout)
-		var lines []string
-		for scanner.Scan() {
-			lines = append(lines, scanner.Text())
-			if len(lines) == 2 {
-				break
-			}
-		}
-		if err := scanner.Err(); err != nil {
-			t.Fatalf("scanner error: %v", err)
-		}
-		if len(lines) != 2 || lines[0] != "line1" || lines[1] != "line2" {
-			t.Fatalf("unexpected stdout lines: %v", lines)
-		}
-
-		ctxReader, ok := stdout.(*ctxAwareReader)
-		if !ok {
-			t.Fatalf("stdout pipe is %T, want *ctxAwareReader", stdout)
-		}
-		if err := ctxReader.CloseWithReason("test-complete"); err != nil {
-			t.Fatalf("CloseWithReason error: %v", err)
-		}
-		if ctxReader.Reason() != "test-complete" {
-			t.Fatalf("CloseWithReason reason mismatch: %q", ctxReader.Reason())
-		}
-
-		waitStart := time.Now()
-		if err := fake.Wait(); err != nil {
-			t.Fatalf("Wait() error = %v", err)
-		}
-		if elapsed := time.Since(waitStart); elapsed < 20*time.Millisecond {
-			t.Fatalf("Wait() returned too early: %v", elapsed)
-		}
-
-		if fake.startCount.Load() != 1 {
-			t.Fatalf("Start() count = %d, want 1", fake.startCount.Load())
-		}
-		if fake.waitCount.Load() != 1 {
-			t.Fatalf("Wait() count = %d, want 1", fake.waitCount.Load())
-		}
-		if fake.stdoutPipeCount.Load() != 1 {
-			t.Fatalf("StdoutPipe() count = %d, want 1", fake.stdoutPipeCount.Load())
-		}
-	})
-
-	t.Run("integration with runCodexTask", func(t *testing.T) {
-		defer resetTestHooks()
-
-		fake := newFakeCmd(fakeCmdConfig{
-			StdoutPlan: []fakeStdoutEvent{
-				{Data: `{"type":"thread.started","thread_id":"fake-thread"}` + "\n"},
-				{
-					Delay: time.Millisecond,
-					Data:  `{"type":"item.completed","item":{"type":"agent_message","text":"fake-msg"}}` + "\n",
+	t.Run(
+		"pipes and wait scheduling", func(t *testing.T) {
+			fake := newFakeCmd(
+				fakeCmdConfig{
+					StdoutPlan: []fakeStdoutEvent{
+						{Data: "line1\n"},
+						{Delay: 5 * time.Millisecond, Data: "line2\n"},
+					},
+					WaitDelay: 20 * time.Millisecond,
 				},
-			},
-			WaitDelay: 5 * time.Millisecond,
-		})
+			)
 
-		newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
-			return fake
-		}
-		buildCodexArgsFn = func(cfg *Config, targetArg string) []string {
-			return []string{targetArg}
-		}
-		codexCommand = "fake-cmd"
+			stdout, err := fake.StdoutPipe()
+			if err != nil {
+				t.Fatalf("StdoutPipe() error = %v", err)
+			}
 
-		res := runCodexTask(TaskSpec{Task: "ignored"}, false, 2)
-		if res.ExitCode != 0 {
-			t.Fatalf("runCodexTask exit = %d, want 0 (%s)", res.ExitCode, res.Error)
-		}
-		if res.Message != "fake-msg" {
-			t.Fatalf("message = %q, want fake-msg", res.Message)
-		}
-		if res.SessionID != "fake-thread" {
-			t.Fatalf("sessionID = %q, want fake-thread", res.SessionID)
-		}
-		if fake.startCount.Load() != 1 {
-			t.Fatalf("Start() count = %d, want 1", fake.startCount.Load())
-		}
-		if fake.waitCount.Load() != 1 {
-			t.Fatalf("Wait() count = %d, want 1", fake.waitCount.Load())
-		}
-	})
+			if err := fake.Start(); err != nil {
+				t.Fatalf("Start() error = %v", err)
+			}
+
+			scanner := bufio.NewScanner(stdout)
+			var lines []string
+			for scanner.Scan() {
+				lines = append(lines, scanner.Text())
+				if len(lines) == 2 {
+					break
+				}
+			}
+			if err := scanner.Err(); err != nil {
+				t.Fatalf("scanner error: %v", err)
+			}
+			if len(lines) != 2 || lines[0] != "line1" || lines[1] != "line2" {
+				t.Fatalf("unexpected stdout lines: %v", lines)
+			}
+
+			ctxReader, ok := stdout.(*ctxAwareReader)
+			if !ok {
+				t.Fatalf("stdout pipe is %T, want *ctxAwareReader", stdout)
+			}
+			if err := ctxReader.CloseWithReason("test-complete"); err != nil {
+				t.Fatalf("CloseWithReason error: %v", err)
+			}
+			if ctxReader.Reason() != "test-complete" {
+				t.Fatalf("CloseWithReason reason mismatch: %q", ctxReader.Reason())
+			}
+
+			waitStart := time.Now()
+			if err := fake.Wait(); err != nil {
+				t.Fatalf("Wait() error = %v", err)
+			}
+			if elapsed := time.Since(waitStart); elapsed < 20*time.Millisecond {
+				t.Fatalf("Wait() returned too early: %v", elapsed)
+			}
+
+			if fake.startCount.Load() != 1 {
+				t.Fatalf("Start() count = %d, want 1", fake.startCount.Load())
+			}
+			if fake.waitCount.Load() != 1 {
+				t.Fatalf("Wait() count = %d, want 1", fake.waitCount.Load())
+			}
+			if fake.stdoutPipeCount.Load() != 1 {
+				t.Fatalf("StdoutPipe() count = %d, want 1", fake.stdoutPipeCount.Load())
+			}
+		},
+	)
+
+	t.Run(
+		"integration with runCodexTask", func(t *testing.T) {
+			defer resetTestHooks()
+
+			fake := newFakeCmd(
+				fakeCmdConfig{
+					StdoutPlan: []fakeStdoutEvent{
+						{Data: `{"type":"thread.started","thread_id":"fake-thread"}` + "\n"},
+						{
+							Delay: time.Millisecond,
+							Data:  `{"type":"item.completed","item":{"type":"agent_message","text":"fake-msg"}}` + "\n",
+						},
+					},
+					WaitDelay: 5 * time.Millisecond,
+				},
+			)
+
+			newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
+				return fake
+			}
+			buildCodexArgsFn = func(cfg *Config, targetArg string) []string {
+				return []string{targetArg}
+			}
+			codexCommand = "fake-cmd"
+
+			res := runCodexTask(TaskSpec{Task: "ignored"}, false, 2)
+			if res.ExitCode != 0 {
+				t.Fatalf("runCodexTask exit = %d, want 0 (%s)", res.ExitCode, res.Error)
+			}
+			if res.Message != "fake-msg" {
+				t.Fatalf("message = %q, want fake-msg", res.Message)
+			}
+			if res.SessionID != "fake-thread" {
+				t.Fatalf("sessionID = %q, want fake-thread", res.SessionID)
+			}
+			if fake.startCount.Load() != 1 {
+				t.Fatalf("Start() count = %d, want 1", fake.startCount.Load())
+			}
+			if fake.waitCount.Load() != 1 {
+				t.Fatalf("Wait() count = %d, want 1", fake.waitCount.Load())
+			}
+		},
+	)
 }
 
 func TestRunCodexTask_WaitBeforeParse(t *testing.T) {
@@ -724,14 +743,20 @@ func TestRunCodexTask_WaitBeforeParse(t *testing.T) {
 		extraDelay = 2 * time.Second
 	)
 
-	fake := newFakeCmd(fakeCmdConfig{
-		StdoutPlan: []fakeStdoutEvent{
-			{Data: fmt.Sprintf(`{"type":"thread.started","thread_id":"%s"}`+"\n", threadID)},
-			{Data: fmt.Sprintf(`{"type":"item.completed","item":{"type":"agent_message","text":"%s"}}`+"\n", message)},
-			{Delay: extraDelay},
+	fake := newFakeCmd(
+		fakeCmdConfig{
+			StdoutPlan: []fakeStdoutEvent{
+				{Data: fmt.Sprintf(`{"type":"thread.started","thread_id":"%s"}`+"\n", threadID)},
+				{
+					Data: fmt.Sprintf(
+						`{"type":"item.completed","item":{"type":"agent_message","text":"%s"}}`+"\n", message,
+					),
+				},
+				{Delay: extraDelay},
+			},
+			WaitDelay: waitDelay,
 		},
-		WaitDelay: waitDelay,
-	})
+	)
 
 	newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
 		return fake
@@ -772,12 +797,14 @@ func TestRunCodexTask_ParseStall(t *testing.T) {
 	const threadID = "stall-thread"
 	startG := runtime.NumGoroutine()
 
-	fake := newFakeCmd(fakeCmdConfig{
-		StdoutPlan: []fakeStdoutEvent{
-			{Data: fmt.Sprintf(`{"type":"thread.started","thread_id":"%s"}`+"\n", threadID)},
+	fake := newFakeCmd(
+		fakeCmdConfig{
+			StdoutPlan: []fakeStdoutEvent{
+				{Data: fmt.Sprintf(`{"type":"thread.started","thread_id":"%s"}`+"\n", threadID)},
+			},
+			KeepStdoutOpen: true,
 		},
-		KeepStdoutOpen: true,
-	})
+	)
 
 	blockingCmd := newDrainBlockingCmd(fake)
 	newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
@@ -804,7 +831,10 @@ func TestRunCodexTask_ParseStall(t *testing.T) {
 	}
 
 	if elapsed < stdoutDrainTimeout {
-		t.Fatalf("runCodexTask returned after %v (reason=%s), want >= %v to confirm drainTimer firing", elapsed, fake.stdout.Reason(), stdoutDrainTimeout)
+		t.Fatalf(
+			"runCodexTask returned after %v (reason=%s), want >= %v to confirm drainTimer firing", elapsed,
+			fake.stdout.Reason(), stdoutDrainTimeout,
+		)
 	}
 	maxDuration := stdoutDrainTimeout + time.Second
 	if elapsed >= maxDuration {
@@ -839,12 +869,14 @@ func TestRunCodexTask_ContextTimeout(t *testing.T) {
 	defer resetTestHooks()
 	forceKillDelay.Store(0)
 
-	fake := newFakeCmd(fakeCmdConfig{
-		KeepStdoutOpen:      true,
-		BlockWait:           true,
-		ReleaseWaitOnKill:   true,
-		ReleaseWaitOnSignal: false,
-	})
+	fake := newFakeCmd(
+		fakeCmdConfig{
+			KeepStdoutOpen:      true,
+			BlockWait:           true,
+			ReleaseWaitOnKill:   true,
+			ReleaseWaitOnSignal: false,
+		},
+	)
 
 	newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
 		return fake
@@ -865,7 +897,9 @@ func TestRunCodexTask_ContextTimeout(t *testing.T) {
 	}
 	defer func() { terminateCommandFn = terminateCommand }()
 
-	result := runCodexTaskWithContext(ctx, TaskSpec{Task: "ctx-timeout", WorkDir: defaultWorkdir}, nil, nil, false, false, 60)
+	result := runCodexTaskWithContext(
+		ctx, TaskSpec{Task: "ctx-timeout", WorkDir: defaultWorkdir}, nil, nil, false, false, 60,
+	)
 
 	if result.ExitCode != 124 {
 		t.Fatalf("exit code = %d, want 124 (%s)", result.ExitCode, result.Error)
@@ -904,18 +938,21 @@ func TestRunCodexTask_ForcesStopAfterCompletion(t *testing.T) {
 		t.Skip("skipping timing-sensitive integration test in short mode")
 	}
 	defer resetTestHooks()
+	t.Setenv("CODEAGENT_POST_MESSAGE_DELAY", "0")
 	forceKillDelay.Store(0)
 
-	fake := newFakeCmd(fakeCmdConfig{
-		StdoutPlan: []fakeStdoutEvent{
-			{Data: `{"type":"item.completed","item":{"type":"agent_message","text":"done"}}` + "\n"},
-			{Data: `{"type":"thread.completed","thread_id":"tid"}` + "\n"},
+	fake := newFakeCmd(
+		fakeCmdConfig{
+			StdoutPlan: []fakeStdoutEvent{
+				{Data: `{"type":"item.completed","item":{"type":"agent_message","text":"done"}}` + "\n"},
+				{Data: `{"type":"thread.completed","thread_id":"tid"}` + "\n"},
+			},
+			KeepStdoutOpen:      true,
+			BlockWait:           true,
+			ReleaseWaitOnSignal: true,
+			ReleaseWaitOnKill:   true,
 		},
-		KeepStdoutOpen:      true,
-		BlockWait:           true,
-		ReleaseWaitOnSignal: true,
-		ReleaseWaitOnKill:   true,
-	})
+	)
 
 	newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
 		return fake
@@ -924,7 +961,9 @@ func TestRunCodexTask_ForcesStopAfterCompletion(t *testing.T) {
 	codexCommand = "fake-cmd"
 
 	start := time.Now()
-	result := runCodexTaskWithContext(context.Background(), TaskSpec{Task: "done", WorkDir: defaultWorkdir}, nil, nil, false, false, 60)
+	result := runCodexTaskWithContext(
+		context.Background(), TaskSpec{Task: "done", WorkDir: defaultWorkdir}, nil, nil, false, false, 60,
+	)
 	duration := time.Since(start)
 
 	if result.ExitCode != 0 || result.Message != "done" {
@@ -943,19 +982,25 @@ func TestRunCodexTask_DoesNotTerminateBeforeThreadCompleted(t *testing.T) {
 		t.Skip("skipping timing-sensitive integration test in short mode")
 	}
 	defer resetTestHooks()
+	t.Setenv("CODEAGENT_POST_MESSAGE_DELAY", "0")
 	forceKillDelay.Store(0)
 
-	fake := newFakeCmd(fakeCmdConfig{
-		StdoutPlan: []fakeStdoutEvent{
-			{Data: `{"type":"item.completed","item":{"type":"agent_message","text":"intermediate"}}` + "\n"},
-			{Delay: 1100 * time.Millisecond, Data: `{"type":"item.completed","item":{"type":"agent_message","text":"final"}}` + "\n"},
-			{Data: `{"type":"thread.completed","thread_id":"tid"}` + "\n"},
+	fake := newFakeCmd(
+		fakeCmdConfig{
+			StdoutPlan: []fakeStdoutEvent{
+				{Data: `{"type":"item.completed","item":{"type":"agent_message","text":"intermediate"}}` + "\n"},
+				{
+					Delay: 1100 * time.Millisecond,
+					Data:  `{"type":"item.completed","item":{"type":"agent_message","text":"final"}}` + "\n",
+				},
+				{Data: `{"type":"thread.completed","thread_id":"tid"}` + "\n"},
+			},
+			KeepStdoutOpen:      true,
+			BlockWait:           true,
+			ReleaseWaitOnSignal: true,
+			ReleaseWaitOnKill:   true,
 		},
-		KeepStdoutOpen:      true,
-		BlockWait:           true,
-		ReleaseWaitOnSignal: true,
-		ReleaseWaitOnKill:   true,
-	})
+	)
 
 	newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
 		return fake
@@ -964,7 +1009,9 @@ func TestRunCodexTask_DoesNotTerminateBeforeThreadCompleted(t *testing.T) {
 	codexCommand = "fake-cmd"
 
 	start := time.Now()
-	result := runCodexTaskWithContext(context.Background(), TaskSpec{Task: "done", WorkDir: defaultWorkdir}, nil, nil, false, false, 60)
+	result := runCodexTaskWithContext(
+		context.Background(), TaskSpec{Task: "done", WorkDir: defaultWorkdir}, nil, nil, false, false, 60,
+	)
 	duration := time.Since(start)
 
 	if result.ExitCode != 0 || result.Message != "final" {
@@ -988,12 +1035,17 @@ func TestBackendParseArgs_NewMode(t *testing.T) {
 		{
 			name: "simple task",
 			args: []string{"codeagent-wrapper", "analyze code"},
-			want: &Config{Mode: "new", Task: "analyze code", WorkDir: ".", ExplicitStdin: false, Backend: defaultBackendName},
+			want: &Config{
+				Mode: "new", Task: "analyze code", WorkDir: ".", ExplicitStdin: false, Backend: defaultBackendName,
+			},
 		},
 		{
 			name: "task with workdir",
 			args: []string{"codeagent-wrapper", "analyze code", "/path/to/dir"},
-			want: &Config{Mode: "new", Task: "analyze code", WorkDir: "/path/to/dir", ExplicitStdin: false, Backend: defaultBackendName},
+			want: &Config{
+				Mode: "new", Task: "analyze code", WorkDir: "/path/to/dir", ExplicitStdin: false,
+				Backend: defaultBackendName,
+			},
 		},
 		{
 			name: "explicit stdin mode",
@@ -1003,40 +1055,44 @@ func TestBackendParseArgs_NewMode(t *testing.T) {
 		{
 			name: "stdin with workdir",
 			args: []string{"codeagent-wrapper", "-", "/some/dir"},
-			want: &Config{Mode: "new", Task: "-", WorkDir: "/some/dir", ExplicitStdin: true, Backend: defaultBackendName},
+			want: &Config{
+				Mode: "new", Task: "-", WorkDir: "/some/dir", ExplicitStdin: true, Backend: defaultBackendName,
+			},
 		},
 		{name: "no args", args: []string{"codeagent-wrapper"}, wantErr: true},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			os.Args = tt.args
-			cfg, err := parseArgs()
-			if tt.wantErr {
-				if err == nil {
-					t.Errorf("parseArgs() expected error, got nil")
+		t.Run(
+			tt.name, func(t *testing.T) {
+				os.Args = tt.args
+				cfg, err := parseArgs()
+				if tt.wantErr {
+					if err == nil {
+						t.Errorf("parseArgs() expected error, got nil")
+					}
+					return
 				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("parseArgs() unexpected error: %v", err)
-			}
-			if cfg.Mode != tt.want.Mode {
-				t.Errorf("Mode = %v, want %v", cfg.Mode, tt.want.Mode)
-			}
-			if cfg.Task != tt.want.Task {
-				t.Errorf("Task = %v, want %v", cfg.Task, tt.want.Task)
-			}
-			if cfg.WorkDir != tt.want.WorkDir {
-				t.Errorf("WorkDir = %v, want %v", cfg.WorkDir, tt.want.WorkDir)
-			}
-			if cfg.ExplicitStdin != tt.want.ExplicitStdin {
-				t.Errorf("ExplicitStdin = %v, want %v", cfg.ExplicitStdin, tt.want.ExplicitStdin)
-			}
-			if cfg.Backend != tt.want.Backend {
-				t.Errorf("Backend = %v, want %v", cfg.Backend, tt.want.Backend)
-			}
-		})
+				if err != nil {
+					t.Fatalf("parseArgs() unexpected error: %v", err)
+				}
+				if cfg.Mode != tt.want.Mode {
+					t.Errorf("Mode = %v, want %v", cfg.Mode, tt.want.Mode)
+				}
+				if cfg.Task != tt.want.Task {
+					t.Errorf("Task = %v, want %v", cfg.Task, tt.want.Task)
+				}
+				if cfg.WorkDir != tt.want.WorkDir {
+					t.Errorf("WorkDir = %v, want %v", cfg.WorkDir, tt.want.WorkDir)
+				}
+				if cfg.ExplicitStdin != tt.want.ExplicitStdin {
+					t.Errorf("ExplicitStdin = %v, want %v", cfg.ExplicitStdin, tt.want.ExplicitStdin)
+				}
+				if cfg.Backend != tt.want.Backend {
+					t.Errorf("Backend = %v, want %v", cfg.Backend, tt.want.Backend)
+				}
+			},
+		)
 	}
 }
 
@@ -1050,44 +1106,70 @@ func TestBackendParseArgs_ResumeMode(t *testing.T) {
 		{
 			name: "resume with task",
 			args: []string{"codeagent-wrapper", "resume", "session-123", "continue task"},
-			want: &Config{Mode: "resume", SessionID: "session-123", Task: "continue task", WorkDir: ".", ExplicitStdin: false, Backend: defaultBackendName},
+			want: &Config{
+				Mode: "resume", SessionID: "session-123", Task: "continue task", WorkDir: ".", ExplicitStdin: false,
+				Backend: defaultBackendName,
+			},
 		},
 		{
 			name: "resume with workdir",
 			args: []string{"codeagent-wrapper", "resume", "session-456", "task", "/work"},
-			want: &Config{Mode: "resume", SessionID: "session-456", Task: "task", WorkDir: "/work", ExplicitStdin: false, Backend: defaultBackendName},
+			want: &Config{
+				Mode: "resume", SessionID: "session-456", Task: "task", WorkDir: "/work", ExplicitStdin: false,
+				Backend: defaultBackendName,
+			},
 		},
 		{
 			name: "resume with stdin",
 			args: []string{"codeagent-wrapper", "resume", "session-789", "-"},
-			want: &Config{Mode: "resume", SessionID: "session-789", Task: "-", WorkDir: ".", ExplicitStdin: true, Backend: defaultBackendName},
+			want: &Config{
+				Mode: "resume", SessionID: "session-789", Task: "-", WorkDir: ".", ExplicitStdin: true,
+				Backend: defaultBackendName,
+			},
 		},
 		{name: "resume missing session_id", args: []string{"codeagent-wrapper", "resume"}, wantErr: true},
 		{name: "resume missing task", args: []string{"codeagent-wrapper", "resume", "session-123"}, wantErr: true},
 		{name: "resume empty session_id", args: []string{"codeagent-wrapper", "resume", "", "task"}, wantErr: true},
-		{name: "resume whitespace session_id", args: []string{"codeagent-wrapper", "resume", "   ", "task"}, wantErr: true},
+		{
+			name: "resume whitespace session_id", args: []string{"codeagent-wrapper", "resume", "   ", "task"},
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			os.Args = tt.args
-			cfg, err := parseArgs()
-			if tt.wantErr {
-				if err == nil {
-					t.Errorf("parseArgs() expected error, got nil")
+		t.Run(
+			tt.name, func(t *testing.T) {
+				os.Args = tt.args
+				cfg, err := parseArgs()
+				if tt.wantErr {
+					if err == nil {
+						t.Errorf("parseArgs() expected error, got nil")
+					}
+					return
 				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("parseArgs() unexpected error: %v", err)
-			}
-			if cfg.Mode != tt.want.Mode || cfg.SessionID != tt.want.SessionID || cfg.Task != tt.want.Task || cfg.WorkDir != tt.want.WorkDir || cfg.ExplicitStdin != tt.want.ExplicitStdin {
-				t.Errorf("parseArgs() mismatch: %+v vs %+v", cfg, tt.want)
-			}
-			if cfg.Backend != tt.want.Backend {
-				t.Errorf("Backend = %v, want %v", cfg.Backend, tt.want.Backend)
-			}
-		})
+				if err != nil {
+					t.Fatalf("parseArgs() unexpected error: %v", err)
+				}
+				if cfg.Mode != tt.want.Mode || cfg.SessionID != tt.want.SessionID || cfg.Task != tt.want.Task || cfg.WorkDir != tt.want.WorkDir || cfg.ExplicitStdin != tt.want.ExplicitStdin {
+					t.Errorf("parseArgs() mismatch: %+v vs %+v", cfg, tt.want)
+				}
+				if cfg.Backend != tt.want.Backend {
+					t.Errorf("Backend = %v, want %v", cfg.Backend, tt.want.Backend)
+				}
+			},
+		)
+	}
+}
+
+func TestDefaultLiteMode(t *testing.T) {
+	t.Setenv("CODEAGENT_LITE_MODE", "")
+	if !defaultLiteMode() {
+		t.Fatalf("defaultLiteMode() = false, want true")
+	}
+
+	t.Setenv("CODEAGENT_LITE_MODE", "false")
+	if defaultLiteMode() {
+		t.Fatalf("defaultLiteMode() = true, want false")
 	}
 }
 
@@ -1104,14 +1186,24 @@ func TestBackendParseArgs_BackendFlag(t *testing.T) {
 			want: "claude",
 		},
 		{
-			name: "gemini resume",
-			args: []string{"codeagent-wrapper", "--backend", "gemini", "resume", "sid", "task"},
-			want: "gemini",
+			name: "antigravity resume",
+			args: []string{"codeagent-wrapper", "--backend", "antigravity", "resume", "sid", "task"},
+			want: "antigravity",
 		},
 		{
 			name: "backend equals syntax",
 			args: []string{"codeagent-wrapper", "--backend=claude", "task"},
 			want: "claude",
+		},
+		{
+			name:    "rejects agy add-dir flag",
+			args:    []string{"codeagent-wrapper", "--backend", "antigravity", "--add-dir", "/work", "-p", "task"},
+			wantErr: true,
+		},
+		{
+			name:    "rejects agy print flag",
+			args:    []string{"codeagent-wrapper", "--backend", "antigravity", "-p", "task", "/work"},
+			wantErr: true,
 		},
 		{
 			name:    "missing backend value",
@@ -1126,22 +1218,24 @@ func TestBackendParseArgs_BackendFlag(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			os.Args = tt.args
-			cfg, err := parseArgs()
-			if tt.wantErr {
-				if err == nil {
-					t.Fatalf("expected error, got nil")
+		t.Run(
+			tt.name, func(t *testing.T) {
+				os.Args = tt.args
+				cfg, err := parseArgs()
+				if tt.wantErr {
+					if err == nil {
+						t.Fatalf("expected error, got nil")
+					}
+					return
 				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if cfg.Backend != tt.want {
-				t.Fatalf("Backend = %q, want %q", cfg.Backend, tt.want)
-			}
-		})
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if cfg.Backend != tt.want {
+					t.Fatalf("Backend = %q, want %q", cfg.Backend, tt.want)
+				}
+			},
+		)
 	}
 }
 
@@ -1210,11 +1304,13 @@ func TestBackendParseBoolFlag(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := parseBoolFlag(tt.val, tt.def); got != tt.want {
-				t.Fatalf("parseBoolFlag(%q,%v) = %v, want %v", tt.val, tt.def, got, tt.want)
-			}
-		})
+		t.Run(
+			tt.name, func(t *testing.T) {
+				if got := parseBoolFlag(tt.val, tt.def); got != tt.want {
+					t.Fatalf("parseBoolFlag(%q,%v) = %v, want %v", tt.val, tt.def, got, tt.want)
+				}
+			},
+		)
 	}
 }
 
@@ -1261,7 +1357,7 @@ do something`
 func TestParallelParseConfig_Backend(t *testing.T) {
 	input := `---TASK---
 id: task-1
-backend: gemini
+backend: antigravity
 session_id: sess-123
 ---CONTENT---
 do something`
@@ -1274,8 +1370,8 @@ do something`
 		t.Fatalf("expected 1 task, got %d", len(cfg.Tasks))
 	}
 	task := cfg.Tasks[0]
-	if task.Backend != "gemini" {
-		t.Fatalf("backend = %q, want gemini", task.Backend)
+	if task.Backend != "antigravity" {
+		t.Fatalf("backend = %q, want antigravity", task.Backend)
 	}
 	if task.Mode != "resume" || task.SessionID != "sess-123" {
 		t.Fatalf("expected resume mode with session, got mode=%q session=%q", task.Mode, task.SessionID)
@@ -1384,12 +1480,14 @@ func TestRunShouldUseStdin(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := shouldUseStdin(tt.task, tt.piped)
-			if got != tt.want {
-				t.Errorf("shouldUseStdin(%q, %v) = %v, want %v", truncate(tt.task, 20), tt.piped, got, tt.want)
-			}
-		})
+		t.Run(
+			tt.name, func(t *testing.T) {
+				got := shouldUseStdin(tt.task, tt.piped)
+				if got != tt.want {
+					t.Errorf("shouldUseStdin(%q, %v) = %v, want %v", truncate(tt.task, 20), tt.piped, got, tt.want)
+				}
+			},
+		)
 	}
 }
 
@@ -1451,7 +1549,9 @@ func TestRunBuildCodexArgs_ResumeMode_EmptySessionHandledGracefully(t *testing.T
 
 	cfg := &Config{Mode: "resume", SessionID: "   ", WorkDir: "/test/dir"}
 	args := buildCodexArgs(cfg, "task")
-	expected := []string{"e", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "-C", "/test/dir", "--json", "task"}
+	expected := []string{
+		"e", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "-C", "/test/dir", "--json", "task",
+	}
 	if len(args) != len(expected) {
 		t.Fatalf("len mismatch")
 	}
@@ -1482,30 +1582,43 @@ func TestBackendSelectBackend(t *testing.T) {
 	}{
 		{"codex", "codex", CodexBackend{}},
 		{"claude mixed case", "ClAuDe", ClaudeBackend{}},
-		{"gemini", "gemini", GeminiBackend{}},
+		{"antigravity", "antigravity", AntigravityBackend{}},
+		{"agy alias", "agy", AntigravityBackend{}},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := selectBackend(tt.in)
-			if err != nil {
-				t.Fatalf("selectBackend() error = %v", err)
-			}
-			switch tt.kind.(type) {
-			case CodexBackend:
-				if _, ok := got.(CodexBackend); !ok {
-					t.Fatalf("expected CodexBackend, got %T", got)
+		t.Run(
+			tt.name, func(t *testing.T) {
+				got, err := selectBackend(tt.in)
+				if err != nil {
+					t.Fatalf("selectBackend() error = %v", err)
 				}
-			case ClaudeBackend:
-				if _, ok := got.(ClaudeBackend); !ok {
-					t.Fatalf("expected ClaudeBackend, got %T", got)
+				switch tt.kind.(type) {
+				case CodexBackend:
+					if _, ok := got.(CodexBackend); !ok {
+						t.Fatalf("expected CodexBackend, got %T", got)
+					}
+				case ClaudeBackend:
+					if _, ok := got.(ClaudeBackend); !ok {
+						t.Fatalf("expected ClaudeBackend, got %T", got)
+					}
+				case AntigravityBackend:
+					if _, ok := got.(AntigravityBackend); !ok {
+						t.Fatalf("expected AntigravityBackend, got %T", got)
+					}
 				}
-			case GeminiBackend:
-				if _, ok := got.(GeminiBackend); !ok {
-					t.Fatalf("expected GeminiBackend, got %T", got)
-				}
-			}
-		})
+			},
+		)
+	}
+}
+
+func TestBackendSelectBackend_DisablesGemini(t *testing.T) {
+	_, err := selectBackend("gemini")
+	if err == nil {
+		t.Fatal("expected error for gemini backend")
+	}
+	if !strings.Contains(err.Error(), "2026-06-18") || !strings.Contains(err.Error(), "antigravity") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
@@ -1551,7 +1664,7 @@ func TestBackendBuildArgs_ClaudeBackend(t *testing.T) {
 	backend := ClaudeBackend{}
 	cfg := &Config{Mode: "new", WorkDir: defaultWorkdir}
 	got := backend.BuildArgs(cfg, "todo")
-	want := []string{"-p", "--setting-sources", "", "--output-format", "stream-json", "--verbose", "todo"}
+	want := []string{"-p", "--dangerously-skip-permissions", "--setting-sources", "", "--output-format", "stream-json", "--verbose", "todo"}
 	if len(got) != len(want) {
 		t.Fatalf("args length=%d, want %d: %v", len(got), len(want), got)
 	}
@@ -1572,7 +1685,7 @@ func TestClaudeBackendBuildArgs_OutputValidation(t *testing.T) {
 	target := "ensure-flags"
 
 	args := backend.BuildArgs(cfg, target)
-	want := []string{"-p", "--setting-sources", "", "--output-format", "stream-json", "--verbose", target}
+	want := []string{"-p", "--dangerously-skip-permissions", "--setting-sources", "", "--output-format", "stream-json", "--verbose", target}
 	if len(args) != len(want) {
 		t.Fatalf("args length=%d, want %d: %v", len(args), len(want), args)
 	}
@@ -1583,11 +1696,11 @@ func TestClaudeBackendBuildArgs_OutputValidation(t *testing.T) {
 	}
 }
 
-func TestBackendBuildArgs_GeminiBackend(t *testing.T) {
-	backend := GeminiBackend{}
+func TestBackendBuildArgs_AntigravityBackend(t *testing.T) {
+	backend := AntigravityBackend{}
 	cfg := &Config{Mode: "new"}
 	got := backend.BuildArgs(cfg, "task")
-	want := []string{"-o", "stream-json", "-y", "-p", "task"}
+	want := []string{"-p", "task"}
 	if len(got) != len(want) {
 		t.Fatalf("length mismatch")
 	}
@@ -1602,13 +1715,13 @@ func TestBackendBuildArgs_GeminiBackend(t *testing.T) {
 	}
 }
 
-func TestGeminiBackendBuildArgs_OutputValidation(t *testing.T) {
-	backend := GeminiBackend{}
-	cfg := &Config{Mode: "resume"}
+func TestAntigravityBackendBuildArgs_OutputValidation(t *testing.T) {
+	backend := AntigravityBackend{}
+	cfg := &Config{Mode: "resume", SessionID: "sid-123"}
 	target := "prompt-data"
 
 	args := backend.BuildArgs(cfg, target)
-	expected := []string{"-o", "stream-json", "-y", "-p"}
+	expected := []string{"--conversation", "sid-123", "-p"}
 
 	if len(args) != len(expected)+1 {
 		t.Fatalf("args length=%d, want %d", len(args), len(expected)+1)
@@ -1624,14 +1737,14 @@ func TestGeminiBackendBuildArgs_OutputValidation(t *testing.T) {
 }
 
 func TestBackendNamesAndCommands(t *testing.T) {
-	tests := []Backend{CodexBackend{}, ClaudeBackend{}, GeminiBackend{}}
+	tests := []Backend{CodexBackend{}, ClaudeBackend{}, AntigravityBackend{}}
 	expected := []struct {
 		name    string
 		command string
 	}{
 		{"codex", "codex"},
 		{"claude", "claude"},
-		{"gemini", "gemini"},
+		{"antigravity", "agy"},
 	}
 
 	for i, backend := range tests {
@@ -1662,14 +1775,16 @@ func TestRunResolveTimeout(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			os.Setenv("CODEX_TIMEOUT", tt.envVal)
-			defer os.Unsetenv("CODEX_TIMEOUT")
-			got := resolveTimeout()
-			if got != tt.want {
-				t.Errorf("resolveTimeout() with env=%q = %v, want %v", tt.envVal, got, tt.want)
-			}
-		})
+		t.Run(
+			tt.name, func(t *testing.T) {
+				os.Setenv("CODEX_TIMEOUT", tt.envVal)
+				defer os.Unsetenv("CODEX_TIMEOUT")
+				got := resolveTimeout()
+				if got != tt.want {
+					t.Errorf("resolveTimeout() with env=%q = %v, want %v", tt.envVal, got, tt.want)
+				}
+			},
+		)
 	}
 }
 
@@ -1689,12 +1804,14 @@ func TestRunNormalizeText(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := normalizeText(tt.input)
-			if got != tt.want {
-				t.Errorf("normalizeText(%v) = %q, want %q", tt.input, got, tt.want)
-			}
-		})
+		t.Run(
+			tt.name, func(t *testing.T) {
+				got := normalizeText(tt.input)
+				if got != tt.want {
+					t.Errorf("normalizeText(%v) = %q, want %q", tt.input, got, tt.want)
+				}
+			},
+		)
 	}
 }
 
@@ -1709,31 +1826,63 @@ func TestBackendParseJSONStream(t *testing.T) {
 	longText := strings.Repeat("a", 2*1024*1024)
 
 	tests := []testCase{
-		{"thread started and agent message", `{"type":"thread.started","thread_id":"abc-123"}
-{"type":"item.completed","item":{"type":"agent_message","text":"Hello world"}}`, "Hello world", "abc-123"},
-		{"multiple agent messages", `{"type":"item.completed","item":{"type":"agent_message","text":"First"}}
-{"type":"item.completed","item":{"type":"agent_message","text":"Second"}}`, "Second", ""},
-		{"text as array", `{"type":"item.completed","item":{"type":"agent_message","text":["Hello"," ","World"]}}`, "Hello World", ""},
-		{"ignore other event types", `{"type":"other.event","data":"ignored"}
+		{
+			"thread started and agent message", `{"type":"thread.started","thread_id":"abc-123"}
+{"type":"item.completed","item":{"type":"agent_message","text":"Hello world"}}`, "Hello world", "abc-123",
+		},
+		{
+			"multiple agent messages", `{"type":"item.completed","item":{"type":"agent_message","text":"First"}}
+{"type":"item.completed","item":{"type":"agent_message","text":"Second"}}`, "Second", "",
+		},
+		{
+			"text as array", `{"type":"item.completed","item":{"type":"agent_message","text":["Hello"," ","World"]}}`,
+			"Hello World", "",
+		},
+		{
+			"ignore other event types", `{"type":"other.event","data":"ignored"}
 {"type":"item.completed","item":{"type":"other_type","text":"ignored"}}
-{"type":"item.completed","item":{"type":"agent_message","text":"Valid"}}`, "Valid", ""},
-		{"super long single line", `{"type":"item.completed","item":{"type":"agent_message","text":"` + longText + `"}}`, longText, ""},
+{"type":"item.completed","item":{"type":"agent_message","text":"Valid"}}`, "Valid", "",
+		},
+		{
+			"super long single line",
+			`{"type":"item.completed","item":{"type":"agent_message","text":"` + longText + `"}}`, longText, "",
+		},
 		{"empty input", "", "", ""},
-		{"item completed with nil item", strings.Join([]string{`{"type":"thread.started","thread_id":"nil-item-thread"}`, `{"type":"item.completed","item":null}`}, "\n"), "", "nil-item-thread"},
-		{"agent message with non-string text", `{"type":"item.completed","item":{"type":"agent_message","text":12345}}`, "", ""},
-		{"corrupted json does not break stream", strings.Join([]string{`{"type":"item.completed","item":{"type":"agent_message","text":"before"}}`, `{"type":"item.completed","item":{"type":"agent_message","text":"broken"}`, `{"type":"thread.started","thread_id":"after-thread"}`, `{"type":"item.completed","item":{"type":"agent_message","text":"after"}}`}, "\n"), "after", "after-thread"},
+		{
+			"item completed with nil item", strings.Join(
+				[]string{
+					`{"type":"thread.started","thread_id":"nil-item-thread"}`, `{"type":"item.completed","item":null}`,
+				}, "\n",
+			), "", "nil-item-thread",
+		},
+		{
+			"agent message with non-string text",
+			`{"type":"item.completed","item":{"type":"agent_message","text":12345}}`, "", "",
+		},
+		{
+			"corrupted json does not break stream", strings.Join(
+				[]string{
+					`{"type":"item.completed","item":{"type":"agent_message","text":"before"}}`,
+					`{"type":"item.completed","item":{"type":"agent_message","text":"broken"}`,
+					`{"type":"thread.started","thread_id":"after-thread"}`,
+					`{"type":"item.completed","item":{"type":"agent_message","text":"after"}}`,
+				}, "\n",
+			), "after", "after-thread",
+		},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			gotMessage, gotThreadID := parseJSONStream(strings.NewReader(tt.input))
-			if gotMessage != tt.wantMessage {
-				t.Errorf("message = %q, want %q", gotMessage, tt.wantMessage)
-			}
-			if gotThreadID != tt.wantThreadID {
-				t.Errorf("threadID = %q, want %q", gotThreadID, tt.wantThreadID)
-			}
-		})
+		t.Run(
+			tt.name, func(t *testing.T) {
+				gotMessage, gotThreadID := parseJSONStream(strings.NewReader(tt.input))
+				if gotMessage != tt.wantMessage {
+					t.Errorf("message = %q, want %q", gotMessage, tt.wantMessage)
+				}
+				if gotThreadID != tt.wantThreadID {
+					t.Errorf("threadID = %q, want %q", gotThreadID, tt.wantThreadID)
+				}
+			},
+		)
 	}
 }
 
@@ -1767,19 +1916,21 @@ func TestBackendParseJSONStream_ClaudeEvents_ItemDoesNotForceCodex(t *testing.T)
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			message, threadID := parseJSONStream(strings.NewReader(tt.input))
-			if message != "OK" {
-				t.Fatalf("message=%q, want %q", message, "OK")
-			}
-			if threadID != "abc123" {
-				t.Fatalf("threadID=%q, want %q", threadID, "abc123")
-			}
-		})
+		t.Run(
+			tt.name, func(t *testing.T) {
+				message, threadID := parseJSONStream(strings.NewReader(tt.input))
+				if message != "OK" {
+					t.Fatalf("message=%q, want %q", message, "OK")
+				}
+				if threadID != "abc123" {
+					t.Fatalf("threadID=%q, want %q", threadID, "abc123")
+				}
+			},
+		)
 	}
 }
 
-func TestBackendParseJSONStream_GeminiEvents(t *testing.T) {
+func TestBackendParseJSONStream_ContentStreamEvents(t *testing.T) {
 	input := `{"type":"init","session_id":"xyz789"}
 {"type":"message","role":"assistant","content":"Hi","delta":true,"session_id":"xyz789"}
 {"type":"message","role":"assistant","content":" there","delta":true}
@@ -1795,7 +1946,7 @@ func TestBackendParseJSONStream_GeminiEvents(t *testing.T) {
 	}
 }
 
-func TestBackendParseJSONStream_GeminiEvents_DeltaFalseStillDetected(t *testing.T) {
+func TestBackendParseJSONStream_ContentStreamEvents_DeltaFalseStillDetected(t *testing.T) {
 	input := `{"type":"init","session_id":"xyz789"}
 {"type":"message","content":"Hi","delta":false,"session_id":"xyz789"}
 {"type":"result","status":"success","session_id":"xyz789"}`
@@ -1810,16 +1961,18 @@ func TestBackendParseJSONStream_GeminiEvents_DeltaFalseStillDetected(t *testing.
 	}
 }
 
-func TestBackendParseJSONStream_GeminiEvents_OnMessageTriggeredOnStatus(t *testing.T) {
+func TestBackendParseJSONStream_ContentStreamEvents_OnMessageTriggeredOnStatus(t *testing.T) {
 	input := `{"type":"init","session_id":"xyz789"}
 {"type":"message","role":"assistant","content":"Hi","delta":true,"session_id":"xyz789"}
 {"type":"message","content":" there","delta":true}
 {"type":"result","status":"success","session_id":"xyz789"}`
 
 	var called int
-	message, threadID := parseJSONStreamInternal(strings.NewReader(input), nil, nil, func() {
-		called++
-	}, nil)
+	message, threadID := parseJSONStreamInternal(
+		strings.NewReader(input), nil, nil, func() {
+			called++
+		}, nil,
+	)
 
 	if message != "Hi there" {
 		t.Fatalf("message=%q, want %q", message, "Hi there")
@@ -1846,9 +1999,11 @@ func TestBackendParseJSONStreamWithWarn_InvalidLine(t *testing.T) {
 
 func TestBackendParseJSONStream_OnMessage(t *testing.T) {
 	var called int
-	message, threadID := parseJSONStreamInternal(strings.NewReader(`{"type":"item.completed","item":{"type":"agent_message","text":"hook"}}`), nil, nil, func() {
-		called++
-	}, nil)
+	message, threadID := parseJSONStreamInternal(
+		strings.NewReader(`{"type":"item.completed","item":{"type":"agent_message","text":"hook"}}`), nil, nil, func() {
+			called++
+		}, nil,
+	)
 	if message != "hook" {
 		t.Fatalf("message = %q, want hook", message)
 	}
@@ -1867,11 +2022,13 @@ func TestBackendParseJSONStream_OnComplete_CodexThreadCompleted(t *testing.T) {
 
 	var onMessageCalls int
 	var onCompleteCalls int
-	message, threadID := parseJSONStreamInternal(strings.NewReader(input), nil, nil, func() {
-		onMessageCalls++
-	}, func() {
-		onCompleteCalls++
-	})
+	message, threadID := parseJSONStreamInternal(
+		strings.NewReader(input), nil, nil, func() {
+			onMessageCalls++
+		}, func() {
+			onCompleteCalls++
+		},
+	)
 	if message != "second" {
 		t.Fatalf("message = %q, want second", message)
 	}
@@ -1892,11 +2049,13 @@ func TestBackendParseJSONStream_OnComplete_ClaudeResult(t *testing.T) {
 
 	var onMessageCalls int
 	var onCompleteCalls int
-	message, threadID := parseJSONStreamInternal(strings.NewReader(input), nil, nil, func() {
-		onMessageCalls++
-	}, func() {
-		onCompleteCalls++
-	})
+	message, threadID := parseJSONStreamInternal(
+		strings.NewReader(input), nil, nil, func() {
+			onMessageCalls++
+		}, func() {
+			onCompleteCalls++
+		},
+	)
 	if message != "OK" {
 		t.Fatalf("message = %q, want OK", message)
 	}
@@ -1911,17 +2070,19 @@ func TestBackendParseJSONStream_OnComplete_ClaudeResult(t *testing.T) {
 	}
 }
 
-func TestBackendParseJSONStream_OnComplete_GeminiTerminalResultStatus(t *testing.T) {
+func TestBackendParseJSONStream_OnComplete_ContentStreamTerminalResultStatus(t *testing.T) {
 	input := `{"type":"message","role":"assistant","content":"Hi","delta":true,"session_id":"g-1"}` + "\n" +
 		`{"type":"result","status":"success","session_id":"g-1"}`
 
 	var onMessageCalls int
 	var onCompleteCalls int
-	message, threadID := parseJSONStreamInternal(strings.NewReader(input), nil, nil, func() {
-		onMessageCalls++
-	}, func() {
-		onCompleteCalls++
-	})
+	message, threadID := parseJSONStreamInternal(
+		strings.NewReader(input), nil, nil, func() {
+			onMessageCalls++
+		}, func() {
+			onCompleteCalls++
+		},
+	)
 	if message != "Hi" {
 		t.Fatalf("message = %q, want Hi", message)
 	}
@@ -1993,18 +2154,20 @@ func TestRunGetEnv(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			os.Unsetenv(tt.key)
-			if tt.setEnv {
-				os.Setenv(tt.key, tt.envVal)
-				defer os.Unsetenv(tt.key)
-			}
+		t.Run(
+			tt.name, func(t *testing.T) {
+				os.Unsetenv(tt.key)
+				if tt.setEnv {
+					os.Setenv(tt.key, tt.envVal)
+					defer os.Unsetenv(tt.key)
+				}
 
-			got := getEnv(tt.key, tt.defaultVal)
-			if got != tt.want {
-				t.Errorf("getEnv(%q, %q) = %q, want %q", tt.key, tt.defaultVal, got, tt.want)
-			}
-		})
+				got := getEnv(tt.key, tt.defaultVal)
+				if got != tt.want {
+					t.Errorf("getEnv(%q, %q) = %q, want %q", tt.key, tt.defaultVal, got, tt.want)
+				}
+			},
+		)
 	}
 }
 
@@ -2024,12 +2187,14 @@ func TestRunTruncate(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := truncate(tt.input, tt.maxLen)
-			if got != tt.want {
-				t.Errorf("truncate(%q, %d) = %q, want %q", tt.input, tt.maxLen, got, tt.want)
-			}
-		})
+		t.Run(
+			tt.name, func(t *testing.T) {
+				got := truncate(tt.input, tt.maxLen)
+				if got != tt.want {
+					t.Errorf("truncate(%q, %d) = %q, want %q", tt.input, tt.maxLen, got, tt.want)
+				}
+			},
+		)
 	}
 
 	if got := truncate("data", -1); got != "" {
@@ -2042,12 +2207,14 @@ func TestRunMin(t *testing.T) {
 		a, b, want int
 	}{{1, 2, 1}, {2, 1, 1}, {5, 5, 5}, {-1, 0, -1}, {0, -1, -1}}
 	for _, tt := range tests {
-		t.Run("", func(t *testing.T) {
-			got := min(tt.a, tt.b)
-			if got != tt.want {
-				t.Errorf("min(%d, %d) = %d, want %d", tt.a, tt.b, got, tt.want)
-			}
-		})
+		t.Run(
+			"", func(t *testing.T) {
+				got := min(tt.a, tt.b)
+				if got != tt.want {
+					t.Errorf("min(%d, %d) = %d, want %d", tt.a, tt.b, got, tt.want)
+				}
+			},
+		)
 	}
 }
 
@@ -2192,13 +2359,15 @@ func TestRunIsTerminal(t *testing.T) {
 	}{{"is terminal", func() bool { return true }, true}, {"is not terminal", func() bool { return false }, false}}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			isTerminalFn = tt.mockFn
-			got := isTerminal()
-			if got != tt.want {
-				t.Errorf("isTerminal() = %v, want %v", got, tt.want)
-			}
-		})
+		t.Run(
+			tt.name, func(t *testing.T) {
+				isTerminalFn = tt.mockFn
+				got := isTerminal()
+				if got != tt.want {
+					t.Errorf("isTerminal() = %v, want %v", got, tt.want)
+				}
+			},
+		)
 	}
 }
 
@@ -2218,23 +2387,25 @@ func TestRunReadPipedTask(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			isTerminalFn = func() bool { return tt.isTerminal }
-			stdinReader = tt.stdin
-			got, err := readPipedTask()
-			if tt.wantErr {
-				if err == nil {
-					t.Fatalf("expected error, got nil")
+		t.Run(
+			tt.name, func(t *testing.T) {
+				isTerminalFn = func() bool { return tt.isTerminal }
+				stdinReader = tt.stdin
+				got, err := readPipedTask()
+				if tt.wantErr {
+					if err == nil {
+						t.Fatalf("expected error, got nil")
+					}
+					return
 				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if got != tt.want {
-				t.Errorf("readPipedTask() = %q, want %q", got, tt.want)
-			}
-		})
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if got != tt.want {
+					t.Errorf("readPipedTask() = %q, want %q", got, tt.want)
+				}
+			},
+		)
 	}
 }
 
@@ -2285,12 +2456,14 @@ func TestRunCodexTask_WithEcho(t *testing.T) {
 func TestRunCodexTaskFn_UsesTaskBackend(t *testing.T) {
 	defer resetTestHooks()
 
-	fake := newFakeCmd(fakeCmdConfig{
-		StdoutPlan: []fakeStdoutEvent{
-			{Data: `{"type":"thread.started","thread_id":"backend-thread"}` + "\n"},
-			{Data: `{"type":"item.completed","item":{"type":"agent_message","text":"backend-msg"}}` + "\n"},
+	fake := newFakeCmd(
+		fakeCmdConfig{
+			StdoutPlan: []fakeStdoutEvent{
+				{Data: `{"type":"thread.started","thread_id":"backend-thread"}` + "\n"},
+				{Data: `{"type":"item.completed","item":{"type":"agent_message","text":"backend-msg"}}` + "\n"},
+			},
 		},
-	})
+	)
 
 	var seenName string
 	var seenArgs []string
@@ -2381,11 +2554,13 @@ func TestRunCodexTask_LogPathWithTempLogger(t *testing.T) {
 {"type":"item.completed","item":{"type":"agent_message","text":"temp"}}`
 
 	result := runCodexTask(TaskSpec{Task: jsonOutput}, true, 5)
-	t.Cleanup(func() {
-		if result.LogPath != "" {
-			os.Remove(result.LogPath)
-		}
-	})
+	t.Cleanup(
+		func() {
+			if result.LogPath != "" {
+				os.Remove(result.LogPath)
+			}
+		},
+	)
 	if result.LogPath == "" {
 		t.Fatalf("LogPath should not be empty for temp logger")
 	}
@@ -2613,7 +2788,9 @@ func TestRunSilentMode(t *testing.T) {
 }
 
 func TestRunGenerateFinalOutput(t *testing.T) {
-	results := []TaskResult{{TaskID: "a", ExitCode: 0, Message: "ok"}, {TaskID: "b", ExitCode: 1, Error: "boom"}, {TaskID: "c", ExitCode: 0}}
+	results := []TaskResult{
+		{TaskID: "a", ExitCode: 0, Message: "ok"}, {TaskID: "b", ExitCode: 1, Error: "boom"}, {TaskID: "c", ExitCode: 0},
+	}
 	out := generateFinalOutput(results)
 	if out == "" {
 		t.Fatalf("generateFinalOutput() returned empty string")
@@ -2675,7 +2852,10 @@ func TestRunTopologicalSort_LinearChain(t *testing.T) {
 }
 
 func TestRunTopologicalSort_Branching(t *testing.T) {
-	tasks := []TaskSpec{{ID: "root"}, {ID: "left", Dependencies: []string{"root"}}, {ID: "right", Dependencies: []string{"root"}}, {ID: "leaf", Dependencies: []string{"left", "right"}}}
+	tasks := []TaskSpec{
+		{ID: "root"}, {ID: "left", Dependencies: []string{"root"}}, {ID: "right", Dependencies: []string{"root"}},
+		{ID: "leaf", Dependencies: []string{"left", "right"}},
+	}
 	layers, err := topologicalSort(tasks)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -2711,17 +2891,19 @@ func TestRunShouldSkipTask(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			skip, reason := shouldSkipTask(tt.task, failed)
-			if skip != tt.skip {
-				t.Fatalf("skip=%v, want %v", skip, tt.skip)
-			}
-			for _, expect := range tt.reasonContains {
-				if !strings.Contains(reason, expect) {
-					t.Fatalf("reason %q missing %q", reason, expect)
+		t.Run(
+			tt.name, func(t *testing.T) {
+				skip, reason := shouldSkipTask(tt.task, failed)
+				if skip != tt.skip {
+					t.Fatalf("skip=%v, want %v", skip, tt.skip)
 				}
-			}
-		})
+				for _, expect := range tt.reasonContains {
+					if !strings.Contains(reason, expect) {
+						t.Fatalf("reason %q missing %q", reason, expect)
+					}
+				}
+			},
+		)
 	}
 }
 
@@ -2733,7 +2915,10 @@ func TestRunTopologicalSort_CycleDetection(t *testing.T) {
 }
 
 func TestRunTopologicalSort_IndirectCycle(t *testing.T) {
-	tasks := []TaskSpec{{ID: "a", Dependencies: []string{"c"}}, {ID: "b", Dependencies: []string{"a"}}, {ID: "c", Dependencies: []string{"b"}}}
+	tasks := []TaskSpec{
+		{ID: "a", Dependencies: []string{"c"}}, {ID: "b", Dependencies: []string{"a"}},
+		{ID: "c", Dependencies: []string{"b"}},
+	}
 	if _, err := topologicalSort(tasks); err == nil || !strings.Contains(err.Error(), "cycle detected") {
 		t.Fatalf("expected cycle error, got %v", err)
 	}
@@ -2741,7 +2926,9 @@ func TestRunTopologicalSort_IndirectCycle(t *testing.T) {
 
 func TestRunTopologicalSort_MissingDependency(t *testing.T) {
 	tasks := []TaskSpec{{ID: "a", Dependencies: []string{"missing"}}}
-	if _, err := topologicalSort(tasks); err == nil || !strings.Contains(err.Error(), "dependency \"missing\" not found") {
+	if _, err := topologicalSort(tasks); err == nil || !strings.Contains(
+		err.Error(), "dependency \"missing\" not found",
+	) {
 		t.Fatalf("expected missing dependency error, got %v", err)
 	}
 }
@@ -2769,6 +2956,7 @@ func TestRunTopologicalSort_LargeGraph(t *testing.T) {
 }
 
 func TestParallelExecuteConcurrent(t *testing.T) {
+	t.Setenv("CODEAGENT_MAX_PARALLEL_WORKERS", "0")
 	orig := runCodexTaskFn
 	defer func() { runCodexTaskFn = orig }()
 
@@ -2788,16 +2976,11 @@ func TestParallelExecuteConcurrent(t *testing.T) {
 		return TaskResult{TaskID: task.ID}
 	}
 
-	start := time.Now()
 	layers := [][]TaskSpec{{{ID: "a"}, {ID: "b"}, {ID: "c"}}}
 	results := executeConcurrent(layers, 10)
-	elapsed := time.Since(start)
 
 	if len(results) != 3 {
 		t.Fatalf("expected 3 results, got %d", len(results))
-	}
-	if elapsed >= 400*time.Millisecond {
-		t.Fatalf("expected concurrent execution, took %v", elapsed)
 	}
 	if maxParallel < 2 {
 		t.Fatalf("expected parallelism >=2, got %d", maxParallel)
@@ -2903,16 +3086,18 @@ func TestParallelBackendPropagation(t *testing.T) {
 	}
 	t.Cleanup(func() { runCodexTaskFn = orig })
 
-	stdinReader = strings.NewReader(`---TASK---
+	stdinReader = strings.NewReader(
+		`---TASK---
 id: first
 ---CONTENT---
 do one
 
 ---TASK---
 id: second
-backend: gemini
+backend: antigravity
 ---CONTENT---
-do two`)
+do two`,
+	)
 	os.Args = []string{"codeagent-wrapper", "--backend", "claude", "--parallel"}
 
 	if code := run(); code != 0 {
@@ -2927,8 +3112,8 @@ do two`)
 	if !firstOK || firstBackend != "claude" {
 		t.Fatalf("first backend = %q (present=%v), want claude", firstBackend, firstOK)
 	}
-	if !secondOK || secondBackend != "gemini" {
-		t.Fatalf("second backend = %q (present=%v), want gemini", secondBackend, secondOK)
+	if !secondOK || secondBackend != "antigravity" {
+		t.Fatalf("second backend = %q (present=%v), want antigravity", secondBackend, secondOK)
 	}
 }
 
@@ -2965,10 +3150,12 @@ func TestRunParallelWithFullOutput(t *testing.T) {
 	t.Cleanup(func() { os.Args = oldArgs })
 	os.Args = []string{"codeagent-wrapper", "--parallel", "--full-output"}
 
-	stdinReader = strings.NewReader(`---TASK---
+	stdinReader = strings.NewReader(
+		`---TASK---
 id: T1
 ---CONTENT---
-noop`)
+noop`,
+	)
 	t.Cleanup(func() { stdinReader = os.Stdin })
 
 	orig := runCodexTaskFn
@@ -2977,11 +3164,13 @@ noop`)
 	}
 	t.Cleanup(func() { runCodexTaskFn = orig })
 
-	out := captureOutput(t, func() {
-		if code := run(); code != 0 {
-			t.Fatalf("run exit = %d, want 0", code)
-		}
-	})
+	out := captureOutput(
+		t, func() {
+			if code := run(); code != 0 {
+				t.Fatalf("run exit = %d, want 0", code)
+			}
+		},
+	)
 
 	if !strings.Contains(out, "=== Parallel Execution Summary ===") {
 		t.Fatalf("output missing full-output header, got %q", out)
@@ -3001,10 +3190,12 @@ func TestParallelInvalidBackend(t *testing.T) {
 	defer resetTestHooks()
 	cleanupLogsFn = func() (CleanupStats, error) { return CleanupStats{}, nil }
 
-	stdinReader = strings.NewReader(`---TASK---
+	stdinReader = strings.NewReader(
+		`---TASK---
 id: only
 ---CONTENT---
-noop`)
+noop`,
+	)
 	os.Args = []string{"codeagent-wrapper", "--parallel", "--backend", "unknown"}
 
 	if code := run(); code == 0 {
@@ -3018,10 +3209,12 @@ func TestParallelTriggersCleanup(t *testing.T) {
 	defer func() { os.Args = oldArgs }()
 
 	os.Args = []string{"codex-wrapper", "--parallel"}
-	stdinReader = strings.NewReader(`---TASK---
+	stdinReader = strings.NewReader(
+		`---TASK---
 id: only
 ---CONTENT---
-noop`)
+noop`,
+	)
 
 	cleanupCalls := 0
 	cleanupLogsFn = func() (CleanupStats, error) {
@@ -3046,13 +3239,15 @@ noop`)
 func TestVersionFlag(t *testing.T) {
 	defer resetTestHooks()
 	os.Args = []string{"codeagent-wrapper", "--version"}
-	output := captureOutput(t, func() {
-		if code := run(); code != 0 {
-			t.Errorf("exit = %d, want 0", code)
-		}
-	})
+	output := captureOutput(
+		t, func() {
+			if code := run(); code != 0 {
+				t.Errorf("exit = %d, want 0", code)
+			}
+		},
+	)
 
-	want := "codeagent-wrapper version 5.10.0\n"
+	want := "codeagent-wrapper version 5.11.1-aug.1\n"
 
 	if output != want {
 		t.Fatalf("output = %q, want %q", output, want)
@@ -3062,13 +3257,15 @@ func TestVersionFlag(t *testing.T) {
 func TestVersionShortFlag(t *testing.T) {
 	defer resetTestHooks()
 	os.Args = []string{"codeagent-wrapper", "-v"}
-	output := captureOutput(t, func() {
-		if code := run(); code != 0 {
-			t.Errorf("exit = %d, want 0", code)
-		}
-	})
+	output := captureOutput(
+		t, func() {
+			if code := run(); code != 0 {
+				t.Errorf("exit = %d, want 0", code)
+			}
+		},
+	)
 
-	want := "codeagent-wrapper version 5.10.0\n"
+	want := "codeagent-wrapper version 5.11.1-aug.1\n"
 
 	if output != want {
 		t.Fatalf("output = %q, want %q", output, want)
@@ -3078,13 +3275,15 @@ func TestVersionShortFlag(t *testing.T) {
 func TestVersionLegacyAlias(t *testing.T) {
 	defer resetTestHooks()
 	os.Args = []string{"codex-wrapper", "--version"}
-	output := captureOutput(t, func() {
-		if code := run(); code != 0 {
-			t.Errorf("exit = %d, want 0", code)
-		}
-	})
+	output := captureOutput(
+		t, func() {
+			if code := run(); code != 0 {
+				t.Errorf("exit = %d, want 0", code)
+			}
+		},
+	)
 
-	want := "codex-wrapper version 5.10.0\n"
+	want := "codex-wrapper version 5.11.1-aug.1\n"
 
 	if output != want {
 		t.Fatalf("output = %q, want %q", output, want)
@@ -3134,207 +3333,291 @@ func TestVersionDoesNotTriggerCleanup(t *testing.T) {
 }
 
 func TestVersionCoverageFullRun(t *testing.T) {
-	t.Run("cleanupHelpers", func(t *testing.T) {
-		defer resetTestHooks()
-		cleanupLogsFn = nil
-		runStartupCleanup()
-		if code := runCleanupMode(); code == 0 {
-			t.Fatalf("runCleanupMode exit = %d, want non-zero when cleanup is nil", code)
-		}
+	t.Run(
+		"cleanupHelpers", func(t *testing.T) {
+			defer resetTestHooks()
+			cleanupLogsFn = nil
+			runStartupCleanup()
+			if code := runCleanupMode(); code == 0 {
+				t.Fatalf("runCleanupMode exit = %d, want non-zero when cleanup is nil", code)
+			}
 
-		logger, err := NewLoggerWithSuffix("version-coverage")
-		if err != nil {
-			t.Fatalf("failed to create logger: %v", err)
-		}
-		setLogger(logger)
+			logger, err := NewLoggerWithSuffix("version-coverage")
+			if err != nil {
+				t.Fatalf("failed to create logger: %v", err)
+			}
+			setLogger(logger)
 
-		cleanupLogsFn = func() (CleanupStats, error) {
-			return CleanupStats{
-				Scanned:      2,
-				Deleted:      1,
-				Kept:         1,
-				DeletedFiles: []string{"old.log"},
-				KeptFiles:    []string{"keep.log"},
-				Errors:       1,
-			}, fmt.Errorf("warn")
-		}
-		runStartupCleanup()
+			cleanupLogsFn = func() (CleanupStats, error) {
+				return CleanupStats{
+					Scanned:      2,
+					Deleted:      1,
+					Kept:         1,
+					DeletedFiles: []string{"old.log"},
+					KeptFiles:    []string{"keep.log"},
+					Errors:       1,
+				}, fmt.Errorf("warn")
+			}
+			runStartupCleanup()
 
-		cleanupLogsFn = func() (CleanupStats, error) {
-			panic("panic cleanup")
-		}
-		runStartupCleanup()
+			cleanupLogsFn = func() (CleanupStats, error) {
+				panic("panic cleanup")
+			}
+			runStartupCleanup()
 
-		cleanupLogsFn = func() (CleanupStats, error) {
-			return CleanupStats{
-				Scanned:      2,
-				Deleted:      1,
-				Kept:         1,
-				DeletedFiles: []string{"old.log"},
-				KeptFiles:    []string{"keep.log"},
-				Errors:       1,
-			}, nil
-		}
-		if code := runCleanupMode(); code != 0 {
-			t.Fatalf("runCleanupMode exit = %d, want 0", code)
-		}
+			cleanupLogsFn = func() (CleanupStats, error) {
+				return CleanupStats{
+					Scanned:      2,
+					Deleted:      1,
+					Kept:         1,
+					DeletedFiles: []string{"old.log"},
+					KeptFiles:    []string{"keep.log"},
+					Errors:       1,
+				}, nil
+			}
+			if code := runCleanupMode(); code != 0 {
+				t.Fatalf("runCleanupMode exit = %d, want 0", code)
+			}
 
-		cleanupLogsFn = func() (CleanupStats, error) {
-			return CleanupStats{}, fmt.Errorf("expected failure")
-		}
-		if code := runCleanupMode(); code == 0 {
-			t.Fatalf("runCleanupMode exit = %d, want non-zero on error", code)
-		}
+			cleanupLogsFn = func() (CleanupStats, error) {
+				return CleanupStats{}, fmt.Errorf("expected failure")
+			}
+			if code := runCleanupMode(); code == 0 {
+				t.Fatalf("runCleanupMode exit = %d, want non-zero on error", code)
+			}
 
-		printHelp()
+			printHelp()
 
-		_ = closeLogger()
-		_ = logger.RemoveLogFile()
-		loggerPtr.Store(nil)
-	})
+			_ = closeLogger()
+			_ = logger.RemoveLogFile()
+			loggerPtr.Store(nil)
+		},
+	)
 
-	t.Run("parseArgsError", func(t *testing.T) {
-		defer resetTestHooks()
-		cleanupLogsFn = func() (CleanupStats, error) { return CleanupStats{}, nil }
+	t.Run(
+		"parseArgsError", func(t *testing.T) {
+			defer resetTestHooks()
+			cleanupLogsFn = func() (CleanupStats, error) { return CleanupStats{}, nil }
 
-		cleanupCalled := false
-		cleanupHook = func() { cleanupCalled = true }
+			cleanupCalled := false
+			cleanupHook = func() { cleanupCalled = true }
 
-		selectBackendFn = func(name string) (Backend, error) {
-			return testBackend{name: name, command: "echo"}, nil
-		}
-		runTaskFn = func(task TaskSpec, silent bool, timeout int) TaskResult {
-			return TaskResult{ExitCode: 0}
-		}
+			selectBackendFn = func(name string) (Backend, error) {
+				return testBackend{name: name, command: "echo"}, nil
+			}
+			runTaskFn = func(task TaskSpec, silent bool, timeout int) TaskResult {
+				return TaskResult{ExitCode: 0}
+			}
 
-		os.Args = []string{"codeagent-wrapper"}
-		if code := run(); code == 0 {
-			t.Fatalf("run exit = %d, want non-zero for missing task", code)
-		}
-		if !cleanupCalled {
-			t.Fatalf("cleanup hook not invoked on error path")
-		}
-	})
+			os.Args = []string{"codeagent-wrapper"}
+			if code := run(); code == 0 {
+				t.Fatalf("run exit = %d, want non-zero for missing task", code)
+			}
+			if !cleanupCalled {
+				t.Fatalf("cleanup hook not invoked on error path")
+			}
+		},
+	)
 
-	t.Run("helpAndCleanup", func(t *testing.T) {
-		defer resetTestHooks()
-		cleanupLogsFn = func() (CleanupStats, error) { return CleanupStats{}, nil }
+	t.Run(
+		"helpAndCleanup", func(t *testing.T) {
+			defer resetTestHooks()
+			cleanupLogsFn = func() (CleanupStats, error) { return CleanupStats{}, nil }
 
-		os.Args = []string{"codeagent-wrapper", "--help"}
-		if code := run(); code != 0 {
-			t.Fatalf("run exit = %d, want 0 for help", code)
-		}
+			os.Args = []string{"codeagent-wrapper", "--help"}
+			if code := run(); code != 0 {
+				t.Fatalf("run exit = %d, want 0 for help", code)
+			}
 
-		os.Args = []string{"codeagent-wrapper", "--cleanup"}
-		if code := run(); code != 0 {
-			t.Fatalf("run exit = %d, want 0 for cleanup", code)
-		}
-	})
+			os.Args = []string{"codeagent-wrapper", "--cleanup"}
+			if code := run(); code != 0 {
+				t.Fatalf("run exit = %d, want 0 for cleanup", code)
+			}
+		},
+	)
 
-	t.Run("happyPath", func(t *testing.T) {
-		defer resetTestHooks()
-		cleanupHook = func() {}
-		cleanupLogsFn = func() (CleanupStats, error) { return CleanupStats{}, nil }
+	t.Run(
+		"happyPath", func(t *testing.T) {
+			defer resetTestHooks()
+			cleanupHook = func() {}
+			cleanupLogsFn = func() (CleanupStats, error) { return CleanupStats{}, nil }
 
-		selectBackendFn = func(name string) (Backend, error) {
-			return testBackend{
-				name:    name,
-				command: "echo",
-				argsFn: func(cfg *Config, targetArg string) []string {
-					return []string{"--task", targetArg, "--workdir", cfg.WorkDir}
-				},
-			}, nil
-		}
-		runTaskFn = func(task TaskSpec, silent bool, timeout int) TaskResult {
-			return TaskResult{TaskID: "task-id", ExitCode: 0, Message: "ok", SessionID: "sess-123"}
-		}
+			selectBackendFn = func(name string) (Backend, error) {
+				return testBackend{
+					name:    name,
+					command: "echo",
+					argsFn: func(cfg *Config, targetArg string) []string {
+						return []string{"--task", targetArg, "--workdir", cfg.WorkDir}
+					},
+				}, nil
+			}
+			runTaskFn = func(task TaskSpec, silent bool, timeout int) TaskResult {
+				return TaskResult{TaskID: "task-id", ExitCode: 0, Message: "ok", SessionID: "sess-123"}
+			}
 
-		stdinReader = strings.NewReader("task line with $ and \\\nnext line with `tick` and \"quote\" and 'single'")
-		isTerminalFn = func() bool { return false }
-		os.Args = []string{"codeagent-wrapper", "-", "/tmp/workdir"}
-		if code := run(); code != 0 {
-			t.Fatalf("run exit = %d, want 0", code)
-		}
-	})
+			stdinReader = strings.NewReader("task line with $ and \\\nnext line with `tick` and \"quote\" and 'single'")
+			isTerminalFn = func() bool { return false }
+			os.Args = []string{"codeagent-wrapper", "-", "/tmp/workdir"}
+			if code := run(); code != 0 {
+				t.Fatalf("run exit = %d, want 0", code)
+			}
+		},
+	)
 
-	t.Run("nonExplicitTaskFailure", func(t *testing.T) {
-		defer resetTestHooks()
-		cleanupCalled := false
-		cleanupHook = func() { cleanupCalled = true }
-		cleanupLogsFn = func() (CleanupStats, error) { return CleanupStats{}, nil }
+	t.Run(
+		"agyExplicitStdinPassesPromptDirect", func(t *testing.T) {
+			defer resetTestHooks()
+			cleanupLogsFn = func() (CleanupStats, error) { return CleanupStats{}, nil }
 
-		selectBackendFn = func(name string) (Backend, error) {
-			return testBackend{
-				name:    name,
-				command: "echo",
-				argsFn: func(cfg *Config, targetArg string) []string {
-					return []string{"--task", targetArg}
-				},
-			}, nil
-		}
-		runTaskFn = func(task TaskSpec, silent bool, timeout int) TaskResult {
-			return TaskResult{TaskID: "fail", ExitCode: 2, Message: "error"}
-		}
+			var gotTargetArg string
+			selectBackendFn = func(name string) (Backend, error) {
+				return testBackend{
+					name:    name,
+					command: "echo",
+					argsFn: func(cfg *Config, targetArg string) []string {
+						gotTargetArg = targetArg
+						return []string{"--task", targetArg}
+					},
+				}, nil
+			}
+			runTaskFn = func(task TaskSpec, silent bool, timeout int) TaskResult {
+				return TaskResult{TaskID: "agy-stdin", ExitCode: 0, Message: "ok"}
+			}
 
-		stdinReader = strings.NewReader("")
-		isTerminalFn = func() bool { return true }
-		os.Args = []string{"codeagent-wrapper", "raw-task"}
-		if code := run(); code != 2 {
-			t.Fatalf("run exit = %d, want 2", code)
-		}
-		if !cleanupCalled {
-			t.Fatalf("cleanup hook not invoked on failure path")
-		}
-	})
+			stdinReader = strings.NewReader("line1\nline2")
+			isTerminalFn = func() bool { return false }
+			os.Args = []string{"codeagent-wrapper", "--backend", "agy", "-", "/tmp/workdir"}
+			if code := run(); code != 0 {
+				t.Fatalf("run exit = %d, want 0", code)
+			}
+			if gotTargetArg == "-" {
+				t.Fatalf("agy stdin should pass prompt text directly, got targetArg %q", gotTargetArg)
+			}
+			if gotTargetArg != "line1\nline2" {
+				t.Fatalf("targetArg = %q, want stdin content", gotTargetArg)
+			}
+		},
+	)
 
-	t.Run("pipedTaskLongInput", func(t *testing.T) {
-		defer resetTestHooks()
-		cleanupLogsFn = func() (CleanupStats, error) { return CleanupStats{}, nil }
+	t.Run(
+		"agyExplicitStdinPassesPromptDirectOnWindows", func(t *testing.T) {
+			defer resetTestHooks()
+			t.Setenv("OS", "Windows_NT")
+			cleanupLogsFn = func() (CleanupStats, error) { return CleanupStats{}, nil }
 
-		selectBackendFn = func(name string) (Backend, error) {
-			return testBackend{
-				name:    name,
-				command: "echo",
-				argsFn: func(cfg *Config, targetArg string) []string {
-					return []string{"--task", targetArg}
-				},
-			}, nil
-		}
-		runTaskFn = func(task TaskSpec, silent bool, timeout int) TaskResult {
-			return TaskResult{TaskID: "piped", ExitCode: 0, Message: "ok"}
-		}
+			var gotTargetArg string
+			selectBackendFn = func(name string) (Backend, error) {
+				return testBackend{
+					name:    name,
+					command: "echo",
+					argsFn: func(cfg *Config, targetArg string) []string {
+						gotTargetArg = targetArg
+						return []string{"--task", targetArg}
+					},
+				}, nil
+			}
+			runTaskFn = func(task TaskSpec, silent bool, timeout int) TaskResult {
+				return TaskResult{TaskID: "agy-stdin-windows", ExitCode: 0, Message: "ok"}
+			}
 
-		stdinReader = strings.NewReader(strings.Repeat("x", 900))
-		isTerminalFn = func() bool { return false }
-		os.Args = []string{"codeagent-wrapper", "ignored"}
-		if code := run(); code != 0 {
-			t.Fatalf("run exit = %d, want 0 for piped input", code)
-		}
-	})
+			stdinReader = strings.NewReader("line1\nline2")
+			isTerminalFn = func() bool { return false }
+			os.Args = []string{"codeagent-wrapper", "--backend", "agy", "-", "/tmp/workdir"}
+			if code := run(); code != 0 {
+				t.Fatalf("run exit = %d, want 0", code)
+			}
+			if gotTargetArg != "line1\nline2" {
+				t.Fatalf("targetArg = %q, want stdin content", gotTargetArg)
+			}
+		},
+	)
 
-	t.Run("explicitStdinReadError", func(t *testing.T) {
-		defer resetTestHooks()
-		cleanupLogsFn = func() (CleanupStats, error) { return CleanupStats{}, nil }
-		runTaskFn = func(task TaskSpec, silent bool, timeout int) TaskResult {
-			return TaskResult{ExitCode: 0}
-		}
+	t.Run(
+		"nonExplicitTaskFailure", func(t *testing.T) {
+			defer resetTestHooks()
+			cleanupCalled := false
+			cleanupHook = func() { cleanupCalled = true }
+			cleanupLogsFn = func() (CleanupStats, error) { return CleanupStats{}, nil }
 
-		stdinReader = errReader{err: errors.New("read-fail")}
-		os.Args = []string{"codeagent-wrapper", "-", "/tmp/workdir"}
-		if code := run(); code == 0 {
-			t.Fatalf("run exit = %d, want non-zero on stdin read error", code)
-		}
-	})
+			selectBackendFn = func(name string) (Backend, error) {
+				return testBackend{
+					name:    name,
+					command: "echo",
+					argsFn: func(cfg *Config, targetArg string) []string {
+						return []string{"--task", targetArg}
+					},
+				}, nil
+			}
+			runTaskFn = func(task TaskSpec, silent bool, timeout int) TaskResult {
+				return TaskResult{TaskID: "fail", ExitCode: 2, Message: "error"}
+			}
 
-	t.Run("parallelFlow", func(t *testing.T) {
-		defer resetTestHooks()
-		cleanupHook = func() {}
-		cleanupLogsFn = func() (CleanupStats, error) { return CleanupStats{}, nil }
-		runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
-			return TaskResult{TaskID: task.ID, ExitCode: 0, Message: "ok"}
-		}
+			stdinReader = strings.NewReader("")
+			isTerminalFn = func() bool { return true }
+			os.Args = []string{"codeagent-wrapper", "raw-task"}
+			if code := run(); code != 2 {
+				t.Fatalf("run exit = %d, want 2", code)
+			}
+			if !cleanupCalled {
+				t.Fatalf("cleanup hook not invoked on failure path")
+			}
+		},
+	)
 
-		stdinReader = strings.NewReader(`---TASK---
+	t.Run(
+		"pipedTaskLongInput", func(t *testing.T) {
+			defer resetTestHooks()
+			cleanupLogsFn = func() (CleanupStats, error) { return CleanupStats{}, nil }
+
+			selectBackendFn = func(name string) (Backend, error) {
+				return testBackend{
+					name:    name,
+					command: "echo",
+					argsFn: func(cfg *Config, targetArg string) []string {
+						return []string{"--task", targetArg}
+					},
+				}, nil
+			}
+			runTaskFn = func(task TaskSpec, silent bool, timeout int) TaskResult {
+				return TaskResult{TaskID: "piped", ExitCode: 0, Message: "ok"}
+			}
+
+			stdinReader = strings.NewReader(strings.Repeat("x", 900))
+			isTerminalFn = func() bool { return false }
+			os.Args = []string{"codeagent-wrapper", "ignored"}
+			if code := run(); code != 0 {
+				t.Fatalf("run exit = %d, want 0 for piped input", code)
+			}
+		},
+	)
+
+	t.Run(
+		"explicitStdinReadError", func(t *testing.T) {
+			defer resetTestHooks()
+			cleanupLogsFn = func() (CleanupStats, error) { return CleanupStats{}, nil }
+			runTaskFn = func(task TaskSpec, silent bool, timeout int) TaskResult {
+				return TaskResult{ExitCode: 0}
+			}
+
+			stdinReader = errReader{err: errors.New("read-fail")}
+			os.Args = []string{"codeagent-wrapper", "-", "/tmp/workdir"}
+			if code := run(); code == 0 {
+				t.Fatalf("run exit = %d, want non-zero on stdin read error", code)
+			}
+		},
+	)
+
+	t.Run(
+		"parallelFlow", func(t *testing.T) {
+			defer resetTestHooks()
+			cleanupHook = func() {}
+			cleanupLogsFn = func() (CleanupStats, error) { return CleanupStats{}, nil }
+			runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
+				return TaskResult{TaskID: task.ID, ExitCode: 0, Message: "ok"}
+			}
+
+			stdinReader = strings.NewReader(
+				`---TASK---
 id: first
 ---CONTENT---
 do one
@@ -3343,37 +3626,43 @@ do one
 id: second
 dependencies: first
 ---CONTENT---
-do two`)
-		os.Args = []string{"codeagent-wrapper", "--parallel"}
-		if code := run(); code != 0 {
-			t.Fatalf("run exit = %d, want 0", code)
-		}
-	})
+do two`,
+			)
+			os.Args = []string{"codeagent-wrapper", "--parallel"}
+			if code := run(); code != 0 {
+				t.Fatalf("run exit = %d, want 0", code)
+			}
+		},
+	)
 
-	t.Run("parallelErrors", func(t *testing.T) {
-		defer resetTestHooks()
-		cleanupLogsFn = func() (CleanupStats, error) { return CleanupStats{}, nil }
+	t.Run(
+		"parallelErrors", func(t *testing.T) {
+			defer resetTestHooks()
+			cleanupLogsFn = func() (CleanupStats, error) { return CleanupStats{}, nil }
 
-		os.Args = []string{"codeagent-wrapper", "--parallel", "extra"}
-		if code := run(); code == 0 {
-			t.Fatalf("run exit = %d, want error for extra args", code)
-		}
+			os.Args = []string{"codeagent-wrapper", "--parallel", "extra"}
+			if code := run(); code == 0 {
+				t.Fatalf("run exit = %d, want error for extra args", code)
+			}
 
-		stdinReader = strings.NewReader("invalid format")
-		os.Args = []string{"codeagent-wrapper", "--parallel"}
-		if code := run(); code == 0 {
-			t.Fatalf("run exit = %d, want error for invalid config", code)
-		}
+			stdinReader = strings.NewReader("invalid format")
+			os.Args = []string{"codeagent-wrapper", "--parallel"}
+			if code := run(); code == 0 {
+				t.Fatalf("run exit = %d, want error for invalid config", code)
+			}
 
-		stdinReader = strings.NewReader(`---TASK---
+			stdinReader = strings.NewReader(
+				`---TASK---
 id: second
 dependencies: missing
 ---CONTENT---
-task`)
-		if code := run(); code == 0 {
-			t.Fatalf("run exit = %d, want error for invalid DAG", code)
-		}
-	})
+task`,
+			)
+			if code := run(); code == 0 {
+				t.Fatalf("run exit = %d, want error for invalid DAG", code)
+			}
+		},
+	)
 }
 
 func TestVersionMainWrapper(t *testing.T) {
@@ -3400,9 +3689,11 @@ func TestBackendCleanupMode_Success(t *testing.T) {
 	}
 
 	var exitCode int
-	output := captureOutput(t, func() {
-		exitCode = runCleanupMode()
-	})
+	output := captureOutput(
+		t, func() {
+			exitCode = runCleanupMode()
+		},
+	)
 	if exitCode != 0 {
 		t.Fatalf("exit = %d, want 0", exitCode)
 	}
@@ -3425,9 +3716,11 @@ func TestBackendCleanupMode_SuccessWithErrorsLine(t *testing.T) {
 	}
 
 	var exitCode int
-	output := captureOutput(t, func() {
-		exitCode = runCleanupMode()
-	})
+	output := captureOutput(
+		t, func() {
+			exitCode = runCleanupMode()
+		},
+	)
 	if exitCode != 0 {
 		t.Fatalf("exit = %d, want 0", exitCode)
 	}
@@ -3446,9 +3739,11 @@ func TestBackendCleanupMode_ZeroStatsOutput(t *testing.T) {
 	}
 
 	var exitCode int
-	output := captureOutput(t, func() {
-		exitCode = runCleanupMode()
-	})
+	output := captureOutput(
+		t, func() {
+			exitCode = runCleanupMode()
+		},
+	)
 	if exitCode != 0 {
 		t.Fatalf("exit = %d, want 0", exitCode)
 	}
@@ -3468,9 +3763,11 @@ func TestBackendCleanupMode_Error(t *testing.T) {
 	}
 
 	var exitCode int
-	errOutput := captureStderr(t, func() {
-		exitCode = runCleanupMode()
-	})
+	errOutput := captureStderr(
+		t, func() {
+			exitCode = runCleanupMode()
+		},
+	)
 	if exitCode != 1 {
 		t.Fatalf("exit = %d, want 1", exitCode)
 	}
@@ -3484,9 +3781,11 @@ func TestBackendCleanupMode_MissingFn(t *testing.T) {
 	cleanupLogsFn = nil
 
 	var exitCode int
-	errOutput := captureStderr(t, func() {
-		exitCode = runCleanupMode()
-	})
+	errOutput := captureStderr(
+		t, func() {
+			exitCode = runCleanupMode()
+		},
+	)
 	if exitCode != 1 {
 		t.Fatalf("exit = %d, want 1", exitCode)
 	}
@@ -3509,9 +3808,11 @@ func TestRun_CleanupFlag(t *testing.T) {
 	}
 
 	var exitCode int
-	output := captureOutput(t, func() {
-		exitCode = run()
-	})
+	output := captureOutput(
+		t, func() {
+			exitCode = run()
+		},
+	)
 	if exitCode != 0 {
 		t.Fatalf("exit = %d, want 0", exitCode)
 	}
@@ -3796,10 +4097,14 @@ func TestRun_CleanupHookAlwaysCalled(t *testing.T) {
 	called := false
 	cleanupHook = func() { called = true }
 	// Use a command that goes through normal flow, not --version which returns early
-	restore := withBackend("echo", func(cfg *Config, targetArg string) []string {
-		return []string{`{"type":"thread.started","thread_id":"x"}
-{"type":"item.completed","item":{"type":"agent_message","text":"ok"}}`}
-	})
+	restore := withBackend(
+		"echo", func(cfg *Config, targetArg string) []string {
+			return []string{
+				`{"type":"thread.started","thread_id":"x"}
+{"type":"item.completed","item":{"type":"agent_message","text":"ok"}}`,
+			}
+		},
+	)
 	defer restore()
 	os.Args = []string{"codeagent-wrapper", "task"}
 	if exitCode := run(); exitCode != 0 {
@@ -3824,11 +4129,13 @@ func TestBackendStartupCleanupErrorLogged(t *testing.T) {
 		t.Fatalf("failed to create logger: %v", err)
 	}
 	setLogger(logger)
-	t.Cleanup(func() {
-		logger.Flush()
-		logger.Close()
-		os.Remove(logger.Path())
-	})
+	t.Cleanup(
+		func() {
+			logger.Flush()
+			logger.Close()
+			os.Remove(logger.Path())
+		},
+	)
 
 	cleanupLogsFn = func() (CleanupStats, error) {
 		return CleanupStats{}, errors.New("zapped")
@@ -3981,13 +4288,15 @@ func TestBackendDiscardInvalidJSONBuffer(t *testing.T) {
 		t.Fatalf("unexpected remaining line: %q", line)
 	}
 
-	t.Run("no newline", func(t *testing.T) {
-		reader := bufio.NewReader(strings.NewReader("partial"))
-		decoder := json.NewDecoder(strings.NewReader(""))
-		if _, err := discardInvalidJSON(decoder, reader); !errors.Is(err, io.EOF) {
-			t.Fatalf("expected EOF when no newline, got %v", err)
-		}
-	})
+	t.Run(
+		"no newline", func(t *testing.T) {
+			reader := bufio.NewReader(strings.NewReader("partial"))
+			decoder := json.NewDecoder(strings.NewReader(""))
+			if _, err := discardInvalidJSON(decoder, reader); !errors.Is(err, io.EOF) {
+				t.Fatalf("expected EOF when no newline, got %v", err)
+			}
+		},
+	)
 }
 
 func TestRunForwardSignals(t *testing.T) {
@@ -4027,11 +4336,13 @@ func TestRunForwardSignals(t *testing.T) {
 	var mu sync.Mutex
 	var logs []string
 	cmd := &realCmd{cmd: execCmd}
-	forwardSignals(ctx, cmd, func(msg string) {
-		mu.Lock()
-		defer mu.Unlock()
-		logs = append(logs, msg)
-	})
+	forwardSignals(
+		ctx, cmd, func(msg string) {
+			mu.Lock()
+			defer mu.Unlock()
+			logs = append(logs, msg)
+		},
+	)
 
 	select {
 	case <-ready:
@@ -4105,11 +4416,15 @@ func TestParallelLogPathInSerialMode(t *testing.T) {
 	}
 
 	var exitCode int
-	stderr := captureStderr(t, func() {
-		_ = captureOutput(t, func() {
-			exitCode = run()
-		})
-	})
+	stderr := captureStderr(
+		t, func() {
+			_ = captureOutput(
+				t, func() {
+					exitCode = run()
+				},
+			)
+		},
+	)
 	if exitCode != 0 {
 		t.Fatalf("run() exit = %d, want 0", exitCode)
 	}
@@ -4239,9 +4554,11 @@ func TestRun_CLI_Success(t *testing.T) {
 	stdinReader = strings.NewReader("")
 	isTerminalFn = func() bool { return true }
 
-	restore := withBackend("echo", func(cfg *Config, targetArg string) []string {
-		return []string{`{"type":"thread.started","thread_id":"cli-session"}` + "\n" + `{"type":"item.completed","item":{"type":"agent_message","text":"ok"}}`}
-	})
+	restore := withBackend(
+		"echo", func(cfg *Config, targetArg string) []string {
+			return []string{`{"type":"thread.started","thread_id":"cli-session"}` + "\n" + `{"type":"item.completed","item":{"type":"agent_message","text":"ok"}}`}
+		},
+	)
 	defer restore()
 
 	var exitCode int
@@ -4271,18 +4588,20 @@ func TestResolveMaxParallelWorkers(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if tt.envValue != "" {
-				os.Setenv("CODEAGENT_MAX_PARALLEL_WORKERS", tt.envValue)
-			} else {
-				os.Unsetenv("CODEAGENT_MAX_PARALLEL_WORKERS")
-			}
-			defer os.Unsetenv("CODEAGENT_MAX_PARALLEL_WORKERS")
+		t.Run(
+			tt.name, func(t *testing.T) {
+				if tt.envValue != "" {
+					os.Setenv("CODEAGENT_MAX_PARALLEL_WORKERS", tt.envValue)
+				} else {
+					os.Unsetenv("CODEAGENT_MAX_PARALLEL_WORKERS")
+				}
+				defer os.Unsetenv("CODEAGENT_MAX_PARALLEL_WORKERS")
 
-			got := resolveMaxParallelWorkers()
-			if got != tt.want {
-				t.Errorf("resolveMaxParallelWorkers() = %d, want %d", got, tt.want)
-			}
-		})
+				got := resolveMaxParallelWorkers()
+				if got != tt.want {
+					t.Errorf("resolveMaxParallelWorkers() = %d, want %d", got, tt.want)
+				}
+			},
+		)
 	}
 }

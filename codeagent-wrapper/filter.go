@@ -8,7 +8,7 @@ import (
 
 // noisePatterns contains stderr patterns to filter for all backends
 var noisePatterns = []string{
-	// Gemini specific
+	// CLI startup noise
 	"[STARTUP]",
 	"Session cleanup disabled",
 	"Warning:",

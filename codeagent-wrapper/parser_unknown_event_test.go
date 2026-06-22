@@ -7,12 +7,14 @@ import (
 )
 
 func TestBackendParseJSONStream_UnknownEventsAreSilent(t *testing.T) {
-	input := strings.Join([]string{
-		`{"type":"turn.started"}`,
-		`{"type":"assistant","text":"hi"}`,
-		`{"type":"user","text":"yo"}`,
-		`{"type":"item.completed","item":{"type":"agent_message","text":"ok"}}`,
-	}, "\n")
+	input := strings.Join(
+		[]string{
+			`{"type":"turn.started"}`,
+			`{"type":"assistant","text":"hi"}`,
+			`{"type":"user","text":"yo"}`,
+			`{"type":"item.completed","item":{"type":"agent_message","text":"ok"}}`,
+		}, "\n",
+	)
 
 	var infos []string
 	infoFn := func(msg string) { infos = append(infos, msg) }
@@ -33,15 +35,17 @@ func TestBackendParseJSONStream_UnknownEventsAreSilent(t *testing.T) {
 }
 
 func TestParseJSONStreamInternalWithContent_EmitsProgressLines(t *testing.T) {
-	input := strings.Join([]string{
-		`{"type":"thread.started","thread_id":"tid-123"}`,
-		`{"type":"turn.started"}`,
-		`{"type":"item.completed","item":{"type":"reasoning","text":"Checking files and APIs"}}`,
-		`{"type":"item.completed","item":{"type":"mcp_tool_call"}}`,
-		`{"type":"item.completed","item":{"type":"command_execution","command":"echo hi","aggregated_output":"hi\n","exit_code":0}}`,
-		`{"type":"item.completed","item":{"type":"agent_message","text":"Done with changes"}}`,
-		`{"type":"turn.completed","thread_id":"tid-123"}`,
-	}, "\n")
+	input := strings.Join(
+		[]string{
+			`{"type":"thread.started","thread_id":"tid-123"}`,
+			`{"type":"turn.started"}`,
+			`{"type":"item.completed","item":{"type":"reasoning","text":"Checking files and APIs"}}`,
+			`{"type":"item.completed","item":{"type":"mcp_tool_call"}}`,
+			`{"type":"item.completed","item":{"type":"command_execution","command":"echo hi","aggregated_output":"hi\n","exit_code":0}}`,
+			`{"type":"item.completed","item":{"type":"agent_message","text":"Done with changes"}}`,
+			`{"type":"turn.completed","thread_id":"tid-123"}`,
+		}, "\n",
+	)
 
 	var progress []string
 	message, threadID := parseJSONStreamInternalWithContent(
@@ -112,4 +116,3 @@ func TestParseArgs_ParsesProgressFlag(t *testing.T) {
 		t.Fatalf("unexpected cfg: %+v", cfg)
 	}
 }
-

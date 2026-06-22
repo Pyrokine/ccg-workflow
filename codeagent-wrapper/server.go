@@ -117,7 +117,7 @@ func openBrowser(url string) {
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "darwin":
-		cmd = exec.Command("open", url)
+		cmd = exec.Command("open", "-g", url)
 	case "linux":
 		cmd = exec.Command("xdg-open", url)
 	case "windows":
@@ -240,17 +240,18 @@ func (ws *WebServer) generateIndexHTML() string {
 		iconBg = "#238636"
 		titleColor = "#3fb950"
 		iconText = "CDX"
-	case "gemini":
+	case "antigravity":
 		iconBg = "#8957e5"
 		titleColor = "#a371f7"
-		iconText = "GEM"
+		iconText = "AGY"
 	case "claude":
 		iconBg = "#d97706"
 		titleColor = "#fbbf24"
 		iconText = "CLD"
 	}
 
-	return fmt.Sprintf(`<!DOCTYPE html>
+	return fmt.Sprintf(
+		`<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -463,7 +464,8 @@ func (ws *WebServer) generateIndexHTML() string {
         connectToStream();
     </script>
 </body>
-</html>`, backend, iconBg, titleColor, iconText, backend)
+</html>`, backend, iconBg, titleColor, iconText, backend,
+	)
 }
 
 // handleSessions returns all active sessions
@@ -476,7 +478,9 @@ func (ws *WebServer) handleSessions(w http.ResponseWriter, r *http.Request) {
 	ws.mu.RUnlock()
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(sessions)
+	if err := json.NewEncoder(w).Encode(sessions); err != nil {
+		logWarn(fmt.Sprintf("encode sessions response failed: %v", err))
+	}
 }
 
 // handleStream handles SSE connections for a session

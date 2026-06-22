@@ -76,42 +76,44 @@ func injectRoleFile(taskText string) (string, error) {
 	// Match "ROLE_FILE: <path>" at the beginning of a line
 	roleFilePattern := regexp.MustCompile(`(?m)^ROLE_FILE:\s*(.+)$`)
 
-	result := roleFilePattern.ReplaceAllStringFunc(taskText, func(match string) string {
-		// Extract file path
-		submatches := roleFilePattern.FindStringSubmatch(match)
-		if len(submatches) < 2 {
-			logWarn(fmt.Sprintf("Invalid ROLE_FILE format: %s", match))
-			return match
-		}
-
-		filePath := strings.TrimSpace(submatches[1])
-
-		// Expand ~ to home directory
-		if strings.HasPrefix(filePath, "~/") {
-			home, err := os.UserHomeDir()
-			if err != nil {
-				logWarn(fmt.Sprintf("Failed to get home directory: %v", err))
+	result := roleFilePattern.ReplaceAllStringFunc(
+		taskText, func(match string) string {
+			// Extract file path
+			submatches := roleFilePattern.FindStringSubmatch(match)
+			if len(submatches) < 2 {
+				logWarn(fmt.Sprintf("Invalid ROLE_FILE format: %s", match))
 				return match
 			}
-			filePath = filepath.Join(home, filePath[2:])
-		}
 
-		// Windows-specific: Convert Git Bash paths to native Windows paths
-		// Only applies when running on Windows (isWindows() check)
-		if isWindows() {
-			filePath = normalizeWindowsPath(filePath)
-		}
+			filePath := strings.TrimSpace(submatches[1])
 
-		// Read file content
-		content, err := os.ReadFile(filePath)
-		if err != nil {
-			logWarn(fmt.Sprintf("Failed to read ROLE_FILE '%s': %v", filePath, err))
-			return match // Keep original line if file read fails
-		}
+			// Expand ~ to home directory
+			if strings.HasPrefix(filePath, "~/") {
+				home, err := os.UserHomeDir()
+				if err != nil {
+					logWarn(fmt.Sprintf("Failed to get home directory: %v", err))
+					return match
+				}
+				filePath = filepath.Join(home, filePath[2:])
+			}
 
-		logInfo(fmt.Sprintf("Injected ROLE_FILE: %s (%d bytes)", filePath, len(content)))
-		return string(content)
-	})
+			// Windows-specific: Convert Git Bash paths to native Windows paths
+			// Only applies when running on Windows (isWindows() check)
+			if isWindows() {
+				filePath = normalizeWindowsPath(filePath)
+			}
+
+			// Read file content
+			content, err := os.ReadFile(filePath)
+			if err != nil {
+				logWarn(fmt.Sprintf("Failed to read ROLE_FILE '%s': %v", filePath, err))
+				return match // Keep original line if file read fails
+			}
+
+			logInfo(fmt.Sprintf("Injected ROLE_FILE: %s (%d bytes)", filePath, len(content)))
+			return string(content)
+		},
+	)
 
 	return result, nil
 }
@@ -385,7 +387,9 @@ func extractCoverageFromLines(lines []string) string {
 	if end == 1 {
 		trimmed := strings.TrimSpace(lines[0])
 		if strings.HasSuffix(trimmed, "%") {
-			if num, err := strconv.ParseFloat(strings.TrimSuffix(trimmed, "%"), 64); err == nil && num >= 0 && num <= 100 {
+			if num, err := strconv.ParseFloat(
+				strings.TrimSuffix(trimmed, "%"), 64,
+			); err == nil && num >= 0 && num <= 100 {
 				return trimmed
 			}
 		}
@@ -469,7 +473,10 @@ func extractFilesChangedFromLines(lines []string) []string {
 
 	var files []string
 	seen := make(map[string]bool)
-	exts := []string{".ts", ".tsx", ".js", ".jsx", ".go", ".py", ".rs", ".java", ".vue", ".css", ".scss", ".md", ".json", ".yaml", ".yml", ".toml"}
+	exts := []string{
+		".ts", ".tsx", ".js", ".jsx", ".go", ".py", ".rs", ".java", ".vue", ".css", ".scss", ".md", ".json", ".yaml",
+		".yml", ".toml",
+	}
 
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
@@ -636,8 +643,10 @@ func extractKeyOutputFromLines(lines []string, maxLen int) string {
 			strings.HasPrefix(lower, "implemented:") || strings.HasPrefix(lower, "added:") ||
 			strings.HasPrefix(lower, "created:") || strings.HasPrefix(lower, "fixed:") {
 			content := line
-			for _, prefix := range []string{"Summary:", "Completed:", "Implemented:", "Added:", "Created:", "Fixed:",
-				"summary:", "completed:", "implemented:", "added:", "created:", "fixed:"} {
+			for _, prefix := range []string{
+				"Summary:", "Completed:", "Implemented:", "Added:", "Created:", "Fixed:",
+				"summary:", "completed:", "implemented:", "added:", "created:", "fixed:",
+			} {
 				content = strings.TrimPrefix(content, prefix)
 			}
 			content = strings.TrimSpace(content)

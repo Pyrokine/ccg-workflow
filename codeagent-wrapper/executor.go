@@ -356,7 +356,12 @@ func executeConcurrent(layers [][]TaskSpec, timeout int) []TaskResult {
 	return executeConcurrentWithContext(context.Background(), layers, timeout, maxWorkers)
 }
 
-func executeConcurrentWithContext(parentCtx context.Context, layers [][]TaskSpec, timeout int, maxWorkers int) []TaskResult {
+func executeConcurrentWithContext(
+	parentCtx context.Context,
+	layers [][]TaskSpec,
+	timeout int,
+	maxWorkers int,
+) []TaskResult {
 	totalTasks := 0
 	for _, layer := range layers {
 		totalTasks += len(layer)
@@ -456,7 +461,10 @@ func executeConcurrentWithContext(parentCtx context.Context, layers [][]TaskSpec
 				handle := taskLoggerHandle{}
 				defer func() {
 					if r := recover(); r != nil {
-						resultsCh <- TaskResult{TaskID: ts.ID, ExitCode: 1, Error: fmt.Sprintf("panic: %v", r), LogPath: taskLogPath, sharedLog: handle.shared}
+						resultsCh <- TaskResult{
+							TaskID: ts.ID, ExitCode: 1, Error: fmt.Sprintf("panic: %v", r), LogPath: taskLogPath,
+							sharedLog: handle.shared,
+						}
 					}
 				}()
 
@@ -722,7 +730,11 @@ func generateFinalOutputWithMode(results []TaskResult, summaryOnly bool) string 
 			taskID := sanitizeOutput(res.TaskID)
 			sb.WriteString(fmt.Sprintf("--- Task: %s ---\n", taskID))
 			if res.Error != "" {
-				sb.WriteString(fmt.Sprintf("Status: FAILED (exit code %d)\nError: %s\n", res.ExitCode, sanitizeOutput(res.Error)))
+				sb.WriteString(
+					fmt.Sprintf(
+						"Status: FAILED (exit code %d)\nError: %s\n", res.ExitCode, sanitizeOutput(res.Error),
+					),
+				)
 			} else if res.ExitCode != 0 {
 				sb.WriteString(fmt.Sprintf("Status: FAILED (exit code %d)\n", res.ExitCode))
 			} else {
@@ -772,7 +784,7 @@ func buildCodexArgs(cfg *Config, targetArg string) []string {
 
 	args := []string{"e"}
 
-	// Default: auto-approve all operations (consistent with Gemini's -y behavior)
+	// Default: auto-approve all operations.
 	// Users can disable this by setting CODEX_REQUIRE_APPROVAL=true
 	if !envFlagEnabled("CODEX_REQUIRE_APPROVAL") {
 		args = append(args, "--dangerously-bypass-approvals-and-sandbox")
@@ -784,7 +796,8 @@ func buildCodexArgs(cfg *Config, targetArg string) []string {
 	}
 
 	if isResume {
-		return append(args,
+		return append(
+			args,
 			"--json",
 			"resume",
 			resumeSessionID,
@@ -792,7 +805,8 @@ func buildCodexArgs(cfg *Config, targetArg string) []string {
 		)
 	}
 
-	return append(args,
+	return append(
+		args,
 		"-C", cfg.WorkDir,
 		"--json",
 		targetArg,
@@ -803,12 +817,29 @@ func runCodexTask(taskSpec TaskSpec, silent bool, timeoutSec int) TaskResult {
 	return runCodexTaskWithContext(context.Background(), taskSpec, nil, nil, false, silent, timeoutSec)
 }
 
-func runCodexProcess(parentCtx context.Context, codexArgs []string, taskText string, useStdin bool, timeoutSec int) (message, threadID string, exitCode int) {
-	res := runCodexTaskWithContext(parentCtx, TaskSpec{Task: taskText, WorkDir: defaultWorkdir, Mode: "new", UseStdin: useStdin}, nil, codexArgs, true, false, timeoutSec)
+func runCodexProcess(
+	parentCtx context.Context,
+	codexArgs []string,
+	taskText string,
+	useStdin bool,
+	timeoutSec int,
+) (message, threadID string, exitCode int) {
+	res := runCodexTaskWithContext(
+		parentCtx, TaskSpec{Task: taskText, WorkDir: defaultWorkdir, Mode: "new", UseStdin: useStdin}, nil, codexArgs,
+		true, false, timeoutSec,
+	)
 	return res.Message, res.SessionID, res.ExitCode
 }
 
-func runCodexTaskWithContext(parentCtx context.Context, taskSpec TaskSpec, backend Backend, customArgs []string, useCustomArgs bool, silent bool, timeoutSec int) TaskResult {
+func runCodexTaskWithContext(
+	parentCtx context.Context,
+	taskSpec TaskSpec,
+	backend Backend,
+	customArgs []string,
+	useCustomArgs bool,
+	silent bool,
+	timeoutSec int,
+) TaskResult {
 	if parentCtx == nil {
 		parentCtx = taskSpec.Context
 	}
@@ -857,18 +888,11 @@ func runCodexTaskWithContext(parentCtx context.Context, taskSpec TaskSpec, backe
 	useStdin := taskSpec.UseStdin
 	targetArg := taskSpec.Task
 
-	// Gemini/Antigravity CLI does not support "-" as stdin marker for -p flag.
-	// On macOS/Linux: pass the actual task text directly via -p (execve preserves
-	// multi-line args in argv). On Windows: npm's .cmd wrapper routes through
-	// cmd.exe which truncates multi-line args at the first newline (Issue #129).
-	// Use stdin pipe instead and omit -p so the CLI reads from piped stdin.
-	promptDirect := useStdin && (cfg.Backend == "gemini" || cfg.Backend == "antigravity") && !isWindows()
-	promptStdinPipe := useStdin && (cfg.Backend == "gemini" || cfg.Backend == "antigravity") && isWindows()
-	if useStdin && !promptDirect && !promptStdinPipe {
+	// Antigravity CLI does not support "-" as stdin marker for -p flag.
+	promptBackend := cfg.Backend == "antigravity" || cfg.Backend == "agy"
+	promptDirect := useStdin && promptBackend
+	if useStdin && !promptDirect {
 		targetArg = "-"
-	}
-	if promptStdinPipe {
-		targetArg = ""
 	}
 
 	var codexArgs []string
@@ -963,7 +987,7 @@ func runCodexTaskWithContext(parentCtx context.Context, taskSpec TaskSpec, backe
 
 	if !silent {
 		// Note: Empty prefix ensures backend output is logged as-is without any wrapper format.
-		// This preserves the original stdout/stderr content from codex/claude/gemini backends.
+		// This preserves the original stdout/stderr content from backend CLIs.
 		// Trade-off: Reduces distinguishability between stdout/stderr in logs, but maintains
 		// output fidelity which is critical for debugging backend-specific issues.
 		stdoutLogger = newLogWriter("", codexLogLineLimit)
@@ -980,6 +1004,8 @@ func runCodexTaskWithContext(parentCtx context.Context, taskSpec TaskSpec, backe
 		return fmt.Sprintf("%s; stderr: %s", msg, stderrBuf.String())
 	}
 
+	isPlainTextBackend := cfg.Backend == "antigravity" || cfg.Backend == "agy"
+
 	cmd := newCommandRunner(ctx, commandName, codexArgs...)
 
 	// 统一处理所有后端的环境变量
@@ -988,16 +1014,14 @@ func runCodexTaskWithContext(parentCtx context.Context, taskSpec TaskSpec, backe
 	if env == nil {
 		env = make(map[string]string)
 	}
+	for k, v := range loadModelProxyEnv(cfg.Backend) {
+		env[k] = v
+	}
 	cmd.SetEnv(env) // SetEnv 会自动合并 os.Environ() (executor.go:122-161)
 
 	// Set working directory for backends that don't support -C flag.
 	// - Codex: passes workdir via -C flag, skip cmd.Dir to avoid conflicts.
-	// - Gemini: use workDir as CWD. Previously used $HOME to avoid project .env
-	//   overriding global API keys (see github.com/google-gemini/gemini-cli/issues/2493),
-	//   but $HOME causes Gemini CLI to hang on long prompts due to directory scanning.
-	//   API keys are already protected via cmd.SetEnv() from loadMinimalEnvSettings().
-	//   Project dir is also passed via --include-directories in buildGeminiArgs().
-	// - Claude: uses cmd.Dir as project context (no .env loading issue).
+	// - Claude and Antigravity: use cmd.Dir as project context.
 	if cfg.Mode != "resume" && cfg.WorkDir != "" {
 		switch commandName {
 		case "codex":
@@ -1007,22 +1031,36 @@ func runCodexTaskWithContext(parentCtx context.Context, taskSpec TaskSpec, backe
 		}
 	}
 
-	stderrWriters := []io.Writer{stderrBuf}
-	if stderrLogger != nil {
-		stderrWriters = append(stderrWriters, stderrLogger)
-	}
-
-	// Filter noisy stderr output for all backends
-	var stderrFilter *filteringWriter
-	if !silent {
-		stderrFilter = newFilteringWriter(os.Stderr, noisePatterns)
-		defer stderrFilter.Flush()
-		stderrWriters = append([]io.Writer{stderrFilter}, stderrWriters...)
-	}
-	if len(stderrWriters) == 1 {
-		cmd.SetStderr(stderrWriters[0])
+	var antigravityStderrFile *os.File
+	var antigravityStderrPath string
+	if isPlainTextBackend {
+		if f, err := os.CreateTemp("", "codeagent-antigravity-stderr-*.log"); err == nil {
+			antigravityStderrFile = f
+			antigravityStderrPath = f.Name()
+			defer os.Remove(antigravityStderrPath)
+			defer f.Close()
+			cmd.SetStderr(f)
+		} else {
+			cmd.SetStderr(os.Stderr)
+		}
 	} else {
-		cmd.SetStderr(io.MultiWriter(stderrWriters...))
+		stderrWriters := []io.Writer{stderrBuf}
+		if stderrLogger != nil {
+			stderrWriters = append(stderrWriters, stderrLogger)
+		}
+
+		// Filter noisy stderr output for all backends
+		var stderrFilter *filteringWriter
+		if !silent {
+			stderrFilter = newFilteringWriter(os.Stderr, noisePatterns)
+			defer stderrFilter.Flush()
+			stderrWriters = append([]io.Writer{stderrFilter}, stderrWriters...)
+		}
+		if len(stderrWriters) == 1 {
+			cmd.SetStderr(stderrWriters[0])
+		} else {
+			cmd.SetStderr(io.MultiWriter(stderrWriters...))
+		}
 	}
 
 	var stdinPipe io.WriteCloser
@@ -1092,8 +1130,6 @@ func runCodexTaskWithContext(parentCtx context.Context, taskSpec TaskSpec, backe
 
 	// Antigravity CLI outputs plain text (no JSON streaming).
 	// Read stdout directly instead of parsing JSON events.
-	isPlainTextBackend := cfg.Backend == "antigravity"
-
 	go func() {
 		if isPlainTextBackend {
 			scanner := bufio.NewScanner(stdoutReader)
@@ -1132,21 +1168,23 @@ func runCodexTaskWithContext(parentCtx context.Context, taskSpec TaskSpec, backe
 			return
 		}
 
-		msg, tid := parseJSONStreamInternalWithContent(stdoutReader, logWarnFn, logInfoFn, func() {
-			select {
-			case messageSeen <- struct{}{}:
-			default:
-			}
-		}, func() {
-			select {
-			case completeSeen <- struct{}{}:
-			default:
-			}
-			// Notify WebServer that session is complete
-			if globalWebServer != nil && webSessionID != "" {
-				globalWebServer.EndSession(webSessionID, cfg.Backend)
-			}
-		}, onContentCallback, onProgressCallback, onSessionStartedCallback)
+		msg, tid := parseJSONStreamInternalWithContent(
+			stdoutReader, logWarnFn, logInfoFn, func() {
+				select {
+				case messageSeen <- struct{}{}:
+				default:
+				}
+			}, func() {
+				select {
+				case completeSeen <- struct{}{}:
+				default:
+				}
+				// Notify WebServer that session is complete
+				if globalWebServer != nil && webSessionID != "" {
+					globalWebServer.EndSession(webSessionID, cfg.Backend)
+				}
+			}, onContentCallback, onProgressCallback, onSessionStartedCallback,
+		)
 		select {
 		case completeSeen <- struct{}{}:
 		default:
@@ -1154,7 +1192,12 @@ func runCodexTaskWithContext(parentCtx context.Context, taskSpec TaskSpec, backe
 		parseCh <- parseResult{message: msg, threadID: tid}
 	}()
 
-	logInfoFn(fmt.Sprintf("Starting %s with args: %s %s...", commandName, commandName, strings.Join(codexArgs[:min(5, len(codexArgs))], " ")))
+	logInfoFn(
+		fmt.Sprintf(
+			"Starting %s with args: %s %s...", commandName, commandName,
+			strings.Join(codexArgs[:min(5, len(codexArgs))], " "),
+		),
+	)
 
 	if err := cmd.Start(); err != nil {
 		if strings.Contains(err.Error(), "executable file not found") {
@@ -1284,6 +1327,16 @@ waitLoop:
 		forceKillTimer.Stop()
 	}
 
+	if antigravityStderrFile != nil {
+		_ = antigravityStderrFile.Sync()
+		if data, err := os.ReadFile(antigravityStderrPath); err == nil && len(data) > 0 {
+			_, _ = stderrBuf.Write(data)
+			if stderrLogger != nil {
+				_, _ = stderrLogger.Write(data)
+			}
+		}
+	}
+
 	var parsed parseResult
 	switch {
 	case ctxCancelled:
@@ -1315,12 +1368,29 @@ waitLoop:
 
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		if errors.Is(ctxErr, context.DeadlineExceeded) {
+			if isPlainTextBackend && isAntigravityAuthenticationPrompt(stderrBuf.String()) {
+				msg := antigravityAuthenticationFailureMessage()
+				logErrorFn(msg)
+				result.ExitCode = 1
+				result.Error = attachStderr(msg)
+				return result
+			}
 			result.ExitCode = 124
 			result.Error = attachStderr(fmt.Sprintf("%s execution timeout", commandName))
 			return result
 		}
 		result.ExitCode = 130
 		result.Error = attachStderr("execution cancelled")
+		return result
+	}
+
+	message := parsed.message
+	threadID := parsed.threadID
+	if isPlainTextBackend && isAntigravityAuthenticationFailure(message, stderrBuf.String()) {
+		msg := antigravityAuthenticationFailureMessage()
+		logErrorFn(msg)
+		result.ExitCode = 1
+		result.Error = attachStderr(msg)
 		return result
 	}
 
@@ -1341,10 +1411,14 @@ waitLoop:
 			return result
 		}
 	}
-
-	message := parsed.message
-	threadID := parsed.threadID
 	if message == "" {
+		if isPlainTextBackend {
+			msg := antigravityEmptyOutputMessage()
+			logErrorFn(msg)
+			result.ExitCode = 1
+			result.Error = attachStderr(msg)
+			return result
+		}
 		logErrorFn(fmt.Sprintf("%s completed without agent_message output", commandName))
 		result.ExitCode = 1
 		result.Error = attachStderr(fmt.Sprintf("%s completed without agent_message output", commandName))
@@ -1366,6 +1440,46 @@ waitLoop:
 	}
 
 	return result
+}
+
+func antigravityAuthenticationFailureMessage() string {
+	return "Antigravity authentication failed; check agy login, real HOME, Linux/WSL keyring or DBus, and proxy settings"
+}
+
+func antigravityEmptyOutputMessage() string {
+	return "Antigravity completed without output; agy can drop stdout in non-interactive runs, so retry in an interactive terminal or update agy"
+}
+
+func isAntigravityAuthenticationFailure(stdout, stderr string) bool {
+	return isAntigravityAuthenticationFailureLine(stderr) ||
+		isAntigravityAuthenticationFailureLine(stdout) ||
+		isAntigravityAuthenticationPrompt(stderr)
+}
+
+func isAntigravityAuthenticationFailureLine(output string) bool {
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.ToLower(strings.TrimSpace(line))
+		if strings.HasPrefix(line, "authentication required") ||
+			strings.HasPrefix(line, "error: authentication required") ||
+			strings.HasPrefix(line, "error: authentication timed out") ||
+			strings.HasPrefix(line, "authentication timed out") ||
+			strings.HasPrefix(line, "login required") ||
+			strings.HasPrefix(line, "error: login required") {
+			return true
+		}
+	}
+	return false
+}
+
+func isAntigravityAuthenticationPrompt(output string) bool {
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.ToLower(strings.TrimSpace(line))
+		if strings.HasPrefix(line, "waiting for authentication") ||
+			strings.Contains(line, "please visit the url to log in") {
+			return true
+		}
+	}
+	return false
 }
 
 func forwardSignals(ctx context.Context, cmd commandRunner, logErrorFn func(string)) {
@@ -1394,11 +1508,13 @@ func forwardSignals(ctx context.Context, cmd commandRunner, logErrorFn func(stri
 					}
 				} else {
 					_ = proc.Signal(syscall.SIGTERM)
-					time.AfterFunc(time.Duration(forceKillDelay.Load())*time.Second, func() {
-						if p := cmd.Process(); p != nil {
-							_ = p.Kill()
-						}
-					})
+					time.AfterFunc(
+						time.Duration(forceKillDelay.Load())*time.Second, func() {
+							if p := cmd.Process(); p != nil {
+								_ = p.Kill()
+							}
+						},
+					)
 				}
 			}
 		case <-ctx.Done():
@@ -1501,16 +1617,18 @@ func terminateCommand(cmd commandRunner) *forceKillTimer {
 	}
 
 	done := make(chan struct{}, 1)
-	timer := time.AfterFunc(time.Duration(forceKillDelay.Load())*time.Second, func() {
-		if p := cmd.Process(); p != nil {
-			if isWindows() {
-				_ = killProcessTree(p.Pid())
-			} else {
-				_ = p.Kill()
+	timer := time.AfterFunc(
+		time.Duration(forceKillDelay.Load())*time.Second, func() {
+			if p := cmd.Process(); p != nil {
+				if isWindows() {
+					_ = killProcessTree(p.Pid())
+				} else {
+					_ = p.Kill()
+				}
 			}
-		}
-		close(done)
-	})
+			close(done)
+		},
+	)
 
 	return &forceKillTimer{timer: timer, done: done}
 }
@@ -1534,13 +1652,15 @@ func terminateProcess(cmd commandRunner) *time.Timer {
 		_ = proc.Signal(syscall.SIGTERM)
 	}
 
-	return time.AfterFunc(time.Duration(forceKillDelay.Load())*time.Second, func() {
-		if p := cmd.Process(); p != nil {
-			if isWindows() {
-				_ = killProcessTree(p.Pid())
-			} else {
-				_ = p.Kill()
+	return time.AfterFunc(
+		time.Duration(forceKillDelay.Load())*time.Second, func() {
+			if p := cmd.Process(); p != nil {
+				if isWindows() {
+					_ = killProcessTree(p.Pid())
+				} else {
+					_ = p.Kill()
+				}
 			}
-		}
-	})
+		},
+	)
 }

@@ -20,8 +20,7 @@ type Config struct {
 	Backend            string
 	SkipPermissions    bool
 	MaxParallelWorkers int
-	GeminiModel        string // Gemini model name (empty = use default)
-	Progress           bool   // Emit compact progress lines to stderr
+	Progress           bool // Emit compact progress lines to stderr
 }
 
 // ParallelConfig defines the JSON schema for parallel execution
@@ -64,17 +63,19 @@ type TaskResult struct {
 }
 
 var backendRegistry = map[string]Backend{
-	"codex":        CodexBackend{},
-	"claude":       ClaudeBackend{},
-	"gemini":       GeminiBackend{},
-	"antigravity":  AntigravityBackend{},
-	"agy":          AntigravityBackend{},
+	"codex":       CodexBackend{},
+	"claude":      ClaudeBackend{},
+	"antigravity": AntigravityBackend{},
+	"agy":         AntigravityBackend{},
 }
 
 func selectBackend(name string) (Backend, error) {
 	key := strings.ToLower(strings.TrimSpace(name))
 	if key == "" {
 		key = defaultBackendName
+	}
+	if key == "gemini" {
+		return nil, fmt.Errorf("Gemini CLI is disabled: consumer OAuth requests stopped being processed after 2026-06-18; use --backend antigravity or --backend agy")
 	}
 	if backend, ok := backendRegistry[key]; ok {
 		return backend, nil
@@ -196,14 +197,23 @@ func parseParallelConfig(data []byte) (*ParallelConfig, error) {
 	return &cfg, nil
 }
 
+func unsupportedWrapperFlagHint(arg string) string {
+	switch {
+	case arg == "--add-dir", strings.HasPrefix(arg, "--add-dir="):
+		return "--add-dir is a backend CLI flag. Use: codeagent-wrapper --backend antigravity \"task\" <workdir>"
+	case arg == "-p", arg == "--print", arg == "--prompt", arg == "--prompt-interactive", arg == "-i":
+		return arg + " is a backend CLI flag. Use: codeagent-wrapper --backend antigravity \"task\" <workdir>, or codeagent-wrapper --backend antigravity - <workdir> <<'EOF'"
+	case arg == "--print-timeout", strings.HasPrefix(arg, "--print-timeout="):
+		return "--print-timeout is managed by codeagent-wrapper timeout settings; do not pass backend CLI flags directly"
+	}
+	return ""
+}
+
 func parseArgs() (*Config, error) {
 	args := os.Args[1:]
 	if len(args) == 0 {
 		return nil, fmt.Errorf("task required")
 	}
-
-	// Read environment variable (lowest precedence)
-	geminiModel := strings.TrimSpace(os.Getenv("GEMINI_MODEL"))
 
 	backendName := defaultBackendName
 	skipPermissions := envFlagEnabled("CODEAGENT_SKIP_PERMISSIONS")
@@ -211,6 +221,9 @@ func parseArgs() (*Config, error) {
 	filtered := make([]string, 0, len(args))
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
+		if hint := unsupportedWrapperFlagHint(arg); hint != "" {
+			return nil, fmt.Errorf("unsupported codeagent-wrapper argument %q: %s", arg, hint)
+		}
 		switch {
 		case arg == "--lite", arg == "-L":
 			liteMode = true
@@ -229,24 +242,8 @@ func parseArgs() (*Config, error) {
 			}
 			backendName = value
 			continue
-		case arg == "--gemini-model":
-			if i+1 >= len(args) {
-				return nil, fmt.Errorf("--gemini-model flag requires a non-empty model name")
-			}
-			value := strings.TrimSpace(args[i+1])
-			if value == "" {
-				return nil, fmt.Errorf("--gemini-model flag requires a non-empty model name")
-			}
-			geminiModel = value
-			i++
-			continue
-		case strings.HasPrefix(arg, "--gemini-model="):
-			value := strings.TrimSpace(strings.TrimPrefix(arg, "--gemini-model="))
-			if value == "" {
-				return nil, fmt.Errorf("--gemini-model flag requires a non-empty model name")
-			}
-			geminiModel = value
-			continue
+		case arg == "--gemini-model" || strings.HasPrefix(arg, "--gemini-model="):
+			return nil, fmt.Errorf("--gemini-model is disabled because Gemini CLI consumer OAuth requests stopped being processed after 2026-06-18; use --backend antigravity")
 		case arg == "--skip-permissions", arg == "--dangerously-skip-permissions":
 			skipPermissions = true
 			continue
@@ -268,7 +265,10 @@ func parseArgs() (*Config, error) {
 	}
 	args = filtered
 
-	cfg := &Config{WorkDir: defaultWorkdir, Backend: backendName, SkipPermissions: skipPermissions, GeminiModel: geminiModel, Progress: progress}
+	cfg := &Config{
+		WorkDir: defaultWorkdir, Backend: backendName, SkipPermissions: skipPermissions,
+		Progress: progress,
+	}
 	cfg.MaxParallelWorkers = resolveMaxParallelWorkers()
 
 	if args[0] == "resume" {
@@ -312,7 +312,11 @@ func resolveMaxParallelWorkers() int {
 	}
 
 	if value > maxParallelWorkersLimit {
-		logWarn(fmt.Sprintf("CODEAGENT_MAX_PARALLEL_WORKERS=%d exceeds limit, capping at %d", value, maxParallelWorkersLimit))
+		logWarn(
+			fmt.Sprintf(
+				"CODEAGENT_MAX_PARALLEL_WORKERS=%d exceeds limit, capping at %d", value, maxParallelWorkersLimit,
+			),
+		)
 		return maxParallelWorkersLimit
 	}
 

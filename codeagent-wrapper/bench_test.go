@@ -29,11 +29,13 @@ func BenchmarkLoggerConcurrentWrite(b *testing.B) {
 	defer logger.Close()
 
 	b.ResetTimer()
-	b.RunParallel(func(pb *testing.PB) {
-		for pb.Next() {
-			logger.Info("concurrent benchmark log message")
-		}
-	})
+	b.RunParallel(
+		func(pb *testing.PB) {
+			for pb.Next() {
+				logger.Info("concurrent benchmark log message")
+			}
+		},
+	)
 	b.StopTimer()
 	logger.Flush()
 }

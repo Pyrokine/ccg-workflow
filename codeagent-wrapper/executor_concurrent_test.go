@@ -84,6 +84,7 @@ func (rc *reasonReadCloser) record(reason string) {
 
 type execFakeRunner struct {
 	stdout          io.ReadCloser
+	stderr          string
 	process         processHandle
 	stdin           io.WriteCloser
 	dir             string
@@ -95,6 +96,7 @@ type execFakeRunner struct {
 	stdinErr        error
 	allowNilProcess bool
 	started         atomic.Bool
+	stdinPipeCalled atomic.Bool
 }
 
 func (f *execFakeRunner) Start() error {
@@ -120,6 +122,7 @@ func (f *execFakeRunner) StdoutPipe() (io.ReadCloser, error) {
 	return f.stdout, nil
 }
 func (f *execFakeRunner) StdinPipe() (io.WriteCloser, error) {
+	f.stdinPipeCalled.Store(true)
 	if f.stdinErr != nil {
 		return nil, f.stdinErr
 	}
@@ -128,8 +131,12 @@ func (f *execFakeRunner) StdinPipe() (io.WriteCloser, error) {
 	}
 	return &writeCloserStub{}, nil
 }
-func (f *execFakeRunner) SetStderr(io.Writer) {}
-func (f *execFakeRunner) SetDir(dir string)   { f.dir = dir }
+func (f *execFakeRunner) SetStderr(w io.Writer) {
+	if f.stderr != "" {
+		_, _ = io.WriteString(w, f.stderr)
+	}
+}
+func (f *execFakeRunner) SetDir(dir string) { f.dir = dir }
 func (f *execFakeRunner) SetEnv(env map[string]string) {
 	if len(env) == 0 {
 		return
@@ -152,469 +159,751 @@ func (f *execFakeRunner) Process() processHandle {
 }
 
 func TestExecutorHelperCoverage(t *testing.T) {
-	t.Run("realCmdAndProcess", func(t *testing.T) {
-		rc := &realCmd{}
-		if err := rc.Start(); err == nil {
-			t.Fatalf("expected error for nil command")
-		}
-		if err := rc.Wait(); err == nil {
-			t.Fatalf("expected error for nil command")
-		}
-		if _, err := rc.StdoutPipe(); err == nil {
-			t.Fatalf("expected error for nil command")
-		}
-		if _, err := rc.StdinPipe(); err == nil {
-			t.Fatalf("expected error for nil command")
-		}
-		rc.SetStderr(io.Discard)
-		if rc.Process() != nil {
-			t.Fatalf("expected nil process")
-		}
-		rcWithCmd := &realCmd{cmd: &exec.Cmd{}}
-		rcWithCmd.SetStderr(io.Discard)
-		rcWithCmd.SetDir("/tmp")
-		if rcWithCmd.cmd.Dir != "/tmp" {
-			t.Fatalf("expected SetDir to set cmd.Dir, got %q", rcWithCmd.cmd.Dir)
-		}
-		echoCmd := exec.Command("echo", "ok")
-		rcProc := &realCmd{cmd: echoCmd}
-		stdoutPipe, err := rcProc.StdoutPipe()
-		if err != nil {
-			t.Fatalf("StdoutPipe error: %v", err)
-		}
-		stdinPipe, err := rcProc.StdinPipe()
-		if err != nil {
-			t.Fatalf("StdinPipe error: %v", err)
-		}
-		rcProc.SetStderr(io.Discard)
-		if err := rcProc.Start(); err != nil {
-			t.Fatalf("Start failed: %v", err)
-		}
-		_, _ = stdinPipe.Write([]byte{})
-		_ = stdinPipe.Close()
-		procHandle := rcProc.Process()
-		if procHandle == nil {
-			t.Fatalf("expected process handle")
-		}
-		_ = procHandle.Signal(syscall.SIGTERM)
-		_ = procHandle.Kill()
-		_ = rcProc.Wait()
-		_, _ = io.ReadAll(stdoutPipe)
-
-		rp := &realProcess{}
-		if rp.Pid() != 0 {
-			t.Fatalf("nil process should have pid 0")
-		}
-		if rp.Kill() != nil {
-			t.Fatalf("nil process Kill should be nil")
-		}
-		if rp.Signal(syscall.SIGTERM) != nil {
-			t.Fatalf("nil process Signal should be nil")
-		}
-		rpLive := &realProcess{proc: &os.Process{Pid: 99}}
-		if rpLive.Pid() != 99 {
-			t.Fatalf("expected pid 99, got %d", rpLive.Pid())
-		}
-		_ = rpLive.Kill()
-		_ = rpLive.Signal(syscall.SIGTERM)
-	})
-
-	t.Run("topologicalSortAndSkip", func(t *testing.T) {
-		layers, err := topologicalSort([]TaskSpec{{ID: "root"}, {ID: "child", Dependencies: []string{"root"}}})
-		if err != nil || len(layers) != 2 {
-			t.Fatalf("unexpected topological sort result: layers=%d err=%v", len(layers), err)
-		}
-		if _, err := topologicalSort([]TaskSpec{{ID: "cycle", Dependencies: []string{"cycle"}}}); err == nil {
-			t.Fatalf("expected cycle detection error")
-		}
-
-		failed := map[string]TaskResult{"root": {ExitCode: 1}}
-		if skip, _ := shouldSkipTask(TaskSpec{ID: "child", Dependencies: []string{"root"}}, failed); !skip {
-			t.Fatalf("should skip when dependency failed")
-		}
-		if skip, _ := shouldSkipTask(TaskSpec{ID: "leaf"}, failed); skip {
-			t.Fatalf("should not skip task without dependencies")
-		}
-		if skip, _ := shouldSkipTask(TaskSpec{ID: "child-ok", Dependencies: []string{"root"}}, map[string]TaskResult{}); skip {
-			t.Fatalf("should not skip when dependencies succeeded")
-		}
-	})
-
-	t.Run("cancelledTaskResult", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
-		cancel()
-		res := cancelledTaskResult("t1", ctx)
-		if res.ExitCode != 130 {
-			t.Fatalf("expected cancel exit code, got %d", res.ExitCode)
-		}
-
-		timeoutCtx, timeoutCancel := context.WithTimeout(context.Background(), 0)
-		defer timeoutCancel()
-		res = cancelledTaskResult("t2", timeoutCtx)
-		if res.ExitCode != 124 {
-			t.Fatalf("expected timeout exit code, got %d", res.ExitCode)
-		}
-	})
-
-	t.Run("generateFinalOutputAndArgs", func(t *testing.T) {
-		const key = "CODEX_REQUIRE_APPROVAL"
-		t.Cleanup(func() { os.Unsetenv(key) })
-		os.Unsetenv(key)
-
-		out := generateFinalOutput([]TaskResult{
-			{TaskID: "ok", ExitCode: 0},
-			{TaskID: "fail", ExitCode: 1, Error: "boom"},
-		})
-		if !strings.Contains(out, "ok") || !strings.Contains(out, "fail") {
-			t.Fatalf("unexpected summary output: %s", out)
-		}
-		// Test summary mode (default) - should have new format with ### headers
-		out = generateFinalOutput([]TaskResult{{TaskID: "rich", ExitCode: 0, SessionID: "sess", LogPath: "/tmp/log", Message: "hello"}})
-		if !strings.Contains(out, "### rich") {
-			t.Fatalf("summary output missing task header: %s", out)
-		}
-		// Test full output mode - should have Session and Message
-		out = generateFinalOutputWithMode([]TaskResult{{TaskID: "rich", ExitCode: 0, SessionID: "sess", LogPath: "/tmp/log", Message: "hello"}}, false)
-		if !strings.Contains(out, "Session: sess") || !strings.Contains(out, "Log: /tmp/log") || !strings.Contains(out, "hello") {
-			t.Fatalf("full output missing fields: %s", out)
-		}
-
-		args := buildCodexArgs(&Config{Mode: "new", WorkDir: "/tmp"}, "task")
-		if !slices.Equal(args, []string{"e", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "-C", "/tmp", "--json", "task"}) {
-			t.Fatalf("unexpected codex args: %+v", args)
-		}
-		args = buildCodexArgs(&Config{Mode: "resume", SessionID: "sess"}, "target")
-		if !slices.Equal(args, []string{"e", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "--json", "resume", "sess", "target"}) {
-			t.Fatalf("unexpected resume args: %+v", args)
-		}
-	})
-
-	t.Run("generateFinalOutputASCIIMode", func(t *testing.T) {
-		t.Setenv("CODEAGENT_ASCII_MODE", "true")
-
-		results := []TaskResult{
-			{TaskID: "ok", ExitCode: 0, Coverage: "92%", CoverageNum: 92, CoverageTarget: 90, KeyOutput: "done"},
-			{TaskID: "warn", ExitCode: 0, Coverage: "80%", CoverageNum: 80, CoverageTarget: 90, KeyOutput: "did"},
-			{TaskID: "bad", ExitCode: 2, Error: "boom"},
-		}
-		out := generateFinalOutput(results)
-
-		for _, sym := range []string{"PASS", "WARN", "FAIL"} {
-			if !strings.Contains(out, sym) {
-				t.Fatalf("ASCII mode should include %q, got: %s", sym, out)
+	t.Run(
+		"realCmdAndProcess", func(t *testing.T) {
+			rc := &realCmd{}
+			if err := rc.Start(); err == nil {
+				t.Fatalf("expected error for nil command")
 			}
-		}
-		for _, sym := range []string{"✓", "⚠️", "✗"} {
-			if strings.Contains(out, sym) {
-				t.Fatalf("ASCII mode should not include %q, got: %s", sym, out)
+			if err := rc.Wait(); err == nil {
+				t.Fatalf("expected error for nil command")
 			}
-		}
-	})
-
-	t.Run("generateFinalOutputUnicodeMode", func(t *testing.T) {
-		t.Setenv("CODEAGENT_ASCII_MODE", "false")
-
-		results := []TaskResult{
-			{TaskID: "ok", ExitCode: 0, Coverage: "92%", CoverageNum: 92, CoverageTarget: 90, KeyOutput: "done"},
-			{TaskID: "warn", ExitCode: 0, Coverage: "80%", CoverageNum: 80, CoverageTarget: 90, KeyOutput: "did"},
-			{TaskID: "bad", ExitCode: 2, Error: "boom"},
-		}
-		out := generateFinalOutput(results)
-
-		for _, sym := range []string{"✓", "⚠️", "✗"} {
-			if !strings.Contains(out, sym) {
-				t.Fatalf("Unicode mode should include %q, got: %s", sym, out)
+			if _, err := rc.StdoutPipe(); err == nil {
+				t.Fatalf("expected error for nil command")
 			}
-		}
-	})
+			if _, err := rc.StdinPipe(); err == nil {
+				t.Fatalf("expected error for nil command")
+			}
+			rc.SetStderr(io.Discard)
+			if rc.Process() != nil {
+				t.Fatalf("expected nil process")
+			}
+			rcWithCmd := &realCmd{cmd: &exec.Cmd{}}
+			rcWithCmd.SetStderr(io.Discard)
+			rcWithCmd.SetDir("/tmp")
+			if rcWithCmd.cmd.Dir != "/tmp" {
+				t.Fatalf("expected SetDir to set cmd.Dir, got %q", rcWithCmd.cmd.Dir)
+			}
+			echoCmd := exec.Command("echo", "ok")
+			rcProc := &realCmd{cmd: echoCmd}
+			stdoutPipe, err := rcProc.StdoutPipe()
+			if err != nil {
+				t.Fatalf("StdoutPipe error: %v", err)
+			}
+			stdinPipe, err := rcProc.StdinPipe()
+			if err != nil {
+				t.Fatalf("StdinPipe error: %v", err)
+			}
+			rcProc.SetStderr(io.Discard)
+			if err := rcProc.Start(); err != nil {
+				t.Fatalf("Start failed: %v", err)
+			}
+			_, _ = stdinPipe.Write([]byte{})
+			_ = stdinPipe.Close()
+			procHandle := rcProc.Process()
+			if procHandle == nil {
+				t.Fatalf("expected process handle")
+			}
+			_ = procHandle.Signal(syscall.SIGTERM)
+			_ = procHandle.Kill()
+			_ = rcProc.Wait()
+			_, _ = io.ReadAll(stdoutPipe)
 
-	t.Run("executeConcurrentWrapper", func(t *testing.T) {
-		orig := runCodexTaskFn
-		defer func() { runCodexTaskFn = orig }()
-		runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
-			return TaskResult{TaskID: task.ID, ExitCode: 0, Message: "done"}
-		}
-		os.Setenv("CODEAGENT_MAX_PARALLEL_WORKERS", "1")
-		defer os.Unsetenv("CODEAGENT_MAX_PARALLEL_WORKERS")
+			rp := &realProcess{}
+			if rp.Pid() != 0 {
+				t.Fatalf("nil process should have pid 0")
+			}
+			if rp.Kill() != nil {
+				t.Fatalf("nil process Kill should be nil")
+			}
+			if rp.Signal(syscall.SIGTERM) != nil {
+				t.Fatalf("nil process Signal should be nil")
+			}
+			rpLive := &realProcess{proc: &os.Process{Pid: 99}}
+			if rpLive.Pid() != 99 {
+				t.Fatalf("expected pid 99, got %d", rpLive.Pid())
+			}
+			_ = rpLive.Kill()
+			_ = rpLive.Signal(syscall.SIGTERM)
+		},
+	)
 
-		results := executeConcurrent([][]TaskSpec{{{ID: "wrap"}}}, 1)
-		if len(results) != 1 || results[0].TaskID != "wrap" {
-			t.Fatalf("unexpected wrapper results: %+v", results)
-		}
+	t.Run(
+		"topologicalSortAndSkip", func(t *testing.T) {
+			layers, err := topologicalSort([]TaskSpec{{ID: "root"}, {ID: "child", Dependencies: []string{"root"}}})
+			if err != nil || len(layers) != 2 {
+				t.Fatalf("unexpected topological sort result: layers=%d err=%v", len(layers), err)
+			}
+			if _, err := topologicalSort([]TaskSpec{{ID: "cycle", Dependencies: []string{"cycle"}}}); err == nil {
+				t.Fatalf("expected cycle detection error")
+			}
 
-		unbounded := executeConcurrentWithContext(context.Background(), [][]TaskSpec{{{ID: "unbounded"}}}, 1, 0)
-		if len(unbounded) != 1 || unbounded[0].ExitCode != 0 {
-			t.Fatalf("unexpected unbounded result: %+v", unbounded)
-		}
+			failed := map[string]TaskResult{"root": {ExitCode: 1}}
+			if skip, _ := shouldSkipTask(TaskSpec{ID: "child", Dependencies: []string{"root"}}, failed); !skip {
+				t.Fatalf("should skip when dependency failed")
+			}
+			if skip, _ := shouldSkipTask(TaskSpec{ID: "leaf"}, failed); skip {
+				t.Fatalf("should not skip task without dependencies")
+			}
+			if skip, _ := shouldSkipTask(
+				TaskSpec{ID: "child-ok", Dependencies: []string{"root"}}, map[string]TaskResult{},
+			); skip {
+				t.Fatalf("should not skip when dependencies succeeded")
+			}
+		},
+	)
 
-		ctx, cancel := context.WithCancel(context.Background())
-		cancel()
-		cancelled := executeConcurrentWithContext(ctx, [][]TaskSpec{{{ID: "cancel"}}}, 1, 1)
-		if cancelled[0].ExitCode == 0 {
-			t.Fatalf("expected cancelled result, got %+v", cancelled[0])
-		}
-	})
+	t.Run(
+		"cancelledTaskResult", func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			res := cancelledTaskResult("t1", ctx)
+			if res.ExitCode != 130 {
+				t.Fatalf("expected cancel exit code, got %d", res.ExitCode)
+			}
+
+			timeoutCtx, timeoutCancel := context.WithTimeout(context.Background(), 0)
+			defer timeoutCancel()
+			res = cancelledTaskResult("t2", timeoutCtx)
+			if res.ExitCode != 124 {
+				t.Fatalf("expected timeout exit code, got %d", res.ExitCode)
+			}
+		},
+	)
+
+	t.Run(
+		"generateFinalOutputAndArgs", func(t *testing.T) {
+			const key = "CODEX_REQUIRE_APPROVAL"
+			t.Cleanup(func() { os.Unsetenv(key) })
+			os.Unsetenv(key)
+
+			out := generateFinalOutput(
+				[]TaskResult{
+					{TaskID: "ok", ExitCode: 0},
+					{TaskID: "fail", ExitCode: 1, Error: "boom"},
+				},
+			)
+			if !strings.Contains(out, "ok") || !strings.Contains(out, "fail") {
+				t.Fatalf("unexpected summary output: %s", out)
+			}
+			// Test summary mode (default) - should have new format with ### headers
+			out = generateFinalOutput(
+				[]TaskResult{
+					{
+						TaskID: "rich", ExitCode: 0, SessionID: "sess", LogPath: "/tmp/log", Message: "hello",
+					},
+				},
+			)
+			if !strings.Contains(out, "### rich") {
+				t.Fatalf("summary output missing task header: %s", out)
+			}
+			// Test full output mode - should have Session and Message
+			out = generateFinalOutputWithMode(
+				[]TaskResult{
+					{
+						TaskID: "rich", ExitCode: 0, SessionID: "sess", LogPath: "/tmp/log", Message: "hello",
+					},
+				}, false,
+			)
+			if !strings.Contains(out, "Session: sess") || !strings.Contains(
+				out, "Log: /tmp/log",
+			) || !strings.Contains(out, "hello") {
+				t.Fatalf("full output missing fields: %s", out)
+			}
+
+			args := buildCodexArgs(&Config{Mode: "new", WorkDir: "/tmp"}, "task")
+			if !slices.Equal(
+				args, []string{
+					"e", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "-C", "/tmp", "--json",
+					"task",
+				},
+			) {
+				t.Fatalf("unexpected codex args: %+v", args)
+			}
+			args = buildCodexArgs(&Config{Mode: "resume", SessionID: "sess"}, "target")
+			if !slices.Equal(
+				args, []string{
+					"e", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "--json", "resume",
+					"sess", "target",
+				},
+			) {
+				t.Fatalf("unexpected resume args: %+v", args)
+			}
+		},
+	)
+
+	t.Run(
+		"generateFinalOutputASCIIMode", func(t *testing.T) {
+			t.Setenv("CODEAGENT_ASCII_MODE", "true")
+
+			results := []TaskResult{
+				{TaskID: "ok", ExitCode: 0, Coverage: "92%", CoverageNum: 92, CoverageTarget: 90, KeyOutput: "done"},
+				{TaskID: "warn", ExitCode: 0, Coverage: "80%", CoverageNum: 80, CoverageTarget: 90, KeyOutput: "did"},
+				{TaskID: "bad", ExitCode: 2, Error: "boom"},
+			}
+			out := generateFinalOutput(results)
+
+			for _, sym := range []string{"PASS", "WARN", "FAIL"} {
+				if !strings.Contains(out, sym) {
+					t.Fatalf("ASCII mode should include %q, got: %s", sym, out)
+				}
+			}
+			for _, sym := range []string{"✓", "⚠️", "✗"} {
+				if strings.Contains(out, sym) {
+					t.Fatalf("ASCII mode should not include %q, got: %s", sym, out)
+				}
+			}
+		},
+	)
+
+	t.Run(
+		"generateFinalOutputUnicodeMode", func(t *testing.T) {
+			t.Setenv("CODEAGENT_ASCII_MODE", "false")
+
+			results := []TaskResult{
+				{TaskID: "ok", ExitCode: 0, Coverage: "92%", CoverageNum: 92, CoverageTarget: 90, KeyOutput: "done"},
+				{TaskID: "warn", ExitCode: 0, Coverage: "80%", CoverageNum: 80, CoverageTarget: 90, KeyOutput: "did"},
+				{TaskID: "bad", ExitCode: 2, Error: "boom"},
+			}
+			out := generateFinalOutput(results)
+
+			for _, sym := range []string{"✓", "⚠️", "✗"} {
+				if !strings.Contains(out, sym) {
+					t.Fatalf("Unicode mode should include %q, got: %s", sym, out)
+				}
+			}
+		},
+	)
+
+	t.Run(
+		"executeConcurrentWrapper", func(t *testing.T) {
+			orig := runCodexTaskFn
+			defer func() { runCodexTaskFn = orig }()
+			runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
+				return TaskResult{TaskID: task.ID, ExitCode: 0, Message: "done"}
+			}
+			os.Setenv("CODEAGENT_MAX_PARALLEL_WORKERS", "1")
+			defer os.Unsetenv("CODEAGENT_MAX_PARALLEL_WORKERS")
+
+			results := executeConcurrent([][]TaskSpec{{{ID: "wrap"}}}, 1)
+			if len(results) != 1 || results[0].TaskID != "wrap" {
+				t.Fatalf("unexpected wrapper results: %+v", results)
+			}
+
+			unbounded := executeConcurrentWithContext(context.Background(), [][]TaskSpec{{{ID: "unbounded"}}}, 1, 0)
+			if len(unbounded) != 1 || unbounded[0].ExitCode != 0 {
+				t.Fatalf("unexpected unbounded result: %+v", unbounded)
+			}
+
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			cancelled := executeConcurrentWithContext(ctx, [][]TaskSpec{{{ID: "cancel"}}}, 1, 1)
+			if cancelled[0].ExitCode == 0 {
+				t.Fatalf("expected cancelled result, got %+v", cancelled[0])
+			}
+		},
+	)
 }
 
 func TestExecutorRunCodexTaskWithContext(t *testing.T) {
 	origRunner := newCommandRunner
 	defer func() { newCommandRunner = origRunner }()
 
-	t.Run("resumeMissingSessionID", func(t *testing.T) {
-		newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
-			t.Fatalf("unexpected command execution for invalid resume config")
-			return nil
-		}
-
-		res := runCodexTaskWithContext(context.Background(), TaskSpec{Task: "payload", WorkDir: ".", Mode: "resume"}, nil, nil, false, false, 1)
-		if res.ExitCode == 0 || !strings.Contains(res.Error, "session_id") {
-			t.Fatalf("expected validation error, got %+v", res)
-		}
-	})
-
-	t.Run("success", func(t *testing.T) {
-		var firstStdout *reasonReadCloser
-		newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
-			rc := newReasonReadCloser(`{"type":"item.completed","item":{"type":"agent_message","text":"hello"}}`)
-			if firstStdout == nil {
-				firstStdout = rc
+	t.Run(
+		"resumeMissingSessionID", func(t *testing.T) {
+			newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
+				t.Fatalf("unexpected command execution for invalid resume config")
+				return nil
 			}
-			return &execFakeRunner{stdout: rc, process: &execFakeProcess{pid: 1234}}
-		}
 
-		res := runCodexTaskWithContext(context.Background(), TaskSpec{ID: "task-1", Task: "payload", WorkDir: "."}, nil, nil, false, false, 1)
-		if res.Error != "" || res.Message != "hello" || res.ExitCode != 0 {
-			t.Fatalf("unexpected result: %+v", res)
-		}
-
-		select {
-		case <-firstStdout.closedC:
-		case <-time.After(1 * time.Second):
-			t.Fatalf("stdout not closed with reason")
-		}
-
-		orig := runCodexTaskFn
-		runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
-			return TaskResult{TaskID: task.ID, ExitCode: 0, Message: "ok"}
-		}
-		t.Cleanup(func() { runCodexTaskFn = orig })
-
-		if res := runCodexTask(TaskSpec{Task: "task-text", WorkDir: "."}, true, 1); res.ExitCode != 0 {
-			t.Fatalf("runCodexTask failed: %+v", res)
-		}
-
-		msg, threadID, code := runCodexProcess(context.Background(), []string{"arg"}, "content", false, 1)
-		if code != 0 || msg == "" {
-			t.Fatalf("runCodexProcess unexpected result: msg=%q code=%d threadID=%s", msg, code, threadID)
-		}
-	})
-
-	t.Run("startErrors", func(t *testing.T) {
-		newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
-			return &execFakeRunner{startErr: errors.New("executable file not found"), process: &execFakeProcess{pid: 1}}
-		}
-		res := runCodexTaskWithContext(context.Background(), TaskSpec{Task: "payload", WorkDir: "."}, nil, nil, false, false, 1)
-		if res.ExitCode != 127 {
-			t.Fatalf("expected missing executable exit code, got %d", res.ExitCode)
-		}
-
-		newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
-			return &execFakeRunner{startErr: errors.New("start failed"), process: &execFakeProcess{pid: 2}}
-		}
-		res = runCodexTaskWithContext(context.Background(), TaskSpec{Task: "payload", WorkDir: "."}, nil, nil, false, false, 1)
-		if res.ExitCode == 0 {
-			t.Fatalf("expected non-zero exit on start failure")
-		}
-	})
-
-	t.Run("timeoutAndPipes", func(t *testing.T) {
-		newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
-			return &execFakeRunner{
-				stdout:    newReasonReadCloser(`{"type":"item.completed","item":{"type":"agent_message","text":"slow"}}`),
-				process:   &execFakeProcess{pid: 5},
-				waitDelay: 20 * time.Millisecond,
+			res := runCodexTaskWithContext(
+				context.Background(), TaskSpec{Task: "payload", WorkDir: ".", Mode: "resume"}, nil, nil, false, false, 1,
+			)
+			if res.ExitCode == 0 || !strings.Contains(res.Error, "session_id") {
+				t.Fatalf("expected validation error, got %+v", res)
 			}
-		}
-		res := runCodexTaskWithContext(context.Background(), TaskSpec{Task: "payload", WorkDir: ".", UseStdin: true}, nil, nil, false, false, 0)
-		if res.ExitCode == 0 {
-			t.Fatalf("expected timeout result, got %+v", res)
-		}
-	})
+		},
+	)
 
-	t.Run("pipeErrors", func(t *testing.T) {
-		newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
-			return &execFakeRunner{stdoutErr: errors.New("stdout fail"), process: &execFakeProcess{pid: 6}}
-		}
-		res := runCodexTaskWithContext(context.Background(), TaskSpec{Task: "payload", WorkDir: "."}, nil, nil, false, false, 1)
-		if res.ExitCode == 0 {
-			t.Fatalf("expected failure on stdout pipe error")
-		}
-
-		newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
-			return &execFakeRunner{stdinErr: errors.New("stdin fail"), process: &execFakeProcess{pid: 7}}
-		}
-		res = runCodexTaskWithContext(context.Background(), TaskSpec{Task: "payload", WorkDir: ".", UseStdin: true}, nil, nil, false, false, 1)
-		if res.ExitCode == 0 {
-			t.Fatalf("expected failure on stdin pipe error")
-		}
-	})
-
-	t.Run("waitExitError", func(t *testing.T) {
-		err := exec.Command("false").Run()
-		exitErr, _ := err.(*exec.ExitError)
-		if exitErr == nil {
-			t.Fatalf("expected exec.ExitError")
-		}
-		newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
-			return &execFakeRunner{
-				stdout:  newReasonReadCloser(`{"type":"item.completed","item":{"type":"agent_message","text":"ignored"}}`),
-				process: &execFakeProcess{pid: 8},
-				waitErr: exitErr,
+	t.Run(
+		"success", func(t *testing.T) {
+			var firstStdout *reasonReadCloser
+			newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
+				rc := newReasonReadCloser(`{"type":"item.completed","item":{"type":"agent_message","text":"hello"}}`)
+				if firstStdout == nil {
+					firstStdout = rc
+				}
+				return &execFakeRunner{stdout: rc, process: &execFakeProcess{pid: 1234}}
 			}
-		}
-		res := runCodexTaskWithContext(context.Background(), TaskSpec{Task: "payload", WorkDir: "."}, nil, nil, false, false, 1)
-		if res.ExitCode == 0 {
-			t.Fatalf("expected non-zero exit on wait error")
-		}
-	})
 
-	t.Run("contextCancelled", func(t *testing.T) {
-		newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
-			return &execFakeRunner{
-				stdout:    newReasonReadCloser(`{"type":"item.completed","item":{"type":"agent_message","text":"cancel"}}`),
-				process:   &execFakeProcess{pid: 9},
-				waitDelay: 10 * time.Millisecond,
+			res := runCodexTaskWithContext(
+				context.Background(), TaskSpec{ID: "task-1", Task: "payload", WorkDir: "."}, nil, nil, false, false, 1,
+			)
+			if res.Error != "" || res.Message != "hello" || res.ExitCode != 0 {
+				t.Fatalf("unexpected result: %+v", res)
 			}
-		}
-		ctx, cancel := context.WithCancel(context.Background())
-		cancel()
-		res := runCodexTaskWithContext(ctx, TaskSpec{Task: "payload", WorkDir: "."}, nil, nil, false, false, 1)
-		if res.ExitCode == 0 {
-			t.Fatalf("expected cancellation result")
-		}
-	})
 
-	t.Run("silentLogger", func(t *testing.T) {
-		newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
-			return &execFakeRunner{
-				stdout:  newReasonReadCloser(`{"type":"item.completed","item":{"type":"agent_message","text":"quiet"}}`),
-				process: &execFakeProcess{pid: 10},
+			select {
+			case <-firstStdout.closedC:
+			case <-time.After(1 * time.Second):
+				t.Fatalf("stdout not closed with reason")
 			}
-		}
-		_ = closeLogger()
-		res := runCodexTaskWithContext(context.Background(), TaskSpec{Task: "payload", WorkDir: "."}, nil, nil, false, true, 1)
-		if res.ExitCode != 0 || res.LogPath == "" {
-			t.Fatalf("expected success with temp logger, got %+v", res)
-		}
-		_ = closeLogger()
-	})
 
-	t.Run("injectedLogger", func(t *testing.T) {
-		newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
-			return &execFakeRunner{
-				stdout:  newReasonReadCloser(`{"type":"item.completed","item":{"type":"agent_message","text":"injected"}}`),
-				process: &execFakeProcess{pid: 12},
+			orig := runCodexTaskFn
+			runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
+				return TaskResult{TaskID: task.ID, ExitCode: 0, Message: "ok"}
 			}
-		}
-		_ = closeLogger()
+			t.Cleanup(func() { runCodexTaskFn = orig })
 
-		injected, err := NewLoggerWithSuffix("executor-injected")
-		if err != nil {
-			t.Fatalf("NewLoggerWithSuffix() error = %v", err)
-		}
-		defer func() {
-			_ = injected.Close()
-			_ = os.Remove(injected.Path())
-		}()
-
-		ctx := withTaskLogger(context.Background(), injected)
-		res := runCodexTaskWithContext(ctx, TaskSpec{ID: "task-injected", Task: "payload", WorkDir: "."}, nil, nil, false, true, 1)
-		if res.ExitCode != 0 || res.LogPath != injected.Path() {
-			t.Fatalf("expected injected logger path, got %+v", res)
-		}
-		if activeLogger() != nil {
-			t.Fatalf("expected no global logger to be created when injected")
-		}
-
-		injected.Flush()
-		data, err := os.ReadFile(injected.Path())
-		if err != nil {
-			t.Fatalf("failed to read injected log file: %v", err)
-		}
-		if !strings.Contains(string(data), "task-injected") {
-			t.Fatalf("injected log missing task prefix, content: %s", string(data))
-		}
-	})
-
-	t.Run("contextLoggerWithoutParent", func(t *testing.T) {
-		newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
-			return &execFakeRunner{
-				stdout:  newReasonReadCloser(`{"type":"item.completed","item":{"type":"agent_message","text":"ctx"}}`),
-				process: &execFakeProcess{pid: 14},
+			if res := runCodexTask(TaskSpec{Task: "task-text", WorkDir: "."}, true, 1); res.ExitCode != 0 {
+				t.Fatalf("runCodexTask failed: %+v", res)
 			}
-		}
-		_ = closeLogger()
 
-		taskLogger, err := NewLoggerWithSuffix("executor-taskctx")
-		if err != nil {
-			t.Fatalf("NewLoggerWithSuffix() error = %v", err)
-		}
-		t.Cleanup(func() {
-			_ = taskLogger.Close()
-			_ = os.Remove(taskLogger.Path())
-		})
-
-		ctx := withTaskLogger(context.Background(), taskLogger)
-		res := runCodexTaskWithContext(nil, TaskSpec{ID: "task-context", Task: "payload", WorkDir: ".", Context: ctx}, nil, nil, false, true, 1)
-		if res.ExitCode != 0 || res.LogPath != taskLogger.Path() {
-			t.Fatalf("expected task logger to be reused from spec context, got %+v", res)
-		}
-		if activeLogger() != nil {
-			t.Fatalf("expected no global logger to be created when task context provides one")
-		}
-
-		taskLogger.Flush()
-		data, err := os.ReadFile(taskLogger.Path())
-		if err != nil {
-			t.Fatalf("failed to read task log: %v", err)
-		}
-		if !strings.Contains(string(data), "task-context") {
-			t.Fatalf("task log missing task id, content: %s", string(data))
-		}
-	})
-
-	t.Run("backendSetsDirAndNilContext", func(t *testing.T) {
-		var rc *execFakeRunner
-		newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
-			rc = &execFakeRunner{
-				stdout:  newReasonReadCloser(`{"type":"item.completed","item":{"type":"agent_message","text":"backend"}}`),
-				process: &execFakeProcess{pid: 13},
+			msg, threadID, code := runCodexProcess(context.Background(), []string{"arg"}, "content", false, 1)
+			if code != 0 || msg == "" {
+				t.Fatalf("runCodexProcess unexpected result: msg=%q code=%d threadID=%s", msg, code, threadID)
 			}
-			return rc
-		}
+		},
+	)
 
-		_ = closeLogger()
-		res := runCodexTaskWithContext(nil, TaskSpec{ID: "task-backend", Task: "payload", WorkDir: "/tmp"}, ClaudeBackend{}, nil, false, false, 1)
-		if res.ExitCode != 0 || res.Message != "backend" {
-			t.Fatalf("unexpected result: %+v", res)
-		}
-		if rc == nil || rc.dir != "/tmp" {
-			t.Fatalf("expected backend to set cmd.Dir, got runner=%v dir=%q", rc, rc.dir)
-		}
-	})
-
-	t.Run("missingMessage", func(t *testing.T) {
-		newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
-			return &execFakeRunner{
-				stdout:  newReasonReadCloser(`{"type":"item.completed","item":{"type":"task","text":"noop"}}`),
-				process: &execFakeProcess{pid: 11},
+	t.Run(
+		"agyAliasPlainTextOutput", func(t *testing.T) {
+			newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
+				if name != "agy" {
+					t.Fatalf("expected agy command, got %q", name)
+				}
+				return &execFakeRunner{stdout: newReasonReadCloser("OK\n"), process: &execFakeProcess{pid: 1234}}
 			}
-		}
-		res := runCodexTaskWithContext(context.Background(), TaskSpec{Task: "payload", WorkDir: "."}, nil, nil, false, false, 1)
-		if res.ExitCode == 0 {
-			t.Fatalf("expected failure when no agent_message returned")
-		}
-	})
+
+			res := runCodexTaskWithContext(
+				context.Background(), TaskSpec{ID: "task-agy", Task: "payload", WorkDir: ".", Backend: "agy"}, AntigravityBackend{}, nil,
+				false, false, 1,
+			)
+			if res.Error != "" || res.Message != "OK" || res.ExitCode != 0 {
+				t.Fatalf("unexpected agy alias result: %+v", res)
+			}
+		},
+	)
+
+	t.Run(
+		"agyUseStdinPassesPromptDirect", func(t *testing.T) {
+			var gotArgs []string
+			var runner *execFakeRunner
+			newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
+				gotArgs = append([]string(nil), args...)
+				runner = &execFakeRunner{stdout: newReasonReadCloser("OK\n"), process: &execFakeProcess{pid: 1234}}
+				return runner
+			}
+
+			res := runCodexTaskWithContext(
+				context.Background(),
+				TaskSpec{ID: "task-agy-stdin", Task: "line1\nline2", WorkDir: ".", Backend: "agy", UseStdin: true},
+				AntigravityBackend{}, nil, false, false, 1,
+			)
+			if res.ExitCode != 0 || res.Message != "OK" {
+				t.Fatalf("unexpected agy stdin result: %+v", res)
+			}
+			if runner == nil || runner.stdinPipeCalled.Load() {
+				t.Fatalf("agy stdin should not create stdin pipe")
+			}
+			if !slices.Equal(gotArgs, []string{"-p", "line1\nline2"}) {
+				t.Fatalf("agy args = %#v", gotArgs)
+			}
+		},
+	)
+
+	t.Run(
+		"agyAuthenticationFailure", func(t *testing.T) {
+			newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
+				return &execFakeRunner{
+					stdout:  newReasonReadCloser("Authentication required. Please visit the URL to log in:\nError: authentication timed out.\n"),
+					process: &execFakeProcess{pid: 1234},
+				}
+			}
+
+			res := runCodexTaskWithContext(
+				context.Background(), TaskSpec{ID: "task-agy-auth", Task: "payload", WorkDir: ".", Backend: "agy"},
+				AntigravityBackend{}, nil, false, false, 1,
+			)
+			if res.ExitCode == 0 || !strings.Contains(res.Error, "authentication") {
+				t.Fatalf("expected authentication failure, got %+v", res)
+			}
+		},
+	)
+
+	t.Run(
+		"agyAuthenticationFailureFromStderr", func(t *testing.T) {
+			newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
+				return &execFakeRunner{
+					stdout:  newReasonReadCloser(""),
+					stderr:  "Authentication required. Please visit the URL to log in:\n",
+					process: &execFakeProcess{pid: 1234},
+				}
+			}
+
+			res := runCodexTaskWithContext(
+				context.Background(), TaskSpec{ID: "task-agy-auth-stderr", Task: "payload", WorkDir: ".", Backend: "agy"},
+				AntigravityBackend{}, nil, false, false, 1,
+			)
+			if res.ExitCode == 0 || !strings.Contains(res.Error, "authentication") {
+				t.Fatalf("expected stderr authentication failure, got %+v", res)
+			}
+		},
+	)
+
+	t.Run(
+		"agyAuthenticationFailureBeforeWaitError", func(t *testing.T) {
+			newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
+				return &execFakeRunner{
+					stdout:  newReasonReadCloser(""),
+					stderr:  "Error: authentication timed out.\n",
+					waitErr: &exec.ExitError{},
+					process: &execFakeProcess{pid: 1234},
+				}
+			}
+
+			res := runCodexTaskWithContext(
+				context.Background(), TaskSpec{ID: "task-agy-auth-wait", Task: "payload", WorkDir: ".", Backend: "agy"},
+				AntigravityBackend{}, nil, false, false, 5,
+			)
+			if res.ExitCode == 0 || !strings.Contains(res.Error, "Antigravity authentication failed") {
+				t.Fatalf("expected authentication failure before wait error, got %+v", res)
+			}
+		},
+	)
+
+	t.Run(
+		"agyAuthenticationFailureWithPrefixedLines", func(t *testing.T) {
+			newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
+				return &execFakeRunner{
+					stdout:  newReasonReadCloser(""),
+					stderr:  "[INFO] Starting agy\nError: Authentication required. Please visit the URL to log in:\n",
+					process: &execFakeProcess{pid: 1234},
+				}
+			}
+
+			res := runCodexTaskWithContext(
+				context.Background(), TaskSpec{ID: "task-agy-auth-prefixed", Task: "payload", WorkDir: ".", Backend: "agy"},
+				AntigravityBackend{}, nil, false, false, 1,
+			)
+			if res.ExitCode == 0 || !strings.Contains(res.Error, "Antigravity authentication failed") {
+				t.Fatalf("expected prefixed authentication failure, got %+v", res)
+			}
+		},
+	)
+
+	t.Run(
+		"agyAuthenticationPromptOnWrapperTimeout", func(t *testing.T) {
+			newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
+				return &execFakeRunner{
+					stdout:    newReasonReadCloser(""),
+					stderr:    "Waiting for authentication (timeout 30s)...\n",
+					process:   &execFakeProcess{pid: 1234},
+					waitDelay: 20 * time.Millisecond,
+				}
+			}
+
+			res := runCodexTaskWithContext(
+				context.Background(), TaskSpec{ID: "task-agy-auth-timeout", Task: "payload", WorkDir: ".", Backend: "agy"},
+				AntigravityBackend{}, nil, false, false, 0,
+			)
+			if res.ExitCode != 1 || !strings.Contains(res.Error, "check agy login") {
+				t.Fatalf("expected authentication guidance on timeout, got %+v", res)
+			}
+		},
+	)
+
+	t.Run(
+		"agyEmptyOutputReportsNonInteractiveRisk", func(t *testing.T) {
+			newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
+				return &execFakeRunner{
+					stdout:  newReasonReadCloser(""),
+					process: &execFakeProcess{pid: 1234},
+				}
+			}
+
+			res := runCodexTaskWithContext(
+				context.Background(), TaskSpec{ID: "task-agy-empty", Task: "payload", WorkDir: ".", Backend: "agy"},
+				AntigravityBackend{}, nil, false, false, 5,
+			)
+			if res.ExitCode != 1 || !strings.Contains(res.Error, "drop stdout in non-interactive runs") {
+				t.Fatalf("expected empty output guidance, got %+v", res)
+			}
+		},
+	)
+
+	t.Run(
+		"agyAuthenticationPhraseInSuccessfulOutput", func(t *testing.T) {
+			newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
+				return &execFakeRunner{
+					stdout:  newReasonReadCloser("Review PASS\nQuoted error: Authentication required. Please visit the URL to log in.\n"),
+					process: &execFakeProcess{pid: 1234},
+				}
+			}
+
+			res := runCodexTaskWithContext(
+				context.Background(), TaskSpec{ID: "task-agy-auth-quote", Task: "payload", WorkDir: ".", Backend: "agy"},
+				AntigravityBackend{}, nil, false, false, 5,
+			)
+			if res.ExitCode != 0 || !strings.Contains(res.Message, "Authentication required") {
+				t.Fatalf("expected successful output containing authentication phrase, got %+v", res)
+			}
+		},
+	)
+
+	t.Run(
+		"startErrors", func(t *testing.T) {
+			newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
+				return &execFakeRunner{
+					startErr: errors.New("executable file not found"), process: &execFakeProcess{pid: 1},
+				}
+			}
+			res := runCodexTaskWithContext(
+				context.Background(), TaskSpec{Task: "payload", WorkDir: "."}, nil, nil, false, false, 1,
+			)
+			if res.ExitCode != 127 {
+				t.Fatalf("expected missing executable exit code, got %d", res.ExitCode)
+			}
+
+			newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
+				return &execFakeRunner{startErr: errors.New("start failed"), process: &execFakeProcess{pid: 2}}
+			}
+			res = runCodexTaskWithContext(
+				context.Background(), TaskSpec{Task: "payload", WorkDir: "."}, nil, nil, false, false, 1,
+			)
+			if res.ExitCode == 0 {
+				t.Fatalf("expected non-zero exit on start failure")
+			}
+		},
+	)
+
+	t.Run(
+		"timeoutAndPipes", func(t *testing.T) {
+			newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
+				return &execFakeRunner{
+					stdout:    newReasonReadCloser(`{"type":"item.completed","item":{"type":"agent_message","text":"slow"}}`),
+					process:   &execFakeProcess{pid: 5},
+					waitDelay: 20 * time.Millisecond,
+				}
+			}
+			res := runCodexTaskWithContext(
+				context.Background(), TaskSpec{Task: "payload", WorkDir: ".", UseStdin: true}, nil, nil, false, false, 0,
+			)
+			if res.ExitCode == 0 {
+				t.Fatalf("expected timeout result, got %+v", res)
+			}
+		},
+	)
+
+	t.Run(
+		"pipeErrors", func(t *testing.T) {
+			newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
+				return &execFakeRunner{stdoutErr: errors.New("stdout fail"), process: &execFakeProcess{pid: 6}}
+			}
+			res := runCodexTaskWithContext(
+				context.Background(), TaskSpec{Task: "payload", WorkDir: "."}, nil, nil, false, false, 1,
+			)
+			if res.ExitCode == 0 {
+				t.Fatalf("expected failure on stdout pipe error")
+			}
+
+			newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
+				return &execFakeRunner{stdinErr: errors.New("stdin fail"), process: &execFakeProcess{pid: 7}}
+			}
+			res = runCodexTaskWithContext(
+				context.Background(), TaskSpec{Task: "payload", WorkDir: ".", UseStdin: true}, nil, nil, false, false, 1,
+			)
+			if res.ExitCode == 0 {
+				t.Fatalf("expected failure on stdin pipe error")
+			}
+		},
+	)
+
+	t.Run(
+		"waitExitError", func(t *testing.T) {
+			err := exec.Command("false").Run()
+			exitErr, _ := err.(*exec.ExitError)
+			if exitErr == nil {
+				t.Fatalf("expected exec.ExitError")
+			}
+			newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
+				return &execFakeRunner{
+					stdout:  newReasonReadCloser(`{"type":"item.completed","item":{"type":"agent_message","text":"ignored"}}`),
+					process: &execFakeProcess{pid: 8},
+					waitErr: exitErr,
+				}
+			}
+			res := runCodexTaskWithContext(
+				context.Background(), TaskSpec{Task: "payload", WorkDir: "."}, nil, nil, false, false, 1,
+			)
+			if res.ExitCode == 0 {
+				t.Fatalf("expected non-zero exit on wait error")
+			}
+		},
+	)
+
+	t.Run(
+		"contextCancelled", func(t *testing.T) {
+			newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
+				return &execFakeRunner{
+					stdout:    newReasonReadCloser(`{"type":"item.completed","item":{"type":"agent_message","text":"cancel"}}`),
+					process:   &execFakeProcess{pid: 9},
+					waitDelay: 10 * time.Millisecond,
+				}
+			}
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			res := runCodexTaskWithContext(ctx, TaskSpec{Task: "payload", WorkDir: "."}, nil, nil, false, false, 1)
+			if res.ExitCode == 0 {
+				t.Fatalf("expected cancellation result")
+			}
+		},
+	)
+
+	t.Run(
+		"silentLogger", func(t *testing.T) {
+			newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
+				return &execFakeRunner{
+					stdout:  newReasonReadCloser(`{"type":"item.completed","item":{"type":"agent_message","text":"quiet"}}`),
+					process: &execFakeProcess{pid: 10},
+				}
+			}
+			_ = closeLogger()
+			res := runCodexTaskWithContext(
+				context.Background(), TaskSpec{Task: "payload", WorkDir: "."}, nil, nil, false, true, 1,
+			)
+			if res.ExitCode != 0 || res.LogPath == "" {
+				t.Fatalf("expected success with temp logger, got %+v", res)
+			}
+			_ = closeLogger()
+		},
+	)
+
+	t.Run(
+		"injectedLogger", func(t *testing.T) {
+			newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
+				return &execFakeRunner{
+					stdout:  newReasonReadCloser(`{"type":"item.completed","item":{"type":"agent_message","text":"injected"}}`),
+					process: &execFakeProcess{pid: 12},
+				}
+			}
+			_ = closeLogger()
+
+			injected, err := NewLoggerWithSuffix("executor-injected")
+			if err != nil {
+				t.Fatalf("NewLoggerWithSuffix() error = %v", err)
+			}
+			defer func() {
+				_ = injected.Close()
+				_ = os.Remove(injected.Path())
+			}()
+
+			ctx := withTaskLogger(context.Background(), injected)
+			res := runCodexTaskWithContext(
+				ctx, TaskSpec{ID: "task-injected", Task: "payload", WorkDir: "."}, nil, nil, false, true, 1,
+			)
+			if res.ExitCode != 0 || res.LogPath != injected.Path() {
+				t.Fatalf("expected injected logger path, got %+v", res)
+			}
+			if activeLogger() != nil {
+				t.Fatalf("expected no global logger to be created when injected")
+			}
+
+			injected.Flush()
+			data, err := os.ReadFile(injected.Path())
+			if err != nil {
+				t.Fatalf("failed to read injected log file: %v", err)
+			}
+			if !strings.Contains(string(data), "task-injected") {
+				t.Fatalf("injected log missing task prefix, content: %s", string(data))
+			}
+		},
+	)
+
+	t.Run(
+		"contextLoggerWithoutParent", func(t *testing.T) {
+			newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
+				return &execFakeRunner{
+					stdout:  newReasonReadCloser(`{"type":"item.completed","item":{"type":"agent_message","text":"ctx"}}`),
+					process: &execFakeProcess{pid: 14},
+				}
+			}
+			_ = closeLogger()
+
+			taskLogger, err := NewLoggerWithSuffix("executor-taskctx")
+			if err != nil {
+				t.Fatalf("NewLoggerWithSuffix() error = %v", err)
+			}
+			t.Cleanup(
+				func() {
+					_ = taskLogger.Close()
+					_ = os.Remove(taskLogger.Path())
+				},
+			)
+
+			ctx := withTaskLogger(context.Background(), taskLogger)
+			res := runCodexTaskWithContext(
+				nil, TaskSpec{ID: "task-context", Task: "payload", WorkDir: ".", Context: ctx}, nil, nil, false, true, 1,
+			)
+			if res.ExitCode != 0 || res.LogPath != taskLogger.Path() {
+				t.Fatalf("expected task logger to be reused from spec context, got %+v", res)
+			}
+			if activeLogger() != nil {
+				t.Fatalf("expected no global logger to be created when task context provides one")
+			}
+
+			taskLogger.Flush()
+			data, err := os.ReadFile(taskLogger.Path())
+			if err != nil {
+				t.Fatalf("failed to read task log: %v", err)
+			}
+			if !strings.Contains(string(data), "task-context") {
+				t.Fatalf("task log missing task id, content: %s", string(data))
+			}
+		},
+	)
+
+	t.Run(
+		"backendSetsDirAndNilContext", func(t *testing.T) {
+			var rc *execFakeRunner
+			newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
+				rc = &execFakeRunner{
+					stdout:  newReasonReadCloser(`{"type":"item.completed","item":{"type":"agent_message","text":"backend"}}`),
+					process: &execFakeProcess{pid: 13},
+				}
+				return rc
+			}
+
+			_ = closeLogger()
+			res := runCodexTaskWithContext(
+				nil, TaskSpec{ID: "task-backend", Task: "payload", WorkDir: "/tmp"}, ClaudeBackend{}, nil, false, false,
+				1,
+			)
+			if res.ExitCode != 0 || res.Message != "backend" {
+				t.Fatalf("unexpected result: %+v", res)
+			}
+			if rc == nil || rc.dir != "/tmp" {
+				t.Fatalf("expected backend to set cmd.Dir, got runner=%v dir=%q", rc, rc.dir)
+			}
+		},
+	)
+
+	t.Run(
+		"missingMessage", func(t *testing.T) {
+			newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
+				return &execFakeRunner{
+					stdout:  newReasonReadCloser(`{"type":"item.completed","item":{"type":"task","text":"noop"}}`),
+					process: &execFakeProcess{pid: 11},
+				}
+			}
+			res := runCodexTaskWithContext(
+				context.Background(), TaskSpec{Task: "payload", WorkDir: "."}, nil, nil, false, false, 1,
+			)
+			if res.ExitCode == 0 {
+				t.Fatalf("expected failure when no agent_message returned")
+			}
+		},
+	)
 }
 
 func TestExecutorParallelLogIsolation(t *testing.T) {
@@ -623,10 +912,12 @@ func TestExecutorParallelLogIsolation(t *testing.T) {
 		t.Fatalf("NewLoggerWithSuffix() error = %v", err)
 	}
 	setLogger(mainLogger)
-	t.Cleanup(func() {
-		_ = closeLogger()
-		_ = os.Remove(mainLogger.Path())
-	})
+	t.Cleanup(
+		func() {
+			_ = closeLogger()
+			_ = os.Remove(mainLogger.Path())
+		},
+	)
 
 	taskA := nextExecutorTestTaskID("iso-a")
 	taskB := nextExecutorTestTaskID("iso-b")
@@ -733,11 +1024,13 @@ func TestConcurrentExecutorParallelLogIsolationAndClosure(t *testing.T) {
 		t.Fatalf("NewLoggerWithSuffix() error = %v", err)
 	}
 	setLogger(mainLogger)
-	t.Cleanup(func() {
-		mainLogger.Flush()
-		_ = closeLogger()
-		_ = os.Remove(mainLogger.Path())
-	})
+	t.Cleanup(
+		func() {
+			mainLogger.Flush()
+			_ = closeLogger()
+			_ = os.Remove(mainLogger.Path())
+		},
+	)
 
 	const taskCount = 16
 	const writersPerTask = 4
@@ -969,260 +1262,280 @@ func TestExecutorExecuteConcurrentWithContextBranches(t *testing.T) {
 	}
 	oldStderr := os.Stderr
 	os.Stderr = devNull
-	t.Cleanup(func() {
-		os.Stderr = oldStderr
-		_ = devNull.Close()
-	})
+	t.Cleanup(
+		func() {
+			os.Stderr = oldStderr
+			_ = devNull.Close()
+		},
+	)
 
-	t.Run("skipOnFailedDependencies", func(t *testing.T) {
-		root := nextExecutorTestTaskID("root")
-		child := nextExecutorTestTaskID("child")
+	t.Run(
+		"skipOnFailedDependencies", func(t *testing.T) {
+			root := nextExecutorTestTaskID("root")
+			child := nextExecutorTestTaskID("child")
 
-		orig := runCodexTaskFn
-		runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
-			if task.ID == root {
-				return TaskResult{TaskID: task.ID, ExitCode: 1, Error: "boom"}
+			orig := runCodexTaskFn
+			runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
+				if task.ID == root {
+					return TaskResult{TaskID: task.ID, ExitCode: 1, Error: "boom"}
+				}
+				return TaskResult{TaskID: task.ID, ExitCode: 0}
 			}
-			return TaskResult{TaskID: task.ID, ExitCode: 0}
-		}
-		t.Cleanup(func() { runCodexTaskFn = orig })
+			t.Cleanup(func() { runCodexTaskFn = orig })
 
-		results := executeConcurrentWithContext(context.Background(), [][]TaskSpec{
-			{{ID: root}},
-			{{ID: child, Dependencies: []string{root}}},
-		}, 1, 0)
+			results := executeConcurrentWithContext(
+				context.Background(), [][]TaskSpec{
+					{{ID: root}},
+					{{ID: child, Dependencies: []string{root}}},
+				}, 1, 0,
+			)
 
-		foundChild := false
-		for _, res := range results {
-			if res.LogPath != "" {
-				_ = os.Remove(res.LogPath)
+			foundChild := false
+			for _, res := range results {
+				if res.LogPath != "" {
+					_ = os.Remove(res.LogPath)
+				}
+				if res.TaskID != child {
+					continue
+				}
+				foundChild = true
+				if res.ExitCode == 0 || !strings.Contains(res.Error, "skipped") {
+					t.Fatalf("expected skipped child task result, got %+v", res)
+				}
 			}
-			if res.TaskID != child {
-				continue
+			if !foundChild {
+				t.Fatalf("expected child task to be present in results")
 			}
-			foundChild = true
-			if res.ExitCode == 0 || !strings.Contains(res.Error, "skipped") {
-				t.Fatalf("expected skipped child task result, got %+v", res)
+		},
+	)
+
+	t.Run(
+		"panicRecovered", func(t *testing.T) {
+			taskID := nextExecutorTestTaskID("panic")
+
+			orig := runCodexTaskFn
+			runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
+				panic("boom")
 			}
-		}
-		if !foundChild {
-			t.Fatalf("expected child task to be present in results")
-		}
-	})
+			t.Cleanup(func() { runCodexTaskFn = orig })
 
-	t.Run("panicRecovered", func(t *testing.T) {
-		taskID := nextExecutorTestTaskID("panic")
-
-		orig := runCodexTaskFn
-		runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
-			panic("boom")
-		}
-		t.Cleanup(func() { runCodexTaskFn = orig })
-
-		results := executeConcurrentWithContext(context.Background(), [][]TaskSpec{{{ID: taskID}}}, 1, 0)
-		if len(results) != 1 {
-			t.Fatalf("expected 1 result, got %d", len(results))
-		}
-		if results[0].ExitCode == 0 || !strings.Contains(results[0].Error, "panic") {
-			t.Fatalf("expected panic result, got %+v", results[0])
-		}
-		if results[0].LogPath == "" {
-			t.Fatalf("expected LogPath on panic result")
-		}
-		_ = os.Remove(results[0].LogPath)
-	})
-
-	t.Run("cancelWhileWaitingForWorker", func(t *testing.T) {
-		task1 := nextExecutorTestTaskID("slot")
-		task2 := nextExecutorTestTaskID("slot")
-
-		parentCtx, cancel := context.WithCancel(context.Background())
-		started := make(chan struct{})
-		unblock := make(chan struct{})
-		var startedOnce sync.Once
-
-		orig := runCodexTaskFn
-		runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
-			startedOnce.Do(func() { close(started) })
-			<-unblock
-			return TaskResult{TaskID: task.ID, ExitCode: 0}
-		}
-		t.Cleanup(func() { runCodexTaskFn = orig })
-
-		go func() {
-			<-started
-			cancel()
-			time.Sleep(50 * time.Millisecond)
-			close(unblock)
-		}()
-
-		results := executeConcurrentWithContext(parentCtx, [][]TaskSpec{{{ID: task1}, {ID: task2}}}, 1, 1)
-		foundCancelled := false
-		for _, res := range results {
-			if res.LogPath != "" {
-				_ = os.Remove(res.LogPath)
+			results := executeConcurrentWithContext(context.Background(), [][]TaskSpec{{{ID: taskID}}}, 1, 0)
+			if len(results) != 1 {
+				t.Fatalf("expected 1 result, got %d", len(results))
 			}
-			if res.ExitCode == 130 {
-				foundCancelled = true
+			if results[0].ExitCode == 0 || !strings.Contains(results[0].Error, "panic") {
+				t.Fatalf("expected panic result, got %+v", results[0])
 			}
-		}
-		if !foundCancelled {
-			t.Fatalf("expected a task to be cancelled")
-		}
-	})
-
-	t.Run("loggerCreateFails", func(t *testing.T) {
-		taskID := nextExecutorTestTaskID("bad") + "/id"
-
-		orig := runCodexTaskFn
-		runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
-			return TaskResult{TaskID: task.ID, ExitCode: 0}
-		}
-		t.Cleanup(func() { runCodexTaskFn = orig })
-
-		results := executeConcurrentWithContext(context.Background(), [][]TaskSpec{{{ID: taskID}}}, 1, 0)
-		if len(results) != 1 || results[0].ExitCode != 0 {
-			t.Fatalf("unexpected results: %+v", results)
-		}
-	})
-
-	t.Run("TestConcurrentTaskLoggerFailure", func(t *testing.T) {
-		// Create a writable temp dir for the main logger, then flip TMPDIR to a read-only
-		// location so task-specific loggers fail to open.
-		writable := t.TempDir()
-		t.Setenv("TMPDIR", writable)
-
-		mainLogger, err := NewLoggerWithSuffix("shared-main")
-		if err != nil {
-			t.Fatalf("NewLoggerWithSuffix() error = %v", err)
-		}
-		setLogger(mainLogger)
-		t.Cleanup(func() {
-			mainLogger.Flush()
-			_ = closeLogger()
-			_ = os.Remove(mainLogger.Path())
-		})
-
-		noWrite := filepath.Join(writable, "ro")
-		if err := os.Mkdir(noWrite, 0o500); err != nil {
-			t.Fatalf("failed to create read-only temp dir: %v", err)
-		}
-		t.Setenv("TMPDIR", noWrite)
-
-		taskA := nextExecutorTestTaskID("shared-a")
-		taskB := nextExecutorTestTaskID("shared-b")
-
-		orig := runCodexTaskFn
-		runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
-			logger := taskLoggerFromContext(task.Context)
-			if logger != mainLogger {
-				return TaskResult{TaskID: task.ID, ExitCode: 1, Error: "unexpected logger"}
+			if results[0].LogPath == "" {
+				t.Fatalf("expected LogPath on panic result")
 			}
-			logger.Info("TASK=" + task.ID)
-			return TaskResult{TaskID: task.ID, ExitCode: 0}
-		}
-		t.Cleanup(func() { runCodexTaskFn = orig })
+			_ = os.Remove(results[0].LogPath)
+		},
+	)
 
-		stderrR, stderrW, err := os.Pipe()
-		if err != nil {
-			t.Fatalf("os.Pipe() error = %v", err)
-		}
-		oldStderr := os.Stderr
-		os.Stderr = stderrW
+	t.Run(
+		"cancelWhileWaitingForWorker", func(t *testing.T) {
+			task1 := nextExecutorTestTaskID("slot")
+			task2 := nextExecutorTestTaskID("slot")
 
-		results := executeConcurrentWithContext(context.Background(), [][]TaskSpec{{{ID: taskA}, {ID: taskB}}}, 1, 0)
+			parentCtx, cancel := context.WithCancel(context.Background())
+			started := make(chan struct{})
+			unblock := make(chan struct{})
+			var startedOnce sync.Once
 
-		_ = stderrW.Close()
-		os.Stderr = oldStderr
-		stderrData, _ := io.ReadAll(stderrR)
-		_ = stderrR.Close()
-		stderrOut := string(stderrData)
-
-		if len(results) != 2 {
-			t.Fatalf("expected 2 results, got %d", len(results))
-		}
-		for _, res := range results {
-			if res.ExitCode != 0 || res.Error != "" {
-				t.Fatalf("task failed unexpectedly: %+v", res)
+			orig := runCodexTaskFn
+			runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
+				startedOnce.Do(func() { close(started) })
+				<-unblock
+				return TaskResult{TaskID: task.ID, ExitCode: 0}
 			}
-			if res.LogPath != mainLogger.Path() {
-				t.Fatalf("shared log path mismatch: got %q want %q", res.LogPath, mainLogger.Path())
+			t.Cleanup(func() { runCodexTaskFn = orig })
+
+			go func() {
+				<-started
+				cancel()
+				time.Sleep(50 * time.Millisecond)
+				close(unblock)
+			}()
+
+			results := executeConcurrentWithContext(parentCtx, [][]TaskSpec{{{ID: task1}, {ID: task2}}}, 1, 1)
+			foundCancelled := false
+			for _, res := range results {
+				if res.LogPath != "" {
+					_ = os.Remove(res.LogPath)
+				}
+				if res.ExitCode == 130 {
+					foundCancelled = true
+				}
 			}
-			if !res.sharedLog {
-				t.Fatalf("expected sharedLog flag for %+v", res)
+			if !foundCancelled {
+				t.Fatalf("expected a task to be cancelled")
 			}
-			if !strings.Contains(stderrOut, "Log (shared)") {
-				t.Fatalf("stderr missing shared marker: %s", stderrOut)
+		},
+	)
+
+	t.Run(
+		"loggerCreateFails", func(t *testing.T) {
+			taskID := nextExecutorTestTaskID("bad") + "/id"
+
+			orig := runCodexTaskFn
+			runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
+				return TaskResult{TaskID: task.ID, ExitCode: 0}
 			}
-		}
+			t.Cleanup(func() { runCodexTaskFn = orig })
 
-		// Test full output mode for shared marker (summary mode doesn't show it)
-		summary := generateFinalOutputWithMode(results, false)
-		if !strings.Contains(summary, "(shared)") {
-			t.Fatalf("full output missing shared marker: %s", summary)
-		}
-
-		mainLogger.Flush()
-		data, err := os.ReadFile(mainLogger.Path())
-		if err != nil {
-			t.Fatalf("failed to read main log: %v", err)
-		}
-		content := string(data)
-		if !strings.Contains(content, "TASK="+taskA) || !strings.Contains(content, "TASK="+taskB) {
-			t.Fatalf("expected shared log to contain both tasks, got: %s", content)
-		}
-	})
-
-	t.Run("TestSanitizeTaskID", func(t *testing.T) {
-		tempDir := t.TempDir()
-		t.Setenv("TMPDIR", tempDir)
-
-		orig := runCodexTaskFn
-		runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
-			logger := taskLoggerFromContext(task.Context)
-			if logger == nil {
-				return TaskResult{TaskID: task.ID, ExitCode: 1, Error: "missing logger"}
+			results := executeConcurrentWithContext(context.Background(), [][]TaskSpec{{{ID: taskID}}}, 1, 0)
+			if len(results) != 1 || results[0].ExitCode != 0 {
+				t.Fatalf("unexpected results: %+v", results)
 			}
-			logger.Info("TASK=" + task.ID)
-			return TaskResult{TaskID: task.ID, ExitCode: 0}
-		}
-		t.Cleanup(func() { runCodexTaskFn = orig })
+		},
+	)
 
-		idA := "../bad id"
-		idB := "tab\tid"
-		results := executeConcurrentWithContext(context.Background(), [][]TaskSpec{{{ID: idA}, {ID: idB}}}, 1, 0)
+	t.Run(
+		"TestConcurrentTaskLoggerFailure", func(t *testing.T) {
+			// Create a writable temp dir for the main logger, then flip TMPDIR to a read-only
+			// location so task-specific loggers fail to open.
+			writable := t.TempDir()
+			t.Setenv("TMPDIR", writable)
 
-		if len(results) != 2 {
-			t.Fatalf("expected 2 results, got %d", len(results))
-		}
-
-		expected := map[string]string{
-			idA: sanitizeLogSuffix(idA),
-			idB: sanitizeLogSuffix(idB),
-		}
-
-		for _, res := range results {
-			if res.ExitCode != 0 || res.Error != "" {
-				t.Fatalf("unexpected failure: %+v", res)
-			}
-			safe, ok := expected[res.TaskID]
-			if !ok {
-				t.Fatalf("unexpected task id %q in results", res.TaskID)
-			}
-			wantBase := fmt.Sprintf("%s-%d-%s.log", primaryLogPrefix(), os.Getpid(), safe)
-			if filepath.Base(res.LogPath) != wantBase {
-				t.Fatalf("log filename for %q = %q, want %q", res.TaskID, filepath.Base(res.LogPath), wantBase)
-			}
-			data, err := os.ReadFile(res.LogPath)
+			mainLogger, err := NewLoggerWithSuffix("shared-main")
 			if err != nil {
-				t.Fatalf("failed to read log %q: %v", res.LogPath, err)
+				t.Fatalf("NewLoggerWithSuffix() error = %v", err)
 			}
-			if !strings.Contains(string(data), "TASK="+res.TaskID) {
-				t.Fatalf("log for %q missing task marker, content: %s", res.TaskID, string(data))
+			setLogger(mainLogger)
+			t.Cleanup(
+				func() {
+					mainLogger.Flush()
+					_ = closeLogger()
+					_ = os.Remove(mainLogger.Path())
+				},
+			)
+
+			noWrite := filepath.Join(writable, "ro")
+			if err := os.Mkdir(noWrite, 0o500); err != nil {
+				t.Fatalf("failed to create read-only temp dir: %v", err)
 			}
-			_ = os.Remove(res.LogPath)
-		}
-	})
+			t.Setenv("TMPDIR", noWrite)
+
+			taskA := nextExecutorTestTaskID("shared-a")
+			taskB := nextExecutorTestTaskID("shared-b")
+
+			orig := runCodexTaskFn
+			runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
+				logger := taskLoggerFromContext(task.Context)
+				if logger != mainLogger {
+					return TaskResult{TaskID: task.ID, ExitCode: 1, Error: "unexpected logger"}
+				}
+				logger.Info("TASK=" + task.ID)
+				return TaskResult{TaskID: task.ID, ExitCode: 0}
+			}
+			t.Cleanup(func() { runCodexTaskFn = orig })
+
+			stderrR, stderrW, err := os.Pipe()
+			if err != nil {
+				t.Fatalf("os.Pipe() error = %v", err)
+			}
+			oldStderr := os.Stderr
+			os.Stderr = stderrW
+
+			results := executeConcurrentWithContext(
+				context.Background(), [][]TaskSpec{{{ID: taskA}, {ID: taskB}}}, 1, 0,
+			)
+
+			_ = stderrW.Close()
+			os.Stderr = oldStderr
+			stderrData, _ := io.ReadAll(stderrR)
+			_ = stderrR.Close()
+			stderrOut := string(stderrData)
+
+			if len(results) != 2 {
+				t.Fatalf("expected 2 results, got %d", len(results))
+			}
+			for _, res := range results {
+				if res.ExitCode != 0 || res.Error != "" {
+					t.Fatalf("task failed unexpectedly: %+v", res)
+				}
+				if res.LogPath != mainLogger.Path() {
+					t.Fatalf("shared log path mismatch: got %q want %q", res.LogPath, mainLogger.Path())
+				}
+				if !res.sharedLog {
+					t.Fatalf("expected sharedLog flag for %+v", res)
+				}
+				if !strings.Contains(stderrOut, "Log (shared)") {
+					t.Fatalf("stderr missing shared marker: %s", stderrOut)
+				}
+			}
+
+			// Test full output mode for shared marker (summary mode doesn't show it)
+			summary := generateFinalOutputWithMode(results, false)
+			if !strings.Contains(summary, "(shared)") {
+				t.Fatalf("full output missing shared marker: %s", summary)
+			}
+
+			mainLogger.Flush()
+			data, err := os.ReadFile(mainLogger.Path())
+			if err != nil {
+				t.Fatalf("failed to read main log: %v", err)
+			}
+			content := string(data)
+			if !strings.Contains(content, "TASK="+taskA) || !strings.Contains(content, "TASK="+taskB) {
+				t.Fatalf("expected shared log to contain both tasks, got: %s", content)
+			}
+		},
+	)
+
+	t.Run(
+		"TestSanitizeTaskID", func(t *testing.T) {
+			tempDir := t.TempDir()
+			t.Setenv("TMPDIR", tempDir)
+
+			orig := runCodexTaskFn
+			runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
+				logger := taskLoggerFromContext(task.Context)
+				if logger == nil {
+					return TaskResult{TaskID: task.ID, ExitCode: 1, Error: "missing logger"}
+				}
+				logger.Info("TASK=" + task.ID)
+				return TaskResult{TaskID: task.ID, ExitCode: 0}
+			}
+			t.Cleanup(func() { runCodexTaskFn = orig })
+
+			idA := "../bad id"
+			idB := "tab\tid"
+			results := executeConcurrentWithContext(context.Background(), [][]TaskSpec{{{ID: idA}, {ID: idB}}}, 1, 0)
+
+			if len(results) != 2 {
+				t.Fatalf("expected 2 results, got %d", len(results))
+			}
+
+			expected := map[string]string{
+				idA: sanitizeLogSuffix(idA),
+				idB: sanitizeLogSuffix(idB),
+			}
+
+			for _, res := range results {
+				if res.ExitCode != 0 || res.Error != "" {
+					t.Fatalf("unexpected failure: %+v", res)
+				}
+				safe, ok := expected[res.TaskID]
+				if !ok {
+					t.Fatalf("unexpected task id %q in results", res.TaskID)
+				}
+				wantBase := fmt.Sprintf("%s-%d-%s.log", primaryLogPrefix(), os.Getpid(), safe)
+				if filepath.Base(res.LogPath) != wantBase {
+					t.Fatalf("log filename for %q = %q, want %q", res.TaskID, filepath.Base(res.LogPath), wantBase)
+				}
+				data, err := os.ReadFile(res.LogPath)
+				if err != nil {
+					t.Fatalf("failed to read log %q: %v", res.LogPath, err)
+				}
+				if !strings.Contains(string(data), "TASK="+res.TaskID) {
+					t.Fatalf("log for %q missing task marker, content: %s", res.TaskID, string(data))
+				}
+				_ = os.Remove(res.LogPath)
+			}
+		},
+	)
 }
 
 func TestExecutorSignalAndTermination(t *testing.T) {
@@ -1373,10 +1686,12 @@ func TestExecutorSharedLogFalseWhenCustomLogPath(t *testing.T) {
 	}
 	oldStderr := os.Stderr
 	os.Stderr = devNull
-	t.Cleanup(func() {
-		os.Stderr = oldStderr
-		_ = devNull.Close()
-	})
+	t.Cleanup(
+		func() {
+			os.Stderr = oldStderr
+			_ = devNull.Close()
+		},
+	)
 
 	tempDir := t.TempDir()
 	t.Setenv("TMPDIR", tempDir)

@@ -241,18 +241,22 @@ func TestLoggerCleanupOldLogsRemovesOrphans(t *testing.T) {
 	untouched := createTempLog(t, tempDir, "unrelated.log")
 
 	runningPIDs := map[int]bool{333: true, 444: true}
-	stubProcessRunning(t, func(pid int) bool {
-		return runningPIDs[pid]
-	})
+	stubProcessRunning(
+		t, func(pid int) bool {
+			return runningPIDs[pid]
+		},
+	)
 
 	// Stub process start time to be in the past so files won't be considered as PID reused
-	stubProcessStartTime(t, func(pid int) time.Time {
-		if runningPIDs[pid] {
-			// Return a time before file creation
-			return time.Now().Add(-1 * time.Hour)
-		}
-		return time.Time{}
-	})
+	stubProcessStartTime(
+		t, func(pid int) time.Time {
+			if runningPIDs[pid] {
+				// Return a time before file creation
+				return time.Now().Add(-1 * time.Hour)
+			}
+			return time.Time{}
+		},
+	)
 
 	stats, err := cleanupOldLogs()
 	if err != nil {
@@ -296,24 +300,30 @@ func TestLoggerCleanupOldLogsHandlesInvalidNamesAndErrors(t *testing.T) {
 	target := createTempLog(t, tempDir, "codex-wrapper-555-extra.log")
 
 	var checked []int
-	stubProcessRunning(t, func(pid int) bool {
-		checked = append(checked, pid)
-		return false
-	})
+	stubProcessRunning(
+		t, func(pid int) bool {
+			checked = append(checked, pid)
+			return false
+		},
+	)
 
-	stubProcessStartTime(t, func(pid int) time.Time {
-		return time.Time{} // Return zero time for processes not running
-	})
+	stubProcessStartTime(
+		t, func(pid int) time.Time {
+			return time.Time{} // Return zero time for processes not running
+		},
+	)
 
 	removeErr := errors.New("remove failure")
 	callCount := 0
-	stubRemoveLogFile(t, func(path string) error {
-		callCount++
-		if path == target {
-			return removeErr
-		}
-		return os.Remove(path)
-	})
+	stubRemoveLogFile(
+		t, func(path string) error {
+			callCount++
+			if path == target {
+				return removeErr
+			}
+			return os.Remove(path)
+		},
+	)
 
 	stats, err := cleanupOldLogs()
 	if err == nil {
@@ -340,18 +350,24 @@ func TestLoggerCleanupOldLogsHandlesInvalidNamesAndErrors(t *testing.T) {
 }
 
 func TestLoggerCleanupOldLogsHandlesGlobFailures(t *testing.T) {
-	stubProcessRunning(t, func(pid int) bool {
-		t.Fatalf("process check should not run when glob fails")
-		return false
-	})
-	stubProcessStartTime(t, func(int) time.Time {
-		return time.Time{}
-	})
+	stubProcessRunning(
+		t, func(pid int) bool {
+			t.Fatalf("process check should not run when glob fails")
+			return false
+		},
+	)
+	stubProcessStartTime(
+		t, func(int) time.Time {
+			return time.Time{}
+		},
+	)
 
 	globErr := errors.New("glob failure")
-	stubGlobLogFiles(t, func(pattern string) ([]string, error) {
-		return nil, globErr
-	})
+	stubGlobLogFiles(
+		t, func(pattern string) ([]string, error) {
+			return nil, globErr
+		},
+	)
 
 	stats, err := cleanupOldLogs()
 	if err == nil {
@@ -368,13 +384,17 @@ func TestLoggerCleanupOldLogsHandlesGlobFailures(t *testing.T) {
 func TestLoggerCleanupOldLogsEmptyDirectoryStats(t *testing.T) {
 	setTempDirEnv(t, t.TempDir())
 
-	stubProcessRunning(t, func(int) bool {
-		t.Fatalf("process check should not run for empty directory")
-		return false
-	})
-	stubProcessStartTime(t, func(int) time.Time {
-		return time.Time{}
-	})
+	stubProcessRunning(
+		t, func(int) bool {
+			t.Fatalf("process check should not run for empty directory")
+			return false
+		},
+	)
+	stubProcessStartTime(
+		t, func(int) time.Time {
+			return time.Time{}
+		},
+	)
 
 	stats, err := cleanupOldLogs()
 	if err != nil {
@@ -397,10 +417,12 @@ func TestLoggerCleanupOldLogsHandlesTempDirPermissionErrors(t *testing.T) {
 	stubProcessStartTime(t, func(int) time.Time { return time.Time{} })
 
 	var attempts int
-	stubRemoveLogFile(t, func(path string) error {
-		attempts++
-		return &os.PathError{Op: "remove", Path: path, Err: os.ErrPermission}
-	})
+	stubRemoveLogFile(
+		t, func(path string) error {
+			attempts++
+			return &os.PathError{Op: "remove", Path: path, Err: os.ErrPermission}
+		},
+	)
 
 	stats, err := cleanupOldLogs()
 	if err == nil {
@@ -434,12 +456,14 @@ func TestLoggerCleanupOldLogsHandlesPermissionDeniedFile(t *testing.T) {
 	stubProcessRunning(t, func(int) bool { return false })
 	stubProcessStartTime(t, func(int) time.Time { return time.Time{} })
 
-	stubRemoveLogFile(t, func(path string) error {
-		if path == protected {
-			return &os.PathError{Op: "remove", Path: path, Err: os.ErrPermission}
-		}
-		return os.Remove(path)
-	})
+	stubRemoveLogFile(
+		t, func(path string) error {
+			if path == protected {
+				return &os.PathError{Op: "remove", Path: path, Err: os.ErrPermission}
+			}
+			return os.Remove(path)
+		},
+	)
 
 	stats, err := cleanupOldLogs()
 	if err == nil {
@@ -472,17 +496,21 @@ func TestLoggerCleanupOldLogsPerformanceBound(t *testing.T) {
 		fakePaths[i] = createTempLog(t, tempDir, name)
 	}
 
-	stubGlobLogFiles(t, func(pattern string) ([]string, error) {
-		return fakePaths, nil
-	})
+	stubGlobLogFiles(
+		t, func(pattern string) ([]string, error) {
+			return fakePaths, nil
+		},
+	)
 	stubProcessRunning(t, func(int) bool { return false })
 	stubProcessStartTime(t, func(int) time.Time { return time.Time{} })
 
 	var removed int
-	stubRemoveLogFile(t, func(path string) error {
-		removed++
-		return nil
-	})
+	stubRemoveLogFile(
+		t, func(path string) error {
+			removed++
+			return nil
+		},
+	)
 
 	start := time.Now()
 	stats, err := cleanupOldLogs()
@@ -559,18 +587,19 @@ func TestLoggerCoverageSuite(t *testing.T) {
 		{"TestParallelParseConfig_DelimiterFormat", TestParallelParseConfig_DelimiterFormat},
 
 		{"TestBackendSelectBackend", TestBackendSelectBackend},
+		{"TestBackendSelectBackend_DisablesGemini", TestBackendSelectBackend_DisablesGemini},
 		{"TestBackendSelectBackend_Invalid", TestBackendSelectBackend_Invalid},
 		{"TestBackendSelectBackend_DefaultOnEmpty", TestBackendSelectBackend_DefaultOnEmpty},
 		{"TestBackendBuildArgs_CodexBackend", TestBackendBuildArgs_CodexBackend},
 		{"TestBackendBuildArgs_ClaudeBackend", TestBackendBuildArgs_ClaudeBackend},
 		{"TestClaudeBackendBuildArgs_OutputValidation", TestClaudeBackendBuildArgs_OutputValidation},
-		{"TestBackendBuildArgs_GeminiBackend", TestBackendBuildArgs_GeminiBackend},
-		{"TestGeminiBackendBuildArgs_OutputValidation", TestGeminiBackendBuildArgs_OutputValidation},
+		{"TestBackendBuildArgs_AntigravityBackend", TestBackendBuildArgs_AntigravityBackend},
+		{"TestAntigravityBackendBuildArgs_OutputValidation", TestAntigravityBackendBuildArgs_OutputValidation},
 		{"TestBackendNamesAndCommands", TestBackendNamesAndCommands},
 
 		{"TestBackendParseJSONStream", TestBackendParseJSONStream},
 		{"TestBackendParseJSONStream_ClaudeEvents", TestBackendParseJSONStream_ClaudeEvents},
-		{"TestBackendParseJSONStream_GeminiEvents", TestBackendParseJSONStream_GeminiEvents},
+		{"TestBackendParseJSONStream_ContentStreamEvents", TestBackendParseJSONStream_ContentStreamEvents},
 		{"TestBackendParseJSONStreamWithWarn_InvalidLine", TestBackendParseJSONStreamWithWarn_InvalidLine},
 		{"TestBackendParseJSONStream_OnMessage", TestBackendParseJSONStream_OnMessage},
 		{"TestBackendParseJSONStream_ScannerError", TestBackendParseJSONStream_ScannerError},
@@ -587,7 +616,8 @@ func TestLoggerCoverageSuite(t *testing.T) {
 		{"TestGetBootTimeInvalidData", TestGetBootTimeInvalidData},
 
 		{"TestClaudeBuildArgs_ModesAndPermissions", TestClaudeBuildArgs_ModesAndPermissions},
-		{"TestClaudeBuildArgs_GeminiAndCodexModes", TestClaudeBuildArgs_GeminiAndCodexModes},
+		{"TestBackendBuildArgs_CodexAndAntigravityModes", TestBackendBuildArgs_CodexAndAntigravityModes},
+		{"TestSelectBackend_DisablesGemini", TestSelectBackend_DisablesGemini},
 		{"TestClaudeBuildArgs_BackendMetadata", TestClaudeBuildArgs_BackendMetadata},
 	}
 
@@ -602,18 +632,22 @@ func TestLoggerCleanupOldLogsKeepsCurrentProcessLog(t *testing.T) {
 	currentPID := os.Getpid()
 	currentLog := createTempLog(t, tempDir, fmt.Sprintf("codex-wrapper-%d.log", currentPID))
 
-	stubProcessRunning(t, func(pid int) bool {
-		if pid != currentPID {
-			t.Fatalf("unexpected pid check: %d", pid)
-		}
-		return true
-	})
-	stubProcessStartTime(t, func(pid int) time.Time {
-		if pid == currentPID {
-			return time.Now().Add(-1 * time.Hour)
-		}
-		return time.Time{}
-	})
+	stubProcessRunning(
+		t, func(pid int) bool {
+			if pid != currentPID {
+				t.Fatalf("unexpected pid check: %d", pid)
+			}
+			return true
+		},
+	)
+	stubProcessStartTime(
+		t, func(pid int) time.Time {
+			if pid == currentPID {
+				return time.Now().Add(-1 * time.Hour)
+			}
+			return time.Time{}
+		},
+	)
 
 	stats, err := cleanupOldLogs()
 	if err != nil {
@@ -645,20 +679,26 @@ func TestLoggerIsPIDReusedScenarios(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			stubFileStat(t, func(string) (os.FileInfo, error) {
-				if tt.statErr != nil {
-					return nil, tt.statErr
+		t.Run(
+			tt.name, func(t *testing.T) {
+				stubFileStat(
+					t, func(string) (os.FileInfo, error) {
+						if tt.statErr != nil {
+							return nil, tt.statErr
+						}
+						return fakeFileInfo{modTime: tt.modTime}, nil
+					},
+				)
+				stubProcessStartTime(
+					t, func(int) time.Time {
+						return tt.startTime
+					},
+				)
+				if got := isPIDReused("log", 1234); got != tt.want {
+					t.Fatalf("isPIDReused() = %v, want %v", got, tt.want)
 				}
-				return fakeFileInfo{modTime: tt.modTime}, nil
-			})
-			stubProcessStartTime(t, func(int) time.Time {
-				return tt.startTime
-			})
-			if got := isPIDReused("log", 1234); got != tt.want {
-				t.Fatalf("isPIDReused() = %v, want %v", got, tt.want)
-			}
-		})
+			},
+		)
 	}
 }
 
@@ -669,46 +709,64 @@ func TestLoggerIsUnsafeFileSecurityChecks(t *testing.T) {
 		t.Fatalf("filepath.Abs() error = %v", err)
 	}
 
-	t.Run("symlink", func(t *testing.T) {
-		stubFileStat(t, func(string) (os.FileInfo, error) {
-			return fakeFileInfo{mode: os.ModeSymlink}, nil
-		})
-		stubEvalSymlinks(t, func(path string) (string, error) {
-			return filepath.Join(absTempDir, filepath.Base(path)), nil
-		})
-		unsafe, reason := isUnsafeFile(filepath.Join(absTempDir, "codex-wrapper-1.log"), tempDir)
-		if !unsafe || reason != "refusing to delete symlink" {
-			t.Fatalf("expected symlink to be rejected, got unsafe=%v reason=%q", unsafe, reason)
-		}
-	})
+	t.Run(
+		"symlink", func(t *testing.T) {
+			stubFileStat(
+				t, func(string) (os.FileInfo, error) {
+					return fakeFileInfo{mode: os.ModeSymlink}, nil
+				},
+			)
+			stubEvalSymlinks(
+				t, func(path string) (string, error) {
+					return filepath.Join(absTempDir, filepath.Base(path)), nil
+				},
+			)
+			unsafe, reason := isUnsafeFile(filepath.Join(absTempDir, "codex-wrapper-1.log"), tempDir)
+			if !unsafe || reason != "refusing to delete symlink" {
+				t.Fatalf("expected symlink to be rejected, got unsafe=%v reason=%q", unsafe, reason)
+			}
+		},
+	)
 
-	t.Run("path traversal", func(t *testing.T) {
-		stubFileStat(t, func(string) (os.FileInfo, error) {
-			return fakeFileInfo{}, nil
-		})
-		outside := filepath.Join(filepath.Dir(absTempDir), "etc", "passwd")
-		stubEvalSymlinks(t, func(string) (string, error) {
-			return outside, nil
-		})
-		unsafe, reason := isUnsafeFile(filepath.Join("..", "..", "etc", "passwd"), tempDir)
-		if !unsafe || reason != "file is outside tempDir" {
-			t.Fatalf("expected traversal path to be rejected, got unsafe=%v reason=%q", unsafe, reason)
-		}
-	})
+	t.Run(
+		"path traversal", func(t *testing.T) {
+			stubFileStat(
+				t, func(string) (os.FileInfo, error) {
+					return fakeFileInfo{}, nil
+				},
+			)
+			outside := filepath.Join(filepath.Dir(absTempDir), "etc", "passwd")
+			stubEvalSymlinks(
+				t, func(string) (string, error) {
+					return outside, nil
+				},
+			)
+			unsafe, reason := isUnsafeFile(filepath.Join("..", "..", "etc", "passwd"), tempDir)
+			if !unsafe || reason != "file is outside tempDir" {
+				t.Fatalf("expected traversal path to be rejected, got unsafe=%v reason=%q", unsafe, reason)
+			}
+		},
+	)
 
-	t.Run("outside temp dir", func(t *testing.T) {
-		stubFileStat(t, func(string) (os.FileInfo, error) {
-			return fakeFileInfo{}, nil
-		})
-		otherDir := t.TempDir()
-		stubEvalSymlinks(t, func(string) (string, error) {
-			return filepath.Join(otherDir, "codex-wrapper-9.log"), nil
-		})
-		unsafe, reason := isUnsafeFile(filepath.Join(otherDir, "codex-wrapper-9.log"), tempDir)
-		if !unsafe || reason != "file is outside tempDir" {
-			t.Fatalf("expected outside file to be rejected, got unsafe=%v reason=%q", unsafe, reason)
-		}
-	})
+	t.Run(
+		"outside temp dir", func(t *testing.T) {
+			stubFileStat(
+				t, func(string) (os.FileInfo, error) {
+					return fakeFileInfo{}, nil
+				},
+			)
+			otherDir := t.TempDir()
+			stubEvalSymlinks(
+				t, func(string) (string, error) {
+					return filepath.Join(otherDir, "codex-wrapper-9.log"), nil
+				},
+			)
+			unsafe, reason := isUnsafeFile(filepath.Join(otherDir, "codex-wrapper-9.log"), tempDir)
+			if !unsafe || reason != "file is outside tempDir" {
+				t.Fatalf("expected outside file to be rejected, got unsafe=%v reason=%q", unsafe, reason)
+			}
+		},
+	)
 }
 
 func TestLoggerPathAndRemove(t *testing.T) {
@@ -792,15 +850,17 @@ func TestLoggerParsePIDFromLog(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, ok := parsePIDFromLog(filepath.Join("/tmp", tt.name))
-			if ok != tt.ok {
-				t.Fatalf("parsePIDFromLog ok = %v, want %v", ok, tt.ok)
-			}
-			if ok && got != tt.pid {
-				t.Fatalf("pid = %d, want %d", got, tt.pid)
-			}
-		})
+		t.Run(
+			tt.name, func(t *testing.T) {
+				got, ok := parsePIDFromLog(filepath.Join("/tmp", tt.name))
+				if ok != tt.ok {
+					t.Fatalf("parsePIDFromLog ok = %v, want %v", ok, tt.ok)
+				}
+				if ok && got != tt.pid {
+					t.Fatalf("pid = %d, want %d", got, tt.pid)
+				}
+			},
+		)
 	}
 }
 
@@ -829,54 +889,66 @@ func stubProcessRunning(t *testing.T, fn func(int) bool) {
 	t.Helper()
 	original := processRunningCheck
 	processRunningCheck = fn
-	t.Cleanup(func() {
-		processRunningCheck = original
-	})
+	t.Cleanup(
+		func() {
+			processRunningCheck = original
+		},
+	)
 }
 
 func stubProcessStartTime(t *testing.T, fn func(int) time.Time) {
 	t.Helper()
 	original := processStartTimeFn
 	processStartTimeFn = fn
-	t.Cleanup(func() {
-		processStartTimeFn = original
-	})
+	t.Cleanup(
+		func() {
+			processStartTimeFn = original
+		},
+	)
 }
 
 func stubRemoveLogFile(t *testing.T, fn func(string) error) {
 	t.Helper()
 	original := removeLogFileFn
 	removeLogFileFn = fn
-	t.Cleanup(func() {
-		removeLogFileFn = original
-	})
+	t.Cleanup(
+		func() {
+			removeLogFileFn = original
+		},
+	)
 }
 
 func stubGlobLogFiles(t *testing.T, fn func(string) ([]string, error)) {
 	t.Helper()
 	original := globLogFiles
 	globLogFiles = fn
-	t.Cleanup(func() {
-		globLogFiles = original
-	})
+	t.Cleanup(
+		func() {
+			globLogFiles = original
+		},
+	)
 }
 
 func stubFileStat(t *testing.T, fn func(string) (os.FileInfo, error)) {
 	t.Helper()
 	original := fileStatFn
 	fileStatFn = fn
-	t.Cleanup(func() {
-		fileStatFn = original
-	})
+	t.Cleanup(
+		func() {
+			fileStatFn = original
+		},
+	)
 }
 
 func stubEvalSymlinks(t *testing.T, fn func(string) (string, error)) {
 	t.Helper()
 	original := evalSymlinksFn
 	evalSymlinksFn = fn
-	t.Cleanup(func() {
-		evalSymlinksFn = original
-	})
+	t.Cleanup(
+		func() {
+			evalSymlinksFn = original
+		},
+	)
 }
 
 type fakeFileInfo struct {
@@ -954,41 +1026,43 @@ func TestLoggerExtractRecentErrors(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			logger, err := NewLoggerWithSuffix("extract-test")
-			if err != nil {
-				t.Fatalf("NewLoggerWithSuffix() error = %v", err)
-			}
-			defer logger.Close()
-			defer logger.RemoveLogFile()
-
-			// Write logs using logger methods
-			for _, entry := range tt.logs {
-				switch entry.level {
-				case "INFO":
-					logger.Info(entry.msg)
-				case "WARN":
-					logger.Warn(entry.msg)
-				case "ERROR":
-					logger.Error(entry.msg)
-				case "DEBUG":
-					logger.Debug(entry.msg)
+		t.Run(
+			tt.name, func(t *testing.T) {
+				logger, err := NewLoggerWithSuffix("extract-test")
+				if err != nil {
+					t.Fatalf("NewLoggerWithSuffix() error = %v", err)
 				}
-			}
+				defer logger.Close()
+				defer logger.RemoveLogFile()
 
-			logger.Flush()
-
-			got := logger.ExtractRecentErrors(tt.maxEntries)
-
-			if len(got) != len(tt.want) {
-				t.Fatalf("ExtractRecentErrors() got %d entries, want %d", len(got), len(tt.want))
-			}
-			for i, entry := range got {
-				if entry != tt.want[i] {
-					t.Errorf("entry[%d] = %q, want %q", i, entry, tt.want[i])
+				// Write logs using logger methods
+				for _, entry := range tt.logs {
+					switch entry.level {
+					case "INFO":
+						logger.Info(entry.msg)
+					case "WARN":
+						logger.Warn(entry.msg)
+					case "ERROR":
+						logger.Error(entry.msg)
+					case "DEBUG":
+						logger.Debug(entry.msg)
+					}
 				}
-			}
-		})
+
+				logger.Flush()
+
+				got := logger.ExtractRecentErrors(tt.maxEntries)
+
+				if len(got) != len(tt.want) {
+					t.Fatalf("ExtractRecentErrors() got %d entries, want %d", len(got), len(tt.want))
+				}
+				for i, entry := range got {
+					if entry != tt.want[i] {
+						t.Errorf("entry[%d] = %q, want %q", i, entry, tt.want[i])
+					}
+				}
+			},
+		)
 	}
 }
 

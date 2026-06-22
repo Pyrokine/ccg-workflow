@@ -9,11 +9,13 @@ func TestParseJSONStream_SkipsOverlongLineAndContinues(t *testing.T) {
 	// Exceed the 10MB bufio.Scanner limit in parseJSONStreamInternal.
 	tooLong := strings.Repeat("a", 11*1024*1024)
 
-	input := strings.Join([]string{
-		`{"type":"item.completed","item":{"type":"other_type","text":"` + tooLong + `"}}`,
-		`{"type":"thread.started","thread_id":"t-1"}`,
-		`{"type":"item.completed","item":{"type":"agent_message","text":"ok"}}`,
-	}, "\n")
+	input := strings.Join(
+		[]string{
+			`{"type":"item.completed","item":{"type":"other_type","text":"` + tooLong + `"}}`,
+			`{"type":"thread.started","thread_id":"t-1"}`,
+			`{"type":"item.completed","item":{"type":"agent_message","text":"ok"}}`,
+		}, "\n",
+	)
 
 	var warns []string
 	warnFn := func(msg string) { warns = append(warns, msg) }
