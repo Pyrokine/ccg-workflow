@@ -1,9 +1,13 @@
 {
   "name": "ccg-workflow",
-  "version": "3.1.0",
-  "description": "Claude + Codex + Gemini multi-model collaboration system - smart routing development workflow",
+  "version": "3.1.6-aug.1",
+  "description": "Claude + Codex + Antigravity multi-model collaboration system - smart routing development workflow",
   "type": "module",
+  "private": true,
   "packageManager": "pnpm@10.17.1",
+  "engines": {
+    "node": "^20.19.0 || ^22.13.0 || >=24"
+  },
   "author": {
     "name": "CCG Contributors"
   },
@@ -11,7 +15,7 @@
   "keywords": [
     "claude",
     "codex",
-    "gemini",
+    "antigravity",
     "multi-model",
     "ai",
     "collaboration",
@@ -26,6 +30,7 @@
   "types": "dist/index.d.mts",
   "files": [
     "bin/ccg.mjs",
+    "assets/sponsors/",
     "dist",
     "templates/commands/",
     "templates/commands-legacy/",
@@ -34,13 +39,6 @@
     "templates/spec/",
     "templates/codex/",
     "templates/prompts/codex/",
-    "templates/prompts/gemini/analyzer.md",
-    "templates/prompts/gemini/architect.md",
-    "templates/prompts/gemini/debugger.md",
-    "templates/prompts/gemini/frontend.md",
-    "templates/prompts/gemini/optimizer.md",
-    "templates/prompts/gemini/reviewer.md",
-    "templates/prompts/gemini/tester.md",
     "templates/prompts/claude/",
     "templates/prompts/antigravity/",
     "templates/output-styles/",
@@ -54,35 +52,41 @@
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "pnpm build",
     "test": "vitest run",
-    "lint": "eslint",
-    "lint:fix": "eslint --fix",
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix",
+    "format": "prettier --write \"src/**/*.{ts,tsx}\" \"*.{json,js}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx}\" \"*.{json,js}\"",
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs"
   },
   "dependencies": {
-    "ansis": "^4.1.0",
-    "cac": "^6.7.14",
-    "fs-extra": "^11.3.2",
-    "i18next": "^25.5.2",
-    "i18next-fs-backend": "^2.6.0",
-    "inquirer": "^12.9.6",
-    "ora": "^9.0.0",
+    "ansis": "^4.3.1",
+    "cac": "^7.0.0",
+    "fs-extra": "^11.3.5",
+    "i18next": "^26.3.1",
+    "i18next-fs-backend": "^2.6.6",
+    "inquirer": "^14.0.2",
+    "ora": "^9.4.0",
     "pathe": "^2.0.3",
-    "smol-toml": "^1.4.2"
+    "smol-toml": "^1.6.1"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild"]
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
   },
   "devDependencies": {
-    "@antfu/eslint-config": "^5.4.1",
+    "@eslint/js": "^10.0.1",
     "@types/fs-extra": "^11.0.4",
     "@types/node": "^22.0.0",
-    "eslint": "^9.36.0",
-    "tsx": "^4.20.5",
-    "typescript": "^5.9.2",
+    "eslint": "^10.5.0",
+    "prettier": "^3.8.4",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.61.1",
     "unbuild": "^3.6.1",
     "vitepress": "^1.6.4",
-    "vitest": "^3.1.1"
+    "vitest": "^4.1.9"
   }
 }

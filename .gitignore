@@ -38,6 +38,7 @@ linux-do-post-update.md
 # Local tools cache
 .ace-tool/
 .claude/
+.ccg/
 .magi/
 
 # Lock files
@@ -61,3 +62,5 @@ FINAL_VERIFICATION.md
 
 # Old package tarballs
 *.tgz
+
+.local-tool/
