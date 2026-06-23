@@ -25,6 +25,15 @@ func nextExecutorTestTaskID(prefix string) string {
 	return fmt.Sprintf("%s-%d", prefix, executorTestTaskCounter.Add(1))
 }
 
+func antigravityLogPathFromArgs(args []string) string {
+	for i, arg := range args {
+		if arg == "--log-file" && i+1 < len(args) {
+			return args[i+1]
+		}
+	}
+	return ""
+}
+
 type execFakeProcess struct {
 	pid     int
 	signals []os.Signal
@@ -407,7 +416,11 @@ func TestExecutorHelperCoverage(t *testing.T) {
 
 func TestExecutorRunCodexTaskWithContext(t *testing.T) {
 	origRunner := newCommandRunner
-	defer func() { newCommandRunner = origRunner }()
+	origPTYRetry := runAntigravityPTYRetryFn
+	defer func() {
+		newCommandRunner = origRunner
+		runAntigravityPTYRetryFn = origPTYRetry
+	}()
 
 	t.Run(
 		"resumeMissingSessionID", func(t *testing.T) {
@@ -506,7 +519,8 @@ func TestExecutorRunCodexTaskWithContext(t *testing.T) {
 			if runner == nil || runner.stdinPipeCalled.Load() {
 				t.Fatalf("agy stdin should not create stdin pipe")
 			}
-			if !slices.Equal(gotArgs, []string{"-p", "line1\nline2"}) {
+			if antigravityLogPathFromArgs(gotArgs) == "" ||
+				!slices.Equal(gotArgs[len(gotArgs)-2:], []string{"-p", "line1\nline2"}) {
 				t.Fatalf("agy args = %#v", gotArgs)
 			}
 		},
@@ -621,6 +635,9 @@ func TestExecutorRunCodexTaskWithContext(t *testing.T) {
 					process: &execFakeProcess{pid: 1234},
 				}
 			}
+			runAntigravityPTYRetryFn = func(context.Context, string, []string, string, map[string]string) (string, bool, error) {
+				return "", false, errors.New("script missing")
+			}
 
 			res := runCodexTaskWithContext(
 				context.Background(), TaskSpec{ID: "task-agy-empty", Task: "payload", WorkDir: ".", Backend: "agy"},
@@ -628,6 +645,178 @@ func TestExecutorRunCodexTaskWithContext(t *testing.T) {
 			)
 			if res.ExitCode != 1 || !strings.Contains(res.Error, "drop stdout in non-interactive runs") {
 				t.Fatalf("expected empty output guidance, got %+v", res)
+			}
+		},
+	)
+
+	t.Run(
+		"agyWaitErrorReportsLogDiagnostic", func(t *testing.T) {
+			err := exec.Command("false").Run()
+			exitErr, _ := err.(*exec.ExitError)
+			if exitErr == nil {
+				t.Fatalf("expected exec.ExitError")
+			}
+			newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
+				if logPath := antigravityLogPathFromArgs(args); logPath != "" {
+					logText := "agent executor error: FAILED_PRECONDITION (code 400): " +
+						"User location is not supported for the API use."
+					if err := os.WriteFile(logPath, []byte(logText), 0o600); err != nil {
+						t.Fatalf("write agy log: %v", err)
+					}
+				}
+				return &execFakeRunner{
+					stdout:  newReasonReadCloser(""),
+					process: &execFakeProcess{pid: 1234},
+					waitErr: exitErr,
+				}
+			}
+			runAntigravityPTYRetryFn = func(context.Context, string, []string, string, map[string]string) (string, bool, error) {
+				t.Fatalf("PTY retry should not run when wait error log contains backend diagnostic")
+				return "", false, nil
+			}
+
+			res := runCodexTaskWithContext(
+				context.Background(), TaskSpec{ID: "task-agy-wait-log", Task: "payload", WorkDir: ".", Backend: "agy"},
+				AntigravityBackend{}, nil, false, false, 5,
+			)
+			if res.ExitCode != 1 || !strings.Contains(res.Error, "User location is not supported") {
+				t.Fatalf("expected wait error log diagnostic, got %+v", res)
+			}
+		},
+	)
+
+	t.Run(
+		"agyEmptyOutputReportsLogDiagnostic", func(t *testing.T) {
+			newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
+				if logPath := antigravityLogPathFromArgs(args); logPath != "" {
+					logText := "agent executor error: FAILED_PRECONDITION (code 400): " +
+						"User location is not supported for the API use."
+					if err := os.WriteFile(logPath, []byte(logText), 0o600); err != nil {
+						t.Fatalf("write agy log: %v", err)
+					}
+				}
+				return &execFakeRunner{
+					stdout:  newReasonReadCloser(""),
+					process: &execFakeProcess{pid: 1234},
+				}
+			}
+			runAntigravityPTYRetryFn = func(context.Context, string, []string, string, map[string]string) (string, bool, error) {
+				t.Fatalf("PTY retry should not run when agy log contains backend diagnostic")
+				return "", false, nil
+			}
+
+			res := runCodexTaskWithContext(
+				context.Background(), TaskSpec{ID: "task-agy-empty-log", Task: "payload", WorkDir: ".", Backend: "agy"},
+				AntigravityBackend{}, nil, false, false, 5,
+			)
+			if res.ExitCode != 1 || !strings.Contains(res.Error, "User location is not supported") {
+				t.Fatalf("expected agy log diagnostic, got %+v", res)
+			}
+		},
+	)
+
+	t.Run(
+		"agyEmptyOutputWithEarlyAuthLogRetriesWithPTY", func(t *testing.T) {
+			newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
+				if logPath := antigravityLogPathFromArgs(args); logPath != "" {
+					logText := "error getting token source: You are not logged into Antigravity.\n"
+					if err := os.WriteFile(logPath, []byte(logText), 0o600); err != nil {
+						t.Fatalf("write agy log: %v", err)
+					}
+				}
+				return &execFakeRunner{
+					stdout:  newReasonReadCloser(""),
+					process: &execFakeProcess{pid: 1234},
+				}
+			}
+			runAntigravityPTYRetryFn = func(context.Context, string, []string, string, map[string]string) (string, bool, error) {
+				return "PTY OK", true, nil
+			}
+
+			res := runCodexTaskWithContext(
+				context.Background(), TaskSpec{ID: "task-agy-empty-auth-log", Task: "payload", WorkDir: ".", Backend: "agy"},
+				AntigravityBackend{}, nil, false, false, 5,
+			)
+			if res.ExitCode != 0 || res.Message != "PTY OK" {
+				t.Fatalf("expected PTY retry despite early auth log, got %+v", res)
+			}
+		},
+	)
+
+	t.Run(
+		"agyEmptyOutputWithQuotaRefreshLogRetriesWithPTY", func(t *testing.T) {
+			newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
+				if logPath := antigravityLogPathFromArgs(args); logPath != "" {
+					logText := "quotaRefreshLoop: starting reload (force=true)\n"
+					if err := os.WriteFile(logPath, []byte(logText), 0o600); err != nil {
+						t.Fatalf("write agy log: %v", err)
+					}
+				}
+				return &execFakeRunner{
+					stdout:  newReasonReadCloser(""),
+					process: &execFakeProcess{pid: 1234},
+				}
+			}
+			runAntigravityPTYRetryFn = func(context.Context, string, []string, string, map[string]string) (string, bool, error) {
+				return "PTY OK", true, nil
+			}
+
+			res := runCodexTaskWithContext(
+				context.Background(), TaskSpec{ID: "task-agy-empty-quota-refresh", Task: "payload", WorkDir: ".", Backend: "agy"},
+				AntigravityBackend{}, nil, false, false, 5,
+			)
+			if res.ExitCode != 0 || res.Message != "PTY OK" {
+				t.Fatalf("expected PTY retry despite quota refresh log, got %+v", res)
+			}
+		},
+	)
+
+	t.Run(
+		"agyEmptyOutputRetriesWithPTY", func(t *testing.T) {
+			newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
+				return &execFakeRunner{
+					stdout:  newReasonReadCloser(""),
+					process: &execFakeProcess{pid: 1234},
+				}
+			}
+			runAntigravityPTYRetryFn = func(
+				ctx context.Context, name string, args []string, workDir string, env map[string]string,
+			) (string, bool, error) {
+				if name != "agy" || workDir != "." || antigravityLogPathFromArgs(args) == "" ||
+					!slices.Equal(args[len(args)-2:], []string{"-p", "payload"}) {
+					t.Fatalf("unexpected PTY retry input: name=%q workDir=%q args=%#v", name, workDir, args)
+				}
+				return "PTY OK", true, nil
+			}
+
+			res := runCodexTaskWithContext(
+				context.Background(), TaskSpec{ID: "task-agy-empty-pty", Task: "payload", WorkDir: ".", Backend: "agy"},
+				AntigravityBackend{}, nil, false, false, 5,
+			)
+			if res.ExitCode != 0 || res.Message != "PTY OK" {
+				t.Fatalf("expected PTY retry output, got %+v", res)
+			}
+		},
+	)
+
+	t.Run(
+		"agyEmptyOutputPTYRetryErrorIsNotSuccess", func(t *testing.T) {
+			newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
+				return &execFakeRunner{
+					stdout:  newReasonReadCloser(""),
+					process: &execFakeProcess{pid: 1234},
+				}
+			}
+			runAntigravityPTYRetryFn = func(context.Context, string, []string, string, map[string]string) (string, bool, error) {
+				return "backend rejected", true, errors.New("exit status 1")
+			}
+
+			res := runCodexTaskWithContext(
+				context.Background(), TaskSpec{ID: "task-agy-empty-pty-error", Task: "payload", WorkDir: ".", Backend: "agy"},
+				AntigravityBackend{}, nil, false, false, 5,
+			)
+			if res.ExitCode == 0 || res.Message == "backend rejected" || !strings.Contains(res.Error, "backend rejected") {
+				t.Fatalf("expected PTY retry error output to stay failed, got %+v", res)
 			}
 		},
 	)

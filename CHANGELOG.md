@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.1.6-aug.2] - 2026-06-23
+
+### Fixes
+
+- `codeagent-wrapper` captures per-run agy logs to report backend diagnostics such as location, auth, quota, or
+  permission
+  rejection; when no backend diagnostic is present, it retries empty stdout once through a pseudo-TTY on Linux/macOS.
+  Binary
+  v5.11.1-aug.2
+- Package and installer metadata now expect wrapper v5.11.1-aug.2 so installs refresh the binary after this fix
+
 ## [3.1.6-aug.1] - 2026-06-20
 
 ### Fixes

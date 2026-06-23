@@ -360,7 +360,7 @@ describe('installWorkflows — binary installation', () => {
     const binDir = join(tmpDir, 'bin')
     const binaryPath = join(binDir, binaryName)
     await fs.ensureDir(binDir)
-    await fs.writeFile(binaryPath, '#!/usr/bin/env sh\necho "codeagent-wrapper version 5.11.1-aug.1"\n', 'utf-8')
+    await fs.writeFile(binaryPath, '#!/usr/bin/env sh\necho "codeagent-wrapper version 5.11.1-aug.2"\n', 'utf-8')
     if (process.platform !== 'win32') {
       await fs.chmod(binaryPath, 0o755)
     }

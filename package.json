@@ -1,6 +1,6 @@
 {
   "name": "ccg-workflow",
-  "version": "3.1.6-aug.1",
+  "version": "3.1.6-aug.2",
   "description": "Claude + Codex + Antigravity multi-model collaboration system - smart routing development workflow",
   "type": "module",
   "private": true,

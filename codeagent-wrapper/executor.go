@@ -11,6 +11,8 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -198,6 +200,9 @@ func (p *realProcess) Signal(sig os.Signal) error {
 var newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
 	return &realCmd{cmd: commandContext(ctx, name, args...)}
 }
+
+var runAntigravityPTYRetryFn = runAntigravityPTYRetry
+var ansiEscapePattern = regexp.MustCompile(`\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1b\\))`)
 
 type parseResult struct {
 	message  string
@@ -1001,10 +1006,25 @@ func runCodexTaskWithContext(
 	defer stop()
 
 	attachStderr := func(msg string) string {
-		return fmt.Sprintf("%s; stderr: %s", msg, stderrBuf.String())
+		stderr := strings.TrimSpace(stderrBuf.String())
+		if stderr == "" {
+			return msg
+		}
+		return fmt.Sprintf("%s; stderr: %s", msg, stderr)
 	}
 
 	isPlainTextBackend := cfg.Backend == "antigravity" || cfg.Backend == "agy"
+	var antigravityLogPath string
+	if isPlainTextBackend {
+		if f, err := os.CreateTemp("", "codeagent-antigravity-*.log"); err == nil {
+			antigravityLogPath = f.Name()
+			_ = f.Close()
+			defer os.Remove(antigravityLogPath)
+			codexArgs = withAntigravityLogFile(codexArgs, antigravityLogPath)
+		} else {
+			logWarnFn("Failed to create Antigravity log file: " + err.Error())
+		}
+	}
 
 	cmd := newCommandRunner(ctx, commandName, codexArgs...)
 
@@ -1398,6 +1418,14 @@ waitLoop:
 		if forcedAfterComplete && parsed.message != "" {
 			logWarnFn(fmt.Sprintf("%s terminated after delivering output", commandName))
 		} else {
+			if isPlainTextBackend {
+				if msg := antigravityLogDiagnosticMessage(antigravityLogPath, true); msg != "" {
+					logErrorFn(msg)
+					result.ExitCode = 1
+					result.Error = attachStderr(msg)
+					return result
+				}
+			}
 			if exitErr, ok := waitErr.(*exec.ExitError); ok {
 				code := exitErr.ExitCode()
 				logErrorFn(fmt.Sprintf("%s exited with status %d", commandName, code))
@@ -1413,6 +1441,39 @@ waitLoop:
 	}
 	if message == "" {
 		if isPlainTextBackend {
+			if msg := antigravityLogDiagnosticMessage(antigravityLogPath, false); msg != "" {
+				logErrorFn(msg)
+				result.ExitCode = 1
+				result.Error = attachStderr(msg)
+				return result
+			}
+			logWarnFn("Antigravity returned empty output; retrying with pseudo-TTY")
+			ptyMessage, ok, ptyErr := runAntigravityPTYRetryFn(ctx, commandName, codexArgs, cfg.WorkDir, env)
+			if ok && ptyErr == nil {
+				result.ExitCode = 0
+				result.Message = ptyMessage
+				result.SessionID = threadID
+				if result.LogPath == "" && injectedLogger != nil {
+					result.LogPath = injectedLogger.Path()
+				}
+				return result
+			}
+			if ptyErr != nil {
+				logWarnFn("Antigravity pseudo-TTY retry failed: " + ptyErr.Error())
+			}
+			if ptyMessage != "" {
+				msg := "Antigravity pseudo-TTY retry failed: " + ptyMessage
+				logErrorFn(msg)
+				result.ExitCode = 1
+				result.Error = attachStderr(msg)
+				return result
+			}
+			if msg := antigravityLogDiagnosticMessage(antigravityLogPath, true); msg != "" {
+				logErrorFn(msg)
+				result.ExitCode = 1
+				result.Error = attachStderr(msg)
+				return result
+			}
 			msg := antigravityEmptyOutputMessage()
 			logErrorFn(msg)
 			result.ExitCode = 1
@@ -1447,7 +1508,141 @@ func antigravityAuthenticationFailureMessage() string {
 }
 
 func antigravityEmptyOutputMessage() string {
-	return "Antigravity completed without output; agy can drop stdout in non-interactive runs, so retry in an interactive terminal or update agy"
+	return strings.Join(
+		[]string{
+			"Antigravity completed without output; agy can drop stdout in non-interactive runs,",
+			"so retry in an interactive terminal or update agy",
+		},
+		" ",
+	)
+}
+
+func withAntigravityLogFile(args []string, path string) []string {
+	if path == "" {
+		return args
+	}
+	extra := []string{"--log-file", path}
+	for i, arg := range args {
+		if arg == "-p" || arg == "--print" || arg == "--prompt" || arg == "-i" || arg == "--prompt-interactive" {
+			out := make([]string, 0, len(args)+len(extra))
+			out = append(out, args[:i]...)
+			out = append(out, extra...)
+			out = append(out, args[i:]...)
+			return out
+		}
+	}
+	out := append([]string(nil), args...)
+	return append(out, extra...)
+}
+
+func antigravityLogDiagnosticMessage(path string, includeAuth bool) string {
+	if path == "" {
+		return ""
+	}
+	data, err := os.ReadFile(path)
+	if err != nil || len(data) == 0 {
+		return ""
+	}
+	return antigravityLogDiagnostic(string(data), includeAuth)
+}
+
+func antigravityLogDiagnostic(logText string, includeAuth bool) string {
+	lower := strings.ToLower(logText)
+	authenticated := strings.Contains(lower, "silent auth succeeded") || strings.Contains(lower, "authenticated successfully")
+	switch {
+	case strings.Contains(lower, "user location is not supported for the api use"):
+		return "Antigravity backend rejected the request: User location is not supported for the API use"
+	case includeAuth && strings.Contains(lower, "you are not logged into antigravity") && !authenticated:
+		return antigravityAuthenticationFailureMessage()
+	case strings.Contains(lower, "resource_exhausted") || strings.Contains(lower, "quota exhausted") || strings.Contains(lower, "quota exceeded") || strings.Contains(lower, "insufficient quota"):
+		return "Antigravity backend rejected the request: quota exhausted"
+	case strings.Contains(lower, "permission_denied"):
+		return "Antigravity backend rejected the request: permission denied"
+	case strings.Contains(lower, "failed_precondition"):
+		return "Antigravity backend rejected the request: FAILED_PRECONDITION"
+	}
+	return ""
+}
+
+func runAntigravityPTYRetry(
+	ctx context.Context,
+	commandName string,
+	args []string,
+	workDir string,
+	env map[string]string,
+) (string, bool, error) {
+	if runtime.GOOS == "windows" {
+		return "", false, errors.New("pty retry is not supported on windows")
+	}
+	if _, err := exec.LookPath("script"); err != nil {
+		return "", false, err
+	}
+
+	commandLine := shellQuote(commandName)
+	for _, arg := range args {
+		commandLine += " " + shellQuote(arg)
+	}
+
+	scriptArgs := []string{"-qec", commandLine, "/dev/null"}
+	if runtime.GOOS == "darwin" {
+		scriptArgs = []string{"-q", "/dev/null", "sh", "-lc", commandLine}
+	}
+
+	cmd := commandContext(ctx, "script", scriptArgs...)
+	if workDir != "" {
+		cmd.Dir = workDir
+	}
+	cmd.Env = mergeEnv(env)
+	output, err := cmd.CombinedOutput()
+	message := cleanPTYOutput(string(output))
+	if message == "" {
+		if err == nil {
+			err = errors.New("pty retry produced no output")
+		}
+		return "", false, err
+	}
+	return message, true, err
+}
+
+func shellQuote(value string) string {
+	if value == "" {
+		return "''"
+	}
+	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
+}
+
+func mergeEnv(env map[string]string) []string {
+	merged := make(map[string]string, len(env)+len(os.Environ()))
+	for _, kv := range os.Environ() {
+		key, value, ok := strings.Cut(kv, "=")
+		if ok && key != "" {
+			merged[key] = value
+		}
+	}
+	for key, value := range env {
+		if strings.TrimSpace(key) != "" {
+			merged[key] = value
+		}
+	}
+
+	keys := make([]string, 0, len(merged))
+	for key := range merged {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	out := make([]string, 0, len(keys))
+	for _, key := range keys {
+		out = append(out, key+"="+merged[key])
+	}
+	return out
+}
+
+func cleanPTYOutput(output string) string {
+	output = ansiEscapePattern.ReplaceAllString(output, "")
+	output = strings.ReplaceAll(output, "\r\n", "\n")
+	output = strings.ReplaceAll(output, "\r", "\n")
+	return strings.TrimSpace(output)
 }
 
 func isAntigravityAuthenticationFailure(stdout, stderr string) bool {
