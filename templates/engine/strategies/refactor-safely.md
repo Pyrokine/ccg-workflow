@@ -131,9 +131,9 @@ Step [N/M]: [描述] — ✅ 测试通过 / ❌ 测试失败
 
 **⛔ 质量关卡（必须逐个调用 Skill，不可跳过，不可用自己的判断替代）：**
 
-6. 调用 Skill `verify-quality` — 等待报告
-7. 调用 Skill `verify-security` — 等待报告
-8. 调用 Skill `verify-change` — 等待报告
+6. 调用 Skill `ccg:verify-quality` — 等待报告
+7. 调用 Skill `ccg:verify-security` — 等待报告
+8. 调用 Skill `ccg:verify-change` — 等待报告
 
 **综合报告**：模型审查 + 质量关卡，按严重度分级
 

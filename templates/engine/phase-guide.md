@@ -182,7 +182,7 @@ TeamCreate 失败（Agent Teams 未启用）→ Claude 自己按计划顺序实�
 ```
 Round N (N=1,2,...,MAX_ROUNDS):
   1. 双模型并行审查（每次 spawn 新 Agent，干净上下文）
-  2. 质量关卡（verify-security / verify-quality / verify-change）
+  2. 质量关卡（ccg:verify-security / ccg:verify-quality / ccg:verify-change）
   3. 综合审查报告，按 Critical / Warning / Info 分级
   4. 展示给用户，询问：
      - 有 Critical → "发现 N 个 Critical 问题，是否修复后再审？[Y/n]"

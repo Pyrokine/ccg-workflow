@@ -120,7 +120,7 @@ module/
 如果缺少文档，可使用文档生成器：
 
 ```bash
-/gen-docs <模块路径>
+/ccg:gen-docs <模块路径>
 ```
 
 ---

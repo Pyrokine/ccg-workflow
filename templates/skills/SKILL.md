@@ -40,19 +40,19 @@ skills/
 
 | Skill              | Trigger                                     | Description                                   |
 |--------------------|---------------------------------------------|-----------------------------------------------|
-| `/verify-module`   | New module completed                        | Module structure & documentation completeness |
-| `/verify-security` | New module / security changes / refactoring | Security vulnerability scanning               |
-| `/verify-change`   | Design-level changes / refactoring          | Document sync & change impact analysis        |
-| `/verify-quality`  | Complex modules / refactoring               | Code quality metrics checking                 |
-| `/gen-docs`        | New module created                          | README.md & DESIGN.md skeleton generator      |
+| `/ccg:verify-module`   | New module completed                        | Module structure & documentation completeness |
+| `/ccg:verify-security` | New module / security changes / refactoring | Security vulnerability scanning               |
+| `/ccg:verify-change`   | Design-level changes / refactoring          | Document sync & change impact analysis        |
+| `/ccg:verify-quality`  | Complex modules / refactoring               | Code quality metrics checking                 |
+| `/ccg:gen-docs`        | New module created                          | README.md & DESIGN.md skeleton generator      |
 
 ### Auto-trigger Rules
 
 ```
-New module:     /gen-docs → develop → /verify-module → /verify-security
-Code changes:   develop → /verify-change → /verify-quality
-Security tasks: execute → /verify-security
-Refactoring:    refactor → /verify-change → /verify-quality → /verify-security
+New module:     /ccg:gen-docs → develop → /ccg:verify-module → /ccg:verify-security
+Code changes:   develop → /ccg:verify-change → /ccg:verify-quality
+Security tasks: execute → /ccg:verify-security
+Refactoring:    refactor → /ccg:verify-change → /ccg:verify-quality → /ccg:verify-security
 ```
 
 ### Running Skills

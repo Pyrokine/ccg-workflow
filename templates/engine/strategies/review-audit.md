@@ -82,8 +82,8 @@ Gate: 双模型审查已返回 ✓
 
 **⛔ 必须逐个调用 Skill，不可跳过：**
 
-- 调用 Skill `verify-security` — 等待报告
-- 调用 Skill `verify-quality` — 等待报告
+- 调用 Skill `ccg:verify-security` — 等待报告
+- 调用 Skill `ccg:verify-quality` — 等待报告
 
 #### 3b. 综合报告
 

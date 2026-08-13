@@ -321,9 +321,9 @@ Bash({
 
 **⛔ 以下 Skill 必须逐个调用执行，不可跳过，不可用自己的判断替代：**
 
-1. 调用 Skill `verify-security` — 等待报告
-2. 调用 Skill `verify-quality` — 等待报告
-3. 调用 Skill `verify-change` — 等待报告
+1. 调用 Skill `ccg:verify-security` — 等待报告
+2. 调用 Skill `ccg:verify-quality` — 等待报告
+3. 调用 Skill `ccg:verify-change` — 等待报告
 
 **5c. 综合报告**
 

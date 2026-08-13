@@ -93,7 +93,7 @@ node scripts/doc_generator.js <模块路径> --json   # JSON 输出
 2. 填充 TODO 标记的内容
 3. 补充设计决策和理由
 4. 添加使用示例
-5. 运行 /verify-module 校验完整性
+5. 运行 /ccg:verify-module 校验完整性
 ```
 
 ## 生成后检查清单

@@ -53,7 +53,7 @@ v3.0 is a ground-up rewrite. One command replaces 29.
   STOP checkpoints.
 - **Agent Teams** — Large tasks spawn parallel Builder teammates via TeamCreate. Each Builder gets isolated file
   ownership.
-- **Quality gates** — `verify-security`, `verify-quality`, `verify-change` run as Skill invocations inside strategy
+- **Quality gates** — `ccg:verify-security`, `ccg:verify-quality`, `ccg:verify-change` run as Skill invocations inside strategy
   verification phases.
 - **Domain knowledge hooks** — When your message mentions security, caching, RAG, etc., the relevant knowledge file is
   auto-injected into context.

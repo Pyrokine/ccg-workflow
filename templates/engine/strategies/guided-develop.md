@@ -240,9 +240,9 @@ Bash({
 
 **⛔ 质量关卡（必须逐个调用 Skill，不可跳过）：**
 
-5. 调用 Skill `verify-quality` — 等待报告
-6. 调用 Skill `verify-security` — 等待报告（涉及 auth/input/crypto 时）
-7. 调用 Skill `verify-change` — 等待报告
+5. 调用 Skill `ccg:verify-quality` — 等待报告
+6. 调用 Skill `ccg:verify-security` — 等待报告（涉及 auth/input/crypto 时）
+7. 调用 Skill `ccg:verify-change` — 等待报告
 
 **用户决定（⛔ 必须等待）：**
 
