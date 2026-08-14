@@ -72,15 +72,13 @@ EOF",
 
 **角色提示词**：
 
-| 阶段 | 前端                                                         |
-|----|------------------------------------------------------------|
-| 分析 | `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/analyzer.md`  |
+| 阶段 | 前端 |
+|----|---|
+| 分析 | `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/analyzer.md` |
 | 规划 | `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/architect.md` |
-| 审查 | `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/reviewer.md`  |
+| 审查 | `~/.claude/.ccg/prompts/claude/reviewer.md`，供 GPT、Grok 两个外部 profile 共用 |
 
-**会话复用**：每次调用返回 `SESSION_ID: xxx`，后续阶段用 `resume xxx` 复用上下文。阶段 2 保存 `FRONTEND_SESSION`，阶段 3 和
-5
-使用 `resume` 复用。
+**会话复用**：阶段 2 保存 `SESSION_ID`，阶段 3 可以使用 `resume` 复用。阶段 5 审查必须使用 `--no-session-persistence`，不得 `resume` 或保存 reviewer `SESSION_ID`。
 
 ⛔ **前端模型失败必须重试**：若前端模型调用失败（非零退出码或输出包含错误信息），最多重试 2 次（间隔 5 秒）。仅当 3
 次全部失败时才报告错误并终止。
@@ -148,16 +146,14 @@ Claude 综合规划，请求用户批准后存入 `.claude/plan/任务名.md`
 
 ### 🚀 阶段 5：优化
 
-`[模式：优化]` - {{FRONTEND_PRIMARY}} 主导审查
+`[模式：优化]` - GPT、Grok 双路审查
 
-**⚠️ 必须调用 {{FRONTEND_PRIMARY}}**（参照上方调用规范）：
+在同一条消息中启动 GPT、Grok 两个 `run_in_background: true` 调用：
 
-- ROLE_FILE: `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/reviewer.md`
-- 需求：审查以下前端代码变更
-- 上下文：git diff 或代码内容
-- OUTPUT: 可访问性、响应式、性能、设计一致性问题列表
+- GPT：`--backend claude --no-session-persistence --claude-model {{REVIEW_GPT_MODEL}} --claude-effort {{REVIEW_GPT_EFFORT}}`，重点审查后端逻辑、正确性、安全、回归与测试缺口
+- Grok：`--backend claude --no-session-persistence --claude-model {{REVIEW_GROK_MODEL}} --claude-effort {{REVIEW_GROK_EFFORT}}`，重点审查前端交互、可访问性、响应式、设计一致性与前端安全
 
-整合审查意见，用户确认后执行优化。
+两个调用使用 `~/.claude/.ccg/prompts/claude/reviewer.md`。等待两个结果后由主 Claude 汇总并确认 finding，禁止 `resume` 或保存 reviewer `SESSION_ID`。
 
 ### ✅ 阶段 6：评审
 

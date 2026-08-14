@@ -251,7 +251,11 @@ export async function init(options: InitOptions = {}): Promise<void> {
   let frontendModels: ModelType[] = normalizeModelNames(options.frontend, ['antigravity'])
   let backendModels: ModelType[] = normalizeModelNames(options.backend, ['codex'])
   let routingProxy: ModelRouting['proxy']
-  const mode: CollaborationMode = 'smart'
+  let reviewRouting: ModelRouting['review'] | undefined
+  let grokModel = ''
+  let kimiModel = ''
+  let opencodeModel = ''
+  let mode: CollaborationMode = 'smart'
   let selectedWorkflows = getCoreCommandIds()
 
   // Non-interactive mode: preserve existing config
@@ -266,6 +270,11 @@ export async function init(options: InitOptions = {}): Promise<void> {
         ? normalizeModelNames(options.backend, routing.backend.models)
         : routing.backend.models
       routingProxy = routing.proxy
+      reviewRouting = routing.review
+      mode = routing.mode
+      grokModel = routing.grokModel || ''
+      kimiModel = routing.kimiModel || ''
+      opencodeModel = routing.opencodeModel || ''
     }
     // Preserve install mode: if existing install has legacy commands, keep them
     if (existingConfig?.workflows?.installed) {
@@ -339,6 +348,11 @@ export async function init(options: InitOptions = {}): Promise<void> {
         ? normalizeModelNames(options.backend, routing.backend.models)
         : routing.backend.models
       routingProxy = routing.proxy
+      reviewRouting = routing.review
+      mode = routing.mode
+      grokModel = routing.grokModel || ''
+      kimiModel = routing.kimiModel || ''
+      opencodeModel = routing.opencodeModel || ''
     }
     if (existingConfig?.performance?.liteMode !== undefined) {
       liteMode = existingConfig.performance.liteMode
@@ -427,7 +441,7 @@ export async function init(options: InitOptions = {}): Promise<void> {
       console.log(ansis.yellow(`  ${i18n.t('init:model.geminiDisabled')}`))
       console.log()
 
-      const { selectedFrontend } = await inquirer.prompt([
+      const { selectedFrontend } = await inquirer.prompt<{ selectedFrontend: ModelType | string }>([
         {
           type: 'select',
           name: 'selectedFrontend',
@@ -437,7 +451,11 @@ export async function init(options: InitOptions = {}): Promise<void> {
               name: `Antigravity ${ansis.green(`(${i18n.t('init:model.recommended')})`)}`,
               value: 'antigravity' as ModelType,
             },
+            { name: 'Grok', value: 'grok' as ModelType },
+            { name: 'Kimi Code', value: 'kimi' as ModelType },
             { name: 'Codex', value: 'codex' as ModelType },
+            { name: 'OpenCode', value: 'opencode' as ModelType },
+            { name: 'Claude Code', value: 'claude' as ModelType },
             ...navSentinels(canGoBack),
           ],
           default: frontendModels[0] || 'antigravity',
@@ -447,21 +465,68 @@ export async function init(options: InitOptions = {}): Promise<void> {
       if (selectedFrontend === BACK_SENTINEL) return 'back'
       if (selectedFrontend === CANCEL_SENTINEL) return 'cancel'
 
-      const { selectedBackend } = await inquirer.prompt([
+      const { selectedBackend } = await inquirer.prompt<{ selectedBackend: ModelType | string }>([
         {
           type: 'select',
           name: 'selectedBackend',
           message: i18n.t('init:model.selectBackend'),
           choices: [
             { name: `Codex ${ansis.green(`(${i18n.t('init:model.recommended')})`)}`, value: 'codex' as ModelType },
-            { name: 'Claude', value: 'claude' as ModelType },
+            { name: 'Grok', value: 'grok' as ModelType },
+            { name: 'Kimi Code', value: 'kimi' as ModelType },
+            { name: 'Antigravity', value: 'antigravity' as ModelType },
+            { name: 'OpenCode', value: 'opencode' as ModelType },
+            { name: 'Claude Code', value: 'claude' as ModelType },
+            ...navSentinels(canGoBack),
           ],
           default: backendModels[0] || 'codex',
         },
       ])
 
-      frontendModels = [selectedFrontend]
-      backendModels = [selectedBackend]
+      if (selectedBackend === BACK_SENTINEL) return 'back'
+      if (selectedBackend === CANCEL_SENTINEL) return 'cancel'
+
+      const selectedModels = new Set<ModelType>([selectedFrontend as ModelType, selectedBackend as ModelType])
+      if (selectedModels.has('grok')) {
+        const { model } = await inquirer.prompt<{ model: string }>([
+          {
+            type: 'input',
+            name: 'model',
+            message: i18n.t('init:model.grokModel'),
+            default: grokModel || 'grok-4.5',
+            validate: (value: string) => value.trim() !== '' || i18n.t('init:model.modelRequired'),
+          },
+        ])
+        grokModel = model.trim()
+      }
+      if (selectedModels.has('kimi')) {
+        const { model } = await inquirer.prompt<{ model: string }>([
+          {
+            type: 'input',
+            name: 'model',
+            message: i18n.t('init:model.kimiModel'),
+            default: kimiModel,
+          },
+        ])
+        kimiModel = model.trim()
+      }
+      if (selectedModels.has('opencode')) {
+        const { model } = await inquirer.prompt<{ model: string }>([
+          {
+            type: 'input',
+            name: 'model',
+            message: i18n.t('init:model.opencodeModel'),
+            default: opencodeModel,
+          },
+        ])
+        opencodeModel = model.trim()
+      }
+      if (selectedFrontend === 'claude' && selectedBackend === 'claude') {
+        console.log(ansis.cyan(`  ${i18n.t('init:model.pureClaudeCode')}`))
+      }
+
+      frontendModels = [selectedFrontend as ModelType]
+      backendModels = [selectedBackend as ModelType]
       return 'next'
     }
 
@@ -880,11 +945,17 @@ export async function init(options: InitOptions = {}): Promise<void> {
       primary: backendModels[0],
       strategy: 'fallback',
     },
-    review: {
-      models: [...new Set([...backendModels, ...frontendModels])],
+    review: reviewRouting || {
+      profiles: [
+        { id: 'gpt', model: 'gpt-5.6-sol', effort: 'xhigh' },
+        { id: 'grok', model: 'grok-4.5', effort: 'high' },
+      ],
       strategy: 'parallel',
     },
     ...(routingProxy ? { proxy: routingProxy } : {}),
+    ...(grokModel ? { grokModel } : {}),
+    ...(kimiModel ? { kimiModel } : {}),
+    ...(opencodeModel ? { opencodeModel } : {}),
     mode,
   }
 
@@ -1039,6 +1110,10 @@ export async function init(options: InitOptions = {}): Promise<void> {
         'Bash(~/.claude/bin/codeagent-wrapper --backend antigravity*)',
         'Bash(~/.claude/bin/codeagent-wrapper --backend agy*)',
         'Bash(~/.claude/bin/codeagent-wrapper --backend codex*)',
+        'Bash(~/.claude/bin/codeagent-wrapper --backend claude*)',
+        'Bash(~/.claude/bin/codeagent-wrapper --backend grok*)',
+        'Bash(~/.claude/bin/codeagent-wrapper --backend kimi*)',
+        'Bash(~/.claude/bin/codeagent-wrapper --backend opencode*)',
       ]
       for (const perm of wrapperPerms) {
         if (!settings.permissions.allow.includes(perm)) settings.permissions.allow.push(perm)

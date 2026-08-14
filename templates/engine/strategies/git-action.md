@@ -15,10 +15,10 @@
 
 | 关键词                        | 命令文件                                              | 说明                        |
 |----------------------------|---------------------------------------------------|---------------------------|
-| commit, 提交                 | `/home/USER/.claude/commands/ccg/commit.md`         | 智能提交（conventional commit） |
-| rollback, 回滚, revert, undo | `/home/USER/.claude/commands/ccg/rollback.md`       | 交互式回滚                     |
-| clean branch, 清理分支         | `/home/USER/.claude/commands/ccg/clean-branches.md` | 清理已合并分支                   |
-| worktree                   | `/home/USER/.claude/commands/ccg/worktree.md`       | Worktree 管理               |
+| commit, 提交                 | `~/.claude/commands/ccg/commit.md`         | 智能提交（conventional commit） |
+| rollback, 回滚, revert, undo | `~/.claude/commands/ccg/rollback.md`       | 交互式回滚                     |
+| clean branch, 清理分支         | `~/.claude/commands/ccg/clean-branches.md` | 清理已合并分支                   |
+| worktree                   | `~/.claude/commands/ccg/worktree.md`       | Worktree 管理               |
 
 ## 执行方式
 

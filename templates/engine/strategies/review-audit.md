@@ -1,6 +1,6 @@
 # Strategy: Review Audit — 代码审查
 
-> 适用于代码审查需求，双模型交叉验证，结果分级输出。
+> 适用于代码审查需求，由 GPT、Grok 两路独立审查交叉验证，结果分级输出。
 
 ## 适用条件
 
@@ -11,7 +11,7 @@
 ## 前置加载
 
 ```
-Read("/home/USER/.claude/.ccg/engine/model-router.md")
+Read("~/.claude/.ccg/engine/model-router.md")
 ```
 
 ---
@@ -20,18 +20,18 @@ Read("/home/USER/.claude/.ccg/engine/model-router.md")
 
 [phase-state:1-scope]
 当前阶段：确定审查范围
-📍 Next: 范围确定后启动双模型审查
+📍 Next: 范围确定后启动GPT、Grok 双路审查
 [/phase-state:1-scope]
 
 [phase-state:2-review]
-当前阶段：双模型审查
+当前阶段：GPT、Grok 双路审查
 Gate: 审查范围已确定 ✓
-📍 Next: 双模型审查返回后综合报告
+📍 Next: GPT、Grok 双路审查返回后综合报告
 [/phase-state:2-review]
 
 [phase-state:3-report]
 当前阶段：综合报告
-Gate: 双模型审查已返回 ✓
+Gate: GPT、Grok 双路审查已返回 ✓
 📍 Next: 报告输出后等待用户决定
 [/phase-state:3-report]
 
@@ -56,27 +56,33 @@ Gate: 双模型审查已返回 ✓
   文件: [文件列表]
 ```
 
-### Phase 2: 双模型审查 [required]
+### Phase 2: GPT、Grok 双路审查 [required]
 
 **Gate check**: 审查范围已确定
 
-**并行调用**（`run_in_background: true`）：
+在同一条消息中并行启动 GPT、Grok 两个 `Bash` 调用。两个 reviewer 都接收完整 `git diff`、完整文件上下文和验收规则，互不依赖彼此的会话或结果。GPT 的任务文本必须列出后端审查维度，Grok 的任务文本必须列出前端审查维度。主 Claude 只负责准备上下文和汇总发现。
 
-- **backend 模型**：reviewer 角色
-  ```
-  <TASK>
-  需求：审查以下代码变更
-  上下文：[git diff + 完整文件上下文]
-  </TASK>
-  OUTPUT: 审查发现（按严重度分级：Critical/Warning/Info，每条含：位置、问题、建议）
-  ```
-- **frontend 模型**：reviewer 角色（相同格式）
+```text
+ROLE_FILE: ~/.claude/.ccg/prompts/claude/reviewer.md
+<TASK>
+审查以下代码变更。
+上下文：[git diff + 完整文件上下文]
+按 Critical/Warning/Info 输出，每条包含位置、问题和修复建议。
+</TASK>
+```
 
-等待双模型返回。
+| reviewer | wrapper 参数 | 审查重点 |
+| --- | --- | --- |
+| GPT | `--backend claude --no-session-persistence --claude-model {{REVIEW_GPT_MODEL}} --claude-effort {{REVIEW_GPT_EFFORT}}` | 后端逻辑、正确性、安全、回归与测试缺口 |
+| Grok | `--backend claude --no-session-persistence --claude-model {{REVIEW_GROK_MODEL}} --claude-effort {{REVIEW_GROK_EFFORT}}` | 前端交互、可访问性、设计一致性与前端安全 |
+
+GPT 与 Grok 使用独立临时会话，禁止使用 `resume` 或保存 `SESSION_ID`。两者的 model、effort 从 `review.profiles` 注入。若外部 reviewer 失败，只报告该 reviewer 不可用，不能将其它结果归入该来源。
+
+等待两个调用返回后再综合报告。
 
 ### Phase 3: 综合报告 + 质量关卡
 
-**Gate check**: 双模型审查已返回
+**Gate check**: GPT、Grok 双路审查已返回
 
 #### 3a. 质量关卡
 
@@ -87,7 +93,7 @@ Gate: 双模型审查已返回 ✓
 
 #### 3b. 综合报告
 
-合并双模型发现 + 质量关卡结果，去重，按严重度分级：
+合并 GPT、Grok reviewer 发现与质量关卡结果，去重，按严重度分级：
 
 ```
 📋 代码审查报告
@@ -95,7 +101,7 @@ Gate: 双模型审查已返回 ✓
 ## Critical（必须修复）
 1. [file:line] — [问题描述]
    建议: [具体修复建议]
-   来源: [backend/frontend/质量关卡]
+   来源: [GPT/Grok/质量关卡]
 
 ## Warning（建议修复）
 1. [file:line] — [问题描述]
@@ -123,6 +129,6 @@ Gate: 双模型审查已返回 ✓
 ## 铁律
 
 - **审查结果必须分级** — 不可笼统说"代码看起来没问题"
-- **双模型必须独立审查** — 交叉验证的价值在于独立性
+- **两个 reviewer 必须独立审查** — 交叉验证的价值在于独立性
 - **Critical 必须明确标出** — 不可淡化严重问题
-- **如无发现，明确说明** — "经双模型审查，未发现问题" 优于沉默
+- **如无发现，明确说明** — "经GPT、Grok 双路审查，未发现问题" 优于沉默

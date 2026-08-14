@@ -95,7 +95,7 @@ description: '初始化 OpenSpec (OPSX) 环境 + 验证多模型 MCP 工具'
     3. Implement: `/ccg:spec-impl` (Includes auto-review & archive)
 
    **Standalone Tools (Available Anytime)**
-    - Code Review: `/ccg:spec-review` (Independent dual-model review)
+    - Code Review: `/ccg:spec-review` (GPT/Grok cross-review)
 
 **Reference**
 

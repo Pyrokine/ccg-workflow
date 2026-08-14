@@ -2342,11 +2342,39 @@ func TestBackendPrintHelp(t *testing.T) {
 	io.Copy(&buf, r)
 	output := buf.String()
 
-	expected := []string{"codeagent-wrapper", "Usage:", "resume", "CODEX_TIMEOUT", "Exit Codes:"}
+	expected := []string{
+		"codeagent-wrapper", "Usage:", "resume", "--grok-model", "--kimi-model", "--opencode-model",
+		"CLAUDE_MODEL", "GROK_MODEL", "KIMI_MODEL", "OPENCODE_MODEL", "CODEX_TIMEOUT", "Exit Codes:",
+	}
 	for _, phrase := range expected {
 		if !strings.Contains(output, phrase) {
 			t.Errorf("printHelp() missing phrase %q", phrase)
 		}
+	}
+}
+
+func TestRun_RedactsTaskFromStartupCommand(t *testing.T) {
+	defer resetTestHooks()
+	cleanupLogsFn = func() (CleanupStats, error) { return CleanupStats{}, nil }
+	runTaskFn = func(TaskSpec, bool, int) TaskResult {
+		return TaskResult{ExitCode: 0, Message: "ok"}
+	}
+
+	const task = "api_key=secret-value"
+	stdinReader = strings.NewReader(task)
+	isTerminalFn = func() bool { return false }
+	os.Args = []string{"codeagent-wrapper", "--backend", "grok", "-"}
+
+	stderr := captureStderr(t, func() {
+		if code := run(); code != 0 {
+			t.Fatalf("run exit = %d, want 0", code)
+		}
+	})
+	if strings.Contains(stderr, task) {
+		t.Fatalf("startup output leaked task: %q", stderr)
+	}
+	if !strings.Contains(stderr, "<task>") {
+		t.Fatalf("startup output did not redact task: %q", stderr)
 	}
 }
 
@@ -2686,6 +2714,10 @@ func TestRunCodexTask_Timeout(t *testing.T) {
 }
 
 func TestRunCodexTask_SignalHandling(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("signal delivery test is Unix-only")
+	}
+
 	defer resetTestHooks()
 	codexCommand = "sleep"
 	buildCodexArgsFn = func(cfg *Config, targetArg string) []string { return []string{"5"} }
@@ -2694,7 +2726,9 @@ func TestRunCodexTask_SignalHandling(t *testing.T) {
 	go func() { resultCh <- runCodexTask(TaskSpec{Task: "ignored"}, false, 5) }()
 
 	time.Sleep(200 * time.Millisecond)
-	syscall.Kill(os.Getpid(), syscall.SIGTERM)
+	if err := sendTestSignal(os.Getpid(), syscall.SIGTERM); err != nil {
+		t.Fatalf("failed to send SIGTERM: %v", err)
+	}
 
 	res := <-resultCh
 	signal.Reset(syscall.SIGINT, syscall.SIGTERM)
@@ -2758,11 +2792,11 @@ func TestRunSilentMode(t *testing.T) {
 	codexCommand = "echo"
 	buildCodexArgsFn = func(cfg *Config, targetArg string) []string { return []string{targetArg} }
 
-	capture := func(silent bool) string {
+	capture := func(silent bool, noSessionPersistence bool) string {
 		oldStderr := os.Stderr
 		r, w, _ := os.Pipe()
 		os.Stderr = w
-		res := runCodexTask(TaskSpec{Task: jsonOutput}, silent, 10)
+		res := runCodexTask(TaskSpec{Task: jsonOutput, NoSessionPersistence: noSessionPersistence}, silent, 10)
 		if res.ExitCode != 0 {
 			t.Fatalf("unexpected exitCode %d", res.ExitCode)
 		}
@@ -2773,8 +2807,9 @@ func TestRunSilentMode(t *testing.T) {
 		return buf.String()
 	}
 
-	verbose := capture(false)
-	quiet := capture(true)
+	verbose := capture(false, false)
+	quiet := capture(true, false)
+	ephemeral := capture(false, true)
 
 	// Silent mode (parallel tasks): no stderr output at all
 	if quiet != "" {
@@ -2784,6 +2819,9 @@ func TestRunSilentMode(t *testing.T) {
 	// so Claude Code can capture it even if the task later fails/times out
 	if !strings.Contains(verbose, "Session-ID: silent-session") {
 		t.Fatalf("non-silent mode should emit Session-ID to stderr, got: %q", verbose)
+	}
+	if ephemeral != "" {
+		t.Fatalf("no-session-persistence should suppress Session-ID output, got: %q", ephemeral)
 	}
 }
 
@@ -3117,6 +3155,116 @@ do two`,
 	}
 }
 
+func TestParallelNoSessionPersistenceRequiresClaudeBackend(t *testing.T) {
+	for _, testCase := range []struct {
+		name    string
+		args    []string
+		input   string
+		message string
+	}{
+		{
+			name:    "default backend",
+			args:    []string{"codeagent-wrapper", "--parallel", "--no-session-persistence"},
+			input:   "---TASK---\nid: review\n---CONTENT---\nreview",
+			message: "only supported by the claude backend",
+		},
+		{
+			name:    "task backend",
+			args:    []string{"codeagent-wrapper", "--parallel", "--backend", "claude", "--no-session-persistence"},
+			input:   "---TASK---\nid: review\nbackend: codex\n---CONTENT---\nreview",
+			message: "only supported by the claude backend",
+		},
+		{
+			name:    "resume task",
+			args:    []string{"codeagent-wrapper", "--parallel", "--backend", "claude", "--no-session-persistence"},
+			input:   "---TASK---\nid: review\nsession_id: sid-123\n---CONTENT---\nreview",
+			message: "cannot be used with resume",
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			defer resetTestHooks()
+			cleanupLogsFn = func() (CleanupStats, error) { return CleanupStats{}, nil }
+
+			oldArgs := os.Args
+			t.Cleanup(func() { os.Args = oldArgs })
+			os.Args = testCase.args
+			stdinReader = strings.NewReader(testCase.input)
+
+			stderr := captureStderr(t, func() {
+				if code := run(); code == 0 {
+					t.Fatalf("run exit = %d, want rejection", code)
+				}
+			})
+			if !strings.Contains(stderr, testCase.message) {
+				t.Fatalf("stderr = %q, want %q", stderr, testCase.message)
+			}
+		})
+	}
+}
+
+func TestParallelModelFlagPropagation(t *testing.T) {
+	defer resetTestHooks()
+	cleanupLogsFn = func() (CleanupStats, error) { return CleanupStats{}, nil }
+
+	oldArgs := os.Args
+	t.Cleanup(func() { os.Args = oldArgs })
+
+	var mu sync.Mutex
+	seen := make(map[string]TaskSpec)
+	orig := runCodexTaskFn
+	runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
+		mu.Lock()
+		seen[task.ID] = task
+		mu.Unlock()
+		return TaskResult{TaskID: task.ID, ExitCode: 0, Message: "ok"}
+	}
+	t.Cleanup(func() { runCodexTaskFn = orig })
+
+	stdinReader = strings.NewReader(
+		`---TASK---
+id: grok-task
+---CONTENT---
+review with grok
+
+---TASK---
+id: kimi-task
+backend: kimi
+---CONTENT---
+review with kimi`,
+	)
+	os.Args = []string{
+		"codeagent-wrapper",
+		"--parallel",
+		"--lite",
+		"--progress",
+		"--backend",
+		"grok",
+		"--grok-model=grok-4.5",
+		"--kimi-model",
+		"kimi-code",
+		"--opencode-model",
+		"anthropic/claude-opus-5",
+	}
+
+	if code := run(); code != 0 {
+		t.Fatalf("run exit = %d, want 0", code)
+	}
+
+	mu.Lock()
+	grokTask, grokOK := seen["grok-task"]
+	kimiTask, kimiOK := seen["kimi-task"]
+	mu.Unlock()
+
+	if !grokOK || grokTask.Backend != "grok" || grokTask.GrokModel != "grok-4.5" ||
+		grokTask.KimiModel != "kimi-code" || grokTask.OpencodeModel != "anthropic/claude-opus-5" || !grokTask.Progress {
+		t.Fatalf("grok task = %+v", grokTask)
+	}
+	if !kimiOK || kimiTask.Backend != "kimi" || kimiTask.GrokModel != "grok-4.5" ||
+		kimiTask.KimiModel != "kimi-code" || kimiTask.OpencodeModel != "anthropic/claude-opus-5" || !kimiTask.Progress {
+		t.Fatalf("kimi task = %+v", kimiTask)
+	}
+}
+
 func TestParallelFlag(t *testing.T) {
 	oldArgs := os.Args
 	defer func() { os.Args = oldArgs }()
@@ -3186,6 +3334,40 @@ noop`,
 	}
 }
 
+func TestRunParallelNoSessionPersistenceSuppressesSessionID(t *testing.T) {
+	defer resetTestHooks()
+	cleanupLogsFn = func() (CleanupStats, error) { return CleanupStats{}, nil }
+
+	oldArgs := os.Args
+	t.Cleanup(func() { os.Args = oldArgs })
+	os.Args = []string{"codeagent-wrapper", "--parallel", "--full-output", "--backend", "claude", "--no-session-persistence"}
+
+	stdinReader = strings.NewReader(
+		`---TASK---
+id: review
+---CONTENT---
+noop`,
+	)
+	t.Cleanup(func() { stdinReader = os.Stdin })
+
+	orig := runCodexTaskFn
+	runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
+		return TaskResult{TaskID: task.ID, ExitCode: 0, Message: "review output", SessionID: "ephemeral-session"}
+	}
+	t.Cleanup(func() { runCodexTaskFn = orig })
+
+	out := captureOutput(
+		t, func() {
+			if code := run(); code != 0 {
+				t.Fatalf("run exit = %d, want 0", code)
+			}
+		},
+	)
+	if strings.Contains(out, "ephemeral-session") || strings.Contains(out, "Session:") {
+		t.Fatalf("full output leaked ephemeral session: %q", out)
+	}
+}
+
 func TestParallelInvalidBackend(t *testing.T) {
 	defer resetTestHooks()
 	cleanupLogsFn = func() (CleanupStats, error) { return CleanupStats{}, nil }
@@ -3247,7 +3429,7 @@ func TestVersionFlag(t *testing.T) {
 		},
 	)
 
-	want := "codeagent-wrapper version 5.11.1-aug.2\n"
+	want := "codeagent-wrapper version 5.14.0-aug.1\n"
 
 	if output != want {
 		t.Fatalf("output = %q, want %q", output, want)
@@ -3265,7 +3447,7 @@ func TestVersionShortFlag(t *testing.T) {
 		},
 	)
 
-	want := "codeagent-wrapper version 5.11.1-aug.2\n"
+	want := "codeagent-wrapper version 5.14.0-aug.1\n"
 
 	if output != want {
 		t.Fatalf("output = %q, want %q", output, want)
@@ -3283,7 +3465,7 @@ func TestVersionLegacyAlias(t *testing.T) {
 		},
 	)
 
-	want := "codex-wrapper version 5.11.1-aug.2\n"
+	want := "codex-wrapper version 5.14.0-aug.1\n"
 
 	if output != want {
 		t.Fatalf("output = %q, want %q", output, want)
@@ -4033,6 +4215,10 @@ func TestRun_LoggerLifecycle(t *testing.T) {
 }
 
 func TestRun_LoggerRemovedOnSignal(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("signal delivery test is Unix-only")
+	}
+
 	// Skip in CI due to unreliable signal delivery in containerized environments
 	if os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
 		t.Skip("Skipping signal test in CI environment")
@@ -4074,7 +4260,9 @@ printf '%s\n' '{"type":"item.completed","item":{"type":"agent_message","text":"l
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	_ = syscall.Kill(os.Getpid(), syscall.SIGINT)
+	if err := sendTestSignal(os.Getpid(), syscall.SIGINT); err != nil {
+		t.Fatalf("failed to send SIGINT: %v", err)
+	}
 
 	var exitCode int
 	select {
@@ -4568,6 +4756,30 @@ func TestRun_CLI_Success(t *testing.T) {
 		t.Fatalf("run() exit=%d, want 0", exitCode)
 	}
 	if !strings.Contains(output, "ok") || !strings.Contains(output, "SESSION_ID: cli-session") {
+		t.Fatalf("unexpected output: %q", output)
+	}
+}
+
+func TestRun_CLINoSessionPersistenceDoesNotOutputSessionID(t *testing.T) {
+	defer resetTestHooks()
+	os.Args = []string{"codeagent-wrapper", "--backend", "claude", "--no-session-persistence", "do-things"}
+	stdinReader = strings.NewReader("")
+	isTerminalFn = func() bool { return true }
+
+	restore := withBackend(
+		"echo", func(cfg *Config, targetArg string) []string {
+			return []string{`{"type":"system","subtype":"init","session_id":"ephemeral-session"}` + "\n" + `{"type":"result","result":"ok","session_id":"ephemeral-session"}`}
+		},
+	)
+	defer restore()
+
+	var exitCode int
+	output := captureOutput(t, func() { exitCode = run() })
+
+	if exitCode != 0 {
+		t.Fatalf("run() exit=%d, want 0", exitCode)
+	}
+	if !strings.Contains(output, "ok") || strings.Contains(output, "SESSION_ID:") {
 		t.Fatalf("unexpected output: %q", output)
 	}
 }

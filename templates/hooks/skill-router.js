@@ -102,14 +102,28 @@ try {
   // Find matching skills
   const matched = ROUTES.filter((route) => route.keywords.some((kw) => msgLower.includes(kw)));
 
+  const REVIEWER_ACTION = {
+    model: 'review-profiles',
+    role: 'reviewer',
+    action: 'GPT、Grok 双路交叉审查代码变更',
+  };
+  const GPT_REVIEWER_ACTION = {
+    model: 'gpt-review-profile',
+    role: 'reviewer',
+    action: 'GPT 后端审查视角检查代码变更',
+  };
+  const GROK_REVIEWER_ACTION = {
+    model: 'grok-review-profile',
+    role: 'reviewer',
+    action: 'Grok 前端审查视角检查代码变更',
+  };
+
   // ── Model action triggers ──
   // Detect when user wants to use a specific model for a task
   const MODEL_ACTIONS = [
     {
       keywords: ['codex审查', 'codex 审查', 'codex review', '用codex看', '让codex检查', 'codex检查'],
-      model: 'codex',
-      role: 'reviewer',
-      action: '审查当前代码变更（git diff）',
+      ...GPT_REVIEWER_ACTION,
     },
     {
       keywords: ['codex分析', 'codex 分析', 'codex analyze', '用codex分析'],
@@ -131,9 +145,7 @@ try {
     },
     {
       keywords: ['antigravity审查', 'antigravity 审查', 'agy审查', 'agy 审查', '用antigravity看', '用agy看'],
-      model: 'antigravity',
-      role: 'reviewer',
-      action: '审查当前代码变更（git diff）',
+      ...GROK_REVIEWER_ACTION,
     },
     {
       keywords: ['antigravity分析', 'antigravity 分析', 'agy分析', 'agy 分析', '用antigravity分析', '用agy分析'],
@@ -148,10 +160,8 @@ try {
       action: '前端开发分析',
     },
     {
-      keywords: ['双模型审查', '双模型 审查', '两个模型审查', 'dual review'],
-      model: 'both',
-      role: 'reviewer',
-      action: '双模型交叉审查代码变更',
+      keywords: ['三模型审查', '三模型 审查', '双模型审查', '双模型 审查', '两个模型审查', 'dual review'],
+      ...REVIEWER_ACTION,
     },
     {
       keywords: ['双模型分析', '双模型 分析', '两个模型分析', 'dual analyze'],
@@ -167,26 +177,57 @@ try {
     const wrapperPath = path.join(homeDir, '.claude', 'bin', 'codeagent-wrapper');
 
     let actionInstructions;
-    if (modelAction.model === 'both') {
+    if (modelAction.model === 'review-profiles') {
+      actionInstructions = `<ccg-model-action>
+用户请求 GPT、Grok 双 profile 审查。请立即执行：
+
+1. 获取工作目录: WORKDIR=$(pwd)
+2. 读取 ${path.join(homeDir, '.claude', '.ccg', 'config.toml')} 中 routing.review.profiles 的 GPT、Grok model 与 effort。缺少配置时使用 gpt-5.6-sol / xhigh 和 grok-4.5 / high。
+3. 在同一条消息中并行启动 GPT、Grok 两个 reviewer，均使用 run_in_background: true。GPT 调用 ${wrapperPath} --lite --progress --backend claude --no-session-persistence --claude-model <GPT model> --claude-effort <GPT effort>；Grok 调用 ${wrapperPath} --lite --progress --backend claude --no-session-persistence --claude-model <Grok model> --claude-effort <Grok effort>。两者均使用 ${path.join(homeDir, '.claude', '.ccg', 'prompts', 'claude', 'reviewer.md')}。GPT 审查后端逻辑、正确性、安全、回归与测试缺口，Grok 审查前端交互、可访问性、设计一致性与前端安全。
+4. reviewer 不使用 resume 或 SESSION_ID。等待两个结果后由主 Claude 汇总并确认 finding。
+</ccg-model-action>`;
+    } else if (modelAction.model === 'gpt-review-profile') {
+      actionInstructions = `<ccg-model-action>
+用户请求 Codex 审查视角。该视角由 GPT profile 通过当前 Claude Code provider 执行。请立即执行：
+
+1. 获取工作目录: WORKDIR=$(pwd)
+2. 读取 ${path.join(homeDir, '.claude', '.ccg', 'config.toml')} 中 GPT profile 的 model 与 effort。缺少配置时使用 gpt-5.6-sol / xhigh。
+3. 使用 ${wrapperPath} --lite --progress --backend claude --no-session-persistence --claude-model <GPT model> --claude-effort <GPT effort> 启动一个 reviewer，ROLE_FILE 为 ${path.join(homeDir, '.claude', '.ccg', 'prompts', 'claude', 'reviewer.md')}。审查后端逻辑、正确性、安全、回归与测试缺口。
+4. 不使用 resume 或 SESSION_ID。等待结果后确认 finding。
+</ccg-model-action>`;
+    } else if (modelAction.model === 'grok-review-profile') {
+      actionInstructions = `<ccg-model-action>
+用户请求 Antigravity 审查视角。该视角由 Grok profile 通过当前 Claude Code provider 执行。请立即执行：
+
+1. 获取工作目录: WORKDIR=$(pwd)
+2. 读取 ${path.join(homeDir, '.claude', '.ccg', 'config.toml')} 中 Grok profile 的 model 与 effort。缺少配置时使用 grok-4.5 / high。
+3. 使用 ${wrapperPath} --lite --progress --backend claude --no-session-persistence --claude-model <Grok model> --claude-effort <Grok effort> 启动一个 reviewer，ROLE_FILE 为 ${path.join(homeDir, '.claude', '.ccg', 'prompts', 'claude', 'reviewer.md')}。审查前端交互、可访问性、设计一致性与前端安全。
+4. 不使用 resume 或 SESSION_ID。等待结果后确认 finding。
+</ccg-model-action>`;
+    } else if (modelAction.model === 'both') {
       actionInstructions = `<ccg-model-action>
 用户请求双模型${modelAction.role === 'reviewer' ? '审查' : '分析'}。请立即执行：
 
 1. 获取工作目录: WORKDIR=$(pwd)
-2. 并行调用两个模型 (run_in_background: true):
+2. 读取 ${path.join(homeDir, '.claude', '.ccg', 'config.toml')}，确定 routing.backend.primary 与 routing.frontend.primary。缺少配置时分别使用 codex 与 antigravity。
+3. 为 Grok、Kimi Code 或 OpenCode 主路由读取 grokModel、kimiModel 或 opencodeModel，并将对应的 --grok-model、--kimi-model 或 --opencode-model 参数附在 --backend 后。
+4. 并行调用两个模型 (run_in_background: true)：
 
-   Backend (codex):
-   ${wrapperPath} --lite --progress --backend codex - "$WORKDIR" <<'EOF'
-   ROLE_FILE: ${path.join(homeDir, '.claude', '.ccg', 'prompts', 'codex', modelAction.role + '.md')}
+   Backend (<routing.backend.primary>):
+   ${wrapperPath} --lite --progress --backend <backend primary 和可选型号参数> - "$WORKDIR" <<'EOF'
+   ROLE_FILE: ${path.join(homeDir, '.claude', '.ccg', 'prompts', '<backend primary>', modelAction.role + '.md')}
    <TASK>${modelAction.action}</TASK>
    EOF
 
-   Frontend (antigravity):
-   ${wrapperPath} --lite --progress --backend antigravity - "$WORKDIR" <<'EOF'
-   ROLE_FILE: ${path.join(homeDir, '.claude', '.ccg', 'prompts', 'antigravity', modelAction.role + '.md')}
+   Frontend (<routing.frontend.primary>):
+   ${wrapperPath} --lite --progress --backend <frontend primary 和可选型号参数> - "$WORKDIR" <<'EOF'
+   ROLE_FILE: ${path.join(homeDir, '.claude', '.ccg', 'prompts', '<frontend primary>', modelAction.role + '.md')}
    <TASK>${modelAction.action}</TASK>
    EOF
 
-3. 等待结果，综合输出
+   当某个主路由为 Claude 时，使用独立 Claude Code Agent 代替该 wrapper 调用。
+
+5. 等待结果，综合输出
 </ccg-model-action>`;
     } else {
       actionInstructions = `<ccg-model-action>

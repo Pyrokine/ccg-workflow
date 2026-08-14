@@ -36,9 +36,7 @@ comprehensive AI models and APIs on the market, along with a variety of ready-to
 
 ---
 
-CCG 是 Claude Code 的工作流引擎。它编排多个 AI 模型（Codex、Antigravity、Claude），通过 Hook 状态追踪、自动策略选择和 Agent
-Teams
-并行执行来完成开发任务。
+CCG 是 Claude Code 的工作流引擎。它协调 Codex、Antigravity、Claude、Grok、Kimi Code 和 OpenCode，通过 Hook 状态追踪、策略选择和 Agent Teams 并行执行完成开发任务。
 
 Gemini CLI 已禁用：2026-06-18 后 consumer OAuth 请求不再处理。CCG 改用 Antigravity。
 
@@ -52,8 +50,10 @@ v3.0 从底层重写。一个命令替代 29 个。
 - **Agent Teams** — 大型任务通过 TeamCreate 并行 spawn 多个 Builder。每个 Builder 有独立文件所有权。
 - **质量关卡** — `ccg:verify-security`、`ccg:verify-quality`、`ccg:verify-change` 作为 Skill 在策略验证阶段强制调用。
 - **域知识 Hook** — 消息涉及安全、缓存、RAG 等关键词时，相关知识文件自动注入上下文。
-- **Codex 主导模式** — 用 Codex CLI 作为主编排器，Codex 自己写代码，同时调度 Antigravity + Claude 做分析和审查。菜单 `X`
-  选项安装。
+- **模型路由** — 前端和后端可以选择 Codex、Antigravity、Claude、Grok、Kimi Code 或 OpenCode。Grok、Kimi Code 和 OpenCode CLI 路由可分别设置可选型号。
+- **交叉审查** — GPT、Grok 通过当前配置的 Claude Code provider 运行独立且不持久化的 print 会话。`routing.review.profiles` 独立配置它们在 provider 侧使用的型号和 effort，不受 Grok CLI 路由型号影响。
+- **纯 Claude Code 模式** — 前端与后端主路由都选择 Claude 时，使用独立 Claude Code Agent 或 Agent Teams 代替这两类 wrapper 调用。
+- **Codex 主导模式** — 使用 Codex CLI 作为主导编排者，再通过 codeagent-wrapper 交给 GPT、Grok 交叉审查。通过菜单 `X` 选项安装。
 
 ## 快速开始
 
@@ -61,7 +61,7 @@ v3.0 从底层重写。一个命令替代 29 个。
 npx ccg-workflow
 ```
 
-需要 Node.js 20.19+ 和 Claude Code CLI。Codex CLI 和 Antigravity CLI 可选（启用多模型功能）。
+需要 Node.js 22.13+ 或 24.19.0+ 和 Claude Code CLI。Codex CLI、Antigravity CLI、Grok CLI、Kimi Code CLI 和 OpenCode CLI 仅在前端或后端路由时可选使用。
 
 安装器 4 步：API 配置 → 模型路由 → MCP 工具 → 性能模式。新用户有精简流程，默认值开箱即用。
 
@@ -75,10 +75,10 @@ CCG 引擎:
   2. 分类: feature / L 复杂度 / backend / high 风险
   3. 选择策略: full-collaborate
   4. 创建 .ccg/tasks/add-jwt-auth/task.json
-  5. 双模型并行分析（Codex + Antigravity）
+  5. 需要双视角时并行启动当前配置的后端与前端分析路由
   6. 产出计划 → HARD STOP 等你审批
   7. spawn Agent Teams Builder 并行实施
-  8. 质量关卡 + 双模型交叉审查
+  8. 质量关卡 + GPT、Grok 交叉审查
   9. 输出结果
 
 每轮 Hook 注入:
@@ -101,10 +101,10 @@ CCG 引擎:
 | guided-develop    | 中等功能，需要规划         | 单模型   | 无     |
 | full-collaborate  | 复杂功能，跨模块          | 双模型并行 | 强制    |
 | debug-investigate | 复杂 bug，原因不明       | 双模型诊断 | 无     |
-| refactor-safely   | 代码重构              | 双模型审查 | 无     |
+| refactor-safely   | 代码重构              | GPT、Grok 交叉审查 | 无     |
 | deep-research     | 技术研究、方案对比         | 双模型探索 | 无     |
 | optimize-measure  | 性能优化              | 可选    | 无     |
-| review-audit      | 代码审查              | 双模型交叉 | 无     |
+| review-audit      | 代码审查              | GPT、Grok 交叉审查 | 无     |
 | git-action        | commit、rollback 等 | 无     | 无     |
 
 简单任务零开销快速执行。复杂任务启动完整引擎。
@@ -143,7 +143,7 @@ v3.0 默认安装 13 个命令。旧版模式额外安装 18 个。
 | `/ccg:spec-research` | 需求 → 约束集    |
 | `/ccg:spec-plan`     | 零决策可执行计划    |
 | `/ccg:spec-impl`     | 按规范实施       |
-| `/ccg:spec-review`   | 双模型交叉审查     |
+| `/ccg:spec-review`   | GPT、Grok 交叉审查 |
 
 ## Hook 引擎
 
@@ -257,4 +257,4 @@ MIT
 
 ---
 
-v3.1.6-aug.2 | [Issues](https://github.com/fengshao1227/ccg-workflow/issues) | [Contributing](./CONTRIBUTING.md)
+v3.4.0-aug.1 | [Issues](https://github.com/fengshao1227/ccg-workflow/issues) | [Contributing](./CONTRIBUTING.md)

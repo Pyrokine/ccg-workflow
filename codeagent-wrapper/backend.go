@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 )
@@ -203,11 +204,18 @@ func buildClaudeArgs(cfg *Config, targetArg string) []string {
 	// This ensures a clean execution environment without CLAUDE.md or skills that would trigger codeagent
 	args = append(args, "--setting-sources", "")
 
-	if cfg.Mode == "resume" {
-		if cfg.SessionID != "" {
-			// Claude CLI uses -r <session_id> for resume.
-			args = append(args, "-r", cfg.SessionID)
-		}
+	if cfg.NoSessionPersistence {
+		args = append(args, "--no-session-persistence")
+	}
+	if model := strings.TrimSpace(cfg.ClaudeModel); model != "" {
+		args = append(args, "--model", model)
+	}
+	if effort := strings.TrimSpace(cfg.ClaudeEffort); effort != "" {
+		args = append(args, "--effort", effort)
+	}
+	if cfg.Mode == "resume" && cfg.SessionID != "" {
+		// Claude CLI uses -r <session_id> for resume.
+		args = append(args, "-r", cfg.SessionID)
 	}
 	// Note: claude CLI doesn't support -C flag; workdir set via cmd.Dir
 
@@ -245,5 +253,98 @@ func buildAntigravityArgs(cfg *Config, targetArg string) []string {
 
 	// -p must come right before the prompt text (last positional arg)
 	args = append(args, "-p", targetArg)
+	return args
+}
+
+type GrokBackend struct{}
+
+func (GrokBackend) Name() string { return "grok" }
+
+func (GrokBackend) Command() string {
+	if _, err := exec.LookPath("grok"); err == nil {
+		return "grok"
+	}
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return "grok"
+	}
+	fallback := filepath.Join(home, ".grok", "bin", "grok")
+	if isWindows() {
+		fallback += ".exe"
+	}
+	if _, err := os.Stat(fallback); err == nil {
+		return fallback
+	}
+	return "grok"
+}
+
+func (GrokBackend) BuildArgs(cfg *Config, targetArg string) []string {
+	return buildGrokArgs(cfg, targetArg)
+}
+
+func buildGrokArgs(cfg *Config, targetArg string) []string {
+	if cfg == nil {
+		return nil
+	}
+
+	args := []string{"--always-approve", "--output-format", "streaming-json"}
+	if model := strings.TrimSpace(cfg.GrokModel); model != "" {
+		args = append(args, "-m", model)
+	}
+	if cfg.Mode == "resume" && cfg.SessionID != "" {
+		args = append(args, "-r", cfg.SessionID)
+	}
+	return append(args, "-p", targetArg)
+}
+
+type KimiBackend struct{}
+
+func (KimiBackend) Name() string    { return "kimi" }
+func (KimiBackend) Command() string { return "kimi" }
+
+func (KimiBackend) BuildArgs(cfg *Config, targetArg string) []string {
+	return buildKimiArgs(cfg, targetArg)
+}
+
+func buildKimiArgs(cfg *Config, targetArg string) []string {
+	if cfg == nil {
+		return nil
+	}
+
+	args := []string{"--output-format", "stream-json", "--final-message-only"}
+	if model := strings.TrimSpace(cfg.KimiModel); model != "" {
+		args = append(args, "-m", model)
+	}
+	if cfg.Mode == "resume" && cfg.SessionID != "" {
+		args = append(args, "-S", cfg.SessionID)
+	}
+	return append(args, "-p", targetArg)
+}
+
+type OpencodeBackend struct{}
+
+func (OpencodeBackend) Name() string    { return "opencode" }
+func (OpencodeBackend) Command() string { return "opencode" }
+
+func (OpencodeBackend) BuildArgs(cfg *Config, targetArg string) []string {
+	return buildOpencodeArgs(cfg, targetArg)
+}
+
+func buildOpencodeArgs(cfg *Config, targetArg string) []string {
+	if cfg == nil {
+		return nil
+	}
+
+	args := []string{"run"}
+	if model := strings.TrimSpace(cfg.OpencodeModel); model != "" {
+		args = append(args, "-m", model)
+	}
+	if cfg.Mode == "resume" && cfg.SessionID != "" {
+		args = append(args, "-s", cfg.SessionID)
+	}
+	args = append(args, "--format", "json")
+	if targetArg != "" && targetArg != "-" {
+		args = append(args, targetArg)
+	}
 	return args
 }

@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node-version: [20.19.0, 22.13.0, 24]
+        node-version: [22.13.0, 24.19.0]
 
     steps:
       - uses: actions/checkout@v4
@@ -29,11 +29,20 @@ jobs:
       - name: Type check
         run: pnpm typecheck
 
+      - name: Lint
+        run: pnpm lint
+
+      - name: Format check
+        run: pnpm format:check
+
       - name: Run tests
         run: pnpm test
 
       - name: Build
         run: pnpm build
+
+      - name: Verify CLI entrypoint
+        run: node bin/ccg.mjs --help
 
   go-build:
     runs-on: ubuntu-latest
@@ -51,3 +60,7 @@ jobs:
       - name: Go test
         working-directory: codeagent-wrapper
         run: go test -short ./...
+
+      - name: Windows test compile
+        working-directory: codeagent-wrapper
+        run: GOOS=windows GOARCH=amd64 go test -c -o /tmp/codeagent-wrapper.test.exe .

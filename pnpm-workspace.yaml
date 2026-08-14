@@ -1,0 +1,6 @@
+allowBuilds:
+  esbuild: true
+
+peerDependencyRules:
+  allowedVersions:
+    "unbuild>typescript": "^6.0.0"

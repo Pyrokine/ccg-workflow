@@ -144,8 +144,8 @@ const CORE_CONFIGS: WorkflowConfig[] = [
     'spec',
     '归档前审查',
     'Spec Review',
-    '双模型交叉审查 → Critical 必须修复 → 允许归档',
-    'Multi-model compliance review before archiving'
+    'GPT、Grok 外部交叉审查 → Critical 必须修复 → 允许归档',
+    'GPT/Grok external cross-review before archiving'
   ),
 ]
 
@@ -224,8 +224,8 @@ const LEGACY_CONFIGS: WorkflowConfig[] = [
     'development',
     'Agent Teams 审查',
     'Agent Teams Review',
-    '双模型交叉审查并行实施产出，分级处理 Critical/Warning/Info',
-    'Dual-model cross-review with severity classification'
+    'GPT、Grok 外部交叉审查并行实施产出，分级处理 Critical/Warning/Info',
+    'GPT/Grok cross-review with severity classification'
   ),
   cmd(
     'frontend',
@@ -289,8 +289,8 @@ const LEGACY_CONFIGS: WorkflowConfig[] = [
     'development',
     '代码审查',
     'Code Review',
-    '双模型代码审查，无参数时自动审查 git diff',
-    'Dual-model code review, auto-review git diff when no args'
+    'GPT、Grok 外部交叉审查，无参数时自动审查 git diff',
+    'GPT/Grok cross-review, auto-review git diff when no args'
   ),
   cmd(
     'enhance',

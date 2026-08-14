@@ -15,9 +15,9 @@ $ARGUMENTS
 ```
 /ccg:plan → 多模型协同规划（Codex ∥ frontend 模型 分析 → Claude 综合）
                 ↓ 计划文件 (.claude/plan/xxx.md)
-/ccg:codex-exec → Codex 全权执行（MCP 搜索 + 代码实现 + 测试）
+/ccg:codex-exec → {{BACKEND_PRIMARY}} 全权执行（MCP 搜索 + 代码实现 + 测试）
                 ↓ 代码变更
-                → 多模型审核（Codex ∥ frontend 模型 交叉审查）
+                → GPT ∥ Grok 外部审核
 ```
 
 **与 `/ccg:execute` 的区别**：
@@ -77,35 +77,22 @@ EXEC_EOF",
 })
 ```
 
-**审核调用语法**（Codex ∥ frontend 模型 并行审查）：
+**审核调用语法**（GPT、Grok 双路审查）：
 
-```
-Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend <{{BACKEND_PRIMARY}}|{{FRONTEND_PRIMARY}}> - \"{{WORKDIR}}\" <<'REVIEW_EOF'
-ROLE_FILE: <角色提示词路径>
-<TASK>
-Scope: Audit the code changes made by Codex.
-Inputs:
-- The git diff (applied changes)
-- The implementation plan
-Constraints:
-- Do NOT modify any files.
-</TASK>
-OUTPUT:
-1) A prioritized list of issues (severity, file, rationale)
-2) If code changes are needed, include a Unified Diff Patch in a fenced code block.
-REVIEW_EOF",
-  run_in_background: true,
-  timeout: 3600000,
-  description: "简短描述"
-})
-```
+在同一条消息中启动 GPT、Grok 两个 `Bash` 调用，每个调用接收完整 git diff、计划文件和相关完整文件：
+
+| reviewer | wrapper 参数 | 审查重点 |
+|---|---|---|
+| GPT | `--backend claude --no-session-persistence --claude-model {{REVIEW_GPT_MODEL}} --claude-effort {{REVIEW_GPT_EFFORT}}` | 后端逻辑、正确性、安全、回归与测试缺口 |
+| Grok | `--backend claude --no-session-persistence --claude-model {{REVIEW_GROK_MODEL}} --claude-effort {{REVIEW_GROK_EFFORT}}` | 前端交互、可访问性、设计一致性与前端安全 |
+
+两个外部调用使用 `~/.claude/.ccg/prompts/claude/reviewer.md`，不得修改文件，输出按 Critical/Warning/Info 分级的问题、位置、依据与修复建议。外部 reviewer 不使用 `resume` 或保存 `SESSION_ID`。
 
 **角色提示词**：
 
-| 阶段 | 后端                                                       | 前端                                                        |
-|----|----------------------------------------------------------|-----------------------------------------------------------|
-| 审查 | `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/reviewer.md` | `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/reviewer.md` |
+| 阶段 | reviewer |
+|---|---|
+| 审查 | `~/.claude/.ccg/prompts/claude/reviewer.md`，供 GPT、Grok 两个外部 profile 共用 |
 
 **等待后台任务**（最大超时 600000ms = 10 分钟）：
 
@@ -156,7 +143,7 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
    **关键文件**：<N 个>
 
    Codex 将自主完成：MCP 搜索 + 代码实现 + 测试验证
-   Claude 仅做最终审核
+   GPT、Grok 将以独立临时会话进行后端与前端审查
 
    确认执行？(Y/N)
    ```
@@ -238,36 +225,28 @@ EXEC_EOF",
 
 ---
 
-### 🔍 Phase 2：Claude 轻量审核
+### 🔍 Phase 2：审查准备
 
-`[模式：审核]`
+`[模式：准备]`
 
-**Claude 只做最小验证，不重复 Codex 已做的工作**：
+**Lead 只整理材料并启动审查，不自行判定实现质量**：
 
-1. **读取 Codex 报告**：解析 CONTEXT_GATHERED / CHANGES_MADE / VERIFICATION_RESULTS / REMAINING_ISSUES
-2. **查看实际变更**：
+1. **读取 Codex 报告**：解析 CONTEXT_GATHERED / CHANGES_MADE / VERIFICATION_RESULTS / REMAINING_ISSUES。
+2. **收集审查上下文**：
 
    ```
-   Bash({ command: "git diff HEAD", description: "查看 Codex 实际变更" })
+   Bash({ command: "git diff HEAD", description: "获取审查变更" })
    ```
 
-3. **快速判定**：
-    - 变更是否在计划范围内？
-    - 是否有明显安全/逻辑问题？
-    - 测试是否通过？
-
-4. **处理结果**：
-    - ✅ **通过** → Phase 3 多模型审核
-    - ⚠️ **小问题** → Claude 直接修复（< 10 行的修正 Claude 自己做）
-    - ❌ **需返工** → Phase 2.5 追加指令
+3. **准备 GPT、Grok 输入**：附上完整 diff、相关完整文件、计划约束和 Codex 验证结果，随后进入 Phase 3。
 
 ---
 
-### 🔄 Phase 2.5：追加指令（仅在需返工时）
+### 🔄 Phase 2.5：审查后追加指令（仅在存在已确认 Critical finding 时）
 
 `[模式：追加]`
 
-**复用 Codex 会话，下发修正指令**：
+**复用 Codex 会话，下发已确认问题的修正指令**：
 
 ```
 Bash({
@@ -292,7 +271,7 @@ FIXEOF",
 })
 ```
 
-等待完成后回到 Phase 2。**最多 2 轮返工**，超过则 Claude 直接接管修复。
+等待完成后重新进入 Phase 3。**最多 2 轮返工**，超过后将未解决问题报告给用户。
 
 ---
 
@@ -300,7 +279,7 @@ FIXEOF",
 
 `[模式：审核]`
 
-**并行调用 {{BACKEND_PRIMARY}} + {{FRONTEND_PRIMARY}} 交叉审查**（多模型协同不变）：
+**GPT、Grok 外部交叉审查**：
 
 1. **获取变更 diff**：
 
@@ -308,30 +287,22 @@ FIXEOF",
    Bash({ command: "git diff HEAD", description: "获取完整变更 diff" })
    ```
 
-2. **并行调用**（`run_in_background: true`）：
+2. **并行调用 GPT、Grok reviewer**（`run_in_background: true`）：
 
-    - **{{BACKEND_PRIMARY}} 审查**：
-        - ROLE_FILE: `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/reviewer.md`
-        - 输入：变更 Diff + 计划文件内容
-        - 关注：安全性、性能、错误处理、逻辑正确性
+    - **GPT**：`--backend claude --no-session-persistence --claude-model {{REVIEW_GPT_MODEL}} --claude-effort {{REVIEW_GPT_EFFORT}}`，关注后端逻辑、正确性、安全、回归与测试缺口
+    - **Grok**：`--backend claude --no-session-persistence --claude-model {{REVIEW_GROK_MODEL}} --claude-effort {{REVIEW_GROK_EFFORT}}`，关注前端交互、可访问性、设计一致性与前端安全
 
-    - **{{FRONTEND_PRIMARY}} 审查**：
-        - ROLE_FILE: `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/reviewer.md`
-        - 输入：变更 Diff + 计划文件内容
-        - 关注：代码可读性、设计一致性、可维护性
-
-   用 `TaskOutput` 等待两个模型的完整审查结果。
+   GPT、Grok 使用 `~/.claude/.ccg/prompts/claude/reviewer.md`，输入变更完整 diff、计划文件和相关完整文件。用 `TaskOutput` 等待两个结果，不得 `resume` 或保存 reviewer `SESSION_ID`。
 
 3. **整合审查意见**：
-    - 按信任规则：后端问题以 {{BACKEND_PRIMARY}} 为准，前端问题以 {{FRONTEND_PRIMARY}} 为准
-    - **Critical** → 必须修复（Claude 直接修或再派 Codex）
+    - 合并 GPT、Grok 两份报告并去重，每项回到当前源码确认
+    - **Critical** → 必须修复
     - **Warning** → 建议修复，报告给用户决定
     - **Info** → 记录不处理
 
 4. **执行修复**（如有 Critical）：
-    - < 10 行修正：Claude 直接修
-    - ≥ 10 行修正：再派 Codex（复用 `CODEX_EXEC_SESSION`）
-    - 修复后可选重复 Phase 3（直到风险可接受）
+    - 将已确认的 Critical finding 下发给 {{BACKEND_PRIMARY}} 修复
+    - 修复后重新执行 Phase 3
 
 ---
 
@@ -348,7 +319,7 @@ FIXEOF",
 | 项目 | 详情 |
 |------|------|
 | 计划 | <计划文件路径> |
-| 模式 | Codex 全权执行 + 多模型审核 |
+| 模式 | {{BACKEND_PRIMARY}} 全权执行 + GPT、Grok 外部审核 |
 | 搜索 | <Codex 使用了哪些 MCP 工具，关键发现> |
 | 变更 | <N 个文件，+X/-Y 行> |
 | 测试 | <通过/失败> |
@@ -360,9 +331,9 @@ FIXEOF",
 | path/to/file.ts | 修改/新增 | 描述 |
 
 ### 审核结果
-- Codex 审查：<通过/发现 N 个问题>
-- Antigravity 审查：<通过/发现 N 个问题>
-- Claude 处理：<已修复 N 个 Critical，N 个 Warning 待用户决定>
+- GPT 审查：<通过/发现 N 个问题>
+- Grok 审查：<通过/发现 N 个问题>
+- 整合处理：<已修复 N 个 Critical，N 个 Warning 待用户决定>
 
 ### 后续建议
 1. [ ] <建议的测试步骤>
@@ -373,12 +344,12 @@ FIXEOF",
 
 ## 关键规则
 
-1. **Claude 极简原则** — Claude 不调用 MCP、不做代码检索。只读计划、指挥 Codex、审核结果。
+1. **Lead 编排原则** — Lead 只读计划、整理审查材料、启动 GPT/Grok 并汇总确认 finding。
 2. **{{BACKEND_PRIMARY}} 全权执行** — MCP 搜索、文档查询、代码检索、实现、测试全由 {{BACKEND_PRIMARY}} 完成。
-3. **多模型审核不变** — 审核阶段仍然 Codex ∥ frontend 模型 交叉审查，保证质量。
-4. **信任规则** — 后端以 {{BACKEND_PRIMARY}} 为准，前端以 {{FRONTEND_PRIMARY}} 为准。
+3. **GPT、Grok 双 profile 审核** — 两者使用独立临时会话交叉审查，主 Claude 只汇总结果。
+4. **结论依据** — 每项 finding 必须回到当前源码确认。
 5. **一次性下发** — 尽量一次给 Codex 完整指令 + 完整计划，减少来回通信。
-6. **最多 2 轮返工** — 超过 2 轮 Claude 直接接管，避免无限循环。
+6. **最多 2 轮返工** — 超过 2 轮后报告未解决问题，避免无限循环。
 7. **计划对齐** — Codex 实现必须在计划范围内，超出范围的变更视为违规。
 
 ---

@@ -16,10 +16,13 @@ describe('createDefaultRouting', () => {
     expect(routing.backend.strategy).toBe('fallback')
   })
 
-  it('returns codex and antigravity for review', () => {
+  it('returns GPT and Grok external review profiles', () => {
     const routing = createDefaultRouting()
-    expect(routing.review.models).toEqual(['codex', 'antigravity'])
-    expect(routing.review.strategy).toBe('single')
+    expect(routing.review.profiles).toEqual([
+      { id: 'gpt', model: 'gpt-5.6-sol', effort: 'xhigh' },
+      { id: 'grok', model: 'grok-4.5', effort: 'high' },
+    ])
+    expect(routing.review.strategy).toBe('parallel')
   })
 
   it('does not inject proxy by default', () => {
@@ -68,7 +71,10 @@ describe('normalizeRoutingForInstall', () => {
       primary: 'codex',
       strategy: 'fallback',
     })
-    expect(routing.review.models).toEqual(['codex', 'antigravity'])
+    expect(routing.review.profiles).toEqual([
+      { id: 'gpt', model: 'gpt-5.6-sol', effort: 'xhigh' },
+      { id: 'grok', model: 'grok-4.5', effort: 'high' },
+    ])
     expect(routing.proxy).toEqual({
       models: ['antigravity'],
       http: 'http://legacy.invalid:8891',
@@ -101,7 +107,10 @@ describe('normalizeRoutingForInstall', () => {
       primary: 'antigravity',
       strategy: 'fallback',
     })
-    expect(routing.review.models).toEqual(['antigravity'])
+    expect(routing.review.profiles).toEqual([
+      { id: 'gpt', model: 'gpt-5.6-sol', effort: 'xhigh' },
+      { id: 'grok', model: 'grok-4.5', effort: 'high' },
+    ])
   })
 
   it('keeps explicitly configured agy proxy as antigravity proxy', () => {
@@ -129,6 +138,68 @@ describe('normalizeRoutingForInstall', () => {
     })
 
     expect(routing.proxy).toBeUndefined()
+  })
+
+  it('ignores the retired Claude profile and fills missing external profiles', () => {
+    const routing = normalizeRoutingForInstall({
+      review: {
+        profiles: [{ id: 'claude' }, { id: 'grok', model: 'grok-4.5', effort: 'high' }],
+        strategy: 'parallel',
+      },
+    })
+
+    expect(routing.review.profiles).toEqual([
+      { id: 'gpt', model: 'gpt-5.6-sol', effort: 'xhigh' },
+      { id: 'grok', model: 'grok-4.5', effort: 'high' },
+    ])
+  })
+
+  it('uses explicit review profile model and effort overrides', () => {
+    const routing = normalizeRoutingForInstall({
+      review: {
+        profiles: [
+          { id: 'gpt', model: 'gpt-5.6-sol', effort: 'max' },
+          { id: 'grok', model: 'grok-4.5', effort: 'xhigh' },
+        ],
+      },
+    })
+
+    expect(routing.review.profiles).toEqual([
+      { id: 'gpt', model: 'gpt-5.6-sol', effort: 'max' },
+      { id: 'grok', model: 'grok-4.5', effort: 'xhigh' },
+    ])
+  })
+
+  it('keeps active additional backends and their model overrides', () => {
+    const routing = normalizeRoutingForInstall({
+      frontend: {
+        models: ['grok', 'opencode'],
+        primary: 'grok',
+        strategy: 'fallback',
+      },
+      backend: {
+        models: ['kimi'],
+        primary: 'kimi',
+        strategy: 'fallback',
+      },
+      review: {
+        models: ['grok', 'kimi', 'opencode'],
+        strategy: 'parallel',
+      },
+      grokModel: 'grok-4.5',
+      kimiModel: 'kimi-code',
+      opencodeModel: 'anthropic/claude-opus-5',
+    })
+
+    expect(routing.frontend.models).toEqual(['grok', 'opencode'])
+    expect(routing.backend.models).toEqual(['kimi'])
+    expect(routing.review.profiles).toEqual([
+      { id: 'gpt', model: 'gpt-5.6-sol', effort: 'xhigh' },
+      { id: 'grok', model: 'grok-4.5', effort: 'high' },
+    ])
+    expect(routing.grokModel).toBe('grok-4.5')
+    expect(routing.kimiModel).toBe('kimi-code')
+    expect(routing.opencodeModel).toBe('anthropic/claude-opus-5')
   })
 })
 

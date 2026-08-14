@@ -89,7 +89,7 @@ Backend 模型：
 
 ```
 Bash({
-  command: "/home/USER/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend {{BACKEND_PRIMARY}} - \"$WORKDIR\" <<'CODEAGENT_EOF'\nROLE_FILE: /home/USER/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/analyzer.md\n<TASK>\n需求：{增强后的需求}\n上下文：{Phase 2 收集的项目上下文、相关代码摘要}\n</TASK>\nOUTPUT: 技术分析报告（可行性、架构建议、风险评估、实施方案对比）\nCODEAGENT_EOF",
+  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend {{BACKEND_PRIMARY}} - \"$WORKDIR\" <<'CODEAGENT_EOF'\nROLE_FILE: ~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/analyzer.md\n<TASK>\n需求：{增强后的需求}\n上下文：{Phase 2 收集的项目上下文、相关代码摘要}\n</TASK>\nOUTPUT: 技术分析报告（可行性、架构建议、风险评估、实施方案对比）\nCODEAGENT_EOF",
   run_in_background: true,
   timeout: 3600000,
   description: "Backend 模型分析"
@@ -100,7 +100,7 @@ Frontend 模型（仅前端设计范围）：
 
 ```
 Bash({
-  command: "/home/USER/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend {{FRONTEND_PRIMARY}} - \"$WORKDIR\" <<'CODEAGENT_EOF'\nROLE_FILE: /home/USER/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/analyzer.md\n<TASK>\n需求：{增强后的需求}\n上下文：{Phase 2 收集的项目上下文}\n</TASK>\nOUTPUT: 从不同视角的分析报告（可行性、设计建议、风险评估）\nCODEAGENT_EOF",
+  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend {{FRONTEND_PRIMARY}} - \"$WORKDIR\" <<'CODEAGENT_EOF'\nROLE_FILE: ~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/analyzer.md\n<TASK>\n需求：{增强后的需求}\n上下文：{Phase 2 收集的项目上下文}\n</TASK>\nOUTPUT: 从不同视角的分析报告（可行性、设计建议、风险评估）\nCODEAGENT_EOF",
   run_in_background: true,
   timeout: 3600000,
   description: "Frontend 模型分析"
@@ -162,7 +162,7 @@ TaskOutput({ task_id: "<id>", block: true, timeout: 600000 })
 请审批以上计划，并选择谁来写代码：
 
 1. **Claude 自己写** — 精细控制，逐步实施
-2. **backend / frontend 模型** — 外部模型写代码，更快，Claude 监控审查
+2. **backend / frontend 模型** — 外部模型写代码，更快，Claude 协调 GPT、Grok 审查
 
 请回复 1 或 2（或直接说"你来写"/"用codex"等）。
 ---
@@ -188,7 +188,7 @@ TaskOutput({ task_id: "<id>", block: true, timeout: 600000 })
 
 #### 模式 B: 外部模型实施（用户选 [2]）
 
-Claude 作为编排者，调用外部模型（backend / frontend 模型）写代码。
+Claude 作为编排者，调用当前 backend 模型写代码。backend 为 `claude` 时使用 Agent Teams，不启动 wrapper。
 
 **Step 1**: 从 plan.md 按文件归属拆分子任务：
 
@@ -200,7 +200,7 @@ Claude 作为编排者，调用外部模型（backend / frontend 模型）写代
 
 ```
 Bash({
-  command: "/home/USER/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --parallel --backend codex - \"$WORKDIR\" <<'PARALLEL_EOF'\n---TASK---\nid: layer1-{name1}\nworkdir: $WORKDIR\n---CONTENT---\nROLE_FILE: /home/USER/.claude/.ccg/prompts/codex/builder.md\n<TASK>\n## 文件范围（⛔ 只改这些文件）\n{file1, file2}\n\n## 实施步骤\n{steps from plan.md}\n</TASK>\n---TASK---\nid: layer1-{name2}\nworkdir: $WORKDIR\n---CONTENT---\nROLE_FILE: /home/USER/.claude/.ccg/prompts/codex/builder.md\n<TASK>\n## 文件范围\n{file3, file4}\n\n## 实施步骤\n{steps}\n</TASK>\n---TASK---\nid: layer2-{name3}\nworkdir: $WORKDIR\ndependencies: layer1-{name1},layer1-{name2}\n---CONTENT---\nROLE_FILE: /home/USER/.claude/.ccg/prompts/codex/builder.md\n<TASK>\n## 文件范围\n{file5}\n\n## 实施步骤\n{steps}\n</TASK>\nPARALLEL_EOF",
+  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --parallel --backend {{BACKEND_PRIMARY}} - \"$WORKDIR\" <<'PARALLEL_EOF'\n---TASK---\nid: layer1-{name1}\nworkdir: $WORKDIR\n---CONTENT---\nROLE_FILE: ~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/builder.md\n<TASK>\n## 文件范围（⛔ 只改这些文件）\n{file1, file2}\n\n## 实施步骤\n{steps from plan.md}\n</TASK>\n---TASK---\nid: layer1-{name2}\nworkdir: $WORKDIR\n---CONTENT---\nROLE_FILE: ~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/builder.md\n<TASK>\n## 文件范围\n{file3, file4}\n\n## 实施步骤\n{steps}\n</TASK>\n---TASK---\nid: layer2-{name3}\nworkdir: $WORKDIR\ndependencies: layer1-{name1},layer1-{name2}\n---CONTENT---\nROLE_FILE: ~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/builder.md\n<TASK>\n## 文件范围\n{file5}\n\n## 实施步骤\n{steps}\n</TASK>\nPARALLEL_EOF",
   run_in_background: true,
   timeout: 3600000,
   description: "Parallel Builder: {task count} 个子任务"
@@ -214,10 +214,7 @@ Bash({
 
 **Step 3**: 等待完成，读取汇总报告
 
-**Step 4**: Claude 审查 `git diff`，确认变更在 plan 范围内
-
-- 小问题 Claude 直接修复
-- 大问题再调外部模型或切换模式 A
+**Step 4**: Lead 收集 `git diff`、完整相关文件和 plan 验收标准，作为 GPT、Grok 审查输入，不在此步骤自行审查或修复
 
 **降级**：外部模型失败/超时 → 切换到模式 A
 
@@ -234,9 +231,8 @@ Bash({
 
 **⛔ 审查线程：**
 
-3. 调用 backend 模型 + reviewer 角色，检查安全、性能、错误处理
-    - 只有任务明确涉及前端、布局、界面、页面设计、UI/UX、视觉样式或交互设计时，才额外调用 frontend 模型检查设计一致性
-4. 综合审查意见
+3. 在同一条消息中并行调用 GPT、Grok：GPT 使用 `--backend claude --no-session-persistence --claude-model {{REVIEW_GPT_MODEL}} --claude-effort {{REVIEW_GPT_EFFORT}}` 审查后端逻辑、正确性、安全、回归与测试缺口；Grok 使用 `--backend claude --no-session-persistence --claude-model {{REVIEW_GROK_MODEL}} --claude-effort {{REVIEW_GROK_EFFORT}}` 审查前端交互、可访问性、设计一致性与前端安全
+4. 等待两份报告。reviewer 不使用 `resume` 或 `SESSION_ID`，Lead 汇总并确认 finding
 
 **⛔ 质量关卡（必须逐个调用 Skill，不可跳过）：**
 

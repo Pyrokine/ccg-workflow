@@ -34,9 +34,8 @@ watermarks across video, PDF, PPTX, infographic, podcast, and more. 100% private
 
 ---
 
-CCG is a workflow engine for Claude Code that orchestrates multiple AI models (Codex, Antigravity, Claude) with
-hook-based
-state tracking, automatic strategy selection, and Agent Teams parallel execution.
+CCG is a workflow engine for Claude Code that coordinates Codex, Antigravity, Claude, Grok, Kimi Code, and OpenCode
+through hook-based state tracking, strategy selection, and Agent Teams parallel execution.
 
 Gemini CLI is disabled because consumer OAuth requests stopped being processed after 2026-06-18. CCG uses Antigravity
 instead.
@@ -57,8 +56,10 @@ v3.0 is a ground-up rewrite. One command replaces 29.
   verification phases.
 - **Domain knowledge hooks** — When your message mentions security, caching, RAG, etc., the relevant knowledge file is
   auto-injected into context.
-- **Codex-Led Mode** — Use Codex CLI as the lead orchestrator. Codex writes code directly and dispatches analysis/review
-  to Antigravity + Claude via codeagent-wrapper. Install via menu option `X`.
+- **Model routing** — Route frontend and backend work to Codex, Antigravity, Claude, Grok, Kimi Code, or OpenCode. Grok, Kimi Code, and OpenCode CLI routes can each use an optional model name.
+- **Cross-model review** — GPT and Grok use the configured Claude Code provider in separate non-persistent print sessions. `routing.review.profiles` configures their provider-side model and effort independently of the Grok CLI route.
+- **Pure Claude Code mode** — When both primary routes use Claude, independent Claude Code Agents or Agent Teams replace wrapper calls for frontend and backend work.
+- **Codex-Led Mode** — Use Codex CLI as the lead orchestrator, then run GPT and Grok cross-review through codeagent-wrapper. Install via menu option `X`.
 
 ## Quick Start
 
@@ -66,7 +67,7 @@ v3.0 is a ground-up rewrite. One command replaces 29.
 npx ccg-workflow
 ```
 
-Requires Node.js 20.19+ and Claude Code CLI. Codex CLI and Antigravity CLI are optional (enable multi-model features).
+Requires Node.js 22.13+ or 24.19.0+ and Claude Code CLI. Codex CLI, Antigravity CLI, Grok CLI, Kimi Code CLI, and OpenCode CLI are optional for frontend and backend routing.
 
 The installer walks through 4 steps: API config, model routing, MCP tools, performance mode. New users get a streamlined
 2-step flow with sensible defaults.
@@ -81,10 +82,10 @@ CCG Engine:
   2. Classifies: feature / L complexity / backend / high risk
   3. Selects strategy: full-collaborate
   4. Creates .ccg/tasks/add-jwt-auth/task.json
-  5. Launches dual-model analysis (Codex + Antigravity in parallel)
+  5. Launches the configured backend and frontend analysis routes when both perspectives apply
   6. Produces plan → HARD STOP for your approval
   7. Spawns Agent Teams Builders for parallel implementation
-  8. Runs quality gates + dual-model cross-review
+  8. Runs quality gates + GPT/Grok cross-review
   9. Reports results
 
 Every turn, a hook injects:
@@ -107,10 +108,10 @@ The engine picks a strategy based on task type and complexity:
 | guided-develop    | Medium feature, needs planning | Single model            | No    |
 | full-collaborate  | Complex feature, multi-module  | Dual model parallel     | Yes   |
 | debug-investigate | Complex bug, unknown cause     | Dual model diagnosis    | No    |
-| refactor-safely   | Code restructuring             | Dual model review       | No    |
+| refactor-safely   | Code restructuring             | GPT/Grok cross-review    | No    |
 | deep-research     | Technical research, comparison | Dual model exploration  | No    |
 | optimize-measure  | Performance optimization       | Optional                | No    |
-| review-audit      | Code review                    | Dual model cross-review | No    |
+| review-audit      | Code review                    | GPT/Grok cross-review | No    |
 | git-action        | commit, rollback, branches     | No                      | No    |
 
 Simple tasks run fast with no overhead. Complex tasks get the full engine.
@@ -149,7 +150,7 @@ v3.0 default install: 13 commands. Legacy mode adds 18 more.
 | `/ccg:spec-research` | Requirements → constraints       |
 | `/ccg:spec-plan`     | Constraints → zero-decision plan |
 | `/ccg:spec-impl`     | Execute plan + archive           |
-| `/ccg:spec-review`   | Dual-model cross-review          |
+| `/ccg:spec-review`   | GPT/Grok cross-review |
 
 ## Hook Engine
 
@@ -269,4 +270,4 @@ MIT
 
 ---
 
-v3.1.6-aug.2 | [Issues](https://github.com/fengshao1227/ccg-workflow/issues) | [Contributing](./CONTRIBUTING.md)
+v3.4.0-aug.1 | [Issues](https://github.com/fengshao1227/ccg-workflow/issues) | [Contributing](./CONTRIBUTING.md)

@@ -1,12 +1,12 @@
 {
   "name": "ccg-workflow",
-  "version": "3.1.6-aug.2",
-  "description": "Claude + Codex + Antigravity multi-model collaboration system - smart routing development workflow",
+  "version": "3.4.0-aug.1",
+  "description": "Multi-model collaboration workflow for Claude Code, Codex, Antigravity, Grok, Kimi Code, and OpenCode",
   "type": "module",
   "private": true,
-  "packageManager": "pnpm@10.17.1",
+  "packageManager": "pnpm@11.21.0",
   "engines": {
-    "node": "^20.19.0 || ^22.13.0 || >=24"
+    "node": "^22.13.0 || >=24.19.0"
   },
   "author": {
     "name": "CCG Contributors"
@@ -16,6 +16,9 @@
     "claude",
     "codex",
     "antigravity",
+    "grok",
+    "kimi",
+    "opencode",
     "multi-model",
     "ai",
     "collaboration",
@@ -41,6 +44,9 @@
     "templates/prompts/codex/",
     "templates/prompts/claude/",
     "templates/prompts/antigravity/",
+    "templates/prompts/grok/",
+    "templates/prompts/kimi/",
+    "templates/prompts/opencode/",
     "templates/output-styles/",
     "templates/skills/",
     "templates/rules/"
@@ -63,30 +69,25 @@
   "dependencies": {
     "ansis": "^4.3.1",
     "cac": "^7.0.0",
-    "fs-extra": "^11.3.5",
-    "i18next": "^26.3.1",
-    "i18next-fs-backend": "^2.6.6",
+    "fs-extra": "^11.4.0",
+    "i18next": "^26.3.6",
+    "i18next-fs-backend": "^2.6.7",
     "inquirer": "^14.0.2",
-    "ora": "^9.4.0",
+    "ora": "^9.4.1",
     "pathe": "^2.0.3",
-    "smol-toml": "^1.6.1"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild"
-    ]
+    "smol-toml": "^1.8.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/fs-extra": "^11.0.4",
-    "@types/node": "^22.0.0",
-    "eslint": "^10.5.0",
-    "prettier": "^3.8.4",
-    "tsx": "^4.22.4",
+    "@types/node": "^22.20.1",
+    "eslint": "^10.8.1",
+    "prettier": "^3.9.6",
+    "tsx": "^4.23.12",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.61.1",
+    "typescript-eslint": "^8.67.0",
     "unbuild": "^3.6.1",
     "vitepress": "^1.6.4",
-    "vitest": "^4.1.9"
+    "vitest": "^4.1.10"
   }
 }

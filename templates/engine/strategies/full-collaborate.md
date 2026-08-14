@@ -11,7 +11,7 @@
 ## 前置加载
 
 ```
-Read("/home/USER/.claude/.ccg/engine/model-router.md")
+Read("~/.claude/.ccg/engine/model-router.md")
 ```
 
 ---
@@ -157,7 +157,7 @@ TaskOutput({ task_id: "$FRONTEND_TASK_ID", block: true, timeout: 600000 })
 请审批以上计划，并选择谁来写代码：
 
 1. **Agent Teams** — Claude Builders 并行写，多文件同时进行
-2. **backend / frontend 模型** — 外部模型写代码，更快更便宜，Claude 监控审查
+2. **backend / frontend 模型** — 外部模型写代码，更快更便宜，Claude 协调 GPT、Grok 审查
 
 请回复 1 或 2（或直接说"用team"/"用codex"等）。
 ---
@@ -227,16 +227,9 @@ Agent({
 - Layer 1 全部完成后 → 在新消息中 spawn Layer 2 Builders
 - Builder 遇到问题 → SendMessage 指导
 
-#### Step 5: spawn Reviewer 快检
+#### Step 5: 准备 GPT、Grok 审查
 
-```
-Agent({
-  team_name: "{task-id}-team",
-  name: "reviewer",
-  model: "sonnet",
-  prompt: "审查所有变更文件（git diff）。运行 lint/typecheck/test。输出 Critical/Warning/Info 分级报告。完成后标记 completed。"
-})
-```
+收集完整 `git diff`、相关完整文件和验收标准。在 Phase 5 并行启动 GPT、Grok 外部 reviewer，不创建 Agent Teams reviewer。
 
 Critical → spawn fix-dev 修复（最多 2 轮）。
 
@@ -245,7 +238,6 @@ Critical → spawn fix-dev 修复（最多 2 轮）。
 ```
 SendMessage({ to: "dev-1", message: { type: "shutdown_request" } })
 SendMessage({ to: "dev-2", message: { type: "shutdown_request" } })
-SendMessage({ to: "reviewer", message: { type: "shutdown_request" } })
 ```
 
 #### 降级方案（仅当 TeamCreate 实际报错时）
@@ -262,7 +254,7 @@ SendMessage({ to: "reviewer", message: { type: "shutdown_request" } })
 
 **Task 更新**：`currentPhase → "4-implementation"`, `nextAction → "Parallel Builder 执行 plan"`
 
-Claude 作为编排者，调用外部模型（backend / frontend 模型）**并行写代码**。
+Claude 作为编排者，调用当前 backend 模型并行写代码。backend 为 `claude` 时使用 Agent Teams，不启动 wrapper。
 
 **Step 1**: 从 plan.md 按**文件归属**拆分为并行子任务：
 
@@ -274,7 +266,7 @@ Claude 作为编排者，调用外部模型（backend / frontend 模型）**并�
 
 ```
 Bash({
-  command: "/home/USER/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --parallel --backend codex - \"$WORKDIR\" <<'PARALLEL_EOF'\n---TASK---\nid: layer1-{name1}\nworkdir: $WORKDIR\n---CONTENT---\nROLE_FILE: /home/USER/.claude/.ccg/prompts/codex/builder.md\n<TASK>\n## 文件范围（⛔ 只改这些文件）\n{file1, file2}\n\n## 实施步骤\n{steps from plan.md Layer 1}\n\n## 验证命令\n{test/lint commands}\n</TASK>\n---TASK---\nid: layer1-{name2}\nworkdir: $WORKDIR\n---CONTENT---\nROLE_FILE: /home/USER/.claude/.ccg/prompts/codex/builder.md\n<TASK>\n## 文件范围\n{file3, file4}\n\n## 实施步骤\n{steps}\n</TASK>\n---TASK---\nid: layer2-{name3}\nworkdir: $WORKDIR\ndependencies: layer1-{name1},layer1-{name2}\n---CONTENT---\nROLE_FILE: /home/USER/.claude/.ccg/prompts/codex/builder.md\n<TASK>\n## 文件范围\n{file5, file6}\n\n## 实施步骤\n{steps from Layer 2}\n</TASK>\nPARALLEL_EOF",
+  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --parallel --backend {{BACKEND_PRIMARY}} - \"$WORKDIR\" <<'PARALLEL_EOF'\n---TASK---\nid: layer1-{name1}\nworkdir: $WORKDIR\n---CONTENT---\nROLE_FILE: ~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/builder.md\n<TASK>\n## 文件范围（⛔ 只改这些文件）\n{file1, file2}\n\n## 实施步骤\n{steps from plan.md Layer 1}\n\n## 验证命令\n{test/lint commands}\n</TASK>\n---TASK---\nid: layer1-{name2}\nworkdir: $WORKDIR\n---CONTENT---\nROLE_FILE: ~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/builder.md\n<TASK>\n## 文件范围\n{file3, file4}\n\n## 实施步骤\n{steps}\n</TASK>\n---TASK---\nid: layer2-{name3}\nworkdir: $WORKDIR\ndependencies: layer1-{name1},layer1-{name2}\n---CONTENT---\nROLE_FILE: ~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/builder.md\n<TASK>\n## 文件范围\n{file5, file6}\n\n## 实施步骤\n{steps from Layer 2}\n</TASK>\nPARALLEL_EOF",
   run_in_background: true,
   timeout: 3600000,
   description: "Parallel Builder: {N} 个子任务（L1: {X} 并行 → L2: {Y} 串行）"
@@ -289,12 +281,11 @@ Bash({
 
 **Step 3**: 等待完成，读取汇总报告（wrapper 自动合并所有子任务结果）
 
-**Step 4**: Claude 审查产出：
+**Step 4**: Lead 准备审查材料：
 
-1. `git diff` 检查所有变更
-2. 确认变更在 plan 范围内（scope check）
-3. 小问题（<10 行）→ Claude 直接修复
-4. 大问题 → 再调外部模型修复，或切换模式 A
+1. 收集完整 `git diff`、相关完整文件和 plan 验收标准
+2. 将范围信息附入 GPT、Grok 的审查输入
+3. 不在此步骤自行审查或修复
 
 **降级**：外部模型失败/超时 → 告知用户，切换到模式 A 执行
 
@@ -310,12 +301,13 @@ Bash({
 
 #### Round N 流程（N=1,2,3）
 
-**5a. 模型审查（每轮 spawn 新 Agent，干净上下文）**
+**5a. GPT、Grok 模型审查（每轮使用不持久化新会话）**
 
 **模型调用**：
 
-- **backend 模型**：reviewer 角色 — 关注安全、性能、错误处理
-- **frontend 模型**：只有任务明确涉及前端、布局、界面、页面设计、UI/UX、视觉样式或交互设计时才调用，关注可访问性和设计一致性
+- **GPT**：`--backend claude --no-session-persistence --claude-model {{REVIEW_GPT_MODEL}} --claude-effort {{REVIEW_GPT_EFFORT}}`，审查后端逻辑、正确性、安全、回归与测试缺口
+- **Grok**：`--backend claude --no-session-persistence --claude-model {{REVIEW_GROK_MODEL}} --claude-effort {{REVIEW_GROK_EFFORT}}`，审查前端交互、可访问性、设计一致性与前端安全
+- 两个 reviewer 必须并行运行，不使用 `resume` 或 `SESSION_ID`。Lead 在等待结果后汇总并确认 finding
 
 **5b. 质量关卡**
 

@@ -2,6 +2,7 @@ import fs from 'fs-extra'
 import { homedir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'pathe'
+import type { ReviewProfile } from '../types'
 import { isWindows } from './platform'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -54,6 +55,38 @@ const MCP_PROVIDERS: Record<string, { tool: string; param: string }> = {
   'fast-context': { tool: 'mcp__fast-context__fast_context_search', param: 'query' },
 }
 
+const DEFAULT_REVIEW_PROFILES: readonly ReviewProfile[] = [
+  { id: 'gpt', model: 'gpt-5.6-sol', effort: 'xhigh' },
+  { id: 'grok', model: 'grok-4.5', effort: 'high' },
+]
+
+const REVIEW_PROFILE_IDS = new Set<ReviewProfile['id']>(['gpt', 'grok'])
+const REVIEW_EFFORTS = new Set<NonNullable<ReviewProfile['effort']>>(['low', 'medium', 'high', 'xhigh', 'max'])
+
+function resolveReviewProfiles(configuredProfiles?: ReviewProfile[]): ReviewProfile[] {
+  const configuredById = new Map<ReviewProfile['id'], ReviewProfile>()
+
+  for (const profile of configuredProfiles || []) {
+    if (!REVIEW_PROFILE_IDS.has(profile.id) || configuredById.has(profile.id)) {
+      continue
+    }
+
+    const normalized: ReviewProfile = { id: profile.id }
+    if (profile.model?.trim()) {
+      normalized.model = profile.model.trim()
+    }
+    if (profile.effort && REVIEW_EFFORTS.has(profile.effort)) {
+      normalized.effort = profile.effort
+    }
+    configuredById.set(normalized.id, normalized)
+  }
+
+  return DEFAULT_REVIEW_PROFILES.map((defaultProfile) => ({
+    ...defaultProfile,
+    ...configuredById.get(defaultProfile.id),
+  }))
+}
+
 /**
  * Replace template variables in content based on user configuration.
  * Injects model routing configs and MCP provider tool names at install time.
@@ -68,7 +101,12 @@ export function injectConfigVariables(
       mode?: string
       frontend?: { models?: string[]; primary?: string }
       backend?: { models?: string[]; primary?: string }
-      review?: { models?: string[] }
+      review?: {
+        profiles?: ReviewProfile[]
+      }
+      grokModel?: string
+      kimiModel?: string
+      opencodeModel?: string
     }
     liteMode?: boolean
     mcpProvider?: string
@@ -91,19 +129,109 @@ export function injectConfigVariables(
   processed = processed.replace(/\{\{BACKEND_MODELS\}\}/g, JSON.stringify(backendModels))
   processed = processed.replace(/\{\{BACKEND_PRIMARY\}\}/g, backendPrimary)
 
-  // Review models
-  const reviewModels = routing.review?.models || ['codex', 'antigravity']
-  const reviewPrimary = reviewModels[0] || 'codex'
-  const reviewSecondary = reviewModels[1] || 'antigravity'
-  processed = processed.replace(/\{\{REVIEW_MODELS\}\}/g, JSON.stringify(reviewModels))
-  processed = processed.replace(/\{\{REVIEW_PRIMARY\}\}/g, reviewPrimary)
-  processed = processed.replace(/\{\{REVIEW_SECONDARY\}\}/g, reviewSecondary)
+  // Review profiles
+  const reviewProfiles = resolveReviewProfiles(routing.review?.profiles)
+  const reviewProfileById = new Map(reviewProfiles.map((profile) => [profile.id, profile]))
+  const reviewGpt = reviewProfileById.get('gpt')
+  const reviewGrok = reviewProfileById.get('grok')
+  processed = processed.replace(/\{\{REVIEW_PROFILES\}\}/g, JSON.stringify(reviewProfiles))
+  processed = processed.replace(/\{\{REVIEW_GPT_MODEL\}\}/g, reviewGpt?.model || '')
+  processed = processed.replace(/\{\{REVIEW_GPT_EFFORT\}\}/g, reviewGpt?.effort || '')
+  processed = processed.replace(/\{\{REVIEW_GROK_MODEL\}\}/g, reviewGrok?.model || '')
+  processed = processed.replace(/\{\{REVIEW_GROK_EFFORT\}\}/g, reviewGrok?.effort || '')
 
   // Routing mode
   const routingMode = routing.mode || 'smart'
   processed = processed.replace(/\{\{ROUTING_MODE\}\}/g, routingMode)
 
   processed = processed.replace(/\{\{GEMINI_MODEL_FLAG\}\}/g, '')
+
+  const configuredModels = new Set([...frontendModels, ...backendModels])
+  const replaceModelFlag = (placeholder: string, model: string | undefined, backend: string, flag: string): void => {
+    const pattern = new RegExp(`\\{\\{${placeholder}\\}\\}`, 'g')
+    const modelName = model?.trim()
+    if (!configuredModels.has(backend) || !modelName) {
+      processed = processed.replace(pattern, '')
+      return
+    }
+
+    const hardCodedBackend = /--backend\s+([a-z0-9-]+)(?:\s|$)/
+    processed = processed
+      .split('\n')
+      .map((line) => {
+        if (!line.includes(`{{${placeholder}}}`)) {
+          return line
+        }
+        const matchedBackend = line.match(hardCodedBackend)?.[1]
+        if (matchedBackend && matchedBackend !== backend) {
+          return line.replace(pattern, '')
+        }
+        const conditionalBackends = line.match(/--backend\s+<([^>]+)>/)?.[1].split('|') || []
+        if (conditionalBackends.some((route) => route.trim().split(/\s+/, 1)[0] === backend)) {
+          return line.replace(pattern, '')
+        }
+        return line.replace(pattern, `${flag} ${modelName} `)
+      })
+      .join('\n')
+  }
+
+  replaceModelFlag('GROK_MODEL_FLAG', routing.grokModel, 'grok', '--grok-model')
+  replaceModelFlag('KIMI_MODEL_FLAG', routing.kimiModel, 'kimi', '--kimi-model')
+  replaceModelFlag('OPENCODE_MODEL_FLAG', routing.opencodeModel, 'opencode', '--opencode-model')
+
+  const addModelFlagToWrapperCalls = (backend: string, model: string | undefined, flag: string): void => {
+    const modelName = model?.trim()
+    if (!configuredModels.has(backend) || !modelName) {
+      return
+    }
+
+    const wrapperBackend = new RegExp(`(codeagent-wrapper.*?--backend\\s+${backend})(?=\\s|$)`)
+    processed = processed
+      .split('\n')
+      .map((line) => {
+        if (!line.includes('codeagent-wrapper') || line.includes(flag)) {
+          return line
+        }
+        return line.replace(wrapperBackend, `$1 ${flag} ${modelName}`)
+      })
+      .join('\n')
+  }
+
+  addModelFlagToWrapperCalls('grok', routing.grokModel, '--grok-model')
+  addModelFlagToWrapperCalls('kimi', routing.kimiModel, '--kimi-model')
+  addModelFlagToWrapperCalls('opencode', routing.opencodeModel, '--opencode-model')
+
+  const modelRoute = (backend: string): string => {
+    const flags: Record<string, [string | undefined, string]> = {
+      grok: [routing.grokModel, '--grok-model'],
+      kimi: [routing.kimiModel, '--kimi-model'],
+      opencode: [routing.opencodeModel, '--opencode-model'],
+    }
+    const modelFlag = flags[backend]
+    if (!modelFlag) {
+      return backend
+    }
+    const [model, flag] = modelFlag
+    return model?.trim() ? `${backend} ${flag} ${model.trim()}` : backend
+  }
+  const conditionalBackend = `--backend <${backendPrimary}|${frontendPrimary}>`
+  const conditionalModelRoutes = `--backend <${modelRoute(backendPrimary)}|${modelRoute(frontendPrimary)}>`
+  processed = processed.replaceAll(conditionalBackend, conditionalModelRoutes)
+
+  const pureClaudeCodeMode = frontendPrimary === 'claude' && backendPrimary === 'claude'
+  if (pureClaudeCodeMode) {
+    const directive = `
+## Pure Claude Code mode
+
+Both primary routes use Claude. Do not execute \`codeagent-wrapper\` for frontend or backend work. Use independent Claude Code Agent or Agent Teams work instead. Review commands that explicitly use \`--no-session-persistence\` remain enabled and must run in independent contexts.
+`
+    const frontmatter = /^---\n[\s\S]*?\n---\n/
+    if (frontmatter.test(processed)) {
+      processed = processed.replace(frontmatter, (match) => `${match}${directive}`)
+    } else {
+      processed = `${directive}\n${processed}`
+    }
+  }
 
   // Lite mode flag for codeagent-wrapper
   // If liteMode is true, inject "--lite" flag

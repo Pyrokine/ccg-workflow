@@ -12,17 +12,27 @@ Read ~/.claude/.ccg/config.toml
 
 从 `[routing]` 区块提取：
 
-- `frontend.models` — 前端候选模型，按顺序尝试
-- `frontend.primary` — 前端首选模型，默认 `antigravity`
-- `frontend.strategy` — `fallback` 时首选失败后按 `models` 继续尝试
-- `backend.primary` — 后端模型，默认 `codex`
-- `review.models` — 审查模型列表，默认 `codex` + `antigravity`
-- `proxy` — 可选代理配置；仅在显式配置 `antigravity` / `agy` 时注入，不默认注入
+- `frontend.models` / `frontend.primary` — 前端候选模型及首选模型，默认 `antigravity`
+- `backend.models` / `backend.primary` — 后端候选模型及首选模型，默认 `codex`
+- `review.profiles` — 外部审查 profile 列表，默认 GPT、Grok
+- `grokModel` — Grok CLI 可选型号
+- `kimiModel` — Kimi 可选型号，留空时使用 Kimi CLI 自身默认值
+- `opencodeModel` — OpenCode 可选 `provider/model`
+- `proxy` — 可选代理配置，仅 `antigravity` / `agy` 可注入
 
-如果配置文件不存在或不可读，使用默认值直接继续。当前默认前端 fallback 链是 `antigravity` → `codex`。
+模型可为 `codex`、`claude`、`antigravity`、`grok`、`kimi` 或 `opencode`。配置文件缺失或不可读时，使用默认路由。
 
-Gemini CLI 已禁用：2026-06-18 后 consumer OAuth 请求不再处理，CCG 使用 Antigravity 替代。不要选择 `gemini`，旧配置中的
-`gemini` 只允许迁移为 `antigravity`。
+Gemini CLI 已禁用：2026-06-18 后 consumer OAuth 请求不再处理。不要选择 `gemini`，旧配置中的 `gemini` 只允许迁移为 `antigravity`。
+
+## 1b. 纯 Claude Code 模式
+
+当 `frontend.primary` 与 `backend.primary` 都是 `claude` 时：
+
+- 不调用 `codeagent-wrapper`，也不启动外部 CLI 执行前端或后端工作
+- 分析与 Builder 工作改由 Claude Code Agent 或 Agent Teams 完成
+- 分别创建独立上下文的 Agent，分配后端或前端视角
+- 按第 2 节调用 GPT、Grok 两个外部 profile，主 Claude 只编排与汇总
+- 第 3 节的新会话与复用会话模板不用于前端或后端工作
 
 ## 2. 按阶段选择模型
 
@@ -45,9 +55,12 @@ Gemini CLI 已禁用：2026-06-18 后 consumer OAuth 请求不再处理，CCG �
 
 ### 审查阶段
 
-- 按 `review.models` 调用两个审查模型，默认 `codex` + `antigravity`
-- 两个模型都必须通过 `~/.claude/bin/codeagent-wrapper --lite --progress --backend $MODEL` 启动
-- 某个模型失败时只报告该模型不可用，禁止把其它模型结果标成它的结论
+- 按 `review.profiles` 启动 GPT、Grok 两个独立 reviewer，缺少任一 profile 时使用默认 profile 补全
+- 两者都通过 `~/.claude/bin/codeagent-wrapper --backend claude` 启动，实际 provider 与当前 Claude Code 相同
+- GPT 负责后端逻辑、正确性、安全、回归和测试缺口，Grok 负责前端交互、可访问性、设计一致性和前端安全
+- GPT 与 Grok 使用各自 profile 中的 `model` 和 `effort`，默认值分别是 `gpt-5.6-sol` / `xhigh` 与 `grok-4.5` / `high`
+- 两个 reviewer 都传 `--no-session-persistence`，每次审查独立且不可 `resume`
+- 某个 reviewer 失败时只报告该 reviewer 不可用，禁止把其它结果标成它的结论
 
 ### 调试阶段
 
@@ -63,16 +76,17 @@ Gemini CLI 已禁用：2026-06-18 后 consumer OAuth 请求不再处理，CCG �
 
 - 外部模型仅提供建议，Claude 执行所有文件修改
 
-**Codex Builder 模式**（用户选择时）：
+**外部 Builder 模式**（用户选择时）：
 
-- backend 模型 + `$BACKEND/builder.md` — **有完整写权限**，直接写代码到文件系统
-- Claude 监控进度，审查产出，必要时接管
+- backend 模型 + `$BACKEND/builder.md` — 有完整写权限，直接写代码到文件系统
+- 支持 `codex`、`antigravity`、`grok`、`kimi` 与 `opencode`
+- backend 为 `claude` 时使用 Agent Teams，不启动 wrapper
+- Claude 监控进度，准备 GPT、Grok 审查材料并协调已确认问题的修复
 - 适用于 M-L 复杂度、低中风险的明确实施任务
 
 ## 3. 调用模板
 
-Antigravity 只有在 `[routing.proxy]` 显式配置 `antigravity` / `agy` 和代理 URL 时，才由 `~/.claude/bin/codeagent-wrapper`
-注入代理。Codex / Claude 不走代理。
+仅 Antigravity 在 `[routing.proxy]` 显式配置 `antigravity` / `agy` 和代理 URL 时，才由 `~/.claude/bin/codeagent-wrapper` 注入代理。Codex、Claude、Grok、Kimi 与 OpenCode 不走代理。
 
 ### 获取工作目录
 
@@ -84,9 +98,19 @@ WORKDIR=$(pwd)
 
 ### 新会话调用
 
+在构造命令前，根据选定 backend 添加对应的可选 model flag：
+
+| Backend | routing 字段 | CLI 参数 |
+|---|---|---|
+| `grok` | `grokModel` | `--grok-model <model>` |
+| `kimi` | `kimiModel` | `--kimi-model <model>` |
+| `opencode` | `opencodeModel` | `--opencode-model <provider/model>` |
+
+其它 backend 不添加 model flag。随后以完成替换的命令启动 wrapper：
+
 ```
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend $MODEL - \"$WORKDIR\" <<'CODEAGENT_EOF'\nROLE_FILE: ~/.claude/.ccg/prompts/$MODEL/$ROLE.md\n<TASK>\n$TASK_CONTENT\n</TASK>\nOUTPUT: $OUTPUT_FORMAT\nCODEAGENT_EOF",
+  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend <MODEL_AND_OPTIONAL_FLAG> - \"$WORKDIR\" <<'CODEAGENT_EOF'\nROLE_FILE: ~/.claude/.ccg/prompts/$MODEL/$ROLE.md\n<TASK>\n$TASK_CONTENT\n</TASK>\nOUTPUT: $OUTPUT_FORMAT\nCODEAGENT_EOF",
   run_in_background: true,
   timeout: 3600000,
   description: "$SHORT_DESCRIPTION"
@@ -95,17 +119,21 @@ Bash({
 
 变量说明：
 
-- `$MODEL` — 选定的模型名（`codex` / `claude` / `antigravity`）
-- `$ROLE` — 角色文件名（`analyzer` / `architect` / `reviewer` / `debugger` / `optimizer` / `tester` / `builder`）
-- `$TASK_CONTENT` — 任务内容（需求 + 上下文）
-- `$OUTPUT_FORMAT` — 期望输出格式
-- `$SHORT_DESCRIPTION` — 简短描述（用于进度显示）
+- `$MODEL`：选定的模型名（`codex` / `claude` / `antigravity` / `grok` / `kimi` / `opencode`）
+- `$ROLE`：角色文件名（`analyzer` / `architect` / `reviewer` / `debugger` / `optimizer` / `tester` / `builder`）
+- `$TASK_CONTENT`：任务内容（需求 + 上下文）
+- `$OUTPUT_FORMAT`：期望输出格式
+- `$SHORT_DESCRIPTION`：简短描述（用于进度显示）
+
+纯 Claude Code 模式不填写 `$MODEL`，直接按第 1b 节创建独立 Claude Agent。
 
 ### 复用会话调用
 
+此调用只适用于非审查任务。审查 profile 使用 `--no-session-persistence`，因此不得加入 `resume <SESSION_ID>`。其它任务沿用新会话调用的 backend 和 model flag 选择规则，仅在 task 前加入 `resume <SESSION_ID>`：
+
 ```
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend $MODEL resume $SESSION_ID - \"$WORKDIR\" <<'CODEAGENT_EOF'\nROLE_FILE: ~/.claude/.ccg/prompts/$MODEL/$ROLE.md\n<TASK>\n$TASK_CONTENT\n</TASK>\nOUTPUT: $OUTPUT_FORMAT\nCODEAGENT_EOF",
+  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend <MODEL_AND_OPTIONAL_FLAG> resume $SESSION_ID - \"$WORKDIR\" <<'CODEAGENT_EOF'\nROLE_FILE: ~/.claude/.ccg/prompts/$MODEL/$ROLE.md\n<TASK>\n$TASK_CONTENT\n</TASK>\nOUTPUT: $OUTPUT_FORMAT\nCODEAGENT_EOF",
   run_in_background: true,
   timeout: 3600000,
   description: "$SHORT_DESCRIPTION"
@@ -137,7 +165,5 @@ Bash({
 
 ## 5. SESSION_ID 管理
 
-- 每次 codeagent-wrapper 调用返回 `Session-ID: xxx`
-- 捕获并保存：`BACKEND_SESSION`、`FRONTEND_SESSION`
-- 后续阶段通过 `resume $SESSION_ID` 复用上下文
-- 复用会话可减少重复分析，提升效率
+- 非审查任务可捕获 `Session-ID: xxx`，保存为 `BACKEND_SESSION`、`FRONTEND_SESSION` 后通过 `resume $SESSION_ID` 复用
+- 审查任务不返回或保存可复用的 session，必须传入完整 diff、完整文件上下文和验收规则

@@ -208,5 +208,5 @@ Read("~/.claude/.ccg/engine/strategies/{selected-strategy}.md")
 | `refactor-safely`   | 代码重构，需要安全保障  | 可选        |
 | `deep-research`     | 技术研究，方案对比    | 双模型探索     |
 | `optimize-measure`  | 性能优化，需要度量    | 可选        |
-| `review-audit`      | 代码审查         | 双模型交叉     |
+| `review-audit`      | 代码审查         | GPT、Grok 外部交叉审查 |
 | `git-action`        | Git 操作       | 无（委托现有命令） |

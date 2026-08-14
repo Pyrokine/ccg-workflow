@@ -62,37 +62,23 @@ EOF",
 
 **审计调用语法**（Code Review / Audit）：
 
-```
-Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend <{{BACKEND_PRIMARY}}|{{FRONTEND_PRIMARY}}> resume <SESSION_ID> - \"{{WORKDIR}}\" <<'EOF'
-ROLE_FILE: <角色提示词路径>
-<TASK>
-Scope: Audit the final code changes.
-Inputs:
-- The applied patch (git diff / final unified diff)
-- The touched files (relevant excerpts if needed)
-Constraints:
-- Do NOT modify any files.
-- Do NOT output tool commands that assume filesystem access.
-</TASK>
-OUTPUT:
-1) A prioritized list of issues (severity, file, rationale)
-2) Concrete fixes; if code changes are needed, include a Unified Diff Patch in a fenced code block.
-EOF",
-  run_in_background: true,
-  timeout: 3600000,
-  description: "简短描述"
-})
-```
+在同一条消息中并行启动 GPT、Grok 两个 `Bash` 调用，每个调用接收完整 diff、完整相关文件和计划验收规则：
+
+| reviewer | wrapper 参数 | 审查重点 |
+|---|---|---|
+| GPT | `--backend claude --no-session-persistence --claude-model {{REVIEW_GPT_MODEL}} --claude-effort {{REVIEW_GPT_EFFORT}}` | 后端逻辑、正确性、安全、回归与测试缺口 |
+| Grok | `--backend claude --no-session-persistence --claude-model {{REVIEW_GROK_MODEL}} --claude-effort {{REVIEW_GROK_EFFORT}}` | 前端交互、可访问性、设计一致性与前端安全 |
+
+两个外部调用使用 `~/.claude/.ccg/prompts/claude/reviewer.md`，输出按 Critical/Warning/Info 分级的 findings。外部 reviewer 不使用 `resume` 或 `SESSION_ID`。
 
 **角色提示词**：
 
-| 阶段 | 后端                                                        | 前端                                                        |
-|----|-----------------------------------------------------------|-----------------------------------------------------------|
+| 阶段 | 后端 | 前端 |
+|----|---|---|
 | 实施 | `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/architect.md` | `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/frontend.md` |
-| 审查 | `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/reviewer.md`  | `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/reviewer.md` |
+| 审查 | `~/.claude/.ccg/prompts/claude/reviewer.md`，供 GPT、Grok 两个外部 profile 共用 | 同左 |
 
-**会话复用**：如果 `/ccg:plan` 提供了 SESSION_ID，使用 `resume <SESSION_ID>` 复用上下文。
+**会话复用**：如果 `/ccg:plan` 提供了 SESSION_ID，原型生成可以使用 `resume <SESSION_ID>`。审计调用不复用会话。
 
 **等待后台任务**（最大超时 600000ms = 10 分钟）：
 
@@ -248,26 +234,26 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 
 #### 5.1 自动审计
 
-**变更生效后，强制立即并行调用** {{BACKEND_PRIMARY}} 和 {{FRONTEND_PRIMARY}} 进行 Code Review：
+**变更生效后，立即并行调用** GPT、Grok 两个 reviewer，输入变更的完整 Diff、目标完整文件和计划验收规则：
 
-1. **{{BACKEND_PRIMARY}} 审查**（`run_in_background: true`）：
-    - ROLE_FILE: `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/reviewer.md`
-    - 输入：变更的 Diff + 目标文件
-    - 关注：安全性、性能、错误处理、逻辑正确性
+1. **GPT**（`run_in_background: true`）：
+    - `--backend claude --no-session-persistence --claude-model {{REVIEW_GPT_MODEL}} --claude-effort {{REVIEW_GPT_EFFORT}}`
+    - ROLE_FILE: `~/.claude/.ccg/prompts/claude/reviewer.md`
+    - 关注：后端逻辑、正确性、安全、回归与测试缺口
 
-2. **{{FRONTEND_PRIMARY}} 审查**（`run_in_background: true`）：
-    - ROLE_FILE: `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/reviewer.md`
-    - 输入：变更的 Diff + 目标文件
-    - 关注：可访问性、设计一致性、用户体验
+2. **Grok**（`run_in_background: true`）：
+    - `--backend claude --no-session-persistence --claude-model {{REVIEW_GROK_MODEL}} --claude-effort {{REVIEW_GROK_EFFORT}}`
+    - ROLE_FILE: `~/.claude/.ccg/prompts/claude/reviewer.md`
+    - 关注：前端交互、可访问性、设计一致性与前端安全
 
-用 `TaskOutput` 等待两个模型的完整审查结果。优先复用 Phase 3 的会话（`resume <SESSION_ID>`）以保持上下文一致。
+用 `TaskOutput` 等待两个审查结果。reviewer 不使用 `resume` 或保存 `SESSION_ID`。
 
 #### 5.2 整合修复
 
-1. 综合 {{BACKEND_PRIMARY}} + {{FRONTEND_PRIMARY}} 的审查意见
-2. 按信任规则权衡：后端以 {{BACKEND_PRIMARY}} 为准，前端以 {{FRONTEND_PRIMARY}} 为准
+1. 合并 GPT、Grok 的审查意见并去重
+2. 每项 finding 回到当前源码确认，再按 Critical / Warning / Info 分级
 3. 执行必要的修复
-4. 修复后按需重复 Phase 5.1（直到风险可接受）
+4. 修复后按需重复 Phase 5.1
 
 #### 5.3 交付确认
 
@@ -282,8 +268,8 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 | path/to/file.ts | 修改 | 描述 |
 
 ### 审计结果
-- {{BACKEND_PRIMARY}}：<通过/发现 N 个问题>
-- {{FRONTEND_PRIMARY}}：<通过/发现 N 个问题>
+- GPT：<通过/发现 N 个问题>
+- Grok：<通过/发现 N 个问题>
 
 ### 后续建议
 1. [ ] <建议的测试步骤>

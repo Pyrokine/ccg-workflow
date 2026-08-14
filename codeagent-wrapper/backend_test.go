@@ -41,6 +41,25 @@ func TestClaudeBuildArgs_ModesAndPermissions(t *testing.T) {
 	)
 
 	t.Run(
+		"new review includes model effort and ephemeral session flag", func(t *testing.T) {
+			cfg := &Config{
+				Mode:                 "new",
+				ClaudeModel:          "gpt-5.6-sol",
+				ClaudeEffort:         "xhigh",
+				NoSessionPersistence: true,
+			}
+			got := backend.BuildArgs(cfg, "review")
+			want := []string{
+				"-p", "--dangerously-skip-permissions", "--setting-sources", "", "--no-session-persistence", "--model",
+				"gpt-5.6-sol", "--effort", "xhigh", "--output-format", "stream-json", "--verbose", "review",
+			}
+			if !reflect.DeepEqual(got, want) {
+				t.Fatalf("got %v, want %v", got, want)
+			}
+		},
+	)
+
+	t.Run(
 		"resume mode includes session id", func(t *testing.T) {
 			cfg := &Config{Mode: "resume", SessionID: "sid-123", WorkDir: "/ignored"}
 			got := backend.BuildArgs(cfg, "resume-task")
@@ -50,6 +69,39 @@ func TestClaudeBuildArgs_ModesAndPermissions(t *testing.T) {
 			}
 			if !reflect.DeepEqual(got, want) {
 				t.Fatalf("got %v, want %v", got, want)
+			}
+		},
+	)
+
+	t.Run(
+		"rejects invalid Claude effort", func(t *testing.T) {
+			previousArgs := os.Args
+			t.Cleanup(func() { os.Args = previousArgs })
+			os.Args = []string{"codeagent-wrapper", "--backend", "claude", "--claude-effort", "invalid", "review"}
+			if _, err := parseArgs(); err == nil || !strings.Contains(err.Error(), "--claude-effort") {
+				t.Fatalf("parseArgs error = %v, want Claude effort rejection", err)
+			}
+		},
+	)
+
+	t.Run(
+		"ignores invalid Claude effort for non-Claude backends", func(t *testing.T) {
+			previousArgs := os.Args
+			t.Cleanup(func() { os.Args = previousArgs })
+			os.Args = []string{"codeagent-wrapper", "--backend", "codex", "--claude-effort", "invalid", "review"}
+			if _, err := parseArgs(); err != nil {
+				t.Fatalf("parseArgs error = %v, want non-Claude backend acceptance", err)
+			}
+		},
+	)
+
+	t.Run(
+		"ephemeral sessions cannot resume", func(t *testing.T) {
+			previousArgs := os.Args
+			t.Cleanup(func() { os.Args = previousArgs })
+			os.Args = []string{"codeagent-wrapper", "--backend", "claude", "--no-session-persistence", "resume", "sid-123", "review"}
+			if _, err := parseArgs(); err == nil || !strings.Contains(err.Error(), "cannot be used with resume") {
+				t.Fatalf("parseArgs error = %v, want no-session-persistence resume rejection", err)
 			}
 		},
 	)
@@ -203,6 +255,9 @@ func TestClaudeBuildArgs_BackendMetadata(t *testing.T) {
 		{backend: CodexBackend{}, name: "codex", command: "codex"},
 		{backend: ClaudeBackend{}, name: "claude", command: "claude"},
 		{backend: AntigravityBackend{}, name: "antigravity", command: "agy"},
+		{backend: GrokBackend{}, name: "grok", command: "grok"},
+		{backend: KimiBackend{}, name: "kimi", command: "kimi"},
+		{backend: OpencodeBackend{}, name: "opencode", command: "opencode"},
 	}
 
 	for _, tt := range tests {
@@ -220,8 +275,10 @@ func TestLoadModelProxyEnv(t *testing.T) {
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 
-	if got := loadModelProxyEnv("codex"); len(got) != 0 {
-		t.Fatalf("codex proxy env = %v, want empty", got)
+	for _, backend := range []string{"codex", "claude", "grok", "kimi", "opencode"} {
+		if got := loadModelProxyEnv(backend); len(got) != 0 {
+			t.Fatalf("%s proxy env = %v, want empty", backend, got)
+		}
 	}
 
 	got := loadModelProxyEnv("gemini")
@@ -271,6 +328,60 @@ func TestLoadModelProxyEnv(t *testing.T) {
 	if len(got) != 0 {
 		t.Fatalf("proxy models without explicit URL should not inject env: %v", got)
 	}
+}
+
+func TestAdditionalBackendBuildArgs(t *testing.T) {
+	t.Run("grok", func(t *testing.T) {
+		got := buildGrokArgs(&Config{Mode: "resume", SessionID: "grok-session", GrokModel: "grok-4.5"}, "review")
+		want := []string{"--always-approve", "--output-format", "streaming-json", "-m", "grok-4.5", "-r", "grok-session", "-p", "review"}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("got %v, want %v", got, want)
+		}
+	})
+
+	t.Run("kimi", func(t *testing.T) {
+		got := buildKimiArgs(&Config{Mode: "resume", SessionID: "kimi-session", KimiModel: "kimi-code"}, "review")
+		want := []string{"--output-format", "stream-json", "--final-message-only", "-m", "kimi-code", "-S", "kimi-session", "-p", "review"}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("got %v, want %v", got, want)
+		}
+	})
+
+	t.Run("opencode", func(t *testing.T) {
+		got := buildOpencodeArgs(&Config{Mode: "resume", SessionID: "opencode-session", OpencodeModel: "anthropic/claude-opus-5"}, "review")
+		want := []string{"run", "-m", "anthropic/claude-opus-5", "-s", "opencode-session", "--format", "json", "review"}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("got %v, want %v", got, want)
+		}
+		for _, arg := range buildOpencodeArgs(&Config{}, "-") {
+			if arg == "-" {
+				t.Fatalf("stdin marker leaked into opencode args: %v", got)
+			}
+		}
+	})
+}
+
+func TestAdditionalBackendStreamParsing(t *testing.T) {
+	t.Run("grok excludes thoughts", func(t *testing.T) {
+		message, sessionID := parseJSONStream(strings.NewReader("{\"type\":\"thought\",\"data\":\"internal\"}\n{\"type\":\"text\",\"data\":\"answer\"}\n{\"type\":\"end\",\"stopReason\":\"EndTurn\",\"sessionId\":\"grok-session\"}\n"))
+		if message != "answer" || sessionID != "grok-session" {
+			t.Fatalf("message=%q session=%q", message, sessionID)
+		}
+	})
+
+	t.Run("kimi excludes metadata and tool output", func(t *testing.T) {
+		message, sessionID := parseJSONStream(strings.NewReader("{\"role\":\"meta\",\"type\":\"session.resume_hint\",\"session_id\":\"kimi-session\",\"content\":\"resume hint\"}\n{\"role\":\"assistant\",\"content\":\"answer\"}\n{\"role\":\"tool\",\"content\":\"tool output\"}\n"))
+		if message != "answer" || sessionID != "kimi-session" {
+			t.Fatalf("message=%q session=%q", message, sessionID)
+		}
+	})
+
+	t.Run("opencode", func(t *testing.T) {
+		message, sessionID := parseJSONStream(strings.NewReader("{\"type\":\"text\",\"sessionID\":\"opencode-session\",\"part\":{\"type\":\"text\",\"text\":\"answer\"}}\n{\"type\":\"step-finish\",\"sessionID\":\"opencode-session\",\"part\":{\"type\":\"step-finish\",\"reason\":\"stop\"}}\n"))
+		if message != "answer" || sessionID != "opencode-session" {
+			t.Fatalf("message=%q session=%q", message, sessionID)
+		}
+	})
 }
 
 func TestLoadMinimalEnvSettings(t *testing.T) {

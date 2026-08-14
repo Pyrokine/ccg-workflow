@@ -3,7 +3,7 @@ import { homedir } from 'node:os'
 import { join } from 'pathe'
 import { parse, stringify } from 'smol-toml'
 import { version as packageVersion } from '../../package.json'
-import type { CcgConfig, ModelRouting, ModelType, SupportedLang } from '../types'
+import type { CcgConfig, ModelRouting, ModelType, ReviewProfile, ReviewProfileId, SupportedLang } from '../types'
 
 // v1.4.0: 配置目录统一到 ~/.claude/.ccg/
 const CCG_DIR = join(homedir(), '.claude', '.ccg')
@@ -86,8 +86,11 @@ export function createDefaultRouting(): ModelRouting {
       strategy: 'fallback',
     },
     review: {
-      models: ['codex', 'antigravity'],
-      strategy: 'single',
+      profiles: [
+        { id: 'gpt', model: 'gpt-5.6-sol', effort: 'xhigh' },
+        { id: 'grok', model: 'grok-4.5', effort: 'high' },
+      ],
+      strategy: 'parallel',
     },
     mode: 'smart',
   }
@@ -100,6 +103,7 @@ type ModelRouteInput = {
 }
 
 type ReviewRouteInput = {
+  profiles?: unknown
   models?: unknown
   strategy?: unknown
 }
@@ -115,10 +119,23 @@ type RoutingInput = {
   backend?: ModelRouteInput
   review?: ReviewRouteInput
   proxy?: RoutingProxyInput
+  grokModel?: unknown
+  kimiModel?: unknown
+  opencodeModel?: unknown
   mode?: unknown
 }
 
-const activeModels = new Set<ModelType>(['codex', 'claude', 'antigravity'])
+const activeModels = new Set<ModelType>(['codex', 'claude', 'antigravity', 'grok', 'kimi', 'opencode'])
+const reviewProfileIds = new Set<ReviewProfileId>(['gpt', 'grok'])
+const reviewEfforts = new Set(['low', 'medium', 'high', 'xhigh', 'max'])
+const defaultReviewProfiles: ReviewProfile[] = [
+  { id: 'gpt', model: 'gpt-5.6-sol', effort: 'xhigh' },
+  { id: 'grok', model: 'grok-4.5', effort: 'high' },
+]
+
+function cloneReviewProfiles(profiles: ReviewProfile[]): ReviewProfile[] {
+  return profiles.map((profile) => ({ ...profile }))
+}
 const routingStrategies = new Set(['parallel', 'fallback', 'round-robin'])
 const reviewStrategies = new Set(['parallel', 'fallback', 'single'])
 const collaborationModes = new Set(['parallel', 'smart', 'sequential'])
@@ -149,7 +166,7 @@ export function normalizeModelNames(value: unknown, fallback: ModelType[]): Mode
   return deduped.length > 0 ? deduped : fallback
 }
 
-function normalizeProxyModelName(value: unknown): ModelType | null {
+function normalizeProxyModelName(value: unknown): Extract<ModelType, 'antigravity'> | null {
   if (typeof value !== 'string') {
     return null
   }
@@ -161,7 +178,7 @@ function normalizeProxyModelName(value: unknown): ModelType | null {
   return null
 }
 
-function normalizeProxyModels(value: unknown): ModelType[] {
+function normalizeProxyModels(value: unknown): Extract<ModelType, 'antigravity'>[] {
   const source = Array.isArray(value) ? value : typeof value === 'string' ? value.split(',') : null
   if (!source) {
     return []
@@ -169,7 +186,7 @@ function normalizeProxyModels(value: unknown): ModelType[] {
 
   const models = source
     .map((model) => normalizeProxyModelName(model))
-    .filter((model): model is ModelType => model !== null)
+    .filter((model): model is Extract<ModelType, 'antigravity'> => model !== null)
   return [...new Set(models)]
 }
 
@@ -186,6 +203,42 @@ function normalizeRoutingProxy(proxy: RoutingProxyInput | undefined): ModelRouti
   }
 
   return { models, http, https }
+}
+
+function normalizeReviewProfiles(value: unknown, fallback: ReviewProfile[]): ReviewProfile[] {
+  if (!Array.isArray(value)) {
+    return cloneReviewProfiles(fallback)
+  }
+
+  const configured = new Map<ReviewProfileId, ReviewProfile>()
+  for (const rawProfile of value) {
+    if (typeof rawProfile !== 'object' || rawProfile === null) {
+      continue
+    }
+    const profile = rawProfile as { id?: unknown; model?: unknown; effort?: unknown }
+    if (
+      typeof profile.id !== 'string' ||
+      !reviewProfileIds.has(profile.id as ReviewProfileId) ||
+      configured.has(profile.id as ReviewProfileId)
+    ) {
+      continue
+    }
+
+    const normalized: ReviewProfile = { id: profile.id as ReviewProfileId }
+    if (typeof profile.model === 'string' && profile.model.trim()) {
+      normalized.model = profile.model.trim()
+    }
+    if (typeof profile.effort === 'string' && reviewEfforts.has(profile.effort)) {
+      normalized.effort = profile.effort as ReviewProfile['effort']
+    }
+    configured.set(normalized.id, normalized)
+  }
+
+  return fallback.map((defaultProfile) => ({ ...defaultProfile, ...configured.get(defaultProfile.id) }))
+}
+
+function normalizeLegacyReviewModels(value: unknown): ReviewProfile[] {
+  return normalizeModelNames(value, []).length > 0 ? cloneReviewProfiles(defaultReviewProfiles) : []
 }
 
 function normalizeModelRoute(
@@ -212,8 +265,11 @@ export function normalizeRoutingForInstall(routing?: unknown): ModelRouting {
   const source = routing as RoutingInput | undefined
   const frontend = normalizeModelRoute(source?.frontend, defaults.frontend)
   const backend = normalizeModelRoute(source?.backend, defaults.backend)
-  const reviewFallback = [...new Set([...backend.models, ...frontend.models])]
-  const reviewModels = normalizeModelNames(source?.review?.models, reviewFallback)
+  const legacyProfiles = normalizeLegacyReviewModels(source?.review?.models)
+  const reviewProfiles = normalizeReviewProfiles(
+    source?.review?.profiles,
+    legacyProfiles.length > 0 ? legacyProfiles : defaultReviewProfiles
+  )
   const reviewStrategy: ModelRouting['review']['strategy'] =
     typeof source?.review?.strategy === 'string' && reviewStrategies.has(source.review.strategy)
       ? (source.review.strategy as ModelRouting['review']['strategy'])
@@ -226,10 +282,19 @@ export function normalizeRoutingForInstall(routing?: unknown): ModelRouting {
     frontend,
     backend,
     review: {
-      models: reviewModels,
+      profiles: reviewProfiles,
       strategy: reviewStrategy,
     },
     mode,
+  }
+  for (const [key, value] of Object.entries({
+    grokModel: source?.grokModel,
+    kimiModel: source?.kimiModel,
+    opencodeModel: source?.opencodeModel,
+  }) as Array<[keyof Pick<ModelRouting, 'grokModel' | 'kimiModel' | 'opencodeModel'>, unknown]>) {
+    if (typeof value === 'string' && value.trim()) {
+      normalized[key] = value.trim()
+    }
   }
   const proxy = normalizeRoutingProxy(source?.proxy)
   if (proxy) {

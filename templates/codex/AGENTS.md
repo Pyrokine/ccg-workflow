@@ -27,13 +27,13 @@ backup.
 
 ```
 S + 低风险 → 直接写，跑测试，完事
-S + 高风险 → 直接写，但必须调双模型审查（Antigravity + Claude）
-M + 任意   → 双模型并行分析（Antigravity + Claude 都调），再写，完成后双模型审查
-L+ + 任意  → 双模型并行分析，制定 plan.md，spawn 子 Agent 并行写，双模型审查
+S + 高风险 → 直接写，完成后调用 GPT、Grok 双路审查
+M + 任意   → 双模型并行分析（Antigravity + Claude 都调），再写，完成后 GPT、Grok 双路审查
+L+ + 任意  → 双模型并行分析，制定 plan.md，spawn 子 Agent 并行写，GPT、Grok 双路审查
 ```
 
-**⛔ M 以上复杂度，分析和审查都必须是双模型（Antigravity + Claude 都调）。**
-这是 CCG 的核心价值——两个模型从不同角度分析同一个问题，交叉验证，弥补单模型盲区。只调一个模型 = 浪费了多模型协作的意义。
+**⛔ M 以上复杂度，分析保持双模型，审查必须使用 GPT、Grok 两个 profile。**
+两个 reviewer 分别覆盖后端与前端审查视角。
 
 **不确定时，选高一级。** 宁可多做一步分析，不可写完才发现方向错了。
 
@@ -297,21 +297,23 @@ Critical 问题 → spawn 修复代理。Warning → 视情况修复。
 
 ### 何时调外部模型审查
 
-- 变更 >30 行 → **必须**调双模型审查（Antigravity + Claude 都调）
-- 变更 ≤30 行但涉及 auth/数据库/加密 → **必须**调双模型审查
-- 变更 ≤30 行且低风险 → 可以只调一个
+- 变更 >30 行 → **必须**调用 GPT、Grok 双路审查
+- 变更 ≤30 行但涉及 auth/数据库/加密 → **必须**调用 GPT、Grok 双路审查
+- 变更 ≤30 行且低风险 → 可跳过外部审查
 
-### ⛔ 审查流程（双模型交叉验证）
+### ⛔ 审查流程（GPT、Grok 双 profile 交叉验证）
+
+执行以下两个并行调用：
 
 ```bash
-# 必须并行调用两个模型审查 git diff
-~/.claude/bin/codeagent-wrapper --lite --progress --backend antigravity - "$(pwd)" <<'EOF'
-ROLE_FILE: ~/.claude/.ccg/prompts/antigravity/reviewer.md
+# 两个调用并行执行
+~/.claude/bin/codeagent-wrapper --lite --progress --backend claude --no-session-persistence --claude-model {{REVIEW_GPT_MODEL}} --claude-effort {{REVIEW_GPT_EFFORT}} - "$(pwd)" <<'EOF'
+ROLE_FILE: ~/.claude/.ccg/prompts/claude/reviewer.md
 <TASK>审查以下代码变更：$(git diff)</TASK>
 OUTPUT: Critical/Warning/Info 分级审查报告
 EOF
 &
-~/.claude/bin/codeagent-wrapper --lite --progress --backend claude - "$(pwd)" <<'EOF'
+~/.claude/bin/codeagent-wrapper --lite --progress --backend claude --no-session-persistence --claude-model {{REVIEW_GROK_MODEL}} --claude-effort {{REVIEW_GROK_EFFORT}} - "$(pwd)" <<'EOF'
 ROLE_FILE: ~/.claude/.ccg/prompts/claude/reviewer.md
 <TASK>审查以下代码变更：$(git diff)</TASK>
 OUTPUT: Critical/Warning/Info 分级审查报告
@@ -320,9 +322,9 @@ EOF
 wait
 ```
 
-1. **两个模型都要调** — 这是多模型协作的核心，不是二选一
-2. 综合双方意见，合并去重，分 Critical / Warning / Info
-3. Critical → 修复后重新双模型审查
+1. GPT、Grok 两个 reviewer 必须独立运行，不使用 `resume` 或 `SESSION_ID`
+2. 合并两份报告并去重，分 Critical / Warning / Info
+3. Critical → 修复后重新审查
 4. Warning → 建议修复
 5. 审查结果写入 `.ccg/tasks/$TASK_NAME/review.md`
 

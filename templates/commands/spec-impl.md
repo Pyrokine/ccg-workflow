@@ -65,8 +65,7 @@ description: '按规范执行 + 多模型协作 + 归档'
    EOF
    ```
 
-   **会话复用**：保存返回的 `SESSION_ID:`（{{BACKEND_PRIMARY}} → `CODEX_PROTO_SESSION`，{{FRONTEND_PRIMARY}} →
-   `FRONTEND_PROTO_SESSION`），Step 7 审查时复用。
+   **会话复用**：非审查阶段可保存返回的 `SESSION_ID:` 用于后续实现或分析。Step 7 的 reviewer 使用独立临时会话，不复用这些 session。
 
 5. **Rewrite Prototype to Production Code**
    Upon receiving diff patch, **NEVER apply directly**. Rewrite by:
@@ -85,43 +84,23 @@ description: '按规范执行 + 多模型协作 + 归档'
 
    If issues found, make targeted corrections.
 
-7. **Multi-Model Review (PARALLEL)**
-    - **CRITICAL**: You MUST launch BOTH {{BACKEND_PRIMARY}} AND {{FRONTEND_PRIMARY}} in a SINGLE message with TWO Bash
-      tool calls.
-    - **DO NOT** call one model first and wait. Launch BOTH simultaneously with `run_in_background: true`.
+7. **GPT and Grok Review (PARALLEL)**
+    - In one message, launch GPT and Grok reviewer calls with `run_in_background: true`.
+    - Both calls use `--backend claude --no-session-persistence`. GPT uses `--claude-model {{REVIEW_GPT_MODEL}} --claude-effort {{REVIEW_GPT_EFFORT}}` for backend logic, correctness, security, regressions, and tests. Grok uses `--claude-model {{REVIEW_GROK_MODEL}} --claude-effort {{REVIEW_GROK_EFFORT}}` for frontend interaction, accessibility, design consistency, and frontend security.
+    - Do not use `resume` or retain external reviewer `SESSION_ID`.
 
-   **Step 7.1**: In ONE message, make TWO parallel Bash calls:
-
-   **FIRST Bash call ({{BACKEND_PRIMARY}})**:
    ```
    Bash({
-     command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend {{BACKEND_PRIMARY}} resume <CODEX_PROTO_SESSION> - \"{{WORKDIR}}\" <<'EOF'\nReview the implementation changes:\n- Correctness: logic errors, edge cases\n- Security: injection, auth issues\n- Spec compliance: constraints satisfied\nOUTPUT: JSON with findings\nEOF",
+     command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend claude --no-session-persistence --claude-model {{REVIEW_GPT_MODEL}} --claude-effort {{REVIEW_GPT_EFFORT}} - \"{{WORKDIR}}\" <<'EOF'\nROLE_FILE: ~/.claude/.ccg/prompts/claude/reviewer.md\n<TASK>Review the implementation changes using the complete diff, changed files, and spec constraints. OUTPUT: JSON findings.</TASK>\nEOF",
      run_in_background: true,
      timeout: 300000,
-     description: "{{BACKEND_PRIMARY}}: correctness/security review"
+     description: "GPT review"
    })
    ```
 
-   **SECOND Bash call ({{FRONTEND_PRIMARY}}) - IN THE SAME MESSAGE**:
-   ```
-   Bash({
-     command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend {{FRONTEND_PRIMARY}} resume <FRONTEND_PROTO_SESSION> - \"{{WORKDIR}}\" <<'EOF'\nReview the implementation changes:\n- Maintainability: readability, complexity\n- Patterns: consistency with project style\n- Integration: cross-module impacts\nOUTPUT: JSON with findings\nEOF",
-     run_in_background: true,
-     timeout: 300000,
-     description: "{{FRONTEND_PRIMARY}}: maintainability/patterns review"
-   })
-   ```
+   Create the Grok call in the same message with its model and effort flags. Wait for both external task IDs with `TaskOutput` before synthesis. Retry a failed reviewer at most twice, then report only that reviewer as unavailable.
 
-   **Step 7.2**: After BOTH Bash calls return task IDs, wait for results with TWO TaskOutput calls:
-   ```
-   TaskOutput({ task_id: "<codex_task_id>", block: true, timeout: 600000 })
-   TaskOutput({ task_id: "<frontend_task_id>", block: true, timeout: 600000 })
-   ```
-
-   ⛔ **前端模型失败必须重试**：若前端模型调用失败，最多重试 2 次（间隔 5 秒）。3 次全败才跳过。
-   ⛔ **后端模型结果必须等待**：后端模型执行 5-15 分钟属正常，超时后继续轮询，禁止跳过。
-
-   Address any critical findings before proceeding.
+   Address any confirmed Critical findings before proceeding.
 
 8. **Update Task Status**
     - Mark completed task in `tasks.md`: `- [x] Task description`

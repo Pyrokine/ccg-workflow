@@ -53,13 +53,14 @@ TaskUpdate({ taskId: "1", owner: "architect" })
 
 | 角色                      | 身份                    | spawn 方式                               | 模型                   | 职责                     |
 |-------------------------|-----------------------|----------------------------------------|----------------------|------------------------|
-| 🏛 Lead                 | 你自己（主对话）              | N/A（不需要 spawn）                         | Opus                 | 编排、决策、用户沟通             |
+| 🏛 Lead                 | 你自己（主对话）              | N/A（不需要 spawn）                         | Opus                 | 编排、用户沟通、审查材料准备           |
 | 🏗 Architect            | Agent Teams teammate  | `Agent(team_name=T, name="architect")` | Opus                 | 代码库扫描、架构蓝图、文件分配        |
 | 📜 Dev × N              | Agent Teams teammates | `Agent(team_name=T, name="dev-1")`     | Sonnet               | 并行编码，文件隔离              |
 | 🧪 QA                   | Agent Teams teammate  | `Agent(team_name=T, name="qa")`        | Sonnet               | 写测试、跑测试、lint、typecheck |
-| 🔬 Reviewer             | Agent Teams teammate  | `Agent(team_name=T, name="reviewer")`  | Sonnet               | 综合审查，分级判决              |
-| 🔥 {{BACKEND_PRIMARY}}  | 外部模型（非 teammate）      | Bash + codeagent-wrapper               | {{BACKEND_PRIMARY}}  | 后端分析/审查（Phase 2, 6）    |
-| 🔮 {{FRONTEND_PRIMARY}} | 外部模型（非 teammate）      | Bash + codeagent-wrapper               | {{FRONTEND_PRIMARY}} | 前端分析/审查（Phase 2, 6）    |
+| 🔬 Reviewer             | Agent Teams teammate  | `Agent(team_name=T, name="reviewer")`  | Sonnet               | 整合 GPT、Grok 报告并确认 finding |
+| 🔥 {{BACKEND_PRIMARY}}  | 外部模型（非 teammate）      | Bash + codeagent-wrapper               | {{BACKEND_PRIMARY}}  | 后端分析（Phase 2）            |
+| 🔮 {{FRONTEND_PRIMARY}} | 外部模型（非 teammate）      | Bash + codeagent-wrapper               | {{FRONTEND_PRIMARY}} | 前端分析（Phase 2）            |
+| 🔍 GPT / Grok           | 外部 reviewer（非 teammate） | Bash + codeagent-wrapper               | Claude Code provider | 后端与前端双视角审查（Phase 6） |
 
 **8 阶段流水线**
 
@@ -70,7 +71,7 @@ Phase 2: ARCHITECTURE  → {{BACKEND_PRIMARY}}∥{{FRONTEND_PRIMARY}} 分析 + A
 Phase 3: PLANNING      → Lead 拆任务 → 零决策并行计划
 Phase 4: DEVELOPMENT   → Dev×N teammates 并行编码
 Phase 5: TESTING       → QA teammate 写测试+跑测试
-Phase 6: REVIEW        → {{BACKEND_PRIMARY}}∥{{FRONTEND_PRIMARY}} 审查 + Reviewer teammate 综合判决
+Phase 6: REVIEW        → GPT∥Grok 外部审查 + Reviewer teammate 汇总确认
 Phase 7: FIX           → Dev teammate(s) 修复 Critical（最多 2 轮）
 Phase 8: INTEGRATION   → Lead 全量验证 + 报告 + 清理
 ```
@@ -81,7 +82,7 @@ Phase 8: INTEGRATION   → Lead 全量验证 + 报告 + 清理
 - Lead 绝不直接修改产品代码。
 - 每个 Dev 只能修改分配给它的文件。
 - QA 只写测试文件，不改产品代码。
-- Reviewer 只读不写。
+- Reviewer 只整合 GPT、Grok 报告，不做独立审查。
 - Architect 只读不写。
 - Phase 7 最多 2 轮修复循环。
 
@@ -302,50 +303,32 @@ Phase 8: INTEGRATION   → Lead 全量验证 + 报告 + 清理
 
 ### Phase 6: REVIEW
 
-**执行者**：Lead 调用后端/前端模型 → Reviewer teammate 综合
+**执行者**：Lead 编排 GPT、Grok reviewer 并汇总确认
 
-1. **运行 git diff 获取变更**
-    - `Bash: git diff` 获取完整变更内容。
+1. **准备审查材料**
+    - `Bash: git diff` 获取完整变更内容，并读取相关完整文件、蓝图和 QA 报告。
 
-2. **{{BACKEND_PRIMARY}} + {{FRONTEND_PRIMARY}} 并行审查（PARALLEL）**
-    - 模式与 Phase 2 相同，使用 reviewer prompt：
+2. **GPT、Grok 双路审查（PARALLEL）**
+    - Lead 在同一条消息中启动 GPT、Grok 两个 `Bash` 调用，均设为 `run_in_background: true`。
+    - 两个调用使用 `~/.claude/.ccg/prompts/claude/reviewer.md`。
 
-   **FIRST Bash call ({{BACKEND_PRIMARY}})**:
-   ```
-   Bash({
-     command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend {{BACKEND_PRIMARY}} - \"{{WORKDIR}}\" <<'EOF'\nROLE_FILE: ~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/reviewer.md\n<TASK>\n审查以下变更：\n<git diff 输出或变更文件列表>\n</TASK>\nOUTPUT (JSON):\n{\n  \"findings\": [{\"severity\": \"Critical|Warning|Info\", \"dimension\": \"logic|security|performance|error_handling\", \"file\": \"path\", \"line\": N, \"description\": \"描述\", \"fix_suggestion\": \"修复建议\"}],\n  \"passed_checks\": [\"检查项\"],\n  \"summary\": \"总体评估\"\n}\nEOF",
-     run_in_background: true,
-     timeout: 3600000,
-     description: "{{BACKEND_PRIMARY}} 后端审查"
-   })
-   ```
+   | reviewer | wrapper 参数 | 重点 |
+   | --- | --- | --- |
+   | GPT | `--backend claude --no-session-persistence --claude-model {{REVIEW_GPT_MODEL}} --claude-effort {{REVIEW_GPT_EFFORT}}` | 后端逻辑、正确性、安全、回归与测试缺口 |
+   | Grok | `--backend claude --no-session-persistence --claude-model {{REVIEW_GROK_MODEL}} --claude-effort {{REVIEW_GROK_EFFORT}}` | 前端交互、可访问性、设计一致性与前端安全 |
 
-   **SECOND Bash call ({{FRONTEND_PRIMARY}}) - IN THE SAME MESSAGE**:
-   ```
-   Bash({
-     command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend {{FRONTEND_PRIMARY}} - \"{{WORKDIR}}\" <<'EOF'\nROLE_FILE: ~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/reviewer.md\n<TASK>\n审查以下变更：\n<git diff 输出或变更文件列表>\n</TASK>\nOUTPUT (JSON):\n{\n  \"findings\": [{\"severity\": \"Critical|Warning|Info\", \"dimension\": \"patterns|maintainability|accessibility|ux|frontend_security\", \"file\": \"path\", \"line\": N, \"description\": \"描述\", \"fix_suggestion\": \"修复建议\"}],\n  \"passed_checks\": [\"检查项\"],\n  \"summary\": \"总体评估\"\n}\nEOF",
-     run_in_background: true,
-     timeout: 3600000,
-     description: "{{FRONTEND_PRIMARY}} 前端审查"
-   })
-   ```
-
-   ⛔ **前端模型失败必须重试**：若失败，最多重试 2 次（间隔 5 秒）。3 次全败才跳过。
-   ⛔ **后端模型结果必须等待**：超时后继续轮询，禁止跳过。
+   - 使用 `TaskOutput` 等待两个结果。
+   - 单个 reviewer 失败时最多重试两次，随后仅标记该 reviewer 不可用。
+   - reviewer 不使用 `resume` 或保存 `SESSION_ID`。
 
 3. **Spawn Reviewer teammate**
-    - 调用 TaskCreate，subject 为 "Review: 综合代码审查"。
-    - 调用 Agent 工具，**必须设置以下参数**：
-        * **team_name**: Phase 0 创建的 team name
-        * **name**: `"reviewer"`
-        * **model**: `"sonnet"`
-        * **prompt**: 包含 git diff、后端/前端模型 审查 JSON（如有）、QA 报告、WORKDIR、以及指令（独立审查→综合意见→分级→输出报告→标记
-          completed）
-    - 调用 TaskUpdate 设 owner 为 `"reviewer"`。
-    - 等待 Reviewer 完成（它会自动发消息通知你）。
+    - 调用 TaskCreate，subject 为 "Review: 整合外部审查报告"。
+    - 调用 `Agent(team_name=..., name="reviewer")`，输入完整 diff、GPT/Grok 审查 JSON、QA 报告、蓝图和 WORKDIR。
+    - 指示 Reviewer 只整合 GPT、Grok finding，回到当前源码确认位置并分级，不生成独立审查意见。
+    - 调用 TaskUpdate 将任务 owner 设为 `"reviewer"`，等待完成。
 
 4. **读取审查报告**
-    - 从 Reviewer 消息中提取 Critical / Warning / Info 列表。
+    - 从 Reviewer 消息中读取 Critical / Warning / Info 列表。
     - 向用户展示审查摘要。
 
 5. **Shutdown Reviewer**
@@ -430,7 +413,8 @@ Phase 8: INTEGRATION   → Lead 全量验证 + 报告 + 清理
    - Dev: N
    - QA: 1
    - Reviewer: 1
-   - 外援: {{BACKEND_PRIMARY}} + {{FRONTEND_PRIMARY}}
+   - 架构外援: {{BACKEND_PRIMARY}} + {{FRONTEND_PRIMARY}}
+   - 审查外援: GPT + Grok
 
    ## 阶段执行摘要
    | 阶段 | 状态 | 关键产出 |

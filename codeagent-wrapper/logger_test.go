@@ -609,12 +609,6 @@ func TestLoggerCoverageSuite(t *testing.T) {
 		{"TestCurrentWrapperNameFallsBackToExecutable", TestCurrentWrapperNameFallsBackToExecutable},
 		{"TestCurrentWrapperNameDetectsLegacyAliasSymlink", TestCurrentWrapperNameDetectsLegacyAliasSymlink},
 
-		{"TestIsProcessRunning", TestIsProcessRunning},
-		{"TestGetProcessStartTimeReadsProcStat", TestGetProcessStartTimeReadsProcStat},
-		{"TestGetProcessStartTimeInvalidData", TestGetProcessStartTimeInvalidData},
-		{"TestGetBootTimeParsesBtime", TestGetBootTimeParsesBtime},
-		{"TestGetBootTimeInvalidData", TestGetBootTimeInvalidData},
-
 		{"TestClaudeBuildArgs_ModesAndPermissions", TestClaudeBuildArgs_ModesAndPermissions},
 		{"TestBackendBuildArgs_CodexAndAntigravityModes", TestBackendBuildArgs_CodexAndAntigravityModes},
 		{"TestSelectBackend_DisablesGemini", TestSelectBackend_DisablesGemini},

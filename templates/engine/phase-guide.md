@@ -40,7 +40,7 @@ Gate 失败时：说明缺失什么，给出补救建议，不可绕过。
 
 1. 明确告知用户：`当前策略为 [名称]，但发现 [原因]，建议升级到 [目标策略]`
 2. 等待用户确认
-3. 确认后：`Read /home/USER/.claude/.ccg/engine/strategies/[target].md`
+3. 确认后：`Read ~/.claude/.ccg/engine/strategies/[target].md`
 4. 从新策略的 Phase 1 开始（已完成的分析工作可复用）
 
 **只能升级，不能降级**（除非用户明确要求）。
@@ -69,7 +69,7 @@ Gate 失败时：说明缺失什么，给出补救建议，不可绕过。
 1. TeamCreate({ team_name: "{task-id}-team" })
 2. 同一消息内并行 spawn 所有 Layer 1 Builder
 3. 等待完成 → spawn Layer 2（如有）
-4. spawn Reviewer 快检
+4. 准备 GPT、Grok 外部审查材料
 5. Critical → spawn fix-dev（最多 2 轮）
 6. shutdown 所有 teammates
 ```
@@ -181,7 +181,7 @@ TeamCreate 失败（Agent Teams 未启用）→ Claude 自己按计划顺序实�
 
 ```
 Round N (N=1,2,...,MAX_ROUNDS):
-  1. 双模型并行审查（每次 spawn 新 Agent，干净上下文）
+  1. 并行调用 GPT、Grok 两个不持久化审查会话，主 Claude 汇总结果
   2. 质量关卡（ccg:verify-security / ccg:verify-quality / ccg:verify-change）
   3. 综合审查报告，按 Critical / Warning / Info 分级
   4. 展示给用户，询问：

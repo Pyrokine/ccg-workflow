@@ -180,13 +180,13 @@ def build_guidance(
     if progress["changed_lines"] > 30 and phase != "review":
         parts.append("")
         parts.append(
-            f"⚠️ {progress['changed_lines']} lines changed. When done coding, you MUST call BOTH Antigravity AND Claude for dual-model review. Not just one — both.")
+            f"⚠️ {progress['changed_lines']} lines changed. When done coding, run GPT with --backend claude --no-session-persistence --claude-model {{REVIEW_GPT_MODEL}} --claude-effort {{REVIEW_GPT_EFFORT}} and Grok with --backend claude --no-session-persistence --claude-model {{REVIEW_GROK_MODEL}} --claude-effort {{REVIEW_GROK_EFFORT}}.")
 
-    # Review phase: enforce dual model
+    # Review phase: enforce GPT and Grok profiles
     if phase == "review":
         parts.append("")
         parts.append(
-            "⛔ Review phase: call BOTH Antigravity (--backend antigravity) AND Claude (--backend claude) with reviewer role. Two models, not one.")
+            "⛔ Review phase: run GPT with --backend claude --no-session-persistence --claude-model {{REVIEW_GPT_MODEL}} --claude-effort {{REVIEW_GPT_EFFORT}} and Grok with --backend claude --no-session-persistence --claude-model {{REVIEW_GROK_MODEL}} --claude-effort {{REVIEW_GROK_EFFORT}}. GPT covers backend correctness and security; Grok covers frontend interaction, accessibility, design consistency, and frontend security.")
 
     # High-risk files detected
     if progress["high_risk_files"] and phase not in ("review", "completed"):

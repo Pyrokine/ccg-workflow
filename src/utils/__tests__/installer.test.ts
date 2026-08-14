@@ -125,28 +125,55 @@ describe('injectConfigVariables — routing variables', () => {
     expect(result).toBe('models: ["antigravity","claude"]')
   })
 
-  it('injects review models', () => {
-    const input = 'review: {{REVIEW_MODELS}}'
+  it('injects review profiles and Claude provider arguments', () => {
+    const input = [
+      'profiles: {{REVIEW_PROFILES}}',
+      'gpt: {{REVIEW_GPT_MODEL}} / {{REVIEW_GPT_EFFORT}}',
+      'grok: {{REVIEW_GROK_MODEL}} / {{REVIEW_GROK_EFFORT}}',
+    ].join('\n')
     const result = injectConfigVariables(input, {
-      routing: { review: { models: ['codex', 'antigravity'] } },
+      routing: {
+        review: {
+          profiles: [
+            { id: 'gpt', model: 'gpt-5.6-sol', effort: 'xhigh' },
+            { id: 'grok', model: 'grok-4.5', effort: 'high' },
+          ],
+        },
+      },
     })
-    expect(result).toBe('review: ["codex","antigravity"]')
+    expect(result).toBe(
+      [
+        'profiles: [{"id":"gpt","model":"gpt-5.6-sol","effort":"xhigh"},{"id":"grok","model":"grok-4.5","effort":"high"}]',
+        'gpt: gpt-5.6-sol / xhigh',
+        'grok: grok-4.5 / high',
+      ].join('\n')
+    )
   })
 
-  it('injects review primary and secondary models', () => {
-    const input = '{{REVIEW_PRIMARY}} / {{REVIEW_SECONDARY}}'
+  it('fills missing external review profiles with the configured defaults', () => {
+    const input = [
+      'profiles: {{REVIEW_PROFILES}}',
+      'gpt: {{REVIEW_GPT_MODEL}} / {{REVIEW_GPT_EFFORT}}',
+      'grok: {{REVIEW_GROK_MODEL}} / {{REVIEW_GROK_EFFORT}}',
+    ].join('\n')
     const result = injectConfigVariables(input, {
-      routing: { review: { models: ['codex', 'antigravity'] } },
+      routing: {
+        review: {
+          profiles: [{ id: 'gpt', model: 'gpt-5.6-sol', effort: 'xhigh' }],
+        },
+      },
     })
-    expect(result).toBe('codex / antigravity')
+    expect(result).toBe(
+      [
+        'profiles: [{"id":"gpt","model":"gpt-5.6-sol","effort":"xhigh"},{"id":"grok","model":"grok-4.5","effort":"high"}]',
+        'gpt: gpt-5.6-sol / xhigh',
+        'grok: grok-4.5 / high',
+      ].join('\n')
+    )
   })
 
-  it('strips gemini model flag placeholder', () => {
-    const input = '--backend {{REVIEW_SECONDARY}} {{GEMINI_MODEL_FLAG}}- "/workdir"'
-    const result = injectConfigVariables(input, {
-      routing: { review: { models: ['codex', 'antigravity'] } },
-    })
-    expect(result).toBe('--backend antigravity - "/workdir"')
+  it('strips the Gemini model flag placeholder', () => {
+    expect(injectConfigVariables('{{GEMINI_MODEL_FLAG}}', {})).toBe('')
   })
 
   it('injects routing mode', () => {
@@ -227,7 +254,12 @@ describe('template variable completeness', () => {
           mode: 'smart',
           frontend: { models: ['antigravity', 'codex'], primary: 'antigravity' },
           backend: { models: ['codex'], primary: 'codex' },
-          review: { models: ['codex', 'antigravity'] },
+          review: {
+            profiles: [
+              { id: 'gpt', model: 'gpt-5.6-sol', effort: 'xhigh' },
+              { id: 'grok', model: 'grok-4.5', effort: 'high' },
+            ],
+          },
         },
         liteMode: false,
         mcpProvider: 'ace-tool',
@@ -360,7 +392,7 @@ describe('installWorkflows — binary installation', () => {
     const binDir = join(tmpDir, 'bin')
     const binaryPath = join(binDir, binaryName)
     await fs.ensureDir(binDir)
-    await fs.writeFile(binaryPath, '#!/usr/bin/env sh\necho "codeagent-wrapper version 5.11.1-aug.2"\n', 'utf-8')
+    await fs.writeFile(binaryPath, '#!/usr/bin/env sh\necho "codeagent-wrapper version 5.14.0-aug.1"\n', 'utf-8')
     if (process.platform !== 'win32') {
       await fs.chmod(binaryPath, 0o755)
     }
@@ -424,6 +456,7 @@ describe('skills namespace isolation', () => {
 
     // Skills must be under skills/ccg/, not skills/ root
     expect(fs.existsSync(join(tmpDir, 'skills', 'ccg', 'SKILL.md'))).toBe(true)
+    expect(fs.existsSync(join(tmpDir, 'skills', 'ccg', 'package.json'))).toBe(true)
     expect(fs.existsSync(join(tmpDir, 'skills', 'ccg', 'tools'))).toBe(true)
     expect(fs.existsSync(join(tmpDir, 'skills', 'ccg', 'orchestration'))).toBe(true)
   })

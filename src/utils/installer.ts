@@ -1,7 +1,9 @@
+import { createHash } from 'node:crypto'
+import { rename } from 'node:fs/promises'
 import ansis from 'ansis'
 import fs from 'fs-extra'
 import { homedir } from 'node:os'
-import { basename, join } from 'pathe'
+import { basename, dirname, join } from 'pathe'
 import type { InstallResult } from '../types'
 import { normalizeRoutingForInstall, readCcgConfig } from './config'
 import { getLegacyCommandIds, getWorkflowById } from './installer-data'
@@ -54,7 +56,7 @@ export type { SkillMeta } from './skill-registry'
  * Must match the `version` constant in codeagent-wrapper/main.go.
  * When this differs from the installed binary, update triggers re-download.
  */
-const EXPECTED_BINARY_VERSION = '5.11.1-aug.2'
+const EXPECTED_BINARY_VERSION = '5.14.0-aug.1'
 
 // ═══════════════════════════════════════════════════════
 // Install context — shared across sub-functions
@@ -65,8 +67,18 @@ interface InstallConfig {
     mode: string
     frontend: { models: string[]; primary: string }
     backend: { models: string[]; primary: string }
-    review: { models: string[]; strategy?: string }
+    review: {
+      profiles: Array<{
+        id: 'gpt' | 'grok'
+        model?: string
+        effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max'
+      }>
+      strategy?: string
+    }
     proxy?: { models?: string[]; http?: string; https?: string }
+    grokModel?: string
+    kimiModel?: string
+    opencodeModel?: string
   }
   liteMode: boolean
   mcpProvider: string
@@ -161,6 +173,51 @@ async function downloadBinaryFromRelease(binaryName: string, destPath: string): 
 // Shared file-copy helper
 // ═══════════════════════════════════════════════════════
 
+async function backupRoutingTemplate(ctx: InstallContext, destFile: string, content: string): Promise<void> {
+  if (!(await fs.pathExists(destFile))) {
+    return
+  }
+
+  const existing = await fs.readFile(destFile, 'utf-8')
+  if (existing === content) {
+    return
+  }
+
+  const backupRoot = join(ctx.installDir, '.ccg', 'backup', 'routing-templates')
+  const relativePath = destFile.slice(ctx.installDir.length + 1)
+  const manifestPath = join(backupRoot, 'manifest.json')
+  const manifest = (await fs.pathExists(manifestPath))
+    ? ((await fs.readJson(manifestPath)) as Record<
+        string,
+        { originalSha256: string; replacementSha256: string; snapshots?: string[] }
+      >)
+    : {}
+  const existingSha256 = createHash('sha256').update(existing).digest('hex')
+  const replacementSha256 = createHash('sha256').update(content).digest('hex')
+  const previous = manifest[relativePath]
+
+  if (previous?.replacementSha256 === existingSha256) {
+    return
+  }
+
+  const primaryBackup = join(backupRoot, relativePath)
+  const backupFile = previous ? `${primaryBackup}.${existingSha256.slice(0, 12)}` : primaryBackup
+  if (!(await fs.pathExists(backupFile))) {
+    await fs.ensureDir(dirname(backupFile))
+    await fs.copy(destFile, backupFile, { overwrite: false })
+    ctx.result.backupPath = backupRoot
+    ctx.result.backedUpFiles ??= []
+    ctx.result.backedUpFiles.push(backupFile)
+  }
+
+  if (previous) {
+    previous.snapshots = [...new Set([...(previous.snapshots || []), existingSha256])]
+  } else {
+    manifest[relativePath] = { originalSha256: existingSha256, replacementSha256 }
+  }
+  await fs.writeJson(manifestPath, manifest, { spaces: 2 })
+}
+
 /**
  * Copy .md templates from srcDir → destDir with optional variable injection.
  * Returns list of installed file stems (filename without .md).
@@ -169,7 +226,7 @@ async function copyMdTemplates(
   ctx: InstallContext,
   srcDir: string,
   destDir: string,
-  options: { inject?: boolean } = {}
+  options: { inject?: boolean; backupExisting?: boolean } = {}
 ): Promise<string[]> {
   const installed: string[] = []
   if (!(await fs.pathExists(srcDir))) {
@@ -182,11 +239,17 @@ async function copyMdTemplates(
   const files = await fs.readdir(srcDir)
   for (const file of files) {
     if (!file.endsWith('.md')) continue
+    const sourceFile = join(srcDir, file)
     const destFile = join(destDir, file)
     if (ctx.force || !(await fs.pathExists(destFile))) {
-      let content = await fs.readFile(join(srcDir, file), 'utf-8')
+      let content = await fs.readFile(sourceFile, 'utf-8')
       if (options.inject) content = injectConfigVariables(content, ctx.config)
       content = replaceHomePathsInTemplate(content, ctx.installDir)
+
+      if (options.backupExisting) {
+        await backupRoutingTemplate(ctx, destFile, content)
+      }
+
       await fs.writeFile(destFile, content, 'utf-8')
       installed.push(file.replace('.md', ''))
     }
@@ -222,7 +285,11 @@ async function writeRenderedCodexFile(src: string, dest: string, config: Install
 /**
  * Install slash command .md files from templates/commands/
  */
-async function installCommandFiles(ctx: InstallContext, workflowIds: string[]): Promise<void> {
+async function installCommandFiles(
+  ctx: InstallContext,
+  workflowIds: string[],
+  options: { backupExisting?: boolean } = {}
+): Promise<void> {
   const commandsDir = join(ctx.installDir, 'commands', 'ccg')
   const legacyIds = new Set(getLegacyCommandIds())
 
@@ -245,6 +312,11 @@ async function installCommandFiles(ctx: InstallContext, workflowIds: string[]): 
             let content = await fs.readFile(srcFile, 'utf-8')
             content = injectConfigVariables(content, ctx.config)
             content = replaceHomePathsInTemplate(content, ctx.installDir)
+
+            if (options.backupExisting) {
+              await backupRoutingTemplate(ctx, destFile, content)
+            }
+
             await fs.writeFile(destFile, content, 'utf-8')
           }
           ctx.result.installedCommands.push(cmd)
@@ -285,17 +357,25 @@ async function installAgentFiles(ctx: InstallContext): Promise<void> {
 }
 
 /**
- * Install expert prompt .md files from templates/prompts/{codex,claude,antigravity}/
+ * Install expert prompt .md files for supported wrapper backends.
  */
 async function installPromptFiles(ctx: InstallContext): Promise<void> {
   const promptsTemplateDir = join(ctx.templateDir, 'prompts')
+  const configuredModels = new Set([
+    ...ctx.config.routing.frontend.models,
+    ...ctx.config.routing.backend.models,
+    'claude',
+  ])
   const promptsDir = join(ctx.installDir, '.ccg', 'prompts')
   if (!(await fs.pathExists(promptsTemplateDir))) {
     ctx.result.errors.push(`Prompts template directory not found: ${promptsTemplateDir}`)
     return
   }
 
-  for (const model of ['codex', 'claude', 'antigravity']) {
+  for (const model of ['codex', 'claude', 'antigravity', 'grok', 'kimi', 'opencode']) {
+    if (!configuredModels.has(model) && model !== 'claude') {
+      continue
+    }
     try {
       const installed = await copyMdTemplates(ctx, join(promptsTemplateDir, model), join(promptsDir, model))
       for (const name of installed) {
@@ -687,6 +767,17 @@ export async function verifyBinary(installDir: string): Promise<boolean> {
   }
 }
 
+async function verifyBinaryFileVersion(binaryPath: string): Promise<boolean> {
+  try {
+    const { execFileSync } = await import('node:child_process')
+    const output = execFileSync(binaryPath, ['--version'], { stdio: 'pipe' }).toString().trim()
+    const version = output.replace(/^.*version\s*/, '')
+    return version === EXPECTED_BINARY_VERSION
+  } catch {
+    return false
+  }
+}
+
 /**
  * Check if installed binary version matches expected version.
  * Returns true if version matches, false if outdated or unreadable.
@@ -694,16 +785,7 @@ export async function verifyBinary(installDir: string): Promise<boolean> {
 export async function verifyBinaryVersion(installDir: string): Promise<boolean> {
   const binDir = join(installDir, 'bin')
   const wrapperName = process.platform === 'win32' ? 'codeagent-wrapper.exe' : 'codeagent-wrapper'
-  const wrapperPath = join(binDir, wrapperName)
-
-  try {
-    const { execSync } = await import('node:child_process')
-    const output = execSync(`"${wrapperPath}" --version`, { stdio: 'pipe' }).toString().trim()
-    const version = output.replace(/^.*version\s*/, '')
-    return version === EXPECTED_BINARY_VERSION
-  } catch {
-    return false
-  }
+  return verifyBinaryFileVersion(join(binDir, wrapperName))
 }
 
 /**
@@ -763,8 +845,12 @@ export function showBinaryDownloadWarning(binDir: string): void {
  * Skips download if binary already exists and passes `--version` check.
  */
 async function installBinaryFile(ctx: InstallContext): Promise<void> {
+  const binDir = join(ctx.installDir, 'bin')
+  const wrapperName = process.platform === 'win32' ? 'codeagent-wrapper.exe' : 'codeagent-wrapper'
+  const destBinary = join(binDir, wrapperName)
+  const tempBinary = join(binDir, `.${wrapperName}.${process.pid}.${Date.now()}.download`)
+
   try {
-    const binDir = join(ctx.installDir, 'bin')
     await fs.ensureDir(binDir)
 
     const binaryName = getBinaryName()
@@ -774,45 +860,31 @@ async function installBinaryFile(ctx: InstallContext): Promise<void> {
       return
     }
 
-    const destBinary = join(binDir, process.platform === 'win32' ? 'codeagent-wrapper.exe' : 'codeagent-wrapper')
-
-    // Check if binary exists, is functional, AND version matches
-    if (await fs.pathExists(destBinary)) {
-      try {
-        const { execSync } = await import('node:child_process')
-        const versionOutput = execSync(`"${destBinary}" --version`, { stdio: 'pipe' }).toString().trim()
-        const installedVersion = versionOutput.replace(/^.*version\s*/, '')
-
-        // Compare with expected version from package
-        const expectedVersion = EXPECTED_BINARY_VERSION
-        if (installedVersion === expectedVersion) {
-          // Binary exists, works, and version matches — skip download
-          ctx.result.binPath = binDir
-          ctx.result.binInstalled = true
-          return
-        }
-        // Version mismatch — fall through to re-download
-      } catch {
-        // Binary exists but broken — fall through to re-download
-      }
+    if (await verifyBinaryFileVersion(destBinary)) {
+      ctx.result.binPath = binDir
+      ctx.result.binInstalled = true
+      return
     }
 
-    const installed = await downloadBinaryFromRelease(binaryName, destBinary)
-
-    if (installed) {
-      if (await verifyBinaryVersion(ctx.installDir)) {
-        ctx.result.binPath = binDir
-        ctx.result.binInstalled = true
-      } else {
-        ctx.result.errors.push(`Binary verification failed: expected codeagent-wrapper ${EXPECTED_BINARY_VERSION}`)
-      }
-    } else {
+    if (!(await downloadBinaryFromRelease(binaryName, tempBinary))) {
       ctx.result.errors.push(
         `Failed to download binary: ${binaryName} from GitHub Release (after 3 attempts). Check network or visit https://github.com/${GITHUB_REPO}/releases/tag/${RELEASE_TAG}`
       )
+      return
     }
+
+    if (!(await verifyBinaryFileVersion(tempBinary))) {
+      ctx.result.errors.push(`Binary verification failed: expected codeagent-wrapper ${EXPECTED_BINARY_VERSION}`)
+      return
+    }
+
+    await rename(tempBinary, destBinary)
+    ctx.result.binPath = binDir
+    ctx.result.binInstalled = true
   } catch (error) {
     ctx.result.errors.push(`Failed to install codeagent-wrapper (non-blocking): ${error}`)
+  } finally {
+    await fs.remove(tempBinary).catch(() => undefined)
   }
 }
 
@@ -825,7 +897,7 @@ async function installBinaryFile(ctx: InstallContext): Promise<void> {
  * Includes model-router.md, phase-guide.md, and strategy files.
  * All .md files receive variable injection + path replacement.
  */
-async function installEngineFiles(ctx: InstallContext): Promise<void> {
+async function installEngineFiles(ctx: InstallContext, options: { backupExisting?: boolean } = {}): Promise<void> {
   const engineSrcDir = join(ctx.templateDir, 'engine')
   if (!(await fs.pathExists(engineSrcDir))) return
 
@@ -833,13 +905,13 @@ async function installEngineFiles(ctx: InstallContext): Promise<void> {
 
   try {
     // Copy top-level engine .md files (model-router.md, phase-guide.md)
-    await copyMdTemplates(ctx, engineSrcDir, engineDestDir, { inject: true })
+    await copyMdTemplates(ctx, engineSrcDir, engineDestDir, { inject: true, ...options })
 
     // Copy strategy files
     const strategiesSrc = join(engineSrcDir, 'strategies')
     const strategiesDest = join(engineDestDir, 'strategies')
     if (await fs.pathExists(strategiesSrc)) {
-      await copyMdTemplates(ctx, strategiesSrc, strategiesDest, { inject: true })
+      await copyMdTemplates(ctx, strategiesSrc, strategiesDest, { inject: true, ...options })
     }
   } catch (error) {
     ctx.result.errors.push(`Failed to install engine files: ${error}`)
@@ -947,8 +1019,18 @@ export async function installWorkflows(
       mode?: string
       frontend?: { models?: string[]; primary?: string }
       backend?: { models?: string[]; primary?: string }
-      review?: { models?: string[]; strategy?: string }
+      review?: {
+        profiles?: Array<{
+          id: 'gpt' | 'grok'
+          model?: string
+          effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max'
+        }>
+        strategy?: string
+      }
       proxy?: { models?: string[]; http?: string; https?: string }
+      grokModel?: string
+      kimiModel?: string
+      opencodeModel?: string
     }
     liteMode?: boolean
     mcpProvider?: string
@@ -964,7 +1046,13 @@ export async function installWorkflows(
         mode: 'smart',
         frontend: { models: ['antigravity', 'codex'], primary: 'antigravity' },
         backend: { models: ['codex'], primary: 'codex' },
-        review: { models: ['codex', 'antigravity'], strategy: 'single' },
+        review: {
+          profiles: [
+            { id: 'gpt', model: 'gpt-5.6-sol', effort: 'xhigh' },
+            { id: 'grok', model: 'grok-4.5', effort: 'high' },
+          ],
+          strategy: 'parallel',
+        },
       },
       liteMode: config?.liteMode ?? true,
       mcpProvider: config?.mcpProvider || 'fast-context',
@@ -1027,6 +1115,66 @@ export async function installWorkflows(
   }
 
   ctx.result.configPath = join(installDir, 'commands', 'ccg')
+  return ctx.result
+}
+
+/**
+ * Refresh routing-dependent CCG artifacts without reinstalling skills, hooks,
+ * settings, or MCP servers. Callers may require the wrapper binary to match
+ * the package version before writing templates that depend on new CLI flags.
+ */
+export async function syncRoutingTemplates(
+  workflowIds: string[],
+  installDir: string,
+  config: {
+    routing: InstallConfig['routing']
+    liteMode?: boolean
+    mcpProvider?: string
+    skipImpeccable?: boolean
+    ensureBinary?: boolean
+  }
+): Promise<InstallResult> {
+  const ctx: InstallContext = {
+    installDir,
+    force: true,
+    config: {
+      routing: config.routing,
+      liteMode: config.liteMode ?? true,
+      mcpProvider: config.mcpProvider || 'fast-context',
+      skipImpeccable: config.skipImpeccable ?? false,
+      skipBinary: !config.ensureBinary,
+    },
+    templateDir: join(PACKAGE_ROOT, 'templates'),
+    result: {
+      success: true,
+      installedCommands: [],
+      installedPrompts: [],
+      errors: [],
+      configPath: join(installDir, 'commands', 'ccg'),
+    },
+  }
+
+  if (!(await fs.pathExists(ctx.templateDir))) {
+    ctx.result.errors.push(`Template directory not found: ${ctx.templateDir}`)
+    ctx.result.success = false
+    return ctx.result
+  }
+
+  await fs.ensureDir(join(installDir, 'commands', 'ccg'))
+  await fs.ensureDir(join(installDir, '.ccg', 'prompts'))
+  await fs.ensureDir(join(installDir, '.ccg', 'engine', 'strategies'))
+
+  if (!ctx.config.skipBinary) {
+    await installBinaryFile(ctx)
+    if (!ctx.result.binInstalled) {
+      ctx.result.success = false
+      return ctx.result
+    }
+  }
+
+  await installCommandFiles(ctx, workflowIds, { backupExisting: true })
+  await installEngineFiles(ctx, { backupExisting: true })
+  await installPromptFiles(ctx)
   return ctx.result
 }
 

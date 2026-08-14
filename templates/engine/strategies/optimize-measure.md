@@ -11,7 +11,7 @@
 ## 前置加载（M+ 复杂度时）
 
 ```
-Read("/home/USER/.claude/.ccg/engine/model-router.md")
+Read("~/.claude/.ccg/engine/model-router.md")
 ```
 
 ---

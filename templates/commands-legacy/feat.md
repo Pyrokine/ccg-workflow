@@ -52,14 +52,14 @@ EOF",
 
 **角色提示词**：
 
-| 阶段 | 后端                                                        | 前端                                                         |
-|----|-----------------------------------------------------------|------------------------------------------------------------|
-| 分析 | `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/analyzer.md`  | `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/analyzer.md`  |
+| 阶段 | 后端 | 前端 |
+|----|---|---|
+| 分析 | `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/analyzer.md` | `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/analyzer.md` |
 | 规划 | `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/architect.md` | `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/architect.md` |
-| 实施 | `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/architect.md` | `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/frontend.md`  |
-| 审查 | `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/reviewer.md`  | `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/reviewer.md`  |
+| 实施 | `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/architect.md` | `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/frontend.md` |
+| 审查 | `~/.claude/.ccg/prompts/claude/reviewer.md`，供 GPT、Grok 两个外部 profile 共用 | 同左 |
 
-**会话复用**：每次调用返回 `SESSION_ID: xxx`，后续阶段用 `resume xxx` 复用上下文。
+**会话复用**：分析、规划和实施调用可复用 `SESSION_ID`。审查调用使用 `--no-session-persistence`，不得 `resume` 或保存 reviewer `SESSION_ID`。
 
 **并行调用**：使用 `run_in_background: true` 启动，用 `TaskOutput` 等待结果。**必须等所有模型返回后才能进入下一阶段**。
 
@@ -187,7 +187,7 @@ git status --short
 git diff --name-status
 ```
 
-询问用户是否运行代码审查（`/ccg:review`）。
+对超过 30 行或涉及认证、数据库、加密的变更，在同一条消息中启动 GPT、Grok 两个 reviewer。二者使用 `--backend claude --no-session-persistence` 和 `~/.claude/.ccg/prompts/claude/reviewer.md`；GPT 使用 `--claude-model {{REVIEW_GPT_MODEL}} --claude-effort {{REVIEW_GPT_EFFORT}}` 审查后端逻辑、正确性、安全、回归与测试缺口，Grok 使用 `--claude-model {{REVIEW_GROK_MODEL}} --claude-effort {{REVIEW_GROK_EFFORT}}` 审查前端交互、可访问性、设计一致性与前端安全。等待两个结果后由主 Claude 汇总并确认 finding，不使用 `resume` 或 reviewer `SESSION_ID`。
 
 ---
 

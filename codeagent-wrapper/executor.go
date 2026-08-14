@@ -81,6 +81,7 @@ func (r *realCmd) Start() error {
 	if r.cmd == nil {
 		return errors.New("command is nil")
 	}
+	isolateProcessGroup(r.cmd)
 	return r.cmd.Start()
 }
 
@@ -857,12 +858,18 @@ func runCodexTaskWithContext(
 	logger := injectedLogger
 
 	cfg := &Config{
-		Mode:      taskSpec.Mode,
-		Task:      taskSpec.Task,
-		SessionID: taskSpec.SessionID,
-		WorkDir:   taskSpec.WorkDir,
-		Backend:   defaultBackendName,
-		Progress:  taskSpec.Progress,
+		Mode:                 taskSpec.Mode,
+		Task:                 taskSpec.Task,
+		SessionID:            taskSpec.SessionID,
+		WorkDir:              taskSpec.WorkDir,
+		Backend:              defaultBackendName,
+		ClaudeModel:          taskSpec.ClaudeModel,
+		ClaudeEffort:         taskSpec.ClaudeEffort,
+		NoSessionPersistence: taskSpec.NoSessionPersistence,
+		GrokModel:            taskSpec.GrokModel,
+		KimiModel:            taskSpec.KimiModel,
+		OpencodeModel:        taskSpec.OpencodeModel,
+		Progress:             taskSpec.Progress,
 	}
 
 	commandName := codexCommand
@@ -894,7 +901,7 @@ func runCodexTaskWithContext(
 	targetArg := taskSpec.Task
 
 	// Antigravity CLI does not support "-" as stdin marker for -p flag.
-	promptBackend := cfg.Backend == "antigravity" || cfg.Backend == "agy"
+	promptBackend := cfg.Backend == "antigravity" || cfg.Backend == "agy" || cfg.Backend == "grok" || cfg.Backend == "kimi" || cfg.Backend == "opencode"
 	promptDirect := useStdin && promptBackend
 	if useStdin && !promptDirect {
 		targetArg = "-"
@@ -1138,7 +1145,7 @@ func runCodexTaskWithContext(
 	// Skip in silent mode (parallel tasks) to avoid polluting stderr.
 	var sessionIDEmitted bool
 	var onSessionStartedCallback func(string)
-	if !silent {
+	if !silent && !cfg.NoSessionPersistence {
 		onSessionStartedCallback = func(id string) {
 			if sessionIDEmitted || id == "" {
 				return
@@ -1589,6 +1596,7 @@ func runAntigravityPTYRetry(
 	}
 
 	cmd := commandContext(ctx, "script", scriptArgs...)
+	isolateProcessGroup(cmd)
 	if workDir != "" {
 		cmd.Dir = workDir
 	}
@@ -1702,11 +1710,15 @@ func forwardSignals(ctx context.Context, cmd commandRunner, logErrorFn func(stri
 						_ = proc.Kill()
 					}
 				} else {
-					_ = proc.Signal(syscall.SIGTERM)
+					if err := killProcessGroup(proc.Pid(), syscall.SIGTERM); err != nil {
+						_ = proc.Signal(syscall.SIGTERM)
+					}
 					time.AfterFunc(
 						time.Duration(forceKillDelay.Load())*time.Second, func() {
 							if p := cmd.Process(); p != nil {
-								_ = p.Kill()
+								if err := killProcessGroup(p.Pid(), syscall.SIGKILL); err != nil {
+									_ = p.Kill()
+								}
 							}
 						},
 					)
@@ -1808,7 +1820,9 @@ func terminateCommand(cmd commandRunner) *forceKillTimer {
 			_ = proc.Kill()
 		}
 	} else {
-		_ = proc.Signal(syscall.SIGTERM)
+		if err := killProcessGroup(proc.Pid(), syscall.SIGTERM); err != nil {
+			_ = proc.Signal(syscall.SIGTERM)
+		}
 	}
 
 	done := make(chan struct{}, 1)
@@ -1817,7 +1831,7 @@ func terminateCommand(cmd commandRunner) *forceKillTimer {
 			if p := cmd.Process(); p != nil {
 				if isWindows() {
 					_ = killProcessTree(p.Pid())
-				} else {
+				} else if err := killProcessGroup(p.Pid(), syscall.SIGKILL); err != nil {
 					_ = p.Kill()
 				}
 			}
@@ -1844,7 +1858,9 @@ func terminateProcess(cmd commandRunner) *time.Timer {
 			_ = proc.Kill()
 		}
 	} else {
-		_ = proc.Signal(syscall.SIGTERM)
+		if err := killProcessGroup(proc.Pid(), syscall.SIGTERM); err != nil {
+			_ = proc.Signal(syscall.SIGTERM)
+		}
 	}
 
 	return time.AfterFunc(
@@ -1852,7 +1868,7 @@ func terminateProcess(cmd commandRunner) *time.Timer {
 			if p := cmd.Process(); p != nil {
 				if isWindows() {
 					_ = killProcessTree(p.Pid())
-				} else {
+				} else if err := killProcessGroup(p.Pid(), syscall.SIGKILL); err != nil {
 					_ = p.Kill()
 				}
 			}

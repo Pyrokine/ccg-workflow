@@ -2,13 +2,23 @@
 export type SupportedLang = 'zh-CN' | 'en'
 
 // 模型类型
-export type ModelType = 'codex' | 'claude' | 'antigravity'
+export type ModelType = 'codex' | 'claude' | 'antigravity' | 'grok' | 'kimi' | 'opencode'
 
 // 协作模式
 export type CollaborationMode = 'parallel' | 'smart' | 'sequential'
 
 // 路由策略
 export type RoutingStrategy = 'parallel' | 'fallback' | 'round-robin'
+
+export type ReviewProfileId = 'gpt' | 'grok'
+
+export type ReviewEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
+
+export interface ReviewProfile {
+  id: ReviewProfileId
+  model?: string
+  effort?: ReviewEffort
+}
 
 // 模型路由配置
 export interface ModelRouting {
@@ -23,14 +33,17 @@ export interface ModelRouting {
     strategy: RoutingStrategy
   }
   review: {
-    models: ModelType[]
+    profiles: ReviewProfile[]
     strategy: 'parallel' | 'fallback' | 'single'
   }
   proxy?: {
-    models: ModelType[]
+    models: Extract<ModelType, 'antigravity'>[]
     http: string
     https: string
   }
+  grokModel?: string
+  kimiModel?: string
+  opencodeModel?: string
   mode: CollaborationMode
 }
 
@@ -99,6 +112,8 @@ export interface InstallResult {
   configPath: string
   binPath?: string
   binInstalled?: boolean
+  backupPath?: string
+  backedUpFiles?: string[]
 }
 
 // ace-tool 配置

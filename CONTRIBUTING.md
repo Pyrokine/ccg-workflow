@@ -6,8 +6,8 @@ Thanks for your interest in contributing to CCG! This guide will help you get st
 
 ### Prerequisites
 
-- Node.js 20.19+
-- pnpm (`npm install -g pnpm`)
+- Node.js 22.13+ or 24.19.0+ (see `.node-version`)
+- pnpm 11 (Node 24 bundles Corepack; run `corepack enable`)
 - Go 1.26+ (only for `codeagent-wrapper` changes)
 
 ### Getting Started
@@ -37,7 +37,7 @@ skills-v2/
 │   └── utils/              # Shared utilities
 ├── templates/              # Installed to ~/.claude/
 │   ├── commands/           # 26 slash command templates (.md)
-│   ├── prompts/            # Expert prompts (codex/ + antigravity/ + claude/)
+│   ├── prompts/            # Expert prompts (antigravity/, claude/, codex/, grok/, kimi/, opencode/)
 │   └── skills/             # Quality gates + orchestration
 ├── codeagent-wrapper/      # Go binary source
 ├── tests/                  # Vitest test files
@@ -52,7 +52,7 @@ skills-v2/
 | `src/utils/config.ts`     | Configuration management                    |
 | `src/utils/mcp.ts`        | MCP tool integration                        |
 | `templates/commands/*.md` | Slash command templates                     |
-| `templates/prompts/`      | Expert prompts for Codex/Antigravity/Claude |
+| `templates/prompts/`      | Expert prompts for Antigravity, Claude, Codex, Grok, Kimi Code, and OpenCode |
 
 ## How to Contribute
 

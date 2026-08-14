@@ -90,6 +90,18 @@ type UnifiedEvent struct {
 	Content        string `json:"content,omitempty"`
 	Delta          *bool  `json:"delta,omitempty"`
 	Status         string `json:"status,omitempty"`
+
+	Data              string          `json:"data,omitempty"`
+	StopReason        string          `json:"stopReason,omitempty"`
+	ToolCallID        string          `json:"tool_call_id,omitempty"`
+	OpencodeSessionID string          `json:"sessionID,omitempty"`
+	Part              json.RawMessage `json:"part,omitempty"`
+}
+
+type OpencodePart struct {
+	Type   string `json:"type"`
+	Text   string `json:"text,omitempty"`
+	Reason string `json:"reason,omitempty"`
 }
 
 // GetSessionID returns the session ID from either snake_case or camelCase field.
@@ -157,9 +169,12 @@ func parseJSONStreamInternalWithContent(
 	totalEvents := 0
 
 	var (
-		codexMessage  string
-		claudeMessage string
-		contentBuffer strings.Builder
+		codexMessage   string
+		claudeMessage  string
+		contentBuffer  strings.Builder
+		grokBuffer     strings.Builder
+		kimiBuffer     strings.Builder
+		opencodeBuffer strings.Builder
 	)
 
 	for {
@@ -225,8 +240,14 @@ func parseJSONStreamInternalWithContent(
 		if !isClaude && event.Type == "result" && event.GetSessionID() != "" && event.Status == "" {
 			isClaude = true
 		}
-		isContentStream := event.Role != "" || event.Delta != nil || event.Status != "" ||
-			(event.Type == "init" && event.GetSessionID() != "")
+		isOpencode := event.OpencodeSessionID != "" && len(event.Part) > 0
+		isKimi := !isCodex && !isClaude && !isOpencode &&
+			(event.Role == "meta" || (event.Type == "" && (event.Role == "assistant" || event.Role == "tool")))
+		isContentStream := !isKimi && !isOpencode && (event.Role != "" || event.Delta != nil || event.Status != "" ||
+			(event.Type == "init" && event.GetSessionID() != ""))
+		isGrok := !isCodex && !isClaude && !isContentStream && !isOpencode &&
+			(((event.Type == "thought" || event.Type == "text") && event.Data != "") ||
+				(event.Type == "end" && (event.StopReason != "" || event.SessionIDCamel != "")))
 
 		// Handle Codex events
 		if isCodex {
@@ -391,6 +412,66 @@ func parseJSONStreamInternalWithContent(
 			continue
 		}
 
+		if isOpencode {
+			if threadID == "" {
+				threadID = event.OpencodeSessionID
+				if onSessionStarted != nil {
+					onSessionStarted(threadID)
+				}
+			}
+
+			var part OpencodePart
+			if err := json.Unmarshal(event.Part, &part); err != nil {
+				warnFn(fmt.Sprintf("Failed to parse opencode part: %s", err.Error()))
+				continue
+			}
+			if event.Type == "text" && part.Text != "" {
+				opencodeBuffer.WriteString(part.Text)
+				notifyMessage()
+				if onContent != nil {
+					onContent(part.Text, "message")
+				}
+			}
+			if part.Type == "step-finish" && part.Reason == "stop" {
+				notifyComplete()
+			}
+			continue
+		}
+
+		if isKimi {
+			switch event.Role {
+			case "assistant":
+				if event.Content != "" {
+					kimiBuffer.WriteString(event.Content)
+					notifyMessage()
+					if onContent != nil {
+						onContent(event.Content, "message")
+					}
+				}
+			case "tool":
+				if onContent != nil && event.Content != "" {
+					onContent(event.Content, "command")
+				}
+			}
+			continue
+		}
+
+		if isGrok {
+			switch event.Type {
+			case "text":
+				grokBuffer.WriteString(event.Data)
+				if onContent != nil {
+					onContent(event.Data, "message")
+				}
+			case "end":
+				if grokBuffer.Len() > 0 {
+					notifyMessage()
+				}
+				notifyComplete()
+			}
+			continue
+		}
+
 		// Handle role/content stream events
 		if isContentStream {
 			if event.GetSessionID() != "" && threadID == "" {
@@ -432,6 +513,12 @@ func parseJSONStreamInternalWithContent(
 	}
 
 	switch {
+	case opencodeBuffer.Len() > 0:
+		message = opencodeBuffer.String()
+	case kimiBuffer.Len() > 0:
+		message = kimiBuffer.String()
+	case grokBuffer.Len() > 0:
+		message = grokBuffer.String()
 	case contentBuffer.Len() > 0:
 		message = contentBuffer.String()
 	case claudeMessage != "":

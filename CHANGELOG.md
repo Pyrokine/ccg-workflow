@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.4.0-aug.1] - 2026-08-14
+
+### Added
+
+- Manually absorbed upstream v3.4.0 support for Grok, Kimi Code, and OpenCode backends. Each backend has routing,
+  model override, session resume, and streaming-output parsing support.
+- The model routing installer now installs prompt files for enabled backends. Menu routing changes refresh commands,
+  engine templates, and prompts, then verify the installed wrapper version and download the matching binary when needed.
+  Hooks, settings, MCP configuration, and skills remain untouched.
+- Unix wrapper children run in separate process groups. Interrupt, timeout, and termination signals target only the
+  child group. Windows keeps the existing process-tree termination path.
+
+### Changed
+
+- Double-Claude primary routing emits a Pure Claude Code mode directive. Analysis and implementation use independent
+  Claude Code Agents or Agent Teams. GPT and Grok review calls remain separate non-persistent print sessions.
+- Proxy injection remains limited to configured Antigravity or agy calls. Codex, Claude, Grok, Kimi Code, and OpenCode
+  do not receive proxy environment variables.
+- Code review now runs GPT and Grok through the Claude Code provider in independent non-persistent print sessions. GPT defaults to `gpt-5.6-sol` at `xhigh` for backend review; Grok defaults to `grok-4.5` at `high` for frontend review.
+- The wrapper accepts `--claude-model`, `--claude-effort`, and `--no-session-persistence`. The last flag is restricted to the Claude backend and cannot be combined with `resume`.
+- Template injection restores any omitted review profile from the default configuration, preventing incomplete configurations from producing empty reviewer arguments.
+- Package version is v3.4.0-aug.1. The expected codeagent-wrapper binary version is v5.14.0-aug.1.
+
 ## [3.1.6-aug.2] - 2026-06-23
 
 ### Fixes

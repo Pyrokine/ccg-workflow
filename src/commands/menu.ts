@@ -9,9 +9,21 @@ import ora from 'ora'
 import { dirname, join } from 'pathe'
 import { version } from '../../package.json'
 import { i18n } from '../i18n'
-import type { ModelType } from '../types'
-import { normalizeModelName, normalizeRoutingForInstall, readCcgConfig, writeCcgConfig } from '../utils/config'
-import { installCodexMode, uninstallCodexMode, uninstallWorkflows } from '../utils/installer'
+import type { ModelRouting, ModelType } from '../types'
+import {
+  createDefaultConfig,
+  normalizeModelName,
+  normalizeRoutingForInstall,
+  readCcgConfig,
+  writeCcgConfig,
+} from '../utils/config'
+import {
+  getAllCommandIds,
+  installCodexMode,
+  syncRoutingTemplates,
+  uninstallCodexMode,
+  uninstallWorkflows,
+} from '../utils/installer'
 import { isWindows } from '../utils/platform'
 import { configMcp } from './config-mcp'
 import { init } from './init'
@@ -108,7 +120,6 @@ function drawHeader(statusParts: string[]): void {
     console.log(boxRow(centerLine(ansis.bold.white(line), INNER_W)))
   }
   console.log(empty)
-  console.log(boxRow(centerLine(ansis.gray('Claude + Codex + Antigravity'), INNER_W)))
   console.log(boxRow(centerLine(ansis.gray('Multi-Model Collaboration'), INNER_W)))
   console.log(empty)
   if (statusParts.length > 0) {
@@ -170,7 +181,7 @@ export async function showMainMenu(): Promise<void> {
           item('3', i18n.t('menu:options.configMcp'), isZh ? '代码检索 MCP 工具' : 'Code retrieval MCP tool'),
           item('4', i18n.t('menu:options.configApi'), isZh ? '自定义 API 端点' : 'Custom API endpoint'),
           item('5', i18n.t('menu:options.configStyle'), isZh ? '选择输出人格' : 'Choose output personality'),
-          item('6', i18n.t('menu:options.configModel'), isZh ? '前端/后端模型切换' : 'Switch frontend/backend models'),
+          item('6', i18n.t('menu:options.configModel'), isZh ? '配置模型路由' : 'Configure model routing'),
 
           groupSep(isZh ? '其他工具' : 'Tools'),
           item(
@@ -405,6 +416,10 @@ async function configApi(): Promise<void> {
     'Bash(~/.claude/bin/codeagent-wrapper --backend antigravity*)',
     'Bash(~/.claude/bin/codeagent-wrapper --backend agy*)',
     'Bash(~/.claude/bin/codeagent-wrapper --backend codex*)',
+    'Bash(~/.claude/bin/codeagent-wrapper --backend claude*)',
+    'Bash(~/.claude/bin/codeagent-wrapper --backend grok*)',
+    'Bash(~/.claude/bin/codeagent-wrapper --backend kimi*)',
+    'Bash(~/.claude/bin/codeagent-wrapper --backend opencode*)',
   ]
   for (const perm of wrapperPerms) {
     if (!settings.permissions.allow.includes(perm)) settings.permissions.allow.push(perm)
@@ -439,7 +454,7 @@ const OUTPUT_STYLES = [
 // ═══════════════════════════════════════════════════════
 
 async function configModelRouting(): Promise<void> {
-  const config = await readCcgConfig()
+  let config = await readCcgConfig()
 
   console.log()
   console.log(ansis.cyan.bold(`  ${i18n.t('init:model.title')}`))
@@ -448,12 +463,27 @@ async function configModelRouting(): Promise<void> {
   // Show current routing
   const currentFrontend = normalizeModelName(config?.routing?.frontend?.primary) || 'antigravity'
   const currentBackend = normalizeModelName(config?.routing?.backend?.primary) || 'codex'
+  const currentGrokModel = config?.routing?.grokModel || ''
+  const currentKimiModel = config?.routing?.kimiModel || ''
+  const currentOpencodeModel = config?.routing?.opencodeModel || ''
 
   console.log(ansis.yellow(`  ${i18n.t('init:model.geminiDisabled')}`))
   console.log()
   console.log(ansis.gray(`  ${i18n.t('init:model.currentRouting')}:`))
-  console.log(`  ${ansis.cyan('Frontend:')} ${ansis.green(currentFrontend)}`)
-  console.log(`  ${ansis.cyan('Backend:')}  ${ansis.blue(currentBackend)}`)
+  console.log(`  ${ansis.cyan(`${i18n.t('init:model.currentFrontend')}:`)} ${ansis.green(currentFrontend)}`)
+  console.log(`  ${ansis.cyan(`${i18n.t('init:model.currentBackend')}:`)}  ${ansis.blue(currentBackend)}`)
+  if (currentGrokModel) {
+    console.log(`  ${ansis.cyan(`${i18n.t('init:model.currentGrok')}:`)} ${ansis.green(currentGrokModel)}`)
+  }
+  if (currentKimiModel) {
+    console.log(`  ${ansis.cyan(`${i18n.t('init:model.currentKimi')}:`)} ${ansis.green(currentKimiModel)}`)
+  }
+  if (currentOpencodeModel) {
+    console.log(`  ${ansis.cyan(`${i18n.t('init:model.currentOpencode')}:`)} ${ansis.green(currentOpencodeModel)}`)
+  }
+  if (currentFrontend === 'claude' && currentBackend === 'claude') {
+    console.log(ansis.cyan(`  ${i18n.t('init:model.pureClaudeCode')}`))
+  }
   console.log()
 
   // Frontend model selection
@@ -464,7 +494,11 @@ async function configModelRouting(): Promise<void> {
       message: i18n.t('init:model.selectFrontend'),
       choices: [
         { name: `Antigravity ${ansis.green(`(${i18n.t('init:model.recommended')})`)}`, value: 'antigravity' },
+        { name: 'Grok', value: 'grok' },
+        { name: 'Kimi Code', value: 'kimi' },
         { name: 'Codex', value: 'codex' },
+        { name: 'OpenCode', value: 'opencode' },
+        { name: 'Claude Code', value: 'claude' },
       ],
       default: currentFrontend,
     },
@@ -478,56 +512,134 @@ async function configModelRouting(): Promise<void> {
       message: i18n.t('init:model.selectBackend'),
       choices: [
         { name: `Codex ${ansis.green(`(${i18n.t('init:model.recommended')})`)}`, value: 'codex' },
-        { name: 'Claude', value: 'claude' },
+        { name: 'Grok', value: 'grok' },
+        { name: 'Kimi Code', value: 'kimi' },
+        { name: 'Antigravity', value: 'antigravity' },
+        { name: 'OpenCode', value: 'opencode' },
+        { name: 'Claude Code', value: 'claude' },
       ],
       default: currentBackend,
     },
   ])
 
+  if (selectedFrontend === 'claude' && selectedBackend === 'claude') {
+    console.log(ansis.cyan(`  ${i18n.t('init:model.pureClaudeCode')}`))
+  }
+
+  const selectedModels = new Set<ModelType>([selectedFrontend, selectedBackend])
+  let grokModel = currentGrokModel
+  let kimiModel = currentKimiModel
+  let opencodeModel = currentOpencodeModel
+
+  if (selectedModels.has('grok')) {
+    const answer = await inquirer.prompt<{ model: string }>([
+      {
+        type: 'input',
+        name: 'model',
+        message: i18n.t('init:model.grokModel'),
+        default: grokModel || 'grok-4.5',
+        validate: (value: string) => value.trim() !== '' || i18n.t('init:model.modelRequired'),
+      },
+    ])
+    grokModel = answer.model.trim()
+  }
+  if (selectedModels.has('kimi')) {
+    const answer = await inquirer.prompt<{ model: string }>([
+      {
+        type: 'input',
+        name: 'model',
+        message: i18n.t('init:model.kimiModel'),
+        default: kimiModel,
+      },
+    ])
+    kimiModel = answer.model.trim()
+  }
+  if (selectedModels.has('opencode')) {
+    const answer = await inquirer.prompt<{ model: string }>([
+      {
+        type: 'input',
+        name: 'model',
+        message: i18n.t('init:model.opencodeModel'),
+        default: opencodeModel,
+      },
+    ])
+    opencodeModel = answer.model.trim()
+  }
+
   // Check if anything changed
-  if (selectedFrontend === currentFrontend && selectedBackend === currentBackend) {
+  if (
+    config &&
+    selectedFrontend === currentFrontend &&
+    selectedBackend === currentBackend &&
+    grokModel === currentGrokModel &&
+    kimiModel === currentKimiModel &&
+    opencodeModel === currentOpencodeModel
+  ) {
     console.log(ansis.gray(`  ${i18n.t('common:configNotModified')}`))
     return
   }
 
   // Update config.toml
-  if (config) {
-    config.routing.frontend = {
+  const normalizedRouting = normalizeRoutingForInstall(config?.routing)
+  const updatedRouting: ModelRouting = {
+    frontend: {
       models: [selectedFrontend],
       primary: selectedFrontend,
       strategy: 'fallback',
-    }
-    config.routing.backend = {
+    },
+    backend: {
       models: [selectedBackend],
       primary: selectedBackend,
       strategy: 'fallback',
-    }
-    config.routing.review = {
-      models: [...new Set<ModelType>([selectedBackend, selectedFrontend])],
-      strategy: 'parallel',
-    }
-    const existingProxy = normalizeRoutingForInstall(config.routing).proxy
-    if (existingProxy) {
-      config.routing.proxy = existingProxy
-    } else {
-      delete config.routing.proxy
-    }
-    await writeCcgConfig(config)
+    },
+    review: normalizedRouting.review,
+    ...(normalizedRouting.proxy ? { proxy: normalizedRouting.proxy } : {}),
+    ...(grokModel ? { grokModel } : {}),
+    ...(kimiModel ? { kimiModel } : {}),
+    ...(opencodeModel ? { opencodeModel } : {}),
+    mode: normalizedRouting.mode,
   }
 
-  console.log()
-  console.log(ansis.green(`  ✓ ${i18n.t('init:model.routingUpdated')}`))
-
-  // Reinstall templates with new config
-  const spinner = ora(i18n.t('init:model.reinstalling')).start()
-  try {
-    const { execSync } = await import('node:child_process')
-    execSync('npx --yes ccg-workflow init --force --skip-prompt --skip-mcp', {
-      timeout: 300000,
-      stdio: 'pipe',
-      env: { ...process.env, CCG_UPDATE_MODE: 'true' },
+  if (config) {
+    config.routing = updatedRouting
+  } else {
+    config = createDefaultConfig({
+      language: i18n.language === 'en' ? 'en' : 'zh-CN',
+      routing: updatedRouting,
+      installedWorkflows: getAllCommandIds(),
+      mcpProvider: 'fast-context',
+      liteMode: true,
     })
-    spinner.succeed(i18n.t('init:model.reinstallDone'))
+  }
+
+  // Refresh only routing-dependent commands, engine files, and prompts.
+  const spinner = ora(i18n.t('init:model.reinstalling')).start()
+  const installedWorkflows = config?.workflows?.installed?.length ? config.workflows.installed : getAllCommandIds()
+  try {
+    const result = await syncRoutingTemplates(installedWorkflows, join(homedir(), '.claude'), {
+      routing: config?.routing ?? normalizeRoutingForInstall(undefined),
+      liteMode: config?.performance?.liteMode,
+      mcpProvider: config?.mcp?.provider,
+      skipImpeccable: config?.performance?.skipImpeccable,
+      ensureBinary: true,
+    })
+    if (!result.success) {
+      spinner.fail(i18n.t('init:model.reinstallFailed'))
+      for (const error of result.errors) {
+        console.log(ansis.red(`  ${error}`))
+      }
+    } else {
+      await writeCcgConfig(config)
+      spinner.succeed(i18n.t('init:model.reinstallDone'))
+      console.log(ansis.green(`  ✓ ${i18n.t('init:model.routingUpdated')}`))
+      if (result.backedUpFiles?.length) {
+        console.log(
+          ansis.gray(
+            `  ${i18n.t('init:model.routingBackup', { count: result.backedUpFiles.length, path: result.backupPath })}`
+          )
+        )
+      }
+    }
   } catch {
     spinner.fail(i18n.t('init:model.reinstallFailed'))
   }

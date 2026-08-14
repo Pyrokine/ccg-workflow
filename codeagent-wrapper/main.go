@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	version               = "5.11.1-aug.2"
+	version               = "5.14.0-aug.1"
 	defaultWorkdir        = "."
 	defaultTimeout        = 7200 // seconds (2 hours)
 	defaultCoverageTarget = 90.0
@@ -35,6 +35,18 @@ var useASCIIMode = os.Getenv("CODEAGENT_ASCII_MODE") == "true"
 
 func defaultLiteMode() bool {
 	return os.Getenv("CODEAGENT_LITE_MODE") != "false"
+}
+
+func redactTaskArgs(args []string, task string) []string {
+	redacted := make([]string, len(args))
+	for i, arg := range args {
+		if task != "" && arg == task {
+			redacted[i] = "<task>"
+		} else {
+			redacted[i] = arg
+		}
+	}
+	return redacted
 }
 
 // Lite mode: disable WebServer, reduce logging, faster post-message delay.
@@ -199,6 +211,13 @@ func run() (exitCode int) {
 		if parallelIndex != -1 {
 			backendName := defaultBackendName
 			fullOutput := false
+			progressFlag := false
+			claudeModel := strings.TrimSpace(os.Getenv("CLAUDE_MODEL"))
+			claudeEffort := strings.TrimSpace(os.Getenv("CLAUDE_EFFORT"))
+			noSessionPersistence := false
+			grokModel := strings.TrimSpace(os.Getenv("GROK_MODEL"))
+			kimiModel := strings.TrimSpace(os.Getenv("KIMI_MODEL"))
+			opencodeModel := strings.TrimSpace(os.Getenv("OPENCODE_MODEL"))
 			var extras []string
 
 			for i := 0; i < len(args); i++ {
@@ -208,6 +227,10 @@ func run() (exitCode int) {
 					continue
 				case arg == "--full-output":
 					fullOutput = true
+				case arg == "--lite", arg == "-L":
+					liteMode = true
+				case arg == "--progress":
+					progressFlag = true
 				case arg == "--backend":
 					if i+1 >= len(args) {
 						fmt.Fprintln(os.Stderr, "ERROR: --backend flag requires a value")
@@ -225,6 +248,54 @@ func run() (exitCode int) {
 				case arg == "--gemini-model" || strings.HasPrefix(arg, "--gemini-model="):
 					fmt.Fprintln(os.Stderr, "ERROR: --gemini-model is disabled because Gemini CLI consumer OAuth requests stopped being processed after 2026-06-18; use --backend antigravity")
 					return 1
+				case arg == "--claude-model", arg == "--claude-effort", arg == "--grok-model", arg == "--kimi-model", arg == "--opencode-model":
+					if i+1 >= len(args) || strings.TrimSpace(args[i+1]) == "" {
+						if arg == "--claude-effort" {
+							fmt.Fprintf(os.Stderr, "ERROR: %s flag requires a non-empty effort level\n", arg)
+						} else {
+							fmt.Fprintf(os.Stderr, "ERROR: %s flag requires a non-empty model name\n", arg)
+						}
+						return 1
+					}
+					value := strings.TrimSpace(args[i+1])
+					switch arg {
+					case "--claude-model":
+						claudeModel = value
+					case "--claude-effort":
+						claudeEffort = value
+					case "--grok-model":
+						grokModel = value
+					case "--kimi-model":
+						kimiModel = value
+					case "--opencode-model":
+						opencodeModel = value
+					}
+					i++
+				case arg == "--no-session-persistence":
+					noSessionPersistence = true
+				case strings.HasPrefix(arg, "--claude-model="), strings.HasPrefix(arg, "--claude-effort="), strings.HasPrefix(arg, "--grok-model="), strings.HasPrefix(arg, "--kimi-model="), strings.HasPrefix(arg, "--opencode-model="):
+					key, value, _ := strings.Cut(arg, "=")
+					value = strings.TrimSpace(value)
+					if value == "" {
+						if key == "--claude-effort" {
+							fmt.Fprintf(os.Stderr, "ERROR: %s flag requires a non-empty effort level\n", key)
+						} else {
+							fmt.Fprintf(os.Stderr, "ERROR: %s flag requires a non-empty model name\n", key)
+						}
+						return 1
+					}
+					switch key {
+					case "--claude-model":
+						claudeModel = value
+					case "--claude-effort":
+						claudeEffort = value
+					case "--grok-model":
+						grokModel = value
+					case "--kimi-model":
+						kimiModel = value
+					case "--opencode-model":
+						opencodeModel = value
+					}
 				default:
 					extras = append(extras, arg)
 				}
@@ -233,7 +304,7 @@ func run() (exitCode int) {
 			if len(extras) > 0 {
 				fmt.Fprintln(
 					os.Stderr,
-					"ERROR: --parallel reads its task configuration from stdin; only --backend and --full-output are allowed.",
+					"ERROR: --parallel reads task configuration from stdin; only recognized wrapper flags may be supplied.",
 				)
 				fmt.Fprintln(os.Stderr, "Usage examples:")
 				fmt.Fprintf(os.Stderr, "  %s --parallel < tasks.txt\n", name)
@@ -249,7 +320,6 @@ func run() (exitCode int) {
 				return 1
 			}
 			backendName = backend.Name()
-
 			data, err := io.ReadAll(stdinReader)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "ERROR: failed to read stdin: %v\n", err)
@@ -263,10 +333,39 @@ func run() (exitCode int) {
 			}
 
 			cfg.GlobalBackend = backendName
+			usesClaudeBackend := false
 			for i := range cfg.Tasks {
 				if strings.TrimSpace(cfg.Tasks[i].Backend) == "" {
 					cfg.Tasks[i].Backend = backendName
 				}
+				taskBackend, err := selectBackendFn(cfg.Tasks[i].Backend)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
+					return 1
+				}
+				cfg.Tasks[i].Backend = taskBackend.Name()
+				usesClaudeBackend = usesClaudeBackend || taskBackend.Name() == "claude"
+				if noSessionPersistence && cfg.Tasks[i].Mode == "resume" {
+					fmt.Fprintln(os.Stderr, "ERROR: --no-session-persistence cannot be used with resume")
+					return 1
+				}
+				if noSessionPersistence && taskBackend.Name() != "claude" {
+					fmt.Fprintln(os.Stderr, "ERROR: --no-session-persistence is only supported by the claude backend")
+					return 1
+				}
+			}
+			if usesClaudeBackend && !isValidClaudeEffort(claudeEffort) {
+				fmt.Fprintln(os.Stderr, "ERROR: --claude-effort must be one of: low, medium, high, xhigh, max")
+				return 1
+			}
+			for i := range cfg.Tasks {
+				cfg.Tasks[i].ClaudeModel = claudeModel
+				cfg.Tasks[i].ClaudeEffort = claudeEffort
+				cfg.Tasks[i].NoSessionPersistence = noSessionPersistence
+				cfg.Tasks[i].GrokModel = grokModel
+				cfg.Tasks[i].KimiModel = kimiModel
+				cfg.Tasks[i].OpencodeModel = opencodeModel
+				cfg.Tasks[i].Progress = progressFlag
 				// Inject ROLE_FILE content if present
 				injectedTask, err := injectRoleFile(cfg.Tasks[i].Task)
 				if err != nil {
@@ -284,6 +383,11 @@ func run() (exitCode int) {
 			}
 
 			results := executeConcurrent(layers, timeoutSec)
+			if noSessionPersistence {
+				for i := range results {
+					results[i].SessionID = ""
+				}
+			}
 
 			// Extract structured report fields from each result
 			for i := range results {
@@ -398,7 +502,7 @@ func run() (exitCode int) {
 	useStdin := cfg.ExplicitStdin || shouldUseStdin(taskText, piped)
 
 	targetArg := taskText
-	promptBackend := cfg.Backend == "antigravity" || cfg.Backend == "agy"
+	promptBackend := cfg.Backend == "antigravity" || cfg.Backend == "agy" || cfg.Backend == "grok" || cfg.Backend == "kimi" || cfg.Backend == "opencode"
 	promptDirect := useStdin && promptBackend
 	if useStdin && !promptDirect {
 		targetArg = "-"
@@ -408,7 +512,7 @@ func run() (exitCode int) {
 	// Print startup information to stderr
 	fmt.Fprintf(os.Stderr, "[%s]\n", name)
 	fmt.Fprintf(os.Stderr, "  Backend: %s\n", cfg.Backend)
-	fmt.Fprintf(os.Stderr, "  Command: %s %s\n", codexCommand, strings.Join(codexArgs, " "))
+	fmt.Fprintf(os.Stderr, "  Command: %s %s\n", codexCommand, strings.Join(redactTaskArgs(codexArgs, taskText), " "))
 	fmt.Fprintf(os.Stderr, "  PID: %d\n", os.Getpid())
 	fmt.Fprintf(os.Stderr, "  Log: %s\n", logger.Path())
 
@@ -449,13 +553,19 @@ func run() (exitCode int) {
 	logInfo(fmt.Sprintf("%s running...", cfg.Backend))
 
 	taskSpec := TaskSpec{
-		Task:      taskText,
-		WorkDir:   cfg.WorkDir,
-		Mode:      cfg.Mode,
-		SessionID: cfg.SessionID,
-		UseStdin:  useStdin,
-		Progress:  cfg.Progress,
-		Backend:   cfg.Backend,
+		Task:                 taskText,
+		WorkDir:              cfg.WorkDir,
+		Mode:                 cfg.Mode,
+		SessionID:            cfg.SessionID,
+		UseStdin:             useStdin,
+		ClaudeModel:          cfg.ClaudeModel,
+		ClaudeEffort:         cfg.ClaudeEffort,
+		NoSessionPersistence: cfg.NoSessionPersistence,
+		GrokModel:            cfg.GrokModel,
+		KimiModel:            cfg.KimiModel,
+		OpencodeModel:        cfg.OpencodeModel,
+		Progress:             cfg.Progress,
+		Backend:              cfg.Backend,
 	}
 
 	result := runTaskFn(taskSpec, false, cfg.Timeout)
@@ -465,7 +575,7 @@ func run() (exitCode int) {
 	}
 
 	fmt.Println(result.Message)
-	if result.SessionID != "" {
+	if result.SessionID != "" && !cfg.NoSessionPersistence {
 		fmt.Printf("\n---\nSESSION_ID: %s\n", result.SessionID)
 	}
 
@@ -548,15 +658,28 @@ Parallel mode examples:
 
 Options:
     --lite, -L            Lite mode is default: disable Web UI, faster response
-    --backend <name>      Select backend (codex, antigravity, agy, claude)
+    --backend <name>      Select backend (codex, antigravity, agy, claude, grok, kimi, opencode)
                           Gemini CLI is disabled because consumer OAuth requests stopped after 2026-06-18
                           Do not pass backend CLI flags like --add-dir or -p to wrapper
+    --claude-model <name> Use this model for the Claude backend
+    --claude-effort <n>   Set Claude effort (low, medium, high, xhigh, max)
+    --grok-model <name>   Use this model for the Grok backend
+    --kimi-model <name>   Use this model for the Kimi Code backend
+    --opencode-model <provider/model>
+                          Use this provider/model for the OpenCode backend
+    --no-session-persistence
+                          Run the Claude print-mode task without persisting a session; incompatible with resume
     --progress            Emit compact progress lines to stderr during execution
 
 Environment Variables:
     CODEX_TIMEOUT              Timeout in milliseconds (default: 7200000)
     CODEX_REQUIRE_APPROVAL     Require manual approval for file operations (default: false)
     CODEX_DISABLE_SKIP_GIT_CHECK  Disable skip-git-repo-check flag (default: false)
+    CLAUDE_MODEL               Default model for the Claude backend
+    CLAUDE_EFFORT              Default effort for the Claude backend
+    GROK_MODEL                 Default model for the Grok backend
+    KIMI_MODEL                 Default model for the Kimi Code backend
+    OPENCODE_MODEL             Default provider/model for the OpenCode backend
     CODEAGENT_ASCII_MODE       Use ASCII symbols instead of Unicode (PASS/WARN/FAIL)
     CODEAGENT_LITE_MODE        Lite mode is default; set false to enable Web UI
 

@@ -11,7 +11,7 @@
 ## 前置加载（L/XL 复杂度时）
 
 ```
-Read("/home/USER/.claude/.ccg/engine/model-router.md")
+Read("~/.claude/.ccg/engine/model-router.md")
 ```
 
 ---
@@ -122,12 +122,11 @@ Step [N/M]: [描述] — ✅ 测试通过 / ❌ 测试失败
 
 #### Round N 流程
 
-**⛔ 审查线程（每轮 spawn 新调用，干净上下文）：**
+**⛔ 审查线程（每轮使用不持久化新会话）：**
 
 3. 获取变更：`git diff` 全量输出
-4. 调用 backend 模型 + reviewer 角色，关注安全、性能、错误处理、行为一致性
-    - 只有任务明确涉及前端、布局、界面、页面设计、UI/UX、视觉样式或交互设计时，才额外调用 frontend 模型检查可访问性和设计一致性
-5. 等待已启动的模型结果，综合审查意见
+4. 在同一条消息中并行调用 GPT、Grok：GPT 使用 `--backend claude --no-session-persistence --claude-model {{REVIEW_GPT_MODEL}} --claude-effort {{REVIEW_GPT_EFFORT}}` 审查后端逻辑、正确性、安全、回归与测试缺口；Grok 使用 `--backend claude --no-session-persistence --claude-model {{REVIEW_GROK_MODEL}} --claude-effort {{REVIEW_GROK_EFFORT}}` 审查前端交互、可访问性、设计一致性与前端安全
+5. 等待两份报告。reviewer 不使用 `resume` 或 `SESSION_ID`，Lead 汇总并确认 finding
 
 **⛔ 质量关卡（必须逐个调用 Skill，不可跳过，不可用自己的判断替代）：**
 

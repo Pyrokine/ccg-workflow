@@ -75,13 +75,13 @@ EOF",
 
 **角色提示词**：
 
-| 阶段 | 后端                                                        | 前端                                                         |
-|----|-----------------------------------------------------------|------------------------------------------------------------|
-| 分析 | `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/analyzer.md`  | `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/analyzer.md`  |
+| 阶段 | 后端 | 前端 |
+|----|---|---|
+| 分析 | `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/analyzer.md` | `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/analyzer.md` |
 | 规划 | `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/architect.md` | `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/architect.md` |
-| 审查 | `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/reviewer.md`  | `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/reviewer.md`  |
+| 审查 | `~/.claude/.ccg/prompts/claude/reviewer.md`，供 GPT、Grok 两个外部 profile 共用 | 同左 |
 
-**会话复用**：每次调用返回 `SESSION_ID: xxx`，后续阶段用 `resume xxx` 复用上下文（注意：是 `resume`，不是 `--resume`）。
+**会话复用**：分析和规划调用返回 `SESSION_ID: xxx` 后可用 `resume xxx` 复用。审查调用不复用 session，必须传 `--no-session-persistence`。
 
 **并行调用**：使用 `run_in_background: true` 启动，用 `TaskOutput` 等待结果。**必须等所有模型返回后才能进入下一阶段**。
 
@@ -171,14 +171,14 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 
 ### 🚀 阶段 5：代码优化
 
-`[模式：优化]` - 多模型并行审查：
+`[模式：优化]` - GPT、Grok 双路审查：
 
-**并行调用**：
+在同一条消息中并行调用 GPT、Grok：
 
-- {{BACKEND_PRIMARY}}：使用审查提示词，关注安全、性能、错误处理
-- {{FRONTEND_PRIMARY}}：使用审查提示词，关注可访问性、设计一致性
+- GPT：`--backend claude --no-session-persistence --claude-model {{REVIEW_GPT_MODEL}} --claude-effort {{REVIEW_GPT_EFFORT}}`，关注后端逻辑、正确性、安全、回归与测试缺口
+- Grok：`--backend claude --no-session-persistence --claude-model {{REVIEW_GROK_MODEL}} --claude-effort {{REVIEW_GROK_EFFORT}}`，关注前端交互、可访问性、设计一致性与前端安全
 
-用 `TaskOutput` 等待结果。整合审查意见，用户确认后执行优化。
+两个调用以 `run_in_background: true` 启动，使用 `~/.claude/.ccg/prompts/claude/reviewer.md`，携带完整 diff、相关文件与计划约束。用 `TaskOutput` 等待两个结果后由主 Claude 汇总并确认 finding。reviewer 不使用 `resume` 或 `SESSION_ID`。
 
 **务必遵循上方 `多模型调用规范` 的 `重要` 指示**
 

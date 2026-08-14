@@ -16,6 +16,7 @@ export {
   getWorkflowConfigs,
   getWorkflowById,
   installWorkflows,
+  syncRoutingTemplates,
   installAceTool,
   installAceToolRs,
   installCodexMode,

@@ -55,7 +55,7 @@ disable-model-invocation: false
 1. 拆解任务 + 文件锁定矩阵
 2. spawn explorer/worker/awaiter
 3. 并行执行 + wait 收敛
-4. reviewer 审查 + 必要修复
+4. GPT、Grok 双路审查 + 必要修复
 5. 汇总结果 + close_agent 全量回收
 ```
 
@@ -98,7 +98,6 @@ disable-model-invocation: false
 | 主修 (Lead)    | 蚁后 Queen   | 天罗主修 | 任务分解、调度、汇总          | `spawn_agent/send_input/wait/close_agent` | 当前模型         |
 | 斥候 (Scout)   | 侦察蚁 Scout  | 天罗斥候 | 只读探索，标记关键文件         | `explorer` + Read/Grep/Glob（只读）           | haiku（快速低成本） |
 | 道侣 (Worker)  | 工蚁 Worker  | 天罗道侣 | 执行任务，可产生子任务         | `worker` + Read/Write/Edit/Bash           | sonnet/当前模型  |
-| 护法 (Soldier) | 兵蚁 Soldier | 天罗护法 | 审查质量，发现问题           | `worker`(审查模式) + Read/Grep/Glob（只读）       | sonnet       |
 | 走卒 (Drone)   | 无人蚁 Drone  | 天罗走卒 | 简单 bash 命令，零 LLM 成本 | Bash（仅此一个）                                | 无（execSync）  |
 
 ### 角色使用时机
@@ -106,7 +105,7 @@ disable-model-invocation: false
 ```
 需要了解代码库结构？ → 派 Scout（agent_type=explorer）
 需要修改代码？       → 派 Worker（agent_type=worker）
-需要审查变更？       → 派 Soldier（agent_type=worker，审查提示词）
+需要审查变更？       → 通过 Claude Code provider 并行启动 GPT、Grok
 需要长耗时命令？      → 派 awaiter（agent_type=awaiter）
 需要短命令？         → 直接 Bash（Drone 等价）
 ```
@@ -115,13 +114,13 @@ disable-model-invocation: false
 
 ## 企业级角色扩展（`/ccg:team` 专用）
 
-`/ccg:team` 命令在蚁群基础角色之上，增加 3 个大厂级专业角色，对应 Agent Teams 真实 teammates：
+`/ccg:team` 命令在蚁群基础角色之上，增加 3 个专业角色，对应 Agent Teams 真实 teammates：
 
 | 角色                 | Agent 名          | 道语   | 职责                           | 工具权限                           | 模型     |
 |--------------------|------------------|------|------------------------------|--------------------------------|--------|
 | 🏗 架构师 (Architect) | `team-architect` | 天罗军师 | 代码库扫描、架构蓝图、文件分配矩阵            | Read/Glob/Grep（只读）             | Sonnet |
 | 🧪 QA 工程师 (QA)     | `team-qa`        | 天罗验毒 | 写测试、跑测试、lint、typecheck       | Read/Write/Edit/Bash/Glob/Grep | Sonnet |
-| 🔬 审查员 (Reviewer)  | `team-reviewer`  | 天罗护法 | 综合 Codex/Antigravity 审查、分级判决 | Read/Glob/Grep（只读）             | Sonnet |
+| 🔬 审查协调员 (Reviewer) | `team-reviewer` | 天罗护法 | 整合 GPT、Grok 报告并确认 finding | Read/Glob/Grep（只读） | Sonnet |
 
 ### 8 阶段流水线
 
@@ -132,7 +131,7 @@ Phase 2: ARCHITECTURE  → Codex∥Antigravity 外援 + Architect teammate 出�
 Phase 3: PLANNING      → Lead 拆任务 → 零决策并行计划
 Phase 4: DEVELOPMENT   → Dev×N teammates 并行编码（文件隔离）
 Phase 5: TESTING       → QA teammate 写测试 + 跑全量验证
-Phase 6: REVIEW        → Codex∥Antigravity 外援 + Reviewer teammate 综合审查
+Phase 6: REVIEW        → GPT∥Grok 外部审查 + Reviewer teammate 汇总确认
 Phase 7: FIX           → Dev teammate(s) 修复 Critical（最多 2 轮）
 Phase 8: INTEGRATION   → Lead 全量验证 + 报告 + 清理
 ```

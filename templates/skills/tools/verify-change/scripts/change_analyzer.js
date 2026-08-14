@@ -107,6 +107,59 @@ function getGitChanges(base = 'HEAD~1', target = 'HEAD') {
   return changes;
 }
 
+function applyNumstat(changes, args) {
+  const statMap = {};
+  for (const line of git('diff', '--numstat', ...args).split('\n')) {
+    if (!line) continue;
+    const parts = line.split('\t');
+    if (parts.length < 3) continue;
+    statMap[normalizePath(parts[2])] = [
+      parts[0] === '-' ? 0 : parseInt(parts[0], 10),
+      parts[1] === '-' ? 0 : parseInt(parts[1], 10),
+    ];
+  }
+
+  for (const change of changes) {
+    if (statMap[change.path]) {
+      [change.additions, change.deletions] = statMap[change.path];
+    }
+  }
+}
+
+function countFileLines(filePath) {
+  try {
+    const content = fs.readFileSync(filePath, 'utf8');
+    if (!content) return 0;
+    const newlines = (content.match(/\n/g) || []).length;
+    return content.endsWith('\n') ? newlines : newlines + 1;
+  } catch {
+    return 0;
+  }
+}
+
+function collectUntrackedChanges(filePath) {
+  let stat;
+  try {
+    stat = fs.statSync(filePath);
+  } catch {
+    return [];
+  }
+
+  if (stat.isFile()) {
+    const change = classifyFile(filePath);
+    change.type = 'added';
+    change.additions = countFileLines(filePath);
+    return [change];
+  }
+  if (!stat.isDirectory()) return [];
+
+  const changes = [];
+  for (const entry of fs.readdirSync(filePath, { withFileTypes: true })) {
+    changes.push(...collectUntrackedChanges(path.join(filePath, entry.name)));
+  }
+  return changes;
+}
+
 function getStagedChanges() {
   const changes = [];
   for (const line of git('diff', '--cached', '--name-status').split('\n')) {
@@ -114,6 +167,7 @@ function getStagedChanges() {
     const c = parseNameStatusLine(line);
     if (c) changes.push(c);
   }
+  applyNumstat(changes, ['--cached']);
   return changes;
 }
 
@@ -122,8 +176,14 @@ function getWorkingChanges() {
   for (const line of git('status', '--porcelain').split('\n')) {
     if (!line) continue;
     const c = parsePorcelainLine(line);
-    if (c) changes.push(c);
+    if (!c) continue;
+    if (c.type === 'added') {
+      changes.push(...collectUntrackedChanges(c.path));
+    } else {
+      changes.push(c);
+    }
   }
+  applyNumstat(changes, []);
   return changes;
 }
 
@@ -320,4 +380,12 @@ if (require.main === module) {
   process.exit(result.passed ? 0 : 1);
 }
 
-module.exports = { normalizePath, classifyFile, parsePorcelainLine, parseNameStatusLine, identifyModules };
+module.exports = {
+  normalizePath,
+  classifyFile,
+  parsePorcelainLine,
+  parseNameStatusLine,
+  getStagedChanges,
+  getWorkingChanges,
+  identifyModules,
+};

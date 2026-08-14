@@ -229,7 +229,35 @@ describe('integration: real templates with skip mode', () => {
 })
 
 // ─────────────────────────────────────────────────────────────
-// E. GEMINI_MODEL_FLAG removal
+// E. Review profile defaults
+// ─────────────────────────────────────────────────────────────
+describe('review profile defaults', () => {
+  it('fills missing profiles and preserves valid overrides', () => {
+    const input = [
+      '{{REVIEW_PROFILES}}',
+      '{{REVIEW_GPT_MODEL}} / {{REVIEW_GPT_EFFORT}}',
+      '{{REVIEW_GROK_MODEL}} / {{REVIEW_GROK_EFFORT}}',
+    ].join('\n')
+    const result = injectConfigVariables(input, {
+      routing: {
+        review: {
+          profiles: [{ id: 'gpt', model: 'gpt-5.6-sol', effort: 'max' }],
+        },
+      },
+    })
+
+    expect(result).toBe(
+      [
+        '[{"id":"gpt","model":"gpt-5.6-sol","effort":"max"},{"id":"grok","model":"grok-4.5","effort":"high"}]',
+        'gpt-5.6-sol / max',
+        'grok-4.5 / high',
+      ].join('\n')
+    )
+  })
+})
+
+// ─────────────────────────────────────────────────────────────
+// F. GEMINI_MODEL_FLAG removal
 // ─────────────────────────────────────────────────────────────
 describe('GEMINI_MODEL_FLAG removal', () => {
   it('strips the placeholder unconditionally', () => {
@@ -254,7 +282,123 @@ describe('GEMINI_MODEL_FLAG removal', () => {
 })
 
 // ─────────────────────────────────────────────────────────────
-// F. Integration: real templates never emit --gemini-model
+// F. Additional backend model flags
+// ─────────────────────────────────────────────────────────────
+describe('additional backend model flags', () => {
+  it('injects Grok model flags only into Grok routes', () => {
+    const input = [
+      '--backend codex {{GROK_MODEL_FLAG}}- "/w"',
+      '--backend grok {{GROK_MODEL_FLAG}}- "/w"',
+      '--backend <codex|grok> {{GROK_MODEL_FLAG}}- "/w"',
+    ].join('\n')
+    const result = injectConfigVariables(input, {
+      routing: {
+        frontend: { models: ['grok'], primary: 'grok' },
+        grokModel: 'grok-4.5',
+      },
+    })
+
+    expect(result).toBe(
+      [
+        '--backend codex - "/w"',
+        '--backend grok --grok-model grok-4.5 - "/w"',
+        '--backend <codex|grok --grok-model grok-4.5> - "/w"',
+      ].join('\n')
+    )
+  })
+
+  it('removes Kimi and OpenCode model flags when their backends are inactive', () => {
+    const input = '--backend codex {{KIMI_MODEL_FLAG}}{{OPENCODE_MODEL_FLAG}}- "/w"'
+    const result = injectConfigVariables(input, {
+      routing: {
+        frontend: { models: ['antigravity'], primary: 'antigravity' },
+        backend: { models: ['codex'], primary: 'codex' },
+        kimiModel: 'kimi-code',
+        opencodeModel: 'anthropic/claude-opus-5',
+      },
+    })
+
+    expect(result).toBe('--backend codex - "/w"')
+  })
+
+  it('only injects OpenCode model flags on OpenCode backend lines', () => {
+    const input = [
+      '--backend claude {{OPENCODE_MODEL_FLAG}}- "/w"',
+      '--backend opencode {{OPENCODE_MODEL_FLAG}}- "/w"',
+    ].join('\n')
+    const result = injectConfigVariables(input, {
+      routing: {
+        backend: { models: ['opencode'], primary: 'opencode' },
+        opencodeModel: 'anthropic/claude-opus-5',
+      },
+    })
+
+    expect(result).toBe(
+      ['--backend claude - "/w"', '--backend opencode --opencode-model anthropic/claude-opus-5 - "/w"'].join('\n')
+    )
+  })
+
+  it('injects model flags into direct hard-coded backend calls', () => {
+    const input = [
+      'codeagent-wrapper --backend grok - "/w"',
+      'codeagent-wrapper --backend codex - "/w"',
+      'codeagent-wrapper --backend opencode - "/w"',
+    ].join('\n')
+    const result = injectConfigVariables(input, {
+      routing: {
+        frontend: { models: ['grok'], primary: 'grok' },
+        backend: { models: ['opencode'], primary: 'opencode' },
+        grokModel: 'grok-4.5',
+        opencodeModel: 'anthropic/claude-opus-5',
+      },
+    })
+
+    expect(result).toBe(
+      [
+        'codeagent-wrapper --backend grok --grok-model grok-4.5 - "/w"',
+        'codeagent-wrapper --backend codex - "/w"',
+        'codeagent-wrapper --backend opencode --opencode-model anthropic/claude-opus-5 - "/w"',
+      ].join('\n')
+    )
+  })
+
+  it('injects model flags for conditional primary routes', () => {
+    const input = 'codeagent-wrapper --backend <{{BACKEND_PRIMARY}}|{{FRONTEND_PRIMARY}}> - "/w"'
+    const result = injectConfigVariables(input, {
+      routing: {
+        frontend: { models: ['grok'], primary: 'grok' },
+        backend: { models: ['opencode'], primary: 'opencode' },
+        grokModel: 'grok-4.5',
+        opencodeModel: 'anthropic/claude-opus-5',
+      },
+    })
+
+    expect(result).toBe(
+      'codeagent-wrapper --backend <opencode --opencode-model anthropic/claude-opus-5|grok --grok-model grok-4.5> - "/w"'
+    )
+  })
+
+  it('adds a runtime short-circuit to every generated template when both primary routes use Claude', () => {
+    const config = {
+      routing: {
+        frontend: { models: ['claude'], primary: 'claude' },
+        backend: { models: ['claude'], primary: 'claude' },
+      },
+    }
+
+    for (const input of [
+      '---\ndescription: test\n---\ncodeagent-wrapper --backend claude',
+      'template without wrapper',
+    ]) {
+      const result = injectConfigVariables(input, config)
+      expect(result).toContain('## Pure Claude Code mode')
+      expect(result).toContain('Do not execute `codeagent-wrapper` for frontend or backend work')
+    }
+  })
+})
+
+// ─────────────────────────────────────────────────────────────
+// G. Integration: real templates never emit --gemini-model
 // ─────────────────────────────────────────────────────────────
 describe('integration: real templates with antigravity+codex config', () => {
   const config = {

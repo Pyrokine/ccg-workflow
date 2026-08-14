@@ -11,16 +11,22 @@ import (
 
 // Config holds CLI configuration
 type Config struct {
-	Mode               string // "new" or "resume"
-	Task               string
-	SessionID          string
-	WorkDir            string
-	ExplicitStdin      bool
-	Timeout            int
-	Backend            string
-	SkipPermissions    bool
-	MaxParallelWorkers int
-	Progress           bool // Emit compact progress lines to stderr
+	Mode                 string // "new" or "resume"
+	Task                 string
+	SessionID            string
+	WorkDir              string
+	ExplicitStdin        bool
+	Timeout              int
+	Backend              string
+	SkipPermissions      bool
+	MaxParallelWorkers   int
+	ClaudeModel          string
+	ClaudeEffort         string
+	NoSessionPersistence bool
+	GrokModel            string
+	KimiModel            string
+	OpencodeModel        string
+	Progress             bool // Emit compact progress lines to stderr
 }
 
 // ParallelConfig defines the JSON schema for parallel execution
@@ -31,16 +37,22 @@ type ParallelConfig struct {
 
 // TaskSpec describes an individual task entry in the parallel config
 type TaskSpec struct {
-	ID           string          `json:"id"`
-	Task         string          `json:"task"`
-	WorkDir      string          `json:"workdir,omitempty"`
-	Dependencies []string        `json:"dependencies,omitempty"`
-	SessionID    string          `json:"session_id,omitempty"`
-	Backend      string          `json:"backend,omitempty"`
-	Progress     bool            `json:"-"`
-	Mode         string          `json:"-"`
-	UseStdin     bool            `json:"-"`
-	Context      context.Context `json:"-"`
+	ID                   string          `json:"id"`
+	Task                 string          `json:"task"`
+	WorkDir              string          `json:"workdir,omitempty"`
+	Dependencies         []string        `json:"dependencies,omitempty"`
+	SessionID            string          `json:"session_id,omitempty"`
+	Backend              string          `json:"backend,omitempty"`
+	Progress             bool            `json:"-"`
+	Mode                 string          `json:"-"`
+	UseStdin             bool            `json:"-"`
+	ClaudeModel          string          `json:"-"`
+	ClaudeEffort         string          `json:"-"`
+	NoSessionPersistence bool            `json:"-"`
+	GrokModel            string          `json:"-"`
+	KimiModel            string          `json:"-"`
+	OpencodeModel        string          `json:"-"`
+	Context              context.Context `json:"-"`
 }
 
 // TaskResult captures the execution outcome of a task
@@ -67,6 +79,9 @@ var backendRegistry = map[string]Backend{
 	"claude":      ClaudeBackend{},
 	"antigravity": AntigravityBackend{},
 	"agy":         AntigravityBackend{},
+	"grok":        GrokBackend{},
+	"kimi":        KimiBackend{},
+	"opencode":    OpencodeBackend{},
 }
 
 func selectBackend(name string) (Backend, error) {
@@ -106,6 +121,15 @@ func parseBoolFlag(val string, defaultValue bool) bool {
 		return false
 	default:
 		return defaultValue
+	}
+}
+
+func isValidClaudeEffort(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", "low", "medium", "high", "xhigh", "max":
+		return true
+	default:
+		return false
 	}
 }
 
@@ -215,6 +239,12 @@ func parseArgs() (*Config, error) {
 		return nil, fmt.Errorf("task required")
 	}
 
+	claudeModel := strings.TrimSpace(os.Getenv("CLAUDE_MODEL"))
+	claudeEffort := strings.TrimSpace(os.Getenv("CLAUDE_EFFORT"))
+	noSessionPersistence := false
+	grokModel := strings.TrimSpace(os.Getenv("GROK_MODEL"))
+	kimiModel := strings.TrimSpace(os.Getenv("KIMI_MODEL"))
+	opencodeModel := strings.TrimSpace(os.Getenv("OPENCODE_MODEL"))
 	backendName := defaultBackendName
 	skipPermissions := envFlagEnabled("CODEAGENT_SKIP_PERMISSIONS")
 	progress := false
@@ -244,6 +274,53 @@ func parseArgs() (*Config, error) {
 			continue
 		case arg == "--gemini-model" || strings.HasPrefix(arg, "--gemini-model="):
 			return nil, fmt.Errorf("--gemini-model is disabled because Gemini CLI consumer OAuth requests stopped being processed after 2026-06-18; use --backend antigravity")
+		case arg == "--claude-model", arg == "--claude-effort", arg == "--grok-model", arg == "--kimi-model", arg == "--opencode-model":
+			if i+1 >= len(args) || strings.TrimSpace(args[i+1]) == "" {
+				if arg == "--claude-effort" {
+					return nil, fmt.Errorf("%s flag requires a non-empty effort level", arg)
+				}
+				return nil, fmt.Errorf("%s flag requires a non-empty model name", arg)
+			}
+			value := strings.TrimSpace(args[i+1])
+			switch arg {
+			case "--claude-model":
+				claudeModel = value
+			case "--claude-effort":
+				claudeEffort = value
+			case "--grok-model":
+				grokModel = value
+			case "--kimi-model":
+				kimiModel = value
+			case "--opencode-model":
+				opencodeModel = value
+			}
+			i++
+			continue
+		case arg == "--no-session-persistence":
+			noSessionPersistence = true
+			continue
+		case strings.HasPrefix(arg, "--claude-model="), strings.HasPrefix(arg, "--claude-effort="), strings.HasPrefix(arg, "--grok-model="), strings.HasPrefix(arg, "--kimi-model="), strings.HasPrefix(arg, "--opencode-model="):
+			key, value, _ := strings.Cut(arg, "=")
+			value = strings.TrimSpace(value)
+			if value == "" {
+				if key == "--claude-effort" {
+					return nil, fmt.Errorf("%s flag requires a non-empty effort level", key)
+				}
+				return nil, fmt.Errorf("%s flag requires a non-empty model name", key)
+			}
+			switch key {
+			case "--claude-model":
+				claudeModel = value
+			case "--claude-effort":
+				claudeEffort = value
+			case "--grok-model":
+				grokModel = value
+			case "--kimi-model":
+				kimiModel = value
+			case "--opencode-model":
+				opencodeModel = value
+			}
+			continue
 		case arg == "--skip-permissions", arg == "--dangerously-skip-permissions":
 			skipPermissions = true
 			continue
@@ -267,11 +344,23 @@ func parseArgs() (*Config, error) {
 
 	cfg := &Config{
 		WorkDir: defaultWorkdir, Backend: backendName, SkipPermissions: skipPermissions,
-		Progress: progress,
+		ClaudeModel: claudeModel, ClaudeEffort: claudeEffort, NoSessionPersistence: noSessionPersistence,
+		GrokModel: grokModel, KimiModel: kimiModel, OpencodeModel: opencodeModel, Progress: progress,
 	}
 	cfg.MaxParallelWorkers = resolveMaxParallelWorkers()
 
+	isClaudeBackend := strings.EqualFold(strings.TrimSpace(backendName), "claude")
+	if noSessionPersistence && !isClaudeBackend {
+		return nil, fmt.Errorf("--no-session-persistence is only supported by the claude backend")
+	}
+	if isClaudeBackend && !isValidClaudeEffort(claudeEffort) {
+		return nil, fmt.Errorf("--claude-effort must be one of: low, medium, high, xhigh, max")
+	}
+
 	if args[0] == "resume" {
+		if noSessionPersistence {
+			return nil, fmt.Errorf("--no-session-persistence cannot be used with resume")
+		}
 		if len(args) < 3 {
 			return nil, fmt.Errorf("resume mode requires: resume <session_id> <task>")
 		}
