@@ -1,289 +1,322 @@
 #!/usr/bin/env python3
-"""
-CCG Workflow Hook for Codex CLI — Adaptive Guardrail
-Injects per-turn guidance based on what Codex has/hasn't done.
-Not a rigid state machine — adapts to task complexity and progress.
+"""CCG UserPromptSubmit hook for Codex CLI.
 
-Hook type: UserPromptSubmit
+Task identity and context come only from the shared Node.js task controller.
 """
 
-import glob
+import html
 import json
 import os
 import subprocess
 import sys
-from datetime import datetime
 from pathlib import Path
 
-TERMINAL_STATUSES = {
-    "completed",
-    "complete",
-    "done",
-    "finished",
-    "finish",
-    "archived",
-    "archive",
-    "cancelled",
-    "canceled",
-    "closed",
-    "resolved",
-    "abandoned",
-}
+INPUT_LIMIT = 1024 * 1024
+OUTPUT_LIMIT = 32 * 1024
+
+SUB_AGENT_NOTICE = """<ccg-sub-agent-notice>
+SUB-AGENT NOTICE
+
+The parent dispatch defines your assigned scope. The linked spec sections and task contract below remain authoritative constraints.
+- Do not modify .ccg task state.
+- Do not call external models or spawn another agent.
+- Only modify files named by the dispatch.
+</ccg-sub-agent-notice>"""
 
 
-def is_terminal_status(
-        status
-):
-    return str(status or "").strip().lower() in TERMINAL_STATUSES
+def read_input():
+    data = sys.stdin.buffer.read(INPUT_LIMIT + 1)
+    if len(data) > INPUT_LIMIT:
+        raise ValueError("HOOK_INPUT_TOO_LARGE")
+    if not data.strip():
+        return {}
+    value = json.loads(data)
+    if not isinstance(value, dict):
+        raise ValueError("HOOK_INPUT_INVALID")
+    return value
 
 
-def find_project_root():
-    """Walk up to find .ccg/ or .git/"""
-    d = os.environ.get("CODEX_PROJECT_DIR", os.getcwd())
-    for _ in range(20):
-        if os.path.isdir(os.path.join(d, ".ccg")) or os.path.isdir(os.path.join(d, ".git")):
-            return d
-        parent = os.path.dirname(d)
-        if parent == d:
+def find_worktree_root(start):
+    current = Path(start).resolve()
+    fallback = None
+    for _ in range(64):
+        if (current / ".git").exists():
+            return current
+        if fallback is None and (current / ".ccg").exists():
+            fallback = current
+        if current.parent == current:
             break
-        d = parent
-    return None
+        current = current.parent
+    return fallback
 
 
-def get_active_task(
-        root
-):
-    """Find the most recent in_progress task."""
-    tasks_dir = os.path.join(root, ".ccg", "tasks")
-    if not os.path.isdir(tasks_dir):
-        return None
-    for name in sorted(os.listdir(tasks_dir), reverse=True):
-        if name == "archive":
-            continue
-        task_file = os.path.join(tasks_dir, name, "task.json")
-        if not os.path.isfile(task_file):
-            continue
-        try:
-            with open(task_file) as f:
-                task = json.load(f)
-            if not is_terminal_status(task.get("status")):
-                task["_dir"] = os.path.join(tasks_dir, name)
-                task["_name"] = name
-                return task
-        except Exception:
-            continue
-    return None
+def is_sub_agent():
+    return bool(os.environ.get("CODEX_AGENT_TYPE")) or os.environ.get("CODEX_FORK_TURNS") == "none"
 
 
-def detect_progress(
-        root
-):
-    """Detect what Codex has done so far in this session."""
+def detect_agent_role():
+    agent_type = os.environ.get("CODEX_AGENT_TYPE", "").lower()
+    if any(token in agent_type for token in ("review", "audit", "check", "qa", "test")):
+        return "review"
+    if any(token in agent_type for token in ("research", "scout", "explore", "analy", "plan")):
+        return "research"
+    if any(token in agent_type for token in ("debug", "diagnos")):
+        return "debug"
+    return "implement"
+
+
+def run_snapshot(root, role):
+    controller = Path(__file__).resolve().parent / "ccg" / "task-state.js"
+    if not controller.is_file():
+        return None, "CONTROLLER_UNAVAILABLE: task-state.js is missing"
+    try:
+        result = subprocess.run(
+            [
+                "node",
+                str(controller),
+                "snapshot",
+                "--root",
+                str(root),
+                "--mode",
+                "agent",
+                "--role",
+                role,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        return None, f"CONTROLLER_UNAVAILABLE: {error}"
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return None, "CONTROLLER_UNAVAILABLE: controller returned invalid JSON"
+    if result.returncode != 0 or not payload.get("ok"):
+        code = payload.get("code", "CONTROLLER_UNAVAILABLE")
+        message = payload.get("message", "controller failed")
+        return None, f"{code}: {message}"
+    return payload, None
+
+
+def detect_progress(root):
     signals = {
-        "has_dirty_files": False,
         "dirty_count": 0,
         "changed_lines": 0,
-        "has_test_output": False,
         "high_risk_files": False,
     }
     try:
         status = subprocess.run(
             ["git", "status", "--porcelain"],
-            cwd=root, capture_output=True, text=True, timeout=5
+            cwd=root,
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
         )
-        lines = [l for l in status.stdout.strip().split("\n") if l.strip()]
+        lines = [line for line in status.stdout.splitlines() if line.strip()]
         signals["dirty_count"] = len(lines)
-        signals["has_dirty_files"] = len(lines) > 0
-
-        risk_patterns = ["auth", "login", "password", "token", "secret", "crypto",
-                         "encrypt", "migration", "schema", "permission", "admin"]
-        for line in lines:
-            fname = line[3:].strip().lower()
-            if any(p in fname for p in risk_patterns):
-                signals["high_risk_files"] = True
-                break
-
-        if signals["has_dirty_files"]:
+        risk_patterns = (
+            "auth",
+            "login",
+            "password",
+            "token",
+            "secret",
+            "crypto",
+            "encrypt",
+            "migration",
+            "schema",
+            "permission",
+            "admin",
+        )
+        signals["high_risk_files"] = any(
+            any(pattern in line[3:].strip().lower() for pattern in risk_patterns)
+            for line in lines
+        )
+        if lines:
             diff = subprocess.run(
                 ["git", "diff", "--stat"],
-                cwd=root, capture_output=True, text=True, timeout=5
+                cwd=root,
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
             )
-            for dline in diff.stdout.strip().split("\n"):
-                if "insertion" in dline or "deletion" in dline:
-                    parts = dline.split(",")
-                    for p in parts:
-                        p = p.strip()
-                        if "insertion" in p:
-                            signals["changed_lines"] += int(p.split()[0])
-                        elif "deletion" in p:
-                            signals["changed_lines"] += int(p.split()[0])
-    except Exception:
+            for part in diff.stdout.replace("\n", ",").split(","):
+                words = part.strip().split()
+                if len(words) >= 2 and words[0].isdigit() and words[1].startswith(("insertion", "deletion")):
+                    signals["changed_lines"] += int(words[0])
+    except (OSError, subprocess.TimeoutExpired):
         pass
     return signals
 
 
-def assess_complexity(
-        task
-):
-    """Get complexity from task.json or default to M."""
-    if not task:
-        return "M"
-    return task.get("complexity", "M")
+def byte_length(value):
+    return len(value.encode("utf-8"))
 
 
-def build_guidance(
-        task,
-        progress,
-        root
-):
-    """Build adaptive guidance based on task state + progress."""
-    parts = []
-    complexity = assess_complexity(task)
-    phase = task.get("currentPhase", "unknown") if task else "no_task"
-
-    # --- Task state breadcrumb ---
-    if task:
-        parts.append(f"Task: {task.get('title', task.get('id', '?'))} ({task.get('status', '?')})")
-        parts.append(f"Complexity: {complexity} | Risk: {task.get('risk', '?')} | Phase: {phase}")
-        if task.get("nextAction"):
-            parts.append(f"Next: {task['nextAction']}")
-    else:
-        parts.append("No active task. Create one in .ccg/tasks/ before starting work.")
-        parts.append("Even small fixes need a task.json for tracking.")
-        return parts
-
-    # --- Adaptive guidance based on phase × progress ---
-
-    # Phase: analysis — haven't started coding yet
-    if phase == "analysis":
-        if complexity in ("M", "L", "XL"):
-            parts.append("")
-            parts.append(
-                f"⛔ {complexity} complexity: you MUST call BOTH Antigravity AND Claude for parallel analysis before coding.")
-            parts.append(
-                "Use the dual-model parallel template in AGENTS.md: --backend antigravity & --backend claude with & + wait.")
-
-    # Phase: implementation — coding in progress
-    elif phase == "implementation":
-        if progress["dirty_count"] == 0:
-            parts.append("")
-            parts.append("Implementation phase started but no files changed yet. Start coding.")
-
-    # Phase: review — code is written, need review
-    elif phase == "review":
-        parts.append("")
-        parts.append("Review phase. Call external models for review, write results to review.md.")
-
-    # --- Cross-phase guardrails ---
-
-    # Big changes without review
-    if progress["changed_lines"] > 30 and phase != "review":
-        parts.append("")
-        parts.append(
-            f"⚠️ {progress['changed_lines']} lines changed. When done coding, run GPT with --backend claude --no-session-persistence --claude-model {{REVIEW_GPT_MODEL}} --claude-effort {{REVIEW_GPT_EFFORT}} and Grok with --backend claude --no-session-persistence --claude-model {{REVIEW_GROK_MODEL}} --claude-effort {{REVIEW_GROK_EFFORT}}.")
-
-    # Review phase: enforce GPT and Grok profiles
-    if phase == "review":
-        parts.append("")
-        parts.append(
-            "⛔ Review phase: run GPT with --backend claude --no-session-persistence --claude-model {{REVIEW_GPT_MODEL}} --claude-effort {{REVIEW_GPT_EFFORT}} and Grok with --backend claude --no-session-persistence --claude-model {{REVIEW_GROK_MODEL}} --claude-effort {{REVIEW_GROK_EFFORT}}. GPT covers backend correctness and security; Grok covers frontend interaction, accessibility, design consistency, and frontend security.")
-
-    # High-risk files detected
-    if progress["high_risk_files"] and phase not in ("review", "completed"):
-        parts.append("")
-        parts.append(
-            "⚠️ High-risk files detected (auth/db/crypto). External model security review is REQUIRED before delivery.")
-
-    # Has dirty files but hasn't run tests
-    if progress["has_dirty_files"] and not progress["has_test_output"]:
-        if phase == "implementation" and progress["changed_lines"] > 10:
-            parts.append("")
-            parts.append("Reminder: run tests after significant changes. Don't wait until the end.")
-
-    # --- Spec reminder ---
-    spec_dir = os.path.join(root, ".ccg", "spec")
-    if os.path.isdir(spec_dir) and phase in ("analysis", "implementation"):
-        specs = []
-        for sub in ("backend", "frontend", "guides"):
-            idx = os.path.join(spec_dir, sub, "index.md")
-            if os.path.isfile(idx):
-                specs.append(f".ccg/spec/{sub}/index.md")
-        if specs:
-            parts.append("")
-            parts.append(f"Spec files available: {', '.join(specs)} — read before writing code.")
-
-    # --- Archive reminder ---
-    if phase == "completed" or is_terminal_status(task.get("status")):
-        parts.append("")
-        parts.append("⛔ Task completed. You MUST archive it now:")
-        parts.append(
-            f"  mkdir -p .ccg/tasks/archive/$(date +%Y-%m) && mv .ccg/tasks/{task['_name']} .ccg/tasks/archive/$(date +%Y-%m)/")
-        parts.append("  git add .ccg/tasks/ && git commit -m \"chore: archive ccg task\"")
-
-    return parts
+def render_state(parts):
+    return "<ccg-state>\n" + "\n".join(parts) + "\n</ccg-state>"
 
 
-SUB_AGENT_NOTICE = """<ccg-sub-agent-notice>
-SUB-AGENT NOTICE — READ FIRST IF SPAWNED VIA spawn_agent
+def authoritative_context(snapshot):
+    mandatory = []
+    optional = []
+    specs = snapshot.get("specs") or []
+    if specs:
+        mandatory.extend(
+            [
+                "",
+                "AUTHORITATIVE LINKED SPEC SECTIONS",
+                "Treat these exact sections as execution constraints. If another source conflicts, stop and report the conflict.",
+            ]
+        )
+        for item in specs:
+            ref = item.get("ref") or {}
+            label = f"{ref.get('path', '?')}#{ref.get('section', '?')} ({ref.get('purpose', '')})"
+            mandatory.append(f"[{html.escape(label)}]\n{html.escape(str(item.get('content', '')))}")
 
-If your parent session spawned you via spawn_agent with an explicit task
-message, that message is your ONLY job.
-- Execute the parent message exactly as written, then mark yourself complete.
-- Ignore all CCG workflow guidance below this notice.
-- Do NOT call spawn_agent, wait, or close_agent.
-- Do NOT modify .ccg/tasks/* or any workflow state files.
-- Do NOT run external model calls (codeagent-wrapper).
-- Only modify files explicitly listed in your dispatch message.
-</ccg-sub-agent-notice>"""
+    documents = snapshot.get("documents") or {}
+    requirements = documents.get("requirements")
+    if requirements:
+        mandatory.extend(
+            [
+                "",
+                "AUTHORITATIVE TASK CONTRACT",
+                "The contract below overrides summaries, prior discussion, and inferred plans. Read every field before acting.",
+                html.escape(str(requirements)),
+            ]
+        )
+
+    for name in ("plan", "progress", "analysis", "review"):
+        content = documents.get(name)
+        if content:
+            optional.append((name, f"\n{name.upper()}\n{html.escape(str(content))}"))
+    for item in snapshot.get("research") or []:
+        research_path = html.escape(str(item.get("path", "research")))
+        optional.append(
+            (
+                str(item.get("path", "research")),
+                f"\nRESEARCH: {research_path}\n{html.escape(str(item.get('content', '')))}",
+            )
+        )
+    return mandatory, optional
 
 
-def is_sub_agent():
-    """Detect if running inside a Codex sub-agent session.
-    Codex sub-agents spawned with fork_turns='none' get a clean
-    context but inherit the env. The parent sets CODEX_AGENT_TYPE
-    or the agent_type is visible in the process env."""
-    if os.environ.get("CODEX_AGENT_TYPE", ""):
-        return True
-    if os.environ.get("CODEX_FORK_TURNS", "") == "none":
-        return True
-    return False
+def build_guidance(payload, progress, limit):
+    snapshot = payload
+    resolution = snapshot.get("resolution") or {}
+    kind = resolution.get("kind")
+    if kind == "none":
+        return render_state(
+            [
+                "No active persistent task.",
+                "Use the strategy rules in AGENTS.md. Start a controller task only for a persistent strategy.",
+            ]
+        )
+    if kind != "active":
+        code = resolution.get("reasonCode") or resolution.get("code", "TASK_STATE_UNAVAILABLE")
+        message = resolution.get("message", "Resolve task state before continuing")
+        return render_state(
+            [
+                f"{html.escape(str(code))}: {html.escape(str(message))}",
+                "Do not infer or select a task from directory order.",
+            ]
+        )
+    if snapshot.get("kind") == "invalid":
+        code = snapshot.get("code", "TASK_CONTEXT_INVALID")
+        message = snapshot.get("message", "Task context is invalid")
+        return render_state(
+            [
+                f"{html.escape(str(code))}: {html.escape(str(message))}",
+                "Do not continue persistent work until the task context is repaired.",
+            ]
+        )
+
+    task = snapshot.get("task") or {}
+    parts = [
+        f"Task: {html.escape(str(task.get('title', task.get('id', '?'))))} [{html.escape(str(task.get('id', '?')))}]",
+        f"Complexity: {html.escape(str(task.get('complexity', '?')))} | Risk: {html.escape(str(task.get('risk', '?')))} | Phase: {html.escape(str(task.get('currentPhase', '?')))}",
+        f"Next: {html.escape(str(task.get('nextAction', '?')))}",
+        f"Revision: state={html.escape(str(resolution.get('stateRevision', '?')))}, task={html.escape(str(task.get('revision', '?')))}",
+    ]
+    if task.get("gate"):
+        parts.append(f"Gate: {html.escape(str(task['gate']))}")
+
+    mandatory, optional = authoritative_context(snapshot)
+    parts.extend(mandatory)
+    if byte_length(render_state(parts)) > limit:
+        return render_state(
+            [
+                "TASK_CONTEXT_TOO_LARGE",
+                "Authoritative task context exceeds the Codex hook output limit.",
+            ]
+        )
+
+    candidates = list(optional)
+    if progress["dirty_count"] == 0 and str(task.get("currentPhase", "")).lower() == "implementation":
+        candidates.append(("runtime:no-changes", "\nImplementation is active but no worktree changes are present."))
+    if progress["changed_lines"] > 30:
+        candidates.append(
+            (
+                "runtime:review",
+                f"\n{progress['changed_lines']} changed lines detected. Run the configured GPT and Grok review profiles before delivery.",
+            )
+        )
+    if progress["high_risk_files"]:
+        candidates.append(("runtime:security", "\nHigh-risk files changed. Include a security review before delivery."))
+    for diagnostic in snapshot.get("diagnostics") or []:
+        candidates.append((f"diagnostic:{diagnostic}", f"\nDiagnostic: {html.escape(str(diagnostic))}"))
+
+    omitted = []
+    for key, block in candidates:
+        if byte_length(render_state([*parts, block])) <= limit:
+            parts.append(block)
+        else:
+            omitted.append(key)
+    for key in omitted:
+        diagnostic = f"\nDiagnostic: CONTEXT_OMITTED:{html.escape(str(key))}:render-budget"
+        if byte_length(render_state([*parts, diagnostic])) <= limit:
+            parts.append(diagnostic)
+    return render_state(parts)
+
+
+def output_context(context):
+    if byte_length(context) > OUTPUT_LIMIT:
+        context = "<ccg-state>\nCCG_CONTEXT_TOO_LARGE\nContext rendering exceeded the hook output limit.\n</ccg-state>"
+    print(
+        json.dumps(
+            {
+                "hookSpecificOutput": {
+                    "hookEventName": "UserPromptSubmit",
+                    "additionalContext": context,
+                }
+            }
+        )
+    )
 
 
 def main():
     try:
-        root = find_project_root()
-        if not root:
+        hook_input = read_input()
+        start = hook_input.get("cwd") or os.environ.get("CODEX_PROJECT_DIR") or os.getcwd()
+        root = find_worktree_root(start)
+        if root is None:
             return
-        if not os.path.isdir(os.path.join(root, ".ccg")):
+        sub_agent = is_sub_agent()
+        role = detect_agent_role() if sub_agent else "all"
+        snapshot, error = run_snapshot(root, role)
+        if error:
+            context = f"<ccg-state>\n{html.escape(error)}\n</ccg-state>"
+            output_context(f"{SUB_AGENT_NOTICE}\n\n{context}" if sub_agent else context)
             return
-
-        # Sub-agent: inject notice and skip workflow guidance
-        if is_sub_agent():
-            print(json.dumps({
-                "hookSpecificOutput": {
-                    "hookEventName": "UserPromptSubmit",
-                    "additionalContext": SUB_AGENT_NOTICE
-                }
-            }))
-            return
-
-        task = get_active_task(root)
-        progress = detect_progress(root)
-        lines = build_guidance(task, progress, root)
-
-        if not lines:
-            return
-
-        context = "<ccg-state>\n" + "\n".join(lines) + "\n</ccg-state>"
-
-        print(json.dumps({
-            "hookSpecificOutput": {
-                "hookEventName": "UserPromptSubmit",
-                "additionalContext": context
-            }
-        }))
-    except Exception:
-        pass
+        prefix = f"{SUB_AGENT_NOTICE}\n\n" if sub_agent else ""
+        guidance = build_guidance(snapshot, detect_progress(root), OUTPUT_LIMIT - byte_length(prefix))
+        if guidance:
+            output_context(f"{prefix}{guidance}")
+    except Exception as error:
+        output_context(f"<ccg-state>\nCCG_HOOK_ERROR: {html.escape(str(error))}\n</ccg-state>")
 
 
 if __name__ == "__main__":

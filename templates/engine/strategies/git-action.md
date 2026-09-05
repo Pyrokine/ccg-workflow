@@ -7,6 +7,8 @@
 - 用户请求 commit / rollback / branch 管理 / worktree 等 Git 操作
 - 任何复杂度级别
 
+本策略 taskless，不创建或修改 `.ccg/` 任务状态。若 Git 操作是某个 active task 的一个步骤，只执行用户授权的 Git 动作，不改变任务生命周期。
+
 ---
 
 ## 路由表

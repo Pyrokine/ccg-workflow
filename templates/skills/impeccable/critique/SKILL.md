@@ -2,13 +2,14 @@
 name: critique
 description: "Evaluate design from a UX perspective, assessing visual hierarchy, information architecture, emotional resonance, cognitive load, and overall quality with quantitative scoring, persona-based testing, and actionable feedback. Use when the user asks to review, critique, evaluate, or give feedback on a design or component."
 argument-hint: "[area (feature, page, component...)]"
-user-invocable: true
+user-invocable: false
 ---
 
 ## MANDATORY PREPARATION
 
-Invoke /frontend-design — it contains design principles, anti-patterns, and the **Context Gathering Protocol**. Follow
-the protocol before proceeding — if no design context exists yet, you MUST run /teach-impeccable first. Additionally
+Use the `frontend-design` skill as the governing entry point and follow its design principles, anti-patterns, and
+**Context Gathering Protocol**. If design context is missing, ask only for the missing audience, use case, or brand
+direction. Additionally
 gather: what the interface is trying to accomplish.
 
 ---
@@ -154,9 +155,9 @@ definitions):
 - **[P?] What**: Name the problem clearly
 - **Why it matters**: How this hurts users or undermines goals
 - **Fix**: What to do about it (be concrete)
-- **Suggested command**: Which command could address this (from: /audit, /critique, /normalize, /polish, /distill,
-  /clarify, /optimize, /harden, /animate, /colorize, /bolder, /quieter, /delight, /extract, /adapt, /onboard, /typeset,
-  /arrange, /overdrive, /teach-impeccable)
+- **Suggested playbook**: Which focused playbook could address this (`audit`, `critique`, `normalize`, `polish`,
+  `distill`, `clarify`, `optimize`, `harden`, `animate`, `colorize`, `bolder`, `quieter`, `delight`, `extract`,
+  `adapt`, `onboard`, `typeset`, `arrange`, `overdrive`, or `teach-impeccable`)
 
 ### Persona Red Flags
 
@@ -225,27 +226,25 @@ from Phase 3.
 
 ### Action Summary
 
-List recommended commands in priority order, based on the user's answers:
+List recommended playbooks in priority order, based on the user's answers:
 
-1. **`/command-name`** — Brief description of what to fix (specific context from critique findings)
-2. **`/command-name`** — Brief description (specific context)
+1. **`playbook-name`** — Brief description of what to fix (specific context from critique findings)
+2. **`playbook-name`** — Brief description (specific context)
    ...
 
 **Rules for recommendations**:
 
-- Only recommend commands from: /audit, /critique, /normalize, /polish, /distill, /clarify, /optimize, /harden,
-  /animate, /colorize, /bolder, /quieter, /delight, /extract, /adapt, /onboard, /typeset, /arrange, /overdrive,
-  /teach-impeccable
+- Only recommend playbooks listed by the `frontend-design` skill
 - Order by the user's stated priorities first, then by impact
-- Each item's description should carry enough context that the command knows what to focus on
-- Map each Priority Issue to the appropriate command
-- Skip commands that would address zero issues
+- Each item's description should carry enough context for the playbook to focus on the finding
+- Map each Priority Issue to the appropriate playbook
+- Skip playbooks that would address zero issues
 - If the user chose a limited scope, only include items within that scope
-- If the user marked areas as off-limits, exclude commands that would touch those areas
-- End with `/polish` as the final step if any fixes were recommended
+- If the user marked areas as off-limits, exclude playbooks that would touch those areas
+- End with `polish` as the final step if any fixes were recommended
 
 After presenting the summary, tell the user:
 
-> You can ask me to run these one at a time, all at once, or in any order you prefer.
+> Use `/ccg:frontend-design` with these playbooks one at a time, together, or in the order you prefer.
 >
-> Re-run `/critique` after fixes to see your score improve.
+> Apply the `critique` playbook again after fixes to compare the score.

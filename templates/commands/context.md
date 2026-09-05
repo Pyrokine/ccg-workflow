@@ -1,46 +1,49 @@
 ---
-description: '项目上下文管理：初始化 .context 目录、记录决策日志、压缩归档、查看历史'
+description: '管理项目共享规范、当前会话备注和提交级决策历史'
 ---
 
 # Context - 项目上下文管理
 
-管理 `.context/` 目录结构，为 LLM 工具提供决策审计链。
+管理 `.context/` 中的团队知识和本地会话备注。此命令不创建、选择或修改持久任务；active task 只由 `.ccg/state.json` 和 task controller 决定。
+
+## 存储边界
+
+| 路径 | 性质 | 用途 |
+| --- | --- | --- |
+| `.ccg/state.json`、`.ccg/tasks/` | 当前 worktree 本地运行态，不提交 | active pointer、任务契约、阶段、计划、进度、审查记录 |
+| `.context/current/` | 本地会话信息，不提交 | 当前分支的临时备注和提交前摘要 |
+| `.context/prefs/` | Git 跟踪，团队共享 | 编码规范和开发流程 |
+| `.context/history/` | Git 跟踪，团队共享 | 已脱敏的提交级决策历史 |
+| 项目文档、OpenSpec | Git 跟踪，团队共享 | 成熟规范；持久任务通过 exact `path#section` 关联 |
+
+`.context/` 不替代 `requirements.md`，也不从目录名、分支或历史记录推断 active task。独立 worktree 各自拥有 `.ccg/` 运行态，共享 Git 跟踪的 prefs、history 和规范文档。
 
 ## 使用方法
 
 ```bash
-/context <subcommand> [options]
+/ccg:context <init|log|show|compress|history|squash> [options]
 ```
 
 ## 子命令
 
-| 子命令               | 说明                                  |
-|-------------------|-------------------------------------|
-| `init`            | 初始化 `.context/` 目录结构                |
-| `log <message>`   | （可选）手动追加备注到 session.log，commit 时会合并 |
-| `show`            | 查看当前分支的 session.log                 |
-| `compress`        | 压缩 session.log → uncommit.md（手动预览用） |
-| `history`         | 查看 history/commits.md               |
-| `squash <ids...>` | 合并多条 history 记录（配合 git squash）      |
+| 子命令 | 说明 |
+| --- | --- |
+| `init` | 初始化 `.context/` 目录和共享模板 |
+| `log <message>` | 向当前分支的本地 `session.log` 追加备注 |
+| `show` | 查看当前分支的本地备注 |
+| `compress` | 生成本地提交前摘要 `uncommit.md` |
+| `history [file]` | 查看提交级决策历史，或按文件过滤 |
+| `squash <ids...>` | 合并多条 ContextEntry |
 
-> **核心用法**：`init` 一次，之后只管开发。`/ccg:commit` 提交时自动从 git diff 分析决策并归档到 history/。`log`
-> 仅在你想手动补充备注时使用。
+通常只需执行一次 `init`。`/ccg:commit` 根据 diff 生成 ContextEntry；`log` 仅记录 diff 无法表达的决策理由。
 
----
+## init
 
-## 执行工作流
+1. 从当前目录向上查找 `.git` 文件或目录，确定当前 worktree 根
+2. 已存在的文件保持不变，只创建缺失项
+3. 创建：
 
-### 子命令：init
-
-`[模式：初始化]`
-
-在当前项目根目录创建 `.context/` 结构：
-
-1. 检测项目根目录（查找 `.git/`）
-2. 若 `.context/` 已存在，跳过已有文件，仅补全缺失
-3. 创建以下结构：
-
-```
+```text
 .context/
 ├── .gitignore
 ├── .gitattributes
@@ -57,233 +60,153 @@ description: '项目上下文管理：初始化 .context 目录、记录决策�
         └── .gitkeep
 ```
 
-4. **创建 `.context/.gitignore`**：
+`.context/.gitignore`：
 
 ```gitignore
-# Ephemeral workspace — never commit
+# Worktree-local session material
 current/
 
-# Raw interaction logs — always local only
+# Raw interaction logs
 **/session.log
 **/session.raw.log
 **/*.session.log
 **/*.raw.log
 
-# Editor / temp
+# Temporary files
 **/*.tmp
 **/*.bak
 **/*.swp
 ```
 
-5. **创建 `.context/.gitattributes`**：
+`.context/.gitattributes`：
 
-```
-# JSONL append-only: 'union' merge reduces conflicts
+```gitattributes
 history/commits.jsonl merge=union
 history/archives/*.jsonl merge=union
 ```
 
-6. **创建 `.context/prefs/coding-style.md`**（团队编码规范模板）：
+`.context/prefs/coding-style.md`：
 
 ```markdown
-# Coding Style Guide
+# Coding style guide
 
-> 此文件定义团队编码规范，所有 LLM 工具在修改代码时必须遵守。
-> 提交到 Git，团队共享。
+This tracked file defines team coding rules for humans and development agents.
 
 ## General
-- Prefer small, reviewable changes; avoid unrelated refactors.
-- Keep functions short (<50 lines); avoid deep nesting (≤3 levels).
-- Name things explicitly; no single-letter variables except loop counters.
-- Handle errors explicitly; never swallow errors silently.
 
-## Language-Specific
-<!-- 根据项目语言补充，例如：-->
-<!-- ### TypeScript -->
-<!-- - Use strict mode; prefer `interface` over `type` for object shapes. -->
-
-## Git Commits
-- Conventional Commits, imperative mood.
-- Atomic commits: one logical change per commit.
+- Keep changes reviewable and avoid unrelated refactors
+- Use explicit names and explicit error handling
+- Follow the repository's language-specific conventions
 
 ## Testing
-- Every feat/fix MUST include corresponding tests.
-- Coverage must not decrease.
-- Fix flow: write failing test FIRST, then fix code.
+
+- Add or update tests for changed behavior
+- Record the commands actually run
 
 ## Security
-- Never log secrets (tokens/keys/cookies/JWT).
-- Validate inputs at trust boundaries.
+
+- Do not store secrets in source, logs, or ContextEntry records
+- Validate data at trust boundaries
 ```
 
-7. **创建 `.context/prefs/workflow.md`**（LLM 工作流规则）：
+`.context/prefs/workflow.md`：
 
 ```markdown
-# Development Workflow Rules
+# Development workflow rules
 
-> 此文件定义 LLM 开发工作流的强制规则。
-> 所有 LLM 工具在执行任务时必须遵守，不可跳过任何步骤。
+This tracked file defines the team's development and verification process.
 
-## Full Flow (MUST follow, no exceptions)
+## Feature
 
-### feat (新功能)
-1. 理解需求，分析影响范围
-2. 读取现有代码，理解模式
-3. 编写实现代码
-4. 编写对应测试
-5. 运行测试，修复失败
-6. 更新文档（若 API 变更）
-7. 自查 lint / type-check
+1. Confirm requirements and scope
+2. Read affected code and authoritative specs
+3. Implement the approved plan
+4. Add or update tests
+5. Run the required checks
+6. Update tracked documentation when behavior or contracts change
 
-### fix (缺陷修复)
-1. 复现问题，确认症状
-2. 定位根因
-3. 编写失败测试（先有红灯）
-4. 修复代码
-5. 验证测试通过（变绿灯）
-6. 回归测试
+## Fix
 
-### refactor (重构)
-1. 确保现有测试通过
-2. 小步重构，每步可验证
-3. 重构后测试必须全部通过
-4. 不改变外部行为
+1. Reproduce the symptom
+2. Establish the cause with code or runtime evidence
+3. Add a failing regression test when practical
+4. Fix the shared cause
+5. Run targeted and regression tests
 
-## Context Logging (决策记录)
+## Refactor
 
-当你做出以下决策时，MUST 追加到 `.context/current/branches/<当前分支>/session.log`：
-
-1. **方案选择**：选 A 不选 B 时，记录原因
-2. **Bug 发现与修复**：根因 + 修复方法 + 教训
-3. **API/架构决策**：接口设计选择
-4. **放弃的方案**：为什么放弃
-
-追加格式：
-
-## <ISO-8601 时间>
-**Decision**: <你选择了什么>
-**Alternatives**: <被排除的方案>
-**Reason**: <为什么>
-**Risk**: <潜在风险>
+1. Record a passing baseline
+2. Preserve public behavior unless the task contract says otherwise
+3. Refactor in independently verifiable steps
+4. Compare final results with the baseline
 ```
 
-8. **创建 `.context/history/commits.jsonl`**（空文件）
-
-9. **创建 `.context/history/commits.md`**（人类视图模板）：
+Create an empty `.context/history/commits.jsonl` and this human-readable view:
 
 ```markdown
-# Commit Decision History
+# Commit decision history
 
-> 此文件是 `commits.jsonl` 的人类可读视图，可由工具重生成。
-> Canonical store: `commits.jsonl` (JSONL, append-only)
+Canonical store: `commits.jsonl`
 
 | Date | Context-Id | Commit | Summary | Decisions | Bugs | Risk |
-|------|-----------|--------|---------|-----------|------|------|
+| --- | --- | --- | --- | --- | --- | --- |
 ```
 
-10. **注入 CLAUDE.md 引用**（若项目存在 CLAUDE.md）：
-
-检测项目根目录是否有 `CLAUDE.md`，若有则在末尾追加：
+If the project has `CLAUDE.md`, append the following block only when it is absent:
 
 ```markdown
+## .context project knowledge
 
-## .context 项目上下文
-
-> 项目使用 `.context/` 管理开发决策上下文。
-
-- 编码规范：`.context/prefs/coding-style.md`
-- 工作流规则：`.context/prefs/workflow.md`
-- 决策历史：`.context/history/commits.md`
-
-**规则**：修改代码前必读 prefs/，做决策时按 workflow.md 规则记录日志。
+- Team coding rules: `.context/prefs/coding-style.md`
+- Team workflow rules: `.context/prefs/workflow.md`
+- Sanitized decision history: `.context/history/commits.md`
+- Local session notes: `.context/current/`, never commit
+- Persistent task runtime: `.ccg/`, never commit and never edit directly
 ```
 
-11. 输出初始化结果摘要
+Report created, preserved, and skipped files separately.
 
----
+## log
 
-### 子命令：log
-
-`[模式：记录]`
-
-1. 获取当前 Git 分支名：`git branch --show-current`
-2. 确保 `.context/current/branches/<branch>/` 目录存在
-3. 将 `<message>` 以结构化格式追加到 `session.log`：
+1. Get the current branch with `git branch --show-current`; use `detached-head` when empty
+2. Create `.context/current/branches/<branch>/`
+3. Append to `session.log`:
 
 ```markdown
-## <ISO-8601 当前时间>
+## <ISO-8601 timestamp>
+
 <message>
 ```
 
----
+Do not copy task contracts, full model transcripts, secrets, or linked spec bodies into this log.
 
-### 子命令：show
+## show
 
-`[模式：查看]`
+Read `.context/current/branches/<branch>/session.log`. If it does not exist, report that the current branch has no local notes.
 
-1. 获取当前分支名
-2. 读取 `.context/current/branches/<branch>/session.log`
-3. 若不存在，提示 "当前分支暂无决策日志"
-4. 输出内容
+## compress
 
----
+1. Read the current branch's `session.log`
+2. Stop when it is empty
+3. Redact tokens, keys, passwords, cookies, Authorization headers, internal credentials, and personal data
+4. Extract decisions, rejected alternatives, bugs, and verification results
+5. Write `.context/current/branches/<branch>/uncommit.md`
+6. Do not update `history/` and do not modify `.ccg/`
 
-### 子命令：compress
+## history
 
-`[模式：压缩]`
+Read `.context/history/commits.md`. When a file path is supplied, filter `commits.jsonl` entries whose `changes.files` contain that path.
 
-将 `session.log` 压缩为结构化 `uncommit.md`，供提交前审查。
+## squash
 
-1. 读取 `.context/current/branches/<branch>/session.log`
-2. 若为空，提示无内容可压缩
-3. **脱敏**：扫描并替换潜在敏感信息（token/key/password → `[REDACTED]`）
-4. **结构化提取**：从日志中提取 decisions / bugs / alternatives
-5. **生成 uncommit.md**：
+1. Read the requested Context-Ids from `commits.jsonl`
+2. Refuse missing or duplicate IDs
+3. Create one new UUIDv7 ContextEntry with `Context-Refs` pointing to the source IDs
+4. Merge decisions, bugs, file changes, and verification records without duplicating identical entries
+5. Redact before appending to `commits.jsonl`
+6. Regenerate `commits.md`
 
-```markdown
-# Pre-commit Summary: <branch-name>
-
-| Time | Summary | Decision | Method | Result & Bug |
-|------|---------|----------|--------|--------------|
-| ... | ... | ... | ... | ... |
-```
-
-6. 输出压缩结果供用户审查
-7. 提示用户：确认后可执行 `/ccg:commit` 提交
-
----
-
-### 子命令：history
-
-`[模式：查看]`
-
-1. 读取 `.context/history/commits.md`
-2. 若不存在，提示 "暂无历史记录，请先使用 /ccg:context init"
-3. 输出内容
-4. 若用户指定文件路径，从 `commits.jsonl` 检索 `changes.files` 包含该路径的条目
-
----
-
-### 子命令：squash
-
-`[模式：合并]`
-
-配合 `git squash` 使用，合并多条 ContextEntry。
-
-1. 接收 Context-Id 列表
-2. 从 `commits.jsonl` 读取对应条目
-3. 生成新的聚合 ContextEntry：
-    - 新 `context_id`（UUIDv7）
-    - `Context-Refs` = 所有被 squash 的 ids
-    - 合并 decisions / bugs / changes
-4. 追加到 `commits.jsonl`
-5. 重生成 `commits.md`
-
----
-
-## ContextEntry Schema (v1.0.0)
-
-每条 JSONL 记录格式：
+## ContextEntry schema
 
 ```json
 {
@@ -300,34 +223,35 @@ history/archives/*.jsonl merge=union
     "trailers": { "Context-Id": "<uuid>" }
   },
   "summary": "<one-line summary>",
-  "decisions": [{
-    "title": "<decision title>",
-    "rationale": "<why>",
-    "tradeoffs": ["<tradeoff>"],
-    "assumptions": ["<assumption>"],
-    "rejected_alternatives": [{ "option": "<alt>", "reason": "<why rejected>" }],
-    "side_effects": ["<side effect>"]
-  }],
-  "bugs": [{
-    "symptom": "<what happened>",
-    "root_cause": "<why>",
-    "fix": "<how fixed>",
-    "lesson": "<takeaway>"
-  }],
+  "decisions": [
+    {
+      "title": "<decision>",
+      "rationale": "<reason>",
+      "tradeoffs": ["<tradeoff>"],
+      "assumptions": ["<assumption>"],
+      "rejected_alternatives": [{ "option": "<alternative>", "reason": "<reason>" }],
+      "side_effects": ["<effect>"]
+    }
+  ],
+  "bugs": [
+    {
+      "symptom": "<symptom>",
+      "root_cause": "<cause>",
+      "fix": "<fix>",
+      "lesson": "<lesson>"
+    }
+  ],
   "changes": { "files": ["<path>"] },
-  "tests": [{ "command": "<cmd>", "result": "<pass/fail>", "coverage": "<pct>" }],
+  "tests": [{ "command": "<command>", "result": "<pass|fail>", "coverage": "<optional>" }],
   "privacy": { "classification": "internal", "redactions_applied": true }
 }
 ```
 
----
+## Rules
 
-## 关键规则
-
-1. **prefs/ 提交到 Git** — 团队共享编码规范
-2. **current/ 永不提交** — 原始日志仅本地
-3. **history/ 提交到 Git** — 永久决策归档
-4. **commits.jsonl 是 canonical** — commits.md 可重生成
-5. **UUIDv7 为主键** — 不依赖 commit SHA（rebase-safe）
-6. **merge=union** — JSONL append 冲突自动合并
-7. **脱敏先于一切** — 任何写入 history 前必须脱敏
+1. Commit `.context/prefs/` and `.context/history/`
+2. Never commit `.context/current/` or `.ccg/`
+3. `commits.jsonl` is the canonical decision history; `commits.md` is derived
+4. Active task identity comes only from the task controller
+5. Exact linked tracked specs and the active task's `requirements.md` outrank summaries and historical notes
+6. Redact before writing shared history

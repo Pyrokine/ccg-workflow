@@ -6,9 +6,10 @@ import { homedir } from 'node:os'
 import { basename, dirname, join } from 'pathe'
 import type { InstallResult } from '../types'
 import { normalizeRoutingForInstall, readCcgConfig } from './config'
-import { getLegacyCommandIds, getWorkflowById } from './installer-data'
+import { configureApiMartForCodex, removeApiMartFromCodex } from './installer-codex-api'
+import { getAllCommandIds, getLegacyCommandIds, getWorkflowById } from './installer-data'
 import { injectConfigVariables, PACKAGE_ROOT, replaceHomePathsInTemplate } from './installer-template'
-import { installSkillCommands } from './skill-registry'
+import { collectSkills, installSkillCommands } from './skill-registry'
 
 // ═══════════════════════════════════════════════════════
 // Re-exports — all consumers import from './installer'
@@ -27,6 +28,13 @@ export {
 export type { WorkflowPreset } from './installer-data'
 
 export { injectConfigVariables } from './installer-template'
+
+export {
+  APIMART_CODEX_PROVIDER,
+  APIMART_CODEX_PROVIDER_ID,
+  configureApiMartForCodex,
+  removeApiMartFromCodex,
+} from './installer-codex-api'
 
 export {
   installAceTool,
@@ -56,7 +64,7 @@ export type { SkillMeta } from './skill-registry'
  * Must match the `version` constant in codeagent-wrapper/main.go.
  * When this differs from the installed binary, update triggers re-download.
  */
-const EXPECTED_BINARY_VERSION = '5.14.0-aug.1'
+const EXPECTED_BINARY_VERSION = '5.15.0-aug.1'
 
 // ═══════════════════════════════════════════════════════
 // Install context — shared across sub-functions
@@ -276,6 +284,23 @@ function renderCodexTemplate(content: string, config: InstallConfig): string {
 async function writeRenderedCodexFile(src: string, dest: string, config: InstallConfig): Promise<void> {
   const content = renderCodexTemplate(await fs.readFile(src, 'utf-8'), config)
   await fs.writeFile(dest, content, 'utf-8')
+}
+
+const TASK_STATE_RUNTIME_FILES = ['package.json', 'task-utils.js', 'task-state.js']
+
+function isCcgHookCommand(command: unknown): boolean {
+  return typeof command === 'string' && command.replace(/\\/g, '/').includes('/hooks/ccg/')
+}
+
+async function installTaskStateRuntime(srcDir: string, destDir: string): Promise<void> {
+  await fs.ensureDir(destDir)
+  for (const file of TASK_STATE_RUNTIME_FILES) {
+    const src = join(srcDir, file)
+    if (!(await fs.pathExists(src))) {
+      throw new Error(`Required task state runtime file not found: ${src}`)
+    }
+    await fs.copy(src, join(destDir, file), { overwrite: true })
+  }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -509,6 +534,22 @@ async function installSkillFiles(ctx: InstallContext): Promise<void> {
   }
 }
 
+async function removeRetiredImpeccableCommands(skillsTemplateDir: string, commandsDir: string): Promise<void> {
+  const retired = collectSkills(skillsTemplateDir).filter(
+    (skill) => skill.category === 'impeccable' && !skill.userInvocable
+  )
+  for (const skill of retired) {
+    const commandPath = join(commandsDir, `${skill.name}.md`)
+    if (!(await fs.pathExists(commandPath))) continue
+
+    const content = (await fs.readFile(commandPath, 'utf-8')).replaceAll('\\', '/')
+    const relPath = skill.relPath.replaceAll('\\', '/')
+    if (content.includes(`/skills/ccg/${relPath}/SKILL.md`)) {
+      await fs.remove(commandPath)
+    }
+  }
+}
+
 /**
  * Auto-generate slash commands for user-invocable skills via Skill Registry.
  *
@@ -524,14 +565,8 @@ async function installSkillGeneratedCommands(ctx: InstallContext): Promise<void>
   if (!(await fs.pathExists(skillsTemplateDir))) return
 
   try {
-    // Collect names of commands already installed by installer-data.ts
-    const existingCommandNames = new Set<string>()
-    const existingFiles = await fs.readdir(commandsDir).catch(() => [] as string[])
-    for (const f of existingFiles) {
-      if (f.endsWith('.md')) {
-        existingCommandNames.add(basename(f, '.md'))
-      }
-    }
+    await removeRetiredImpeccableCommands(skillsTemplateDir, commandsDir)
+    const existingCommandNames = new Set(getAllCommandIds())
 
     const skipCategories: import('./skill-registry').SkillCategory[] = []
     if (ctx.config.skipImpeccable) {
@@ -578,6 +613,9 @@ export async function installCodexMode(): Promise<{ success: boolean; message: s
       await fs.copy(configSrc, configDest)
     }
 
+    const codexApi = await configureApiMartForCodex(false)
+    const codexApiWarning = codexApi.success ? '' : `\n  APIMart provider warning: ${codexApi.message}`
+
     const agentsSrc = join(codexTemplateDir, 'agents')
     if (await fs.pathExists(agentsSrc)) {
       await fs.copy(agentsSrc, join(codexHome, 'agents'), { overwrite: true })
@@ -598,6 +636,7 @@ export async function installCodexMode(): Promise<{ success: boolean; message: s
         config
       )
     }
+    await installTaskStateRuntime(join(PACKAGE_ROOT, 'templates', 'hooks'), join(codexHome, 'hooks', 'ccg'))
 
     // hooks.json
     const hooksJsonSrc = join(codexTemplateDir, 'hooks.json')
@@ -607,7 +646,7 @@ export async function installCodexMode(): Promise<{ success: boolean; message: s
 
     return {
       success: true,
-      message: `Codex mode installed:\n  ~/.codex/AGENTS.md\n  ~/.codex/config.toml\n  ~/.codex/hooks.json\n  ~/.codex/hooks/ccg-workflow.py\n  ~/.codex/agents/ccg-implement.toml\n  ~/.codex/agents/ccg-review.toml\n  ~/.codex/agents/ccg-research.toml`,
+      message: `Codex mode installed:\n  ~/.codex/AGENTS.md\n  ~/.codex/config.toml\n  ~/.codex/hooks.json\n  ~/.codex/hooks/ccg-workflow.py\n  ~/.codex/hooks/ccg/task-state.js\n  ~/.codex/agents/ccg-implement.toml\n  ~/.codex/agents/ccg-review.toml\n  ~/.codex/agents/ccg-research.toml${codexApiWarning}`,
     }
   } catch (error) {
     return { success: false, message: `Failed to install Codex mode: ${error}` }
@@ -628,6 +667,9 @@ export async function uninstallCodexMode(): Promise<{ success: boolean; removed:
     join(codexHome, 'agents', 'ccg-review.toml'),
     join(codexHome, 'agents', 'ccg-research.toml'),
     join(codexHome, 'hooks', 'ccg-workflow.py'),
+    join(codexHome, 'hooks', 'ccg', 'package.json'),
+    join(codexHome, 'hooks', 'ccg', 'task-utils.js'),
+    join(codexHome, 'hooks', 'ccg', 'task-state.js'),
     join(codexHome, 'hooks.json'),
   ]
 
@@ -652,10 +694,22 @@ export async function uninstallCodexMode(): Promise<{ success: boolean; removed:
       }
     }
 
-    // config.toml — never delete (user may have custom settings)
+    // config.toml — preserve user settings and remove only the provider table CCG added.
+    const codexApi = await removeApiMartFromCodex()
+    if (!codexApi.success) {
+      throw new Error(codexApi.message)
+    }
+    if (codexApi.configPath) {
+      removed.push('~/.codex/config.toml [model_providers.apimart]')
+    }
     skipped.push('~/.codex/config.toml (preserved — may contain user settings)')
 
     // Clean up empty dirs
+    const taskHooksDir = join(codexHome, 'hooks', 'ccg')
+    if ((await fs.pathExists(taskHooksDir)) && (await fs.readdir(taskHooksDir)).length === 0) {
+      await fs.remove(taskHooksDir)
+      removed.push('~/.codex/hooks/ccg/ (empty, removed)')
+    }
     for (const dir of ['agents', 'hooks']) {
       const dirPath = join(codexHome, dir)
       if (await fs.pathExists(dirPath)) {
@@ -676,6 +730,7 @@ export async function uninstallCodexMode(): Promise<{ success: boolean; removed:
 async function _installCodexFilesInternal(ctx: InstallContext): Promise<void> {
   const codexTemplateDir = join(ctx.templateDir, 'codex')
   if (!(await fs.pathExists(codexTemplateDir))) return
+  const taskStateRuntimeDir = join(ctx.templateDir, 'hooks')
 
   try {
     const config = ctx.config
@@ -713,6 +768,7 @@ async function _installCodexFilesInternal(ctx: InstallContext): Promise<void> {
         config
       )
     }
+    await installTaskStateRuntime(taskStateRuntimeDir, join(codexHome, 'hooks', 'ccg'))
 
     // hooks.json
     const hooksJsonSrc = join(codexTemplateDir, 'hooks.json')
@@ -922,14 +978,26 @@ async function installEngineFiles(ctx: InstallContext, options: { backupExisting
 // CCG 3.0 Hook installation
 // ═══════════════════════════════════════════════════════
 
-const HOOK_FILES = ['task-utils.js', 'workflow-state.js', 'session-start.js', 'subagent-context.js', 'skill-router.js']
+const HOOK_FILES = [
+  'package.json',
+  'task-utils.js',
+  'task-state.js',
+  'workflow-state.js',
+  'session-start.js',
+  'subagent-context.js',
+  'skill-router.js',
+]
 
 /**
  * Install CCG hook scripts to ~/.claude/hooks/ccg/
  */
-async function installHookScripts(ctx: InstallContext): Promise<void> {
+async function installHookScripts(ctx: InstallContext): Promise<boolean> {
   const hooksSrcDir = join(ctx.templateDir, 'hooks')
-  if (!(await fs.pathExists(hooksSrcDir))) return
+  if (!(await fs.pathExists(hooksSrcDir))) {
+    ctx.result.errors.push(`Hook template directory not found: ${hooksSrcDir}`)
+    ctx.result.success = false
+    return false
+  }
 
   const hooksDestDir = join(ctx.installDir, 'hooks', 'ccg')
   await fs.ensureDir(hooksDestDir)
@@ -937,14 +1005,59 @@ async function installHookScripts(ctx: InstallContext): Promise<void> {
   try {
     for (const file of HOOK_FILES) {
       const src = join(hooksSrcDir, file)
-      const dest = join(hooksDestDir, file)
-      if (await fs.pathExists(src)) {
-        await fs.copy(src, dest, { overwrite: true })
+      if (!(await fs.pathExists(src))) {
+        throw new Error(`Required hook runtime file not found: ${src}`)
       }
+      await fs.copy(src, join(hooksDestDir, file), { overwrite: true })
     }
+    return true
   } catch (error) {
     ctx.result.errors.push(`Failed to install hook scripts: ${error}`)
+    ctx.result.success = false
+    return false
   }
+}
+
+const CCG_HOOK_EVENTS = ['UserPromptSubmit', 'SessionStart', 'PreToolUse', 'PostToolUse', 'PostToolUseFailure'] as const
+
+async function readHookSettings(ctx: InstallContext): Promise<Record<string, unknown> | null> {
+  const settingsPath = join(ctx.installDir, 'settings.json')
+  let settings: Record<string, unknown> = {}
+  if (await fs.pathExists(settingsPath)) {
+    const rawSettings = await fs.readFile(settingsPath, 'utf-8')
+    try {
+      const parsed = JSON.parse(rawSettings)
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        ctx.result.errors.push('Failed to register hooks in settings.json: root value must be an object')
+        ctx.result.success = false
+        return null
+      }
+      settings = parsed as Record<string, unknown>
+    } catch (error) {
+      ctx.result.errors.push(`Failed to register hooks in settings.json: invalid JSON (${error})`)
+      ctx.result.success = false
+      return null
+    }
+  }
+
+  const configuredHooks = settings.hooks
+  if (
+    configuredHooks !== undefined &&
+    (!configuredHooks || typeof configuredHooks !== 'object' || Array.isArray(configuredHooks))
+  ) {
+    ctx.result.errors.push('Failed to register hooks in settings.json: hooks must be an object')
+    ctx.result.success = false
+    return null
+  }
+  const hooks = (configuredHooks || {}) as Record<string, unknown>
+  for (const event of CCG_HOOK_EVENTS) {
+    if (hooks[event] !== undefined && !Array.isArray(hooks[event])) {
+      ctx.result.errors.push(`Failed to register hooks in settings.json: hooks.${event} must be an array`)
+      ctx.result.success = false
+      return null
+    }
+  }
+  return settings
 }
 
 /**
@@ -954,55 +1067,85 @@ async function installHookScripts(ctx: InstallContext): Promise<void> {
 async function registerHooksInSettings(ctx: InstallContext): Promise<void> {
   const settingsPath = join(ctx.installDir, 'settings.json')
   const hooksDir = join(ctx.installDir, 'hooks', 'ccg')
+  const quoteCommandPath = (filePath: string): string => `"${filePath.replace(/"/g, '\\"')}"`
 
   try {
-    let settings: Record<string, unknown> = {}
-    if (await fs.pathExists(settingsPath)) {
-      try {
-        settings = JSON.parse(await fs.readFile(settingsPath, 'utf-8'))
-      } catch {
-        settings = {}
-      }
-    }
+    const settings = await readHookSettings(ctx)
+    if (!settings) return
+    const hooks = { ...((settings.hooks || {}) as Record<string, unknown>) }
 
-    const hooks = (settings.hooks || {}) as Record<string, unknown[]>
-
-    const ccgHookDefs = {
+    const ccgHookDefs: Record<string, Record<string, unknown>> = {
       UserPromptSubmit: {
         hooks: [
-          { type: 'command', command: `node ${join(hooksDir, 'workflow-state.js')}`, timeout: 10000 },
-          { type: 'command', command: `node ${join(hooksDir, 'skill-router.js')}`, timeout: 5000 },
+          { type: 'command', command: `node ${quoteCommandPath(join(hooksDir, 'workflow-state.js'))}`, timeout: 10 },
+          { type: 'command', command: `node ${quoteCommandPath(join(hooksDir, 'skill-router.js'))}`, timeout: 5 },
         ],
       },
       SessionStart: {
-        matcher: 'startup|clear|compact',
-        hooks: [{ type: 'command', command: `node ${join(hooksDir, 'session-start.js')}`, timeout: 15000 }],
+        matcher: 'startup|resume|clear|compact|fork',
+        hooks: [
+          { type: 'command', command: `node ${quoteCommandPath(join(hooksDir, 'session-start.js'))}`, timeout: 15 },
+        ],
       },
       PreToolUse: {
         matcher: 'Bash|Agent',
-        hooks: [{ type: 'command', command: `node ${join(hooksDir, 'subagent-context.js')}`, timeout: 15000 }],
+        hooks: [
+          { type: 'command', command: `node ${quoteCommandPath(join(hooksDir, 'subagent-context.js'))}`, timeout: 15 },
+        ],
+      },
+      PostToolUse: {
+        matcher: 'Bash|Agent|TaskOutput',
+        hooks: [
+          { type: 'command', command: `node ${quoteCommandPath(join(hooksDir, 'workflow-state.js'))}`, timeout: 10 },
+        ],
+      },
+      PostToolUseFailure: {
+        matcher: 'Bash|Agent',
+        hooks: [
+          { type: 'command', command: `node ${quoteCommandPath(join(hooksDir, 'workflow-state.js'))}`, timeout: 10 },
+        ],
       },
     }
 
-    for (const [event, def] of Object.entries(ccgHookDefs)) {
-      const eventHooks = (hooks[event] || []) as Record<string, unknown>[]
-      const existingIdx = eventHooks.findIndex((h) => {
-        const hHooks = (h.hooks || []) as Record<string, unknown>[]
-        return hHooks.some((hh) => typeof hh.command === 'string' && hh.command.includes('hooks/ccg/'))
-      })
-
-      if (existingIdx >= 0) {
-        eventHooks[existingIdx] = def
-      } else {
-        eventHooks.push(def)
+    for (const [event, definition] of Object.entries(ccgHookDefs)) {
+      const existing = hooks[event]
+      if (existing !== undefined && !Array.isArray(existing)) {
+        ctx.result.errors.push(`Failed to register hooks in settings.json: hooks.${event} must be an array`)
+        ctx.result.success = false
+        return
       }
-      hooks[event] = eventHooks
+
+      const preservedEntries: Record<string, unknown>[] = []
+      for (const entry of (existing || []) as Record<string, unknown>[]) {
+        if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+          preservedEntries.push(entry)
+          continue
+        }
+        const commands = entry.hooks
+        if (!Array.isArray(commands)) {
+          preservedEntries.push(entry)
+          continue
+        }
+        const preservedCommands = commands.filter((hook) => {
+          if (!hook || typeof hook !== 'object' || Array.isArray(hook)) return true
+          return !isCcgHookCommand((hook as Record<string, unknown>).command)
+        })
+        if (preservedCommands.length > 0) preservedEntries.push({ ...entry, hooks: preservedCommands })
+      }
+      hooks[event] = [...preservedEntries, definition]
     }
 
     settings.hooks = hooks
-    await fs.writeFile(settingsPath, JSON.stringify(settings, null, 2), 'utf-8')
+    const tempSettingsPath = `${settingsPath}.ccg-${process.pid}.tmp`
+    try {
+      await fs.writeFile(tempSettingsPath, `${JSON.stringify(settings, null, 2)}\n`, 'utf-8')
+      await rename(tempSettingsPath, settingsPath)
+    } finally {
+      await fs.remove(tempSettingsPath).catch(() => undefined)
+    }
   } catch (error) {
     ctx.result.errors.push(`Failed to register hooks in settings.json: ${error}`)
+    ctx.result.success = false
   }
 }
 
@@ -1044,8 +1187,8 @@ export async function installWorkflows(
     config: {
       routing: (config?.routing as InstallConfig['routing']) || {
         mode: 'smart',
-        frontend: { models: ['antigravity', 'codex'], primary: 'antigravity' },
-        backend: { models: ['codex'], primary: 'codex' },
+        frontend: { models: ['claude'], primary: 'claude' },
+        backend: { models: ['claude'], primary: 'claude' },
         review: {
           profiles: [
             { id: 'gpt', model: 'gpt-5.6-sol', effort: 'xhigh' },
@@ -1092,8 +1235,10 @@ export async function installWorkflows(
   // Execute each install step
   await installCommandFiles(ctx, workflowIds)
   await installEngineFiles(ctx)
-  await installHookScripts(ctx)
-  await registerHooksInSettings(ctx)
+  const hooksInstalled = await installHookScripts(ctx)
+  if (hooksInstalled) {
+    await registerHooksInSettings(ctx)
+  }
   await installAgentFiles(ctx)
   await installPromptFiles(ctx)
   await installSkillFiles(ctx)
@@ -1119,9 +1264,8 @@ export async function installWorkflows(
 }
 
 /**
- * Refresh routing-dependent CCG artifacts without reinstalling skills, hooks,
- * settings, or MCP servers. Callers may require the wrapper binary to match
- * the package version before writing templates that depend on new CLI flags.
+ * Refresh routing-dependent CCG artifacts and the Hook runtime they depend on.
+ * Skills, MCP servers, and the wrapper binary remain untouched.
  */
 export async function syncRoutingTemplates(
   workflowIds: string[],
@@ -1131,7 +1275,6 @@ export async function syncRoutingTemplates(
     liteMode?: boolean
     mcpProvider?: string
     skipImpeccable?: boolean
-    ensureBinary?: boolean
   }
 ): Promise<InstallResult> {
   const ctx: InstallContext = {
@@ -1142,7 +1285,7 @@ export async function syncRoutingTemplates(
       liteMode: config.liteMode ?? true,
       mcpProvider: config.mcpProvider || 'fast-context',
       skipImpeccable: config.skipImpeccable ?? false,
-      skipBinary: !config.ensureBinary,
+      skipBinary: true,
     },
     templateDir: join(PACKAGE_ROOT, 'templates'),
     result: {
@@ -1164,13 +1307,10 @@ export async function syncRoutingTemplates(
   await fs.ensureDir(join(installDir, '.ccg', 'prompts'))
   await fs.ensureDir(join(installDir, '.ccg', 'engine', 'strategies'))
 
-  if (!ctx.config.skipBinary) {
-    await installBinaryFile(ctx)
-    if (!ctx.result.binInstalled) {
-      ctx.result.success = false
-      return ctx.result
-    }
-  }
+  if (!(await readHookSettings(ctx))) return ctx.result
+  if (!(await installHookScripts(ctx))) return ctx.result
+  await registerHooksInSettings(ctx)
+  if (!ctx.result.success) return ctx.result
 
   await installCommandFiles(ctx, workflowIds, { backupExisting: true })
   await installEngineFiles(ctx, { backupExisting: true })
@@ -1287,10 +1427,7 @@ export async function uninstallWorkflows(
           const kept = eventHooks
             .map((entry: Record<string, unknown>) => {
               const commands = Array.isArray(entry.hooks) ? entry.hooks : []
-              const keptCommands = commands.filter((hook) => {
-                const command = typeof hook?.command === 'string' ? hook.command : ''
-                return !command.includes('hooks/ccg/') && !command.includes('hooks\\ccg\\')
-              })
+              const keptCommands = commands.filter((hook) => !isCcgHookCommand(hook?.command))
               if (keptCommands.length !== commands.length) changed = true
               return keptCommands.length > 0 ? { ...entry, hooks: keptCommands } : null
             })
@@ -1307,7 +1444,13 @@ export async function uninstallWorkflows(
           changed = true
         }
         if (changed) {
-          await fs.writeJson(settingsPath, settings, { spaces: 2 })
+          const tempSettingsPath = `${settingsPath}.ccg-uninstall-${process.pid}.tmp`
+          try {
+            await fs.writeFile(tempSettingsPath, `${JSON.stringify(settings, null, 2)}\n`, 'utf-8')
+            await rename(tempSettingsPath, settingsPath)
+          } finally {
+            await fs.remove(tempSettingsPath).catch(() => undefined)
+          }
           result.removedHooks = true
         }
       }

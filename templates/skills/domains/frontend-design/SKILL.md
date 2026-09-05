@@ -1,7 +1,7 @@
 ---
 name: frontend-design
-description: "Frontend design skill fused from Impeccable + custom extensions. Covers design philosophy, anti-AI-slop patterns, typography, color (OKLCH), spatial design, motion, interaction, responsive, UX writing, state management, engineering, and 4 style variants. Includes 20 command skills for audit/critique/polish/animate/etc."
-license: "Apache 2.0 (Impeccable) + MIT (custom extensions)"
+description: 'Frontend design skill fused from Impeccable + custom extensions. Covers design philosophy, anti-AI-slop patterns, typography, color (OKLCH), spatial design, motion, interaction, responsive, UX writing, state management, engineering, and 4 style variants. Includes 20 technique playbooks for focused design work.'
+license: 'Apache 2.0 (Impeccable) + MIT (custom extensions)'
 user-invocable: true
 disable-model-invocation: false
 ---
@@ -31,8 +31,8 @@ design work.
    proceed immediately.
 2. **Check .impeccable.md (fast)**: If not in instructions, read `.impeccable.md` from the project root. If it exists
    and contains the required context, proceed.
-3. **Run /teach-impeccable (REQUIRED)**: If neither source has context, you MUST run `/teach-impeccable` NOW before
-   doing anything else. Do NOT skip this step. Do NOT attempt to infer context from the codebase instead.
+3. **Ask for missing context**: If neither source has enough context, ask only for the missing audience, use case, or
+   brand direction before making design decisions. Do not infer product intent from visual code alone.
 
 ---
 
@@ -55,7 +55,7 @@ both work — the key is intentionality, not intensity.
 
 ### Typography
 
-> *Consult [typography reference](reference/typography.md) for scales, pairing, and loading strategies.*
+> _Consult [typography reference](reference/typography.md) for scales, pairing, and loading strategies._
 
 Choose fonts that are beautiful, unique, and interesting. Pair a distinctive display font with a refined body font.
 
@@ -67,7 +67,7 @@ Choose fonts that are beautiful, unique, and interesting. Pair a distinctive dis
 
 ### Color & Theme
 
-> *Consult [color reference](reference/color-and-contrast.md) for OKLCH, palettes, and dark mode.*
+> _Consult [color reference](reference/color-and-contrast.md) for OKLCH, palettes, and dark mode._
 
 Commit to a cohesive palette. Dominant colors with sharp accents outperform timid, evenly-distributed palettes.
 
@@ -81,7 +81,7 @@ Commit to a cohesive palette. Dominant colors with sharp accents outperform timi
 
 ### Layout & Space
 
-> *Consult [spatial reference](reference/spatial-design.md) for grids, rhythm, and container queries.*
+> _Consult [spatial reference](reference/spatial-design.md) for grids, rhythm, and container queries._
 
 **DO**: Create visual rhythm through varied spacing — tight groupings, generous separations
 **DO**: Use fluid spacing with clamp() that breathes on larger screens
@@ -103,7 +103,7 @@ Commit to a cohesive palette. Dominant colors with sharp accents outperform timi
 
 ### Motion
 
-> *Consult [motion reference](reference/motion-design.md) for timing, easing, and reduced motion.*
+> _Consult [motion reference](reference/motion-design.md) for timing, easing, and reduced motion._
 
 **DO**: Use motion to convey state changes — entrances, exits, feedback
 **DO**: Use exponential easing (ease-out-quart/quint/expo) for natural deceleration
@@ -113,7 +113,7 @@ Commit to a cohesive palette. Dominant colors with sharp accents outperform timi
 
 ### Interaction
 
-> *Consult [interaction reference](reference/interaction-design.md) for forms, focus, and loading patterns.*
+> _Consult [interaction reference](reference/interaction-design.md) for forms, focus, and loading patterns._
 
 **DO**: Use progressive disclosure — start simple, reveal sophistication through interaction
 **DO**: Design empty states that teach the interface, not just say "nothing here"
@@ -123,8 +123,8 @@ Commit to a cohesive palette. Dominant colors with sharp accents outperform timi
 
 ### Responsive
 
-> *Consult [responsive reference](reference/responsive-design.md) for mobile-first, fluid design, and container
-queries.*
+> _Consult [responsive reference](reference/responsive-design.md) for mobile-first, fluid design, and container
+> queries._
 
 **DO**: Use container queries (@container) for component-level responsiveness
 **DO**: Adapt the interface for different contexts — don't just shrink it
@@ -132,7 +132,7 @@ queries.*
 
 ### UX Writing
 
-> *Consult [ux-writing reference](reference/ux-writing.md) for labels, errors, and empty states.*
+> _Consult [ux-writing reference](reference/ux-writing.md) for labels, errors, and empty states._
 
 **DO**: Make every word earn its place
 **DON'T**: Repeat information users can already see
@@ -155,7 +155,7 @@ Review the DON'T guidelines above — they are the fingerprints of AI-generated 
 Deep-dive reference documents for each design dimension:
 
 | Reference                                             | Covers                                                                          |
-|-------------------------------------------------------|---------------------------------------------------------------------------------|
+| ----------------------------------------------------- | ------------------------------------------------------------------------------- |
 | [typography](reference/typography.md)                 | Type systems, font pairing, modular scales, OpenType, web font loading          |
 | [color-and-contrast](reference/color-and-contrast.md) | OKLCH, tinted neutrals, dark mode, accessibility, 60-30-10                      |
 | [spatial-design](reference/spatial-design.md)         | 4pt spacing, grids, visual hierarchy, container queries, optical adjustments    |
@@ -167,7 +167,7 @@ Deep-dive reference documents for each design dimension:
 ## Extended Knowledge (Original)
 
 | Topic                | Document                                       | Covers                                                                      |
-|----------------------|------------------------------------------------|-----------------------------------------------------------------------------|
+| -------------------- | ---------------------------------------------- | --------------------------------------------------------------------------- |
 | UI Aesthetics        | [ui-aesthetics.md](ui-aesthetics.md)           | HSL color tokens, 8px grid CSS snippets, shadow scales, dark mode CSS       |
 | Component Patterns   | [component-patterns.md](component-patterns.md) | CSS Grid/Flexbox layouts, responsive nav, glass card, Framer Motion         |
 | UX Principles        | [ux-principles.md](ux-principles.md)           | Nielsen 10 heuristics, WCAG, ARIA, keyboard, loading patterns               |
@@ -179,7 +179,7 @@ Deep-dive reference documents for each design dimension:
 Specific style variant specs with CSS tokens and component patterns:
 
 | Style         | Document                                         | Aesthetic                                                            |
-|---------------|--------------------------------------------------|----------------------------------------------------------------------|
+| ------------- | ------------------------------------------------ | -------------------------------------------------------------------- |
 | Claymorphism  | [claymorphism/SKILL.md](claymorphism/SKILL.md)   | Soft clay, large radii, dual inner shadows, offset outer shadows     |
 | Glassmorphism | [glassmorphism/SKILL.md](glassmorphism/SKILL.md) | Frosted glass, backdrop-filter, translucency, blur layers            |
 | Neubrutalism  | [neubrutalism/SKILL.md](neubrutalism/SKILL.md)   | Thick borders, offset solid shadows, high saturation, minimal radius |
@@ -187,59 +187,53 @@ Specific style variant specs with CSS tokens and component patterns:
 
 ---
 
-## Command System (20 Impeccable Commands)
+## Technique Playbooks
 
-All commands are in `~/.claude/skills/ccg/impeccable/`. Each invokes this skill's guidelines first.
+Focused playbooks live under `~/.claude/skills/ccg/impeccable/`. They are supporting references for this skill, not
+standalone slash commands.
 
-### Quality & Audit
+### Quality and audit
 
-| Command             | What it does                                                                                   |
-|---------------------|------------------------------------------------------------------------------------------------|
-| `/audit`            | Technical quality checks (a11y, performance, responsive, theming, anti-patterns) — scored 0-20 |
-| `/critique`         | UX design review with Nielsen heuristics scoring (0-40), persona testing, cognitive load       |
-| `/teach-impeccable` | One-time setup: gather design context, save to .impeccable.md                                  |
+| Playbook           | What it does                                                                                   |
+| ------------------ | ---------------------------------------------------------------------------------------------- |
+| `audit`            | Technical quality checks (a11y, performance, responsive, theming, anti-patterns) — scored 0-20 |
+| `critique`         | UX design review with Nielsen heuristics scoring (0-40), persona testing, cognitive load       |
+| `teach-impeccable` | Gather reusable design context and save it to `.impeccable.md`                                 |
 
-### Fix & Align
+### Fix and align
 
-| Command      | What it does                                      |
-|--------------|---------------------------------------------------|
-| `/normalize` | Align with design system standards                |
-| `/polish`    | Final pass before shipping — 20-item checklist    |
-| `/distill`   | Strip to essence, remove unnecessary complexity   |
-| `/clarify`   | Improve unclear UX copy, error messages, labels   |
-| `/optimize`  | Performance improvements (CWV, bundle, rendering) |
-| `/harden`    | Error handling, i18n, text overflow, edge cases   |
+| Playbook    | What it does                                      |
+| ----------- | ------------------------------------------------- |
+| `normalize` | Align with design system standards                |
+| `polish`    | Final pass before shipping — 20-item checklist    |
+| `distill`   | Strip to essence, remove unnecessary complexity   |
+| `clarify`   | Improve unclear UX copy, error messages, labels   |
+| `optimize`  | Performance improvements (CWV, bundle, rendering) |
+| `harden`    | Error handling, i18n, text overflow, edge cases   |
 
-### Style & Expression
+### Style and expression
 
-| Command     | What it does                                            |
-|-------------|---------------------------------------------------------|
-| `/animate`  | Add purposeful motion and micro-interactions            |
-| `/colorize` | Introduce strategic color to monochromatic designs      |
-| `/bolder`   | Amplify boring designs with distinctive impact          |
-| `/quieter`  | Tone down overly bold designs to refined sophistication |
-| `/delight`  | Add moments of joy, personality, and surprise           |
+| Playbook   | What it does                                            |
+| ---------- | ------------------------------------------------------- |
+| `animate`  | Add purposeful motion and micro-interactions            |
+| `colorize` | Introduce strategic color to monochromatic designs      |
+| `bolder`   | Amplify boring designs with distinctive impact          |
+| `quieter`  | Tone down overly bold designs to refined sophistication |
+| `delight`  | Add moments of joy, personality, and surprise           |
 
-### Structure & Components
+### Structure and components
 
-| Command      | What it does                                                        |
-|--------------|---------------------------------------------------------------------|
-| `/extract`   | Pull into reusable components and design tokens                     |
-| `/adapt`     | Adapt for different devices and contexts                            |
-| `/onboard`   | Design onboarding flows and empty states                            |
-| `/typeset`   | Fix font choices, hierarchy, sizing, readability                    |
-| `/arrange`   | Fix layout, spacing, visual rhythm                                  |
-| `/overdrive` | Technically extraordinary effects (shaders, springs, scroll-driven) |
+| Playbook    | What it does                                                        |
+| ----------- | ------------------------------------------------------------------- |
+| `extract`   | Pull into reusable components and design tokens                     |
+| `adapt`     | Adapt for different devices and contexts                            |
+| `onboard`   | Design onboarding flows and empty states                            |
+| `typeset`   | Fix font choices, hierarchy, sizing, readability                    |
+| `arrange`   | Fix layout, spacing, visual rhythm                                  |
+| `overdrive` | Technically extraordinary effects (shaders, springs, scroll-driven) |
 
-### Combining Commands
-
-```
-/audit /normalize /polish blog       # Full workflow: audit -> fix -> polish
-/critique /harden checkout           # UX review + add error handling
-/audit                               # Find issues first
-/normalize                           # Then fix inconsistencies
-/polish                              # Final cleanup
-```
+Combine playbooks as needed. For example, audit first, normalize confirmed inconsistencies, then use polish as the final
+quality pass.
 
 ---
 
@@ -259,14 +253,14 @@ generations.
 
 - Design system establishment
 - Component library development
-- UI/UX audit and review (`/audit`, `/critique`)
+- UI/UX audit and review (`audit`, `critique`)
 - Accessibility improvement
-- Responsive layout design (`/adapt`)
-- Interaction and animation design (`/animate`, `/delight`)
+- Responsive layout design (`adapt`)
+- Interaction and animation design (`animate`, `delight`)
 - Style variant selection (Claymorphism / Glassmorphism / Neubrutalism / Liquid Glass)
-- Performance optimization (`/optimize`)
-- Pre-launch polish (`/polish`)
-- Copy improvement (`/clarify`)
-- Production hardening (`/harden`)
-- Typography refinement (`/typeset`)
-- Layout improvement (`/arrange`)
+- Performance optimization (`optimize`)
+- Pre-launch polish (`polish`)
+- Copy improvement (`clarify`)
+- Production hardening (`harden`)
+- Typography refinement (`typeset`)
+- Layout improvement (`arrange`)

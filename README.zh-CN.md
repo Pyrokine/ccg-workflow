@@ -1,6 +1,4 @@
-# CCG - Claude + Codex + Antigravity 多模型协作
-
-# CCG - Claude + Codex + Antigravity Multi-Model Collaboration
+# CCG - Claude Code + GPT + Grok 协作
 
 <div align="center">
 
@@ -11,21 +9,21 @@
 [![npm version](https://img.shields.io/npm/v/ccg-workflow.svg)](https://www.npmjs.com/package/ccg-workflow)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-Compatible-green.svg)](https://claude.ai/code)
-[![Tests](https://img.shields.io/badge/Tests-139%20passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/Tests-201%20passed-brightgreen.svg)](#)
 [![Follow on X](https://img.shields.io/badge/X-@CCG__Workflow-black?logo=x&logoColor=white)](https://x.com/CCG_Workflow)
 ![star](https://atomgit.com/fengshao1227/ccg-workflow/star/badge.svg)
 [![Docs](https://img.shields.io/badge/文档站-ccg.fengshao1227.com-blue?style=for-the-badge&logo=readthedocs&logoColor=white)](https://github.com/Pyrokine/ccg-workflow/)
 
-[简体中文](./README.zh-CN.md) | English | [**完整文档**](https://github.com/Pyrokine/ccg-workflow/)
+简体中文 | [English](./README.md) | [**完整文档**](https://github.com/Pyrokine/ccg-workflow/)
 
 </div>
 
 ## ♥️ Sponsor
 
-[![302.AI](assets/sponsors/302.ai-en.jpg)](https://share.302.ai/oUDqQ6)
+[![APIMart](assets/sponsors/apimart.jpg)](https://go.apimart.ai/gh-ccg-workflow)
 
-[302.AI](https://share.302.ai/oUDqQ6) is a pay-as-you-go enterprise AI resource hub that offers the latest and most
-comprehensive AI models and APIs on the market, along with a variety of ready-to-use online AI applications.
+[APIMart](https://go.apimart.ai/gh-ccg-workflow) 赞助本项目，并提供图片、视频、Claude 和 GPT API。安装器可将其
+Anthropic 兼容端点配置为 Claude Code API 提供方，也可单独注册 Codex provider；是否激活 Codex provider 由用户明确选择。
 
 ---
 
@@ -36,24 +34,50 @@ comprehensive AI models and APIs on the market, along with a variety of ready-to
 
 ---
 
-CCG 是 Claude Code 的工作流引擎。它协调 Codex、Antigravity、Claude、Grok、Kimi Code 和 OpenCode，通过 Hook 状态追踪、策略选择和 Agent Teams 并行执行完成开发任务。
+## DeepSeek Harness 版 CCG：`dsh-ccg`
 
-Gemini CLI 已禁用：2026-06-18 后 consumer OAuth 请求不再处理。CCG 改用 Antigravity。
+内置的 `dsh-ccg` 插件将同一套角色矩阵带入
+[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)。安装器使用当前 `DSH_HOME`，把插件复制到长期保留的本地路径，并且只修改用户选定的 profile manifest。
+
+```bash
+npx ccg-workflow dsh install                # 安装到所有已发现的 profile
+npx ccg-workflow dsh install --profile web  # 只安装到一个 profile
+npx ccg-workflow dsh list
+npx ccg-workflow dsh uninstall
+```
+
+角色工具、模型面板和常驻队友说明见 [`dsh-ccg/README.zh-CN.md`](./dsh-ccg/README.zh-CN.md)。
+
+---
+
+CCG 是 Claude Code 的工作流引擎。默认前端、后端和审查都使用独立 Claude Code Agent。Codex、Antigravity、Grok、Kimi Code、OpenCode 与 GPT/Grok 外部审查只在用户明确请求时运行。
+
+Gemini CLI 已禁用：2026-06-18 后 consumer OAuth 请求不再处理。旧 Gemini 路由迁移为 Grok，`agy` 保留为 Antigravity 别名。
+
+## v3.6.4-aug.1 更新
+
+- APIMart 可作为 Claude Code API 提供方；Codex provider 单独注册，只有用户明确选择时才激活
+- Claude Code 可从当前仓库以原生 plugin 方式安装技能包；完整多模型工作流仍由安装器提供
+- 新增 `bt-panel`、`seo-page-builder` 和 `adsense-site-auditor` 三个 Web 运维技能
+- `frontend-design` 成为唯一直接设计入口，内部使用 20 个 Impeccable playbook
+- `dsh-ccg` 可安装到 DeepSeek Harness profile，并尊重 `DSH_HOME`
+- Codex sub-agent 默认不启动 MCP；`/ccg:codex-exec` 只为需要检索的 executor 显式开启
+- task controller 会在每次用户输入和前台外部结果返回后刷新精确规范权威
 
 ## v3.0 重大更新
 
 v3.0 从底层重写。一个命令替代 29 个。
 
 - `/ccg:go` — 用自然语言描述任务，引擎自动分析意图、选择策略、执行到底。
-- **Hook 引擎** — 每轮注入任务状态，即使上下文被压缩也不丢。会话开始时注入完整项目上下文。
-- **Task 持久化** — 中等以上复杂度任务创建 `.ccg/tasks/`，阶段门控强制 HARD STOP 检查点。
+- **Hook 引擎** — 用户消息只注入限长任务摘要；startup、resume、clear、compact 和 fork 会恢复完整任务契约、artifact 与精确关联的 spec section。
+- **Task 持久化** — 持久策略在每个 worktree 的 `.ccg/state.json` 保存唯一 active pointer。revision 检查、文件锁、临时任务返回链和显式迁移避免按目录顺序猜任务，也拒绝过期并发写入。
 - **Agent Teams** — 大型任务通过 TeamCreate 并行 spawn 多个 Builder。每个 Builder 有独立文件所有权。
 - **质量关卡** — `ccg:verify-security`、`ccg:verify-quality`、`ccg:verify-change` 作为 Skill 在策略验证阶段强制调用。
 - **域知识 Hook** — 消息涉及安全、缓存、RAG 等关键词时，相关知识文件自动注入上下文。
-- **模型路由** — 前端和后端可以选择 Codex、Antigravity、Claude、Grok、Kimi Code 或 OpenCode。Grok、Kimi Code 和 OpenCode CLI 路由可分别设置可选型号。
-- **交叉审查** — GPT、Grok 通过当前配置的 Claude Code provider 运行独立且不持久化的 print 会话。`routing.review.profiles` 独立配置它们在 provider 侧使用的型号和 effort，不受 Grok CLI 路由型号影响。
-- **纯 Claude Code 模式** — 前端与后端主路由都选择 Claude 时，使用独立 Claude Code Agent 或 Agent Teams 代替这两类 wrapper 调用。
-- **Codex 主导模式** — 使用 Codex CLI 作为主导编排者，再通过 codeagent-wrapper 交给 GPT、Grok 交叉审查。通过菜单 `X` 选项安装。
+- **模型路由** — 前端与后端默认使用独立 Claude Code Agent。Codex、Antigravity、Grok、Kimi Code 和 OpenCode 是显式可选路由。Grok、Kimi Code 和 OpenCode CLI 路由可分别设置可选型号。
+- **交叉审查** — 用户明确请求 GPT、Grok、双模型审查或 `/ccg:spec-review` 时，GPT、Grok 通过当前配置的 Claude Code provider 运行独立且不持久化的 print 会话。`routing.review.profiles` 独立配置它们在 provider 侧使用的型号和 effort，不受 Grok CLI 路由型号影响。
+- **纯 Claude Code 模式** — 默认模式。独立 Claude Code Agent 或 Agent Teams 处理前端、后端和审查，不调用外部 CLI。
+- **Codex 主导模式** — 用户明确选择时使用 Codex CLI 作为主导编排者。通过菜单 `X` 选项安装。
 
 ## 快速开始
 
@@ -74,19 +98,23 @@ CCG 引擎:
   1. 读取项目上下文（git、技术栈、文件结构）
   2. 分类: feature / L 复杂度 / backend / high 风险
   3. 选择策略: full-collaborate
-  4. 创建 .ccg/tasks/add-jwt-auth/task.json
-  5. 需要双视角时并行启动当前配置的后端与前端分析路由
-  6. 产出计划 → HARD STOP 等你审批
-  7. spawn Agent Teams Builder 并行实施
-  8. 质量关卡 + GPT、Grok 交叉审查
-  9. 输出结果
+  4. 创建 .ccg/state.json 和 .ccg/tasks/add-jwt-auth/
+  5. 写入完整 requirements 契约，并关联 tracked 文档中的精确 spec section
+  6. 需要双视角时并行启动独立 Claude Code 分析 Agent
+  7. 产出计划 → HARD STOP 等待审批
+  8. 向 Builder 派发 task ID、revision、文件范围和 authoritative spec
+  9. 执行质量关卡与独立 Claude Code 审查，记录最终检查点
+
+只有用户明确请求时才调用外部 CLI 或 GPT、Grok 交叉审查。
 
 每轮 Hook 注入:
   <ccg-state>
-  Task: add-jwt-auth (in_progress)
+  Task: add-jwt-auth [add-jwt-auth]
+  Status: active
   Strategy: full-collaborate
   Phase: 4-implementation
   Next: Layer 1 Builders 执行中
+  Revision: state=3, task=7
   </ccg-state>
 ```
 
@@ -94,106 +122,160 @@ CCG 引擎:
 
 引擎根据任务类型和复杂度自动选择策略：
 
-| 策略                | 场景                | 外部模型  | Teams |
-|-------------------|-------------------|-------|-------|
-| direct-fix        | 简单 bug，单文件        | 无     | 无     |
-| quick-implement   | 小功能，范围清晰          | 无     | 无     |
-| guided-develop    | 中等功能，需要规划         | 单模型   | 无     |
-| full-collaborate  | 复杂功能，跨模块          | 双模型并行 | 强制    |
-| debug-investigate | 复杂 bug，原因不明       | 双模型诊断 | 无     |
-| refactor-safely   | 代码重构              | GPT、Grok 交叉审查 | 无     |
-| deep-research     | 技术研究、方案对比         | 双模型探索 | 无     |
-| optimize-measure  | 性能优化              | 可选    | 无     |
-| review-audit      | 代码审查              | GPT、Grok 交叉审查 | 无     |
-| git-action        | commit、rollback 等 | 无     | 无     |
+| 策略              | 场景                | 外部模型           | Teams |
+| ----------------- | ------------------- | ------------------ | ----- |
+| direct-fix        | 简单 bug，单文件    | 无                 | 无    |
+| quick-implement   | 小功能，范围清晰    | 无                 | 无    |
+| guided-develop    | 中等功能，需要规划  | 仅显式路由         | 无    |
+| full-collaborate  | 复杂功能，跨模块    | 仅显式路由         | 强制  |
+| debug-investigate | 复杂 bug，原因不明  | 仅显式路由         | 无    |
+| refactor-safely   | 代码重构            | 仅显式外部审查     | 无    |
+| deep-research     | 技术研究、方案对比  | 仅显式路由         | 无    |
+| optimize-measure  | 性能优化            | 可选               | 无    |
+| review-audit      | 代码审查            | 仅显式外部审查     | 无    |
+| git-action        | commit、rollback 等 | 无                 | 无    |
 
 简单任务零开销快速执行。复杂任务启动完整引擎。
 
 ## 命令
 
-v3.0 默认安装 13 个命令。旧版模式额外安装 18 个。
+v3.0 默认安装 12 个核心命令。Legacy 模式额外安装 18 个。
 
 ### 核心
 
-| 命令        | 说明                 |
-|-----------|--------------------|
+| 命令      | 说明                              |
+| --------- | --------------------------------- |
 | `/ccg:go` | 智能入口 — 描述任务，引擎自动处理 |
 
 ### Git 工具
 
-| 命令                    | 说明                     |
-|-----------------------|------------------------|
+| 命令                  | 说明                     |
+| --------------------- | ------------------------ |
 | `/ccg:commit`         | 智能 conventional commit |
-| `/ccg:rollback`       | 交互式回滚                  |
-| `/ccg:clean-branches` | 清理已合并分支                |
+| `/ccg:rollback`       | 交互式回滚               |
+| `/ccg:clean-branches` | 清理已合并分支           |
 | `/ccg:worktree`       | Worktree 管理            |
 
 ### 项目
 
-| 命令             | 说明              |
-|----------------|-----------------|
+| 命令           | 说明                 |
+| -------------- | -------------------- |
 | `/ccg:init`    | 初始化项目 CLAUDE.md |
-| `/ccg:context` | 项目上下文管理         |
+| `/ccg:context` | 项目上下文管理       |
 
 ### OpenSpec
 
-| 命令                   | 说明          |
-|----------------------|-------------|
-| `/ccg:spec-init`     | 初始化 OPSX 环境 |
-| `/ccg:spec-research` | 需求 → 约束集    |
-| `/ccg:spec-plan`     | 零决策可执行计划    |
-| `/ccg:spec-impl`     | 按规范实施       |
+| 命令                 | 说明               |
+| -------------------- | ------------------ |
+| `/ccg:spec-init`     | 初始化 OPSX 环境   |
+| `/ccg:spec-research` | 需求 → 约束集      |
+| `/ccg:spec-plan`     | 零决策可执行计划   |
+| `/ccg:spec-impl`     | 按规范实施         |
 | `/ccg:spec-review`   | GPT、Grok 交叉审查 |
 
 ## Hook 引擎
 
-CCG 在 `~/.claude/settings.json` 注册 4 个 Hook：
+CCG 安装 CommonJS Hook runtime，并在 `~/.claude/settings.json` 的五类 Hook event 中注册四个处理脚本：
 
-| Hook                | 事件               | 作用                                            |
-|---------------------|------------------|-----------------------------------------------|
-| workflow-state.js   | UserPromptSubmit | 每轮注入任务状态面包屑                                   |
-| session-start.js    | SessionStart     | 会话开始/压缩时注入完整项目上下文                             |
-| subagent-context.js | PreToolUse       | codeagent-wrapper/Team spawn 时注入 spec + 任务上下文 |
-| skill-router.js     | UserPromptSubmit | 检测域关键词，自动注入知识文件                               |
+| Hook                  | 事件                                                     | 作用                                                                         |
+| --------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `workflow-state.js`   | `UserPromptSubmit`、`PostToolUse`、`PostToolUseFailure` | 每次输入及前台外部结果返回后刷新精确权威                                     |
+| `session-start.js`    | `SessionStart`                                           | 在 startup、resume、clear、compact、fork 时恢复完整任务 snapshot             |
+| `subagent-context.js` | Bash/Agent 的 `PreToolUse`                               | 修改实际 Agent prompt 或 wrapper heredoc，注入按角色匹配的任务与 spec 上下文 |
+| `skill-router.js`     | `UserPromptSubmit`                                       | 注入命中的领域知识                                                           |
 
-纯 JavaScript，零依赖，失败时静默退出。
+`task-state.js` 是唯一允许修改任务生命周期的入口。Hook 输入、任务文件和 spec section 都有大小限制。任务状态无效、权威上下文缺失或超限、quoted heredoc 无法绑定到 wrapper command 时，`PreToolUse` Hook 返回 `permissionDecision: "deny"`，Agent 或 wrapper 不会在缺少任务契约的情况下启动。
 
 ## Task 系统
 
-中等以上复杂度任务创建持久化目录：
+持久策略使用当前 worktree 的 active pointer 和固定任务目录：
 
-```
-.ccg/tasks/add-jwt-auth/
-├── task.json         # 状态、策略、当前阶段、门控
-├── requirements.md   # 增强后的需求
-├── plan.md           # 审批后的计划
-├── context.jsonl     # 子 Agent spec 注入列表
-├── review.md         # 审查结果
-└── research/         # 研究成果
-```
-
-workflow-state Hook 每轮读取 task.json 注入状态。上下文压缩后 session-start 重新注入。状态不会丢失。
-
-## Spec 系统
-
-项目级编码规范在 `.ccg/spec/`：
-
-```
-.ccg/spec/
-├── backend/index.md    # 后端规范
-├── frontend/index.md   # 前端规范
-└── guides/index.md     # 跨模块指南
+```text
+.ccg/
+├── state.json                    # stateId、revision、activeTaskId
+├── state.lock                    # 生命周期写入的短期文件锁
+├── transaction.json             # 多文件修改待恢复时存在
+├── tasks/
+│   └── add-jwt-auth/
+│       ├── task.json             # open/completed/cancelled、task revision、phase、gate、specRefs
+│       ├── requirements.md       # 必需的任务契约
+│       ├── progress.md           # 最后成功检查点和下一动作
+│       ├── analysis.md           # 可选分析
+│       ├── plan.md               # 可选审批计划
+│       ├── review.md             # 可选审查结果
+│       └── research/             # 可选研究成果
+└── migrations/v1/                # 显式迁移旧任务时创建的备份
 ```
 
-subagent-context Hook 读取 `context.jsonl` 将相关 spec 文件注入到 codeagent-wrapper 调用和 Team spawn 中。子 Agent
-自动遵循项目规范。
+`active` 和 `suspended` 由 `state.activeTaskId` 推导，task 文件只持久化 `open`、`completed` 或 `cancelled`。临时任务记录 `returnToTaskId`，完成后返回最近仍为 open 的父任务。完成的任务保持原路径。所有状态修改都校验 `stateId` 和 revision，拒绝过期或并发写入。跨 artifact、task 和 state 的多文件修改会保留可重放的 transaction marker，直到全部原子 rename 完成。
+
+active pointer 为空但仍有 open task 时，控制器要求显式选择。旧任务目录要求显式迁移。active target 已结束、丢失或事务中断时要求显式恢复。运行态父路径必须是 worktree 内的普通目录，symlink 会被拒绝。分支名和目录时间只用于诊断，不能选择任务。
+
+## 规范权威
+
+任务通过结构化 `specRefs` 关联 tracked 或 staged Markdown 的精确 section：
+
+```json
+{
+  "path": "docs/integration-version-map.md",
+  "section": "Merge and dependency rules",
+  "purpose": "定义哪些仓库合入，哪些只由 build system 引用",
+  "roles": ["research", "implement", "review", "debug"]
+}
+```
+
+Hook 验证项目相对路径、普通文件、literal Git 跟踪状态、fenced code block 之外的唯一精确 heading、完整且限长的 section、全部关联内容的上下文预算、角色和项目根边界。精确 spec section 与 `requirements.md` 先于可选任务 artifact 渲染，最终 32 KiB 限制不会删掉权威来源。系统不再扫描整个规范目录，也不再使用隐式 `.ccg/spec/` 模板。
+
+执行依据从高到低为：精确关联的 spec section、`requirements.md`、用户当前明确指令、已审批的 `plan.md`、`progress.md`、compact 摘要或模型推断。compact/resume 和外部模型返回后，Lead 必须重新 resolve，并逐字段核对实体、版本、依赖方向、排除项和验收标准。
+
+## 本地与共享上下文
+
+| 路径                                   | 范围                                          |
+| -------------------------------------- | --------------------------------------------- |
+| `.ccg/`                                | 当前 worktree 的本地运行态，由 Git 忽略       |
+| `.context/current/`                    | 本地会话备注，由 Git 忽略                     |
+| `.context/prefs/`、`.context/history/` | Git 跟踪的团队规范和已脱敏决策历史            |
+| 项目文档、OpenSpec                     | Git 跟踪的共享规范，由任务按精确 section 关联 |
+
+## 技能包
+
+安装器和 Claude Code 原生 plugin 都提供以下直接入口：
+
+| 技能 | 用途 |
+| ---- | ---- |
+| `/ccg:frontend-design` | 前端设计入口，内部包含 20 个 Impeccable playbook |
+| `/ccg:bt-panel` | 通过宝塔/aaPanel HTTP API 部署和管理站点 |
+| `/ccg:seo-page-builder` | 创建和审计 SEO 工具页，附可执行的 on-page audit 脚本 |
+| `/ccg:adsense-site-auditor` | 检查 AdSense 申请准备情况和政策要求 |
+
+只从 private fork 安装技能包：
+
+```bash
+claude plugin marketplace add Pyrokine/ccg-workflow
+claude plugin install ccg@ccg
+```
+
+原生 plugin 不安装 wrapper binary，也不安装带模板占位符的多模型工作流命令。
+
+## CLI 命令
+
+```bash
+npx ccg-workflow doctor                   # 环境健康检查
+npx ccg-workflow status                   # 安装状态和 active task 概览
+npx ccg-workflow codex-mode install       # 安装 Codex 主导模式
+npx ccg-workflow codex-mode uninstall     # 卸载 Codex 主导模式
+npx ccg-workflow dsh install              # 安装 dsh-ccg
+npx ccg-workflow dsh list                 # 查看 DSH profile 状态
+npx ccg-workflow dsh uninstall            # 卸载 dsh-ccg
+npx ccg-workflow uninstall                # 卸载 CCG
+```
 
 ## 配置
 
 ```
 ~/.claude/
 ├── commands/ccg/          # 斜杠命令
-├── hooks/ccg/             # Hook 脚本（4 个）
+├── hooks/ccg/             # Task controller、共享工具、4 个处理脚本、5 类 event
 ├── .ccg/
 │   ├── config.toml        # 模型路由、MCP、性能
 │   ├── engine/            # 策略文件 + 模型路由器
@@ -206,10 +288,13 @@ subagent-context Hook 读取 `context.jsonl` 将相关 spec 文件注入到 code
 
 在 `~/.claude/settings.json` 的 `"env"` 中设置：
 
-| 变量                                     | 默认值    | 说明                       |
-|----------------------------------------|--------|--------------------------|
-| `CODEX_TIMEOUT`                        | `7200` | Wrapper 超时（秒）            |
-| `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` | 未设置    | 设为 `1` 启用 Agent Teams 并行 |
+| 变量                                   | 默认值 | 说明                           |
+| -------------------------------------- | ------ | ------------------------------ |
+| `CODEX_TIMEOUT`                        | `7200`   | Wrapper 超时（秒）                                  |
+| `CODEAGENT_POST_MESSAGE_DELAY`         | `5`      | 后端完成后的等待时间（秒）                          |
+| `APIMART_API_KEY`                      | 未设置   | 选择 APIMart Codex provider 时使用的 API key        |
+| `DSH_HOME`                             | `~/.dsh` | `dsh-ccg` 使用的 DeepSeek Harness home              |
+| `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` | 未设置   | 设为 `1` 启用 Agent Teams 并行                      |
 
 ## 更新 / 卸载
 
@@ -257,4 +342,4 @@ MIT
 
 ---
 
-v3.4.0-aug.1 | [Issues](https://github.com/fengshao1227/ccg-workflow/issues) | [Contributing](./CONTRIBUTING.md)
+v3.6.4-aug.1 | [Issues](https://github.com/fengshao1227/ccg-workflow/issues) | [Contributing](./CONTRIBUTING.md)

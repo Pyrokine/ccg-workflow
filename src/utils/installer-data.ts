@@ -206,8 +206,8 @@ const LEGACY_CONFIGS: WorkflowConfig[] = [
     'development',
     'Agent Teams 规划',
     'Agent Teams Planning',
-    'Lead 调用 Codex/Antigravity 并行分析，产出零决策并行实施计划',
-    'Lead orchestrates Codex/Antigravity analysis, produces zero-decision parallel plan'
+    'Lead 使用当前路由完成并行分析，产出零决策并行实施计划',
+    'Lead orchestrates analysis through the current routes and produces a zero-decision parallel plan'
   ),
   cmd(
     'team-exec',

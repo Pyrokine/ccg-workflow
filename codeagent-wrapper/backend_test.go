@@ -197,7 +197,7 @@ func TestBackendBuildArgs_CodexAndAntigravityModes(t *testing.T) {
 			cfg := &Config{Mode: "new", WorkDir: "/tmp"}
 			got := backend.BuildArgs(cfg, "task")
 			want := []string{
-				"e", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "-C", "/tmp", "--json",
+				"e", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "-c", "mcp_servers={}", "-C", "/tmp", "--json",
 				"task",
 			}
 			if !reflect.DeepEqual(got, want) {
@@ -213,7 +213,7 @@ func TestBackendBuildArgs_CodexAndAntigravityModes(t *testing.T) {
 			backend := CodexBackend{}
 			cfg := &Config{Mode: "new", WorkDir: "/tmp"}
 			got := backend.BuildArgs(cfg, "task")
-			want := []string{"e", "--skip-git-repo-check", "-C", "/tmp", "--json", "task"}
+			want := []string{"e", "--skip-git-repo-check", "-c", "mcp_servers={}", "-C", "/tmp", "--json", "task"}
 			if !reflect.DeepEqual(got, want) {
 				t.Fatalf("got %v, want %v", got, want)
 			}
@@ -226,7 +226,7 @@ func TestBackendBuildArgs_CodexAndAntigravityModes(t *testing.T) {
 			cfg := &Config{Mode: "new", WorkDir: "/tmp", Progress: true}
 			got := backend.BuildArgs(cfg, "task")
 			want := []string{
-				"e", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "-C", "/tmp", "--json",
+				"e", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "-c", "mcp_servers={}", "-C", "/tmp", "--json",
 				"task",
 			}
 			if !reflect.DeepEqual(got, want) {
@@ -234,6 +234,44 @@ func TestBackendBuildArgs_CodexAndAntigravityModes(t *testing.T) {
 			}
 		},
 	)
+}
+
+func TestParseArgs_WithMCP(t *testing.T) {
+	oldArgs := os.Args
+	t.Cleanup(func() { os.Args = oldArgs })
+	os.Args = []string{"codeagent-wrapper", "--with-mcp", "task"}
+
+	cfg, err := parseArgs()
+	if err != nil {
+		t.Fatalf("parseArgs() error = %v", err)
+	}
+	if !cfg.WithMCP {
+		t.Fatal("--with-mcp was not propagated to Config")
+	}
+}
+
+func TestCodexBuildArgs_MCPStartup(t *testing.T) {
+	t.Setenv("CODEX_REQUIRE_APPROVAL", "")
+
+	t.Run("disabled by default", func(t *testing.T) {
+		got := CodexBackend{}.BuildArgs(&Config{Mode: "new", WorkDir: "/tmp"}, "task")
+		want := []string{
+			"e", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "-c", "mcp_servers={}",
+			"-C", "/tmp", "--json", "task",
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("got %v, want %v", got, want)
+		}
+	})
+
+	t.Run("with-mcp keeps configured servers", func(t *testing.T) {
+		got := CodexBackend{}.BuildArgs(&Config{Mode: "new", WorkDir: "/tmp", WithMCP: true}, "task")
+		for i, arg := range got {
+			if arg == "-c" && i+1 < len(got) && got[i+1] == "mcp_servers={}" {
+				t.Fatalf("--with-mcp must not empty configured servers: %v", got)
+			}
+		}
+	})
 }
 
 func TestSelectBackend_DisablesGemini(t *testing.T) {

@@ -27,6 +27,7 @@ type Config struct {
 	KimiModel            string
 	OpencodeModel        string
 	Progress             bool // Emit compact progress lines to stderr
+	WithMCP              bool // Let the sub-agent load configured MCP servers (off by default)
 }
 
 // ParallelConfig defines the JSON schema for parallel execution
@@ -52,6 +53,7 @@ type TaskSpec struct {
 	GrokModel            string          `json:"-"`
 	KimiModel            string          `json:"-"`
 	OpencodeModel        string          `json:"-"`
+	WithMCP              bool            `json:"-"`
 	Context              context.Context `json:"-"`
 }
 
@@ -248,6 +250,7 @@ func parseArgs() (*Config, error) {
 	backendName := defaultBackendName
 	skipPermissions := envFlagEnabled("CODEAGENT_SKIP_PERMISSIONS")
 	progress := false
+	withMCP := false
 	filtered := make([]string, 0, len(args))
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
@@ -327,6 +330,9 @@ func parseArgs() (*Config, error) {
 		case arg == "--progress":
 			progress = true
 			continue
+		case arg == "--with-mcp":
+			withMCP = true
+			continue
 		case strings.HasPrefix(arg, "--skip-permissions="):
 			skipPermissions = parseBoolFlag(strings.TrimPrefix(arg, "--skip-permissions="), skipPermissions)
 			continue
@@ -345,7 +351,7 @@ func parseArgs() (*Config, error) {
 	cfg := &Config{
 		WorkDir: defaultWorkdir, Backend: backendName, SkipPermissions: skipPermissions,
 		ClaudeModel: claudeModel, ClaudeEffort: claudeEffort, NoSessionPersistence: noSessionPersistence,
-		GrokModel: grokModel, KimiModel: kimiModel, OpencodeModel: opencodeModel, Progress: progress,
+		GrokModel: grokModel, KimiModel: kimiModel, OpencodeModel: opencodeModel, Progress: progress, WithMCP: withMCP,
 	}
 	cfg.MaxParallelWorkers = resolveMaxParallelWorkers()
 

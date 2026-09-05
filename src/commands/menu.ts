@@ -10,13 +10,7 @@ import { dirname, join } from 'pathe'
 import { version } from '../../package.json'
 import { i18n } from '../i18n'
 import type { ModelRouting, ModelType } from '../types'
-import {
-  createDefaultConfig,
-  normalizeModelName,
-  normalizeRoutingForInstall,
-  readCcgConfig,
-  writeCcgConfig,
-} from '../utils/config'
+import { createDefaultConfig, normalizeRoutingForInstall, readCcgConfig, writeCcgConfig } from '../utils/config'
 import {
   getAllCommandIds,
   installCodexMode,
@@ -24,6 +18,7 @@ import {
   uninstallCodexMode,
   uninstallWorkflows,
 } from '../utils/installer'
+import { defaultDshHome, findDshProfiles, installDshPlugin, uninstallDshPlugin } from '../utils/installer-dsh'
 import { isWindows } from '../utils/platform'
 import { configMcp } from './config-mcp'
 import { init } from './init'
@@ -189,6 +184,7 @@ export async function showMainMenu(): Promise<void> {
             isZh ? 'Codex 模式' : 'Codex Mode',
             isZh ? '安装 Codex 主导的多模型编排' : 'Install Codex-led multi-model orchestration'
           ),
+          item('D', 'DeepSeek Harness', isZh ? '把 CCG 角色矩阵安装到 dsh' : 'Install the CCG role matrix into dsh'),
           item('T', i18n.t('menu:options.tools'), 'ccusage, CCometixLine'),
           item('C', i18n.t('menu:options.installClaude'), isZh ? '安装/重装 CLI' : 'Install/reinstall CLI'),
 
@@ -223,6 +219,9 @@ export async function showMainMenu(): Promise<void> {
         break
       case 'X':
         await handleCodexMode()
+        break
+      case 'D':
+        await handleDshPlugin()
         break
       case 'T':
         await handleTools()
@@ -332,7 +331,7 @@ async function configApi(): Promise<void> {
   if (currentUrl || currentKey) {
     console.log(ansis.gray(`  ${i18n.t('menu:api.currentConfig')}`))
     if (currentUrl) console.log(ansis.gray(`    URL: ${currentUrl}`))
-    if (currentKey) console.log(ansis.gray(`    Key: ${currentKey.slice(0, 8)}...${currentKey.slice(-4)}`))
+    if (currentKey) console.log(ansis.gray(`    Key: ${i18n.t('menu:api.keyConfigured')}`))
     console.log()
   }
 
@@ -345,8 +344,8 @@ async function configApi(): Promise<void> {
         { name: `${ansis.green('●')} ${i18n.t('menu:api.officialOption')}`, value: 'official' },
         { name: `${ansis.cyan('●')} ${i18n.t('menu:api.thirdPartyOption')}`, value: 'thirdparty' },
         {
-          name: `${ansis.yellow('★')} ${i18n.t('menu:api.sponsor302AI')} ${ansis.gray('— https://share.302.ai/oUDqQ6')}`,
-          value: '302ai',
+          name: `${ansis.yellow('★')} ${i18n.t('menu:api.sponsorAPIMart')} ${ansis.gray('— https://go.apimart.ai/gh-ccg-workflow')}`,
+          value: 'apimart',
         },
       ],
     },
@@ -358,24 +357,24 @@ async function configApi(): Promise<void> {
     delete settings.env.ANTHROPIC_BASE_URL
     delete settings.env.ANTHROPIC_AUTH_TOKEN
     delete settings.env.ANTHROPIC_API_KEY
-  } else if (apiProvider === '302ai') {
+  } else if (apiProvider === 'apimart') {
     console.log()
     console.log(
-      `    ${ansis.yellow('★')} ${i18n.t('menu:api.sponsor302AIGetKey')}: ${ansis.cyan.underline('https://share.302.ai/oUDqQ6')}`
+      `    ${ansis.yellow('★')} ${i18n.t('menu:api.sponsorAPIMartGetKey')}: ${ansis.cyan.underline('https://go.apimart.ai/gh-ccg-workflow')}`
     )
     console.log()
     const { key } = await inquirer.prompt([
       {
         type: 'password',
         name: 'key',
-        message: `302.AI API Key ${ansis.gray(`(${i18n.t('menu:api.keyRequired')})`)}`,
+        message: `APIMart API Key ${ansis.gray(`(${i18n.t('menu:api.keyRequired')})`)}`,
         mask: '*',
         validate: (v: string) => v.trim() !== '' || i18n.t('menu:api.enterKey'),
       },
     ])
 
     if (!settings.env) settings.env = {}
-    settings.env.ANTHROPIC_BASE_URL = 'https://api.302.ai/cc'
+    settings.env.ANTHROPIC_BASE_URL = 'https://api.apimart.ai'
     settings.env.ANTHROPIC_AUTH_TOKEN = key.trim()
     delete settings.env.ANTHROPIC_API_KEY
   } else {
@@ -460,12 +459,13 @@ async function configModelRouting(): Promise<void> {
   console.log(ansis.cyan.bold(`  ${i18n.t('init:model.title')}`))
   console.log()
 
-  // Show current routing
-  const currentFrontend = normalizeModelName(config?.routing?.frontend?.primary) || 'antigravity'
-  const currentBackend = normalizeModelName(config?.routing?.backend?.primary) || 'codex'
-  const currentGrokModel = config?.routing?.grokModel || ''
-  const currentKimiModel = config?.routing?.kimiModel || ''
-  const currentOpencodeModel = config?.routing?.opencodeModel || ''
+  // Normalize retired defaults before presenting route choices.
+  const normalizedRouting = normalizeRoutingForInstall(config?.routing)
+  const currentFrontend = normalizedRouting.frontend.primary
+  const currentBackend = normalizedRouting.backend.primary
+  const currentGrokModel = normalizedRouting.grokModel || ''
+  const currentKimiModel = normalizedRouting.kimiModel || ''
+  const currentOpencodeModel = normalizedRouting.opencodeModel || ''
 
   console.log(ansis.yellow(`  ${i18n.t('init:model.geminiDisabled')}`))
   console.log()
@@ -493,12 +493,12 @@ async function configModelRouting(): Promise<void> {
       name: 'selectedFrontend',
       message: i18n.t('init:model.selectFrontend'),
       choices: [
-        { name: `Antigravity ${ansis.green(`(${i18n.t('init:model.recommended')})`)}`, value: 'antigravity' },
+        { name: `Claude Code ${ansis.green(`(${i18n.t('init:model.recommended')})`)}`, value: 'claude' },
         { name: 'Grok', value: 'grok' },
         { name: 'Kimi Code', value: 'kimi' },
         { name: 'Codex', value: 'codex' },
+        { name: 'Antigravity', value: 'antigravity' },
         { name: 'OpenCode', value: 'opencode' },
-        { name: 'Claude Code', value: 'claude' },
       ],
       default: currentFrontend,
     },
@@ -511,12 +511,12 @@ async function configModelRouting(): Promise<void> {
       name: 'selectedBackend',
       message: i18n.t('init:model.selectBackend'),
       choices: [
-        { name: `Codex ${ansis.green(`(${i18n.t('init:model.recommended')})`)}`, value: 'codex' },
+        { name: `Claude Code ${ansis.green(`(${i18n.t('init:model.recommended')})`)}`, value: 'claude' },
         { name: 'Grok', value: 'grok' },
         { name: 'Kimi Code', value: 'kimi' },
+        { name: 'Codex', value: 'codex' },
         { name: 'Antigravity', value: 'antigravity' },
         { name: 'OpenCode', value: 'opencode' },
-        { name: 'Claude Code', value: 'claude' },
       ],
       default: currentBackend,
     },
@@ -580,7 +580,6 @@ async function configModelRouting(): Promise<void> {
   }
 
   // Update config.toml
-  const normalizedRouting = normalizeRoutingForInstall(config?.routing)
   const updatedRouting: ModelRouting = {
     frontend: {
       models: [selectedFrontend],
@@ -612,7 +611,7 @@ async function configModelRouting(): Promise<void> {
     })
   }
 
-  // Refresh only routing-dependent commands, engine files, and prompts.
+  // Refresh routing-dependent templates and their Hook runtime.
   const spinner = ora(i18n.t('init:model.reinstalling')).start()
   const installedWorkflows = config?.workflows?.installed?.length ? config.workflows.installed : getAllCommandIds()
   try {
@@ -621,7 +620,6 @@ async function configModelRouting(): Promise<void> {
       liteMode: config?.performance?.liteMode,
       mcpProvider: config?.mcp?.provider,
       skipImpeccable: config?.performance?.skipImpeccable,
-      ensureBinary: true,
     })
     if (!result.success) {
       spinner.fail(i18n.t('init:model.reinstallFailed'))
@@ -715,8 +713,118 @@ async function configOutputStyle(): Promise<void> {
 }
 
 // ═══════════════════════════════════════════════════════
-// Install Claude Code
+// External orchestrators
 // ═══════════════════════════════════════════════════════
+
+async function handleDshPlugin(): Promise<void> {
+  const isZh = i18n.language === 'zh-CN'
+  const dshHome = defaultDshHome()
+  console.log()
+  console.log(ansis.cyan.bold('  CCG for DeepSeek Harness'))
+  console.log()
+  console.log(
+    isZh
+      ? '  七个固定角色委派工具可分别配置模型，也可作为带独立文件的常驻队友。'
+      : '  Seven role-pinned delegation tools can use separate models or work as persistent teammates.'
+  )
+  console.log()
+
+  const profiles = await findDshProfiles(dshHome)
+  if (profiles.length === 0) {
+    console.log(
+      ansis.yellow(
+        isZh
+          ? `  没有找到 DeepSeek Harness 配置档：${join(dshHome, 'profiles')}`
+          : `  No DeepSeek Harness profile found: ${join(dshHome, 'profiles')}`
+      )
+    )
+    console.log(ansis.gray(isZh ? '  先运行一次 `dsh web` 生成配置档。' : '  Run `dsh web` once to create a profile.'))
+    return
+  }
+
+  for (const profile of profiles) {
+    const mark = profile.installed ? ansis.green('✓') : ansis.gray('○')
+    const note = profile.installed ? ansis.gray(isZh ? '已安装' : 'installed') : ''
+    console.log(`  ${mark} ${profile.name} ${note}`)
+  }
+  console.log()
+
+  const { action } = await inquirer.prompt([
+    {
+      type: 'select',
+      name: 'action',
+      message: isZh ? '选择操作' : 'Select action',
+      choices: [
+        { name: isZh ? '安装或更新全部配置档' : 'Install or update every profile', value: 'install' },
+        { name: isZh ? '选择配置档安装' : 'Choose profiles to install', value: 'pick' },
+        { name: isZh ? '从全部配置档卸载' : 'Uninstall from every profile', value: 'uninstall' },
+        { name: isZh ? '返回' : 'Back', value: 'back' },
+      ],
+    },
+  ])
+
+  if (action === 'back') return
+
+  let chosen: string[] | undefined
+  if (action === 'pick') {
+    const { picked } = await inquirer.prompt<{ picked: string[] }>([
+      {
+        type: 'checkbox',
+        name: 'picked',
+        message: isZh ? '选择配置档' : 'Select profiles',
+        choices: profiles.map((profile) => ({
+          name: profile.name,
+          value: profile.name,
+          checked: profile.installed,
+        })),
+      },
+    ])
+    if (!picked?.length) return
+    chosen = picked
+  }
+
+  const uninstalling = action === 'uninstall'
+  const spinner = ora(
+    uninstalling
+      ? isZh
+        ? '正在移除 dsh-ccg...'
+        : 'Removing dsh-ccg...'
+      : isZh
+        ? '正在安装 dsh-ccg...'
+        : 'Installing dsh-ccg...'
+  ).start()
+  const result = uninstalling
+    ? await uninstallDshPlugin({ dshHome })
+    : await installDshPlugin({ dshHome, profiles: chosen })
+
+  if (result.success) {
+    spinner.succeed(
+      uninstalling
+        ? isZh
+          ? `已移除：${result.profiles.join(', ') || '没有配置档安装过'}`
+          : `Removed from: ${result.profiles.join(', ') || 'no installed profile'}`
+        : isZh
+          ? `已安装到：${result.profiles.join(', ')}`
+          : `Installed into: ${result.profiles.join(', ')}`
+    )
+    if (!uninstalling) {
+      console.log(
+        ansis.gray(
+          isZh
+            ? '  重启 dsh 后，在设置中配置 CCG 的模型档位。'
+            : '  Restart dsh, then configure the CCG model tiers in Settings.'
+        )
+      )
+    }
+  } else {
+    spinner.fail(isZh ? '操作失败' : 'Operation failed')
+    if (result.message) console.log(ansis.red(`  ${result.message}`))
+  }
+
+  for (const warning of result.warnings) {
+    console.log(ansis.yellow(`  ! ${warning}`))
+  }
+}
 
 async function handleCodexMode(): Promise<void> {
   const isZh = i18n.language === 'zh-CN'

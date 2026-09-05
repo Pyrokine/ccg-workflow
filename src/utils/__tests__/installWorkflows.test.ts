@@ -58,6 +58,44 @@ describe('installWorkflows E2E — additional backend prompts', () => {
     for (const model of ['codex', 'antigravity', 'kimi']) {
       expect(await fs.pathExists(join(tmpDir, '.ccg', 'prompts', model))).toBe(false)
     }
+
+    const builder = readFileSync(join(tmpDir, '.ccg', 'prompts', 'opencode', 'builder.md'), 'utf-8')
+    expect(builder).toContain('Exact sections in `<ccg-specs>`')
+    expect(builder).toContain('The dispatch must supply the active task ID and task revision')
+    expect(builder).not.toContain('If the project has `.ccg/spec/`')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────
+// E2E: retired Skill Registry commands
+// ─────────────────────────────────────────────────────────────
+describe('installWorkflows E2E — retired Impeccable commands', () => {
+  const tmpDir = join(tmpdir(), `ccg-test-retired-skills-${Date.now()}`)
+
+  afterAll(async () => {
+    await fs.remove(tmpDir)
+  })
+
+  it('removes generated commands that are no longer invocable and preserves user files', async () => {
+    const commandsDir = join(tmpDir, 'commands', 'ccg')
+    const retiredPath = join(commandsDir, 'adapt.md')
+    const userPath = join(commandsDir, 'polish.md')
+    await fs.ensureDir(commandsDir)
+    await fs.writeFile(
+      retiredPath,
+      `Read ${join(tmpDir, 'skills', 'ccg', 'impeccable', 'adapt', 'SKILL.md').replaceAll('\\', '/')}\n`,
+      'utf-8'
+    )
+    await fs.writeFile(userPath, 'user-owned command\n', 'utf-8')
+
+    const result = await installWorkflows(['go'], tmpDir, true, {
+      mcpProvider: 'skip',
+      skipBinary: true,
+    })
+
+    expect(result.success).toBe(true)
+    expect(await fs.pathExists(retiredPath)).toBe(false)
+    expect(await fs.readFile(userPath, 'utf-8')).toBe('user-owned command\n')
   })
 })
 
@@ -66,16 +104,30 @@ describe('installWorkflows E2E — additional backend prompts', () => {
 // ─────────────────────────────────────────────────────────────
 describe('syncRoutingTemplates', () => {
   const tmpDir = join(tmpdir(), `ccg-test-routing-sync-${Date.now()}`)
+  const invalidDir = join(tmpdir(), `ccg-test-routing-invalid-${Date.now()}`)
 
   afterAll(async () => {
-    await fs.remove(tmpDir)
+    await Promise.all([fs.remove(tmpDir), fs.remove(invalidDir)])
   })
 
-  it('updates only routing-dependent artifacts', async () => {
+  it('updates routing artifacts and Hook runtime without touching the binary', async () => {
     const settingsPath = join(tmpDir, 'settings.json')
     const binaryPath = join(tmpDir, 'bin', 'codeagent-wrapper')
+    const oldHookPath = join(tmpDir, 'hooks', 'ccg', 'workflow-state.js')
     await fs.ensureDir(join(tmpDir, 'bin'))
-    await fs.writeFile(settingsPath, 'preserve settings', 'utf-8')
+    await fs.ensureDir(join(tmpDir, 'hooks', 'ccg'))
+    await fs.writeJson(settingsPath, {
+      preserved: true,
+      hooks: {
+        PostToolUse: [
+          {
+            matcher: 'Write',
+            hooks: [{ type: 'command', command: 'node /tmp/user-post-tool.js' }],
+          },
+        ],
+      },
+    })
+    await fs.writeFile(oldHookPath, '// old CCG Hook\n', 'utf-8')
     await fs.writeFile(binaryPath, 'preserve binary', 'utf-8')
 
     const result = await syncRoutingTemplates(['go'], tmpDir, {
@@ -95,10 +147,19 @@ describe('syncRoutingTemplates', () => {
     })
 
     expect(result.success).toBe(true)
-    expect(readFileSync(settingsPath, 'utf-8')).toBe('preserve settings')
     expect(readFileSync(binaryPath, 'utf-8')).toBe('preserve binary')
-    expect(await fs.pathExists(join(tmpDir, 'commands', 'ccg', 'go.md'))).toBe(true)
+    expect(readFileSync(oldHookPath, 'utf-8')).toContain('authority refresh after prompts and external results')
+    const settings = await fs.readJson(settingsPath)
+    expect(settings.preserved).toBe(true)
+    expect(JSON.stringify(settings.hooks.PostToolUse)).toContain('/tmp/user-post-tool.js')
+    expect(JSON.stringify(settings.hooks.PostToolUse)).toContain('workflow-state.js')
+    expect(settings.hooks.PostToolUseFailure.at(-1).matcher).toBe('Bash|Agent')
+    const goPath = join(tmpDir, 'commands', 'ccg', 'go.md')
+    expect(await fs.pathExists(goPath)).toBe(true)
     expect(await fs.pathExists(join(tmpDir, '.ccg', 'engine', 'model-router.md'))).toBe(true)
+    const goCommand = readFileSync(goPath, 'utf-8')
+    expect(goCommand).toContain(join(tmpDir, 'hooks', 'ccg', 'task-state.js').replace(/\\/g, '/'))
+    expect(goCommand).not.toContain('~/.claude/hooks/ccg/task-state.js')
     const installedCcgDir = join(tmpDir, '.ccg').replace(/\\/g, '/')
     const reviewStrategy = readFileSync(join(tmpDir, '.ccg', 'engine', 'strategies', 'review-audit.md'), 'utf-8')
     expect(reviewStrategy).toContain(`Read("${installedCcgDir}/engine/model-router.md")`)
@@ -107,6 +168,37 @@ describe('syncRoutingTemplates', () => {
     }
     expect(await fs.pathExists(join(tmpDir, '.ccg', 'prompts', 'grok', 'analyzer.md'))).toBe(true)
     expect(await fs.pathExists(join(tmpDir, '.ccg', 'prompts', 'opencode', 'analyzer.md'))).toBe(true)
+  })
+
+  it('stops before replacing Hook or routing files when settings are invalid', async () => {
+    const settingsPath = join(invalidDir, 'settings.json')
+    const commandPath = join(invalidDir, 'commands', 'ccg', 'go.md')
+    const hookPath = join(invalidDir, 'hooks', 'ccg', 'workflow-state.js')
+    await fs.ensureDir(join(invalidDir, 'commands', 'ccg'))
+    await fs.ensureDir(join(invalidDir, 'hooks', 'ccg'))
+    await fs.writeFile(settingsPath, '{invalid', 'utf-8')
+    await fs.writeFile(commandPath, 'preserve command\n', 'utf-8')
+    await fs.writeFile(hookPath, 'preserve Hook\n', 'utf-8')
+
+    const result = await syncRoutingTemplates(['go'], invalidDir, {
+      routing: {
+        mode: 'smart',
+        frontend: { models: ['antigravity'], primary: 'antigravity' },
+        backend: { models: ['codex'], primary: 'codex' },
+        review: {
+          profiles: [
+            { id: 'gpt', model: 'gpt-5.6-sol', effort: 'xhigh' },
+            { id: 'grok', model: 'grok-4.5', effort: 'high' },
+          ],
+        },
+      },
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.errors.join('\n')).toContain('invalid JSON')
+    expect(await fs.readFile(settingsPath, 'utf-8')).toBe('{invalid')
+    expect(await fs.readFile(commandPath, 'utf-8')).toBe('preserve command\n')
+    expect(await fs.readFile(hookPath, 'utf-8')).toBe('preserve Hook\n')
   })
 
   it('fills missing review profiles in refreshed templates', async () => {

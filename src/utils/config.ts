@@ -76,13 +76,13 @@ export function createDefaultConfig(options: {
 export function createDefaultRouting(): ModelRouting {
   return {
     frontend: {
-      models: ['antigravity', 'codex'],
-      primary: 'antigravity',
+      models: ['claude'],
+      primary: 'claude',
       strategy: 'fallback',
     },
     backend: {
-      models: ['codex'],
-      primary: 'codex',
+      models: ['claude'],
+      primary: 'claude',
       strategy: 'fallback',
     },
     review: {
@@ -146,7 +146,10 @@ export function normalizeModelName(value: unknown): ModelType | null {
   }
 
   const model = value.trim().toLowerCase()
-  if (model === 'agy' || model === 'gemini') {
+  if (model === 'gemini') {
+    return 'grok'
+  }
+  if (model === 'agy') {
     return 'antigravity'
   }
   if (activeModels.has(model as ModelType)) {

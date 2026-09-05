@@ -67,15 +67,7 @@ Gate: 优化审查已完成 ✓
     - 目标明确性（0-3）、预期结果（0-3）、边界范围（0-2）、约束条件（0-2）
     - ≥7：继续 | <7：停止，提出补充问题
 
-**Task 更新**：
-
-```
-更新 .ccg/tasks/{task-name}/task.json:
-  currentPhase → "1-research"
-  nextAction → "需求增强 + 上下文检索"
-```
-
-持久化：写入 `.ccg/tasks/{task-name}/requirements.md`
+用户确认增强后的需求后，使用 `update-requirements` 写入完整契约，再用 `checkpoint` 更新为 `1-research`，下一动作设为“启动多模型构思”。
 
 ### Phase 2: 多模型构思 [required]
 
@@ -108,15 +100,9 @@ TaskOutput({ task_id: "$FRONTEND_TASK_ID", block: true, timeout: 600000 })
 
 综合双方分析，输出方案对比（至少 2 个方案）。
 
-**Task 更新**：`currentPhase → "2-ideation"`, `nextAction → "综合分析结果，进入规划"`
-**持久化**：写入 `.ccg/tasks/{task-name}/analysis.md`
+外部模型返回后重新 `resolve`。综合结果使用 `write-artifact` 写入 `analysis.md`，再用 `checkpoint` 更新为 `2-ideation`，下一动作设为“根据分析与 authoritative spec 撰写计划”。
 
-**策展 context.jsonl**：
-在进入 Phase 3 前，策展 `.ccg/tasks/{task-name}/context.jsonl`：
-
-- 检查 `.ccg/spec/` 存在 → 列出相关 spec 文件
-- 将 analysis.md 加入（子 Agent 在规划阶段需要参考分析结果）
-- 格式：每行 `{"file": "路径", "reason": "原因"}`
+不要创建 `context.jsonl` 或扫描 `.ccg/spec/`。子 Agent 上下文由 task snapshot 中的 requirements、artifacts 和精确 `specRefs` 提供。
 
 ### Phase 3: 详细规划 [required]
 
@@ -136,16 +122,7 @@ TaskOutput({ task_id: "$FRONTEND_TASK_ID", block: true, timeout: 600000 })
 - 测试策略
 - 风险及缓解措施
 
-**持久化**：写入 `.ccg/tasks/{task-name}/plan.md`
-
-**Task 更新**：
-
-```
-更新 task.json:
-  currentPhase → "3-planning"
-  gate → "user_approval_required"
-  nextAction → "等待用户审批计划"
-```
+按实体、版本、依赖方向和排除项逐字段核对 authoritative spec，再用 `write-artifact` 写入 `plan.md`。随后用 `checkpoint` 更新为 `3-planning`，`gate` 设为 `user_approval_required`，下一动作设为“等待用户审批计划”。
 
 **⛔⛔⛔ HARD STOP — 你必须在这里停下来，向用户展示以下选项并等待回复。不可跳过，不可默认选择。⛔⛔⛔**
 
@@ -157,14 +134,14 @@ TaskOutput({ task_id: "$FRONTEND_TASK_ID", block: true, timeout: 600000 })
 请审批以上计划，并选择谁来写代码：
 
 1. **Agent Teams** — Claude Builders 并行写，多文件同时进行
-2. **backend / frontend 模型** — 外部模型写代码，更快更便宜，Claude 协调 GPT、Grok 审查
+2. **backend / frontend 模型** — 用户明确选择的外部模型写代码
 
 请回复 1 或 2（或直接说"用team"/"用codex"等）。
 ---
 
 **在用户回复之前，你不可以执行任何文件写入操作。** 未审批不可进入 Phase 4。
 
-用户确认后：`task.json: gate → null`
+用户确认后，用 `checkpoint` 将 `gate` 设为 `null`，阶段更新为 `4-implementation`，并记录用户选择的执行模式。
 
 ### Phase 4: 实施
 
@@ -182,7 +159,7 @@ TaskOutput({ task_id: "$FRONTEND_TASK_ID", block: true, timeout: 600000 })
 
 **你绝对不可以自己用 Write/Edit 工具写产品代码。所有代码由 Team Builder 写。你只做编排。**
 
-**Task 更新**：`currentPhase → "4-implementation"`, `nextAction → "TeamCreate → spawn Builders"`
+使用 `checkpoint` 保持阶段为 `4-implementation`，下一动作设为“TeamCreate 后按已审批计划派发 Builders”。
 
 #### Step 1: 拆分子任务
 
@@ -190,6 +167,7 @@ TaskOutput({ task_id: "$FRONTEND_TASK_ID", block: true, timeout: 600000 })
 
 - 每个子任务有明确的文件范围（互不重叠）
 - 标注依赖关系：Layer 1（无依赖）→ Layer 2（依赖 Layer 1）
+- 每个 dispatch 写明 task ID、task revision，并声明注入的 `ccg-specs` 高于 prompt 摘要；发现冲突时停止并报告
 
 #### Step 2: 创建 Team（必须执行）
 
@@ -210,7 +188,7 @@ Agent({
   team_name: "{task-id}-team",
   name: "dev-1",
   model: "sonnet",
-  prompt: "你是 Builder，负责实施子任务 1。\n\n## 工作目录\n{WORKDIR}\n\n## 文件范围约束（⛔ 硬性规则）\n你只能创建或修改以下文件：\n- {file1}\n- {file2}\n严禁修改其他文件。违反 = 任务失败。\n\n## 实施步骤\n{steps from plan.md}\n\n## 验收标准\n{criteria from prd}\n\n完成后标记任务 completed。"
+  prompt: "你是 Builder，负责实施子任务 1。\n\n## 工作目录\n{WORKDIR}\n\n## Active task\nID: {task-id}\nRevision: {task-revision}\n\n## 文件范围约束（⛔ 硬性规则）\n你只能创建或修改以下文件：\n- {file1}\n- {file2}\n严禁修改其他文件。违反 = 任务失败。\n\n## 实施步骤\n{steps from plan.md}\n\n## 验收标准\n{criteria from requirements.md}\n\n注入的精确 spec section 和 requirements.md 高于本派发摘要；发现冲突时停止并报告，不修改 `.ccg/`。"
 })
 Agent({
   team_name: "{task-id}-team",
@@ -227,9 +205,9 @@ Agent({
 - Layer 1 全部完成后 → 在新消息中 spawn Layer 2 Builders
 - Builder 遇到问题 → SendMessage 指导
 
-#### Step 5: 准备 GPT、Grok 审查
+#### Step 5: 准备 Claude Code 审查
 
-收集完整 `git diff`、相关完整文件和验收标准。在 Phase 5 并行启动 GPT、Grok 外部 reviewer，不创建 Agent Teams reviewer。
+收集完整 `git diff`、相关完整文件和验收标准。在 Phase 5 创建独立 Claude Code 审查 Agent。只有用户明确请求 GPT、Grok、双模型审查或 `/ccg:spec-review` 时才启动外部 reviewer。
 
 Critical → spawn fix-dev 修复（最多 2 轮）。
 
@@ -252,7 +230,7 @@ SendMessage({ to: "dev-2", message: { type: "shutdown_request" } })
 
 #### 模式 B: 外部模型并行实施（用户选 [2]）
 
-**Task 更新**：`currentPhase → "4-implementation"`, `nextAction → "Parallel Builder 执行 plan"`
+使用 `checkpoint` 保持阶段为 `4-implementation`，下一动作设为“Parallel Builder 执行已审批 plan”。
 
 Claude 作为编排者，调用当前 backend 模型并行写代码。backend 为 `claude` 时使用 Agent Teams，不启动 wrapper。
 
@@ -260,13 +238,14 @@ Claude 作为编排者，调用当前 backend 模型并行写代码。backend �
 
 - **Layer 1** — 无依赖（底层模块：model/store/util/schema）→ 并行
 - **Layer 2** — 依赖 Layer 1（上层：route/middleware/controller/component）→ 串行等 Layer 1
-- 每个子任务：文件范围 + 实施步骤 + 验证命令
+- 每个子任务：active task ID + task revision + 文件范围 + 实施步骤 + 验收标准 + 验证命令
+- 每个派发声明注入的精确 spec section 与 requirements.md 优先；缺失上下文、revision 不一致或内容冲突时停止并报告
 
 **Step 2**: 调用 codeagent-wrapper `--parallel` 模式：
 
 ```
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --parallel --backend {{BACKEND_PRIMARY}} - \"$WORKDIR\" <<'PARALLEL_EOF'\n---TASK---\nid: layer1-{name1}\nworkdir: $WORKDIR\n---CONTENT---\nROLE_FILE: ~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/builder.md\n<TASK>\n## 文件范围（⛔ 只改这些文件）\n{file1, file2}\n\n## 实施步骤\n{steps from plan.md Layer 1}\n\n## 验证命令\n{test/lint commands}\n</TASK>\n---TASK---\nid: layer1-{name2}\nworkdir: $WORKDIR\n---CONTENT---\nROLE_FILE: ~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/builder.md\n<TASK>\n## 文件范围\n{file3, file4}\n\n## 实施步骤\n{steps}\n</TASK>\n---TASK---\nid: layer2-{name3}\nworkdir: $WORKDIR\ndependencies: layer1-{name1},layer1-{name2}\n---CONTENT---\nROLE_FILE: ~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/builder.md\n<TASK>\n## 文件范围\n{file5, file6}\n\n## 实施步骤\n{steps from Layer 2}\n</TASK>\nPARALLEL_EOF",
+  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --parallel --backend {{BACKEND_PRIMARY}} - \"$WORKDIR\" <<'PARALLEL_EOF'\n---TASK---\nid: layer1-{name1}\nworkdir: $WORKDIR\n---CONTENT---\nROLE_FILE: ~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/builder.md\n<TASK>\n## Active task\nID: {task-id}\nRevision: {task-revision}\n\n## Authority\n注入的精确 spec section 和 requirements.md 高于本派发摘要；缺失上下文、revision 不一致或内容冲突时停止并报告。不得修改 `.ccg/`。\n\n## 文件范围（⛔ 只改这些文件）\n{file1, file2}\n\n## 实施步骤\n{steps from plan.md Layer 1}\n\n## 验证命令\n{test/lint commands}\n</TASK>\n---TASK---\nid: layer1-{name2}\nworkdir: $WORKDIR\n---CONTENT---\nROLE_FILE: ~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/builder.md\n<TASK>\n## Active task\nID: {task-id}\nRevision: {task-revision}\n\n## Authority\n注入的精确 spec section 和 requirements.md 高于本派发摘要；缺失上下文、revision 不一致或内容冲突时停止并报告。不得修改 `.ccg/`。\n\n## 文件范围\n{file3, file4}\n\n## 实施步骤\n{steps}\n</TASK>\n---TASK---\nid: layer2-{name3}\nworkdir: $WORKDIR\ndependencies: layer1-{name1},layer1-{name2}\n---CONTENT---\nROLE_FILE: ~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/builder.md\n<TASK>\n## Active task\nID: {task-id}\nRevision: {task-revision}\n\n## Authority\n注入的精确 spec section 和 requirements.md 高于本派发摘要；缺失上下文、revision 不一致或内容冲突时停止并报告。不得修改 `.ccg/`。\n\n## 文件范围\n{file5, file6}\n\n## 实施步骤\n{steps from Layer 2}\n</TASK>\nPARALLEL_EOF",
   run_in_background: true,
   timeout: 3600000,
   description: "Parallel Builder: {N} 个子任务（L1: {X} 并行 → L2: {Y} 串行）"
@@ -284,7 +263,7 @@ Bash({
 **Step 4**: Lead 准备审查材料：
 
 1. 收集完整 `git diff`、相关完整文件和 plan 验收标准
-2. 将范围信息附入 GPT、Grok 的审查输入
+2. 将范围信息附入独立 Claude Code 审查 Agent 的输入
 3. 不在此步骤自行审查或修复
 
 **降级**：外部模型失败/超时 → 告知用户，切换到模式 A 执行
@@ -295,19 +274,18 @@ Bash({
 
 **Gate check**: 实施已完成
 
-**Task 更新**：`currentPhase → "5-optimization"`, `nextAction → "Ralph Loop Round 1: 模型审查 + 质量关卡"`
+使用 `checkpoint` 更新为 `5-optimization`，下一动作设为“Ralph Loop Round 1: 模型审查与质量关卡”。
 
-参考 `phase-guide.md § 10 Ralph Loop` 执行迭代审查。最多 3 轮。
+参考 `phase-guide.md § 9 Ralph Loop` 执行迭代审查。最多 3 轮。
 
 #### Round N 流程（N=1,2,3）
 
-**5a. GPT、Grok 模型审查（每轮使用不持久化新会话）**
+**5a. Claude Code 审查**
 
-**模型调用**：
-
-- **GPT**：`--backend claude --no-session-persistence --claude-model {{REVIEW_GPT_MODEL}} --claude-effort {{REVIEW_GPT_EFFORT}}`，审查后端逻辑、正确性、安全、回归与测试缺口
-- **Grok**：`--backend claude --no-session-persistence --claude-model {{REVIEW_GROK_MODEL}} --claude-effort {{REVIEW_GROK_EFFORT}}`，审查前端交互、可访问性、设计一致性与前端安全
-- 两个 reviewer 必须并行运行，不使用 `resume` 或 `SESSION_ID`。Lead 在等待结果后汇总并确认 finding
+- 创建独立 Claude Code 审查 Agent，使用完整 diff、相关文件和验收标准检查正确性、安全、回归与测试缺口
+- 不调用 codeagent-wrapper 或任何外部 CLI
+- 只有用户明确请求 GPT、Grok、双模型审查或 `/ccg:spec-review` 时，才启动对应外部 review profile。外部 reviewer 使用 `--no-session-persistence`，不使用 `resume` 或 `SESSION_ID`
+- Lead 在收到审查结果后汇总并确认 finding
 
 **5b. 质量关卡**
 
@@ -325,13 +303,7 @@ Bash({
 - **Warning**：建议修复
 - **Info**：供参考
 
-**持久化**：写入 `.ccg/tasks/{task-name}/review.md`（每轮覆盖）
-
-追加进度到 `.ccg/tasks/{task-name}/fix-log.jsonl`：
-
-```jsonl
-{"round": N, "critical": X, "warning": Y, "info": Z, "ts": "ISO"}
-```
+每轮使用 `write-artifact` 覆盖 `review.md`，再用 `checkpoint` 把轮次、finding 数量和修复结果写入 progress。不要创建单独的状态日志。
 
 **5d. 用户决定（⛔ 必须等待）**
 
@@ -345,7 +317,7 @@ Bash({
 
 1. spawn fix-dev（**新 Agent，干净上下文**）修复 Critical/Warning
 2. fix-dev 完成后回到 5a 开始 Round N+1
-3. 追加修复记录到 fix-log.jsonl
+3. 使用 `checkpoint` 更新 progress 中的修复记录
 
 用户选择停止 → 进入 Phase 6
 
@@ -355,7 +327,7 @@ Bash({
 
 `[模式：评审]`
 
-**Task 更新**：`currentPhase → "6-final"`, `nextAction → "最终验收"`
+使用 `checkpoint` 更新为 `6-final`，下一动作设为“逐项执行最终验收”。
 
 1. 对照计划检查完成情况
 2. 运行测试验证功能
@@ -366,30 +338,14 @@ Bash({
      变更: [N] 文件，[M] 行
      方案: [选定方案摘要]
      审查: [Critical: N, Warning: N, Info: N]
-     📍 Next: /ccg commit 提交，或查看 .ccg/tasks/{task-name}/ 中的完整记录
+     📍 Next: /ccg commit 提交，或查看 .ccg/tasks/{task-id}/ 中的完整记录
    ```
 
-#### Spec Evolution（归档前必须执行）
+#### Spec Evolution 与完成
 
-参考 `phase-guide.md § 8 Spec Evolution Protocol` 执行：
+按 `phase-guide.md § 7` 检查本次变更是否需要更新项目已有的 tracked 文档或 OpenSpec，并用 `set-spec-evolution` 记录结果。
 
-1. 分析本次 `git diff` + `review.md`，提炼可复用的编码约定和经验教训
-2. 如有值得记录的经验 → 草拟 Spec 条目，展示给用户确认后追加到 `.ccg/spec/{domain}/index.md`
-3. 无值得提炼的经验 → 跳过（不强行凑）
-
-**Task 更新**：`status → "archived"`
-
-**归档任务**：将 `.ccg/tasks/{task-name}/` 移动到 `.ccg/tasks/archive/YYYY-MM/{task-name}/`
-
-```bash
-mkdir -p .ccg/tasks/archive/$(date +%Y-%m) && mv .ccg/tasks/{task-name} .ccg/tasks/archive/$(date +%Y-%m)/
-```
-
-**自动提交归档**：
-
-```bash
-git add .ccg/tasks/ && git commit -m "chore: archive ccg task {task-name}"
-```
+最终验收通过且 Gate 为 `null` 后，使用 `finish` 标记任务为 `completed`。任务目录保持原路径，不移动、不提交 `.ccg/`。
 
 ```
 📍 Next: /ccg:commit 提交产品代码
@@ -403,5 +359,5 @@ git add .ccg/tasks/ && git commit -m "chore: archive ccg task {task-name}"
 - **Phase 2 双模型必须并行** — 不可串行调用
 - **外部模型返回前不可提前进入下一阶段** — 等待是必须的
 - **不可因为"任务简单"而跳过 [required] 阶段** — 每个阶段都有其价值
-- **外部模型零文件写入权限** — 所有修改由 Claude 执行
+- **执行权限跟随已审批模式** — 仅模式 B 的 Builder 可在各自文件范围内写代码；分析、规划和 reviewer 不写产品代码
 - **评分 <7 或用户未审批时强制停止** — 不可绕过

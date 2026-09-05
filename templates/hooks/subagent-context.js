@@ -1,172 +1,140 @@
 #!/usr/bin/env node
 // CCG SubAgent Context Hook — PreToolUse (Bash|Agent matcher)
-// Injects spec + task context when:
-//   1. codeagent-wrapper is about to be called (Bash)
-//   2. Agent Team member is about to be spawned (Agent)
-// Supports role-based filtering: context.jsonl entries with "roles" field
-// are only injected when the agent's detected role matches.
+// Injects task context into the actual Agent prompt or wrapper stdin.
 
 'use strict';
 
-try {
-  const path = require('path');
-  const fs = require('fs');
-  const { findProjectRoot, getActiveTask, readFileSafe, readContextJsonl, outputHook } = require('./task-utils.js');
+const {
+  findProjectRoot,
+  readHookInput,
+  buildTaskSnapshot,
+  renderTaskSnapshot,
+  renderResolution,
+  findCodeagentWrapperCalls,
+  injectIntoQuotedHeredoc,
+  outputHook,
+  escapeXml,
+} = require('./task-utils.js');
 
-  let inputData = '';
-  if (!process.stdin.isTTY) {
-    inputData = fs.readFileSync(0, 'utf-8');
-  }
+const ROLE_FILE_MAP = {
+  reviewer: 'review',
+  analyzer: 'research',
+  debugger: 'debug',
+  tester: 'review',
+  architect: 'implement',
+  optimizer: 'implement',
+  frontend: 'implement',
+  builder: 'implement',
+};
 
-  let toolInput = {};
-  try {
-    const parsed = JSON.parse(inputData);
-    toolInput = parsed.tool_input || parsed.input || parsed;
-  } catch {
-    /* not JSON */
-  }
+const AGENT_NAME_PATTERNS = [
+  { pattern: /review|check|audit|qa/i, role: 'review' },
+  { pattern: /research|scout|explore|analy|plan/i, role: 'research' },
+  { pattern: /debug|diagnos/i, role: 'debug' },
+  { pattern: /dev|builder|fix|impl|architect|frontend|optimizer/i, role: 'implement' },
+];
 
-  // Determine trigger type
-  const command = toolInput.command || '';
-  const teamName = toolInput.team_name || '';
-  const agentName = toolInput.name || toolInput.subagent_type || '';
+let protectExecution = false;
 
-  const isCodeagentCall = command.includes('codeagent-wrapper');
-  const isTeamSpawn = !!teamName || (typeof toolInput.prompt === 'string' && !!toolInput.subagent_type);
+function denyTool(code, message, additionalContext) {
+  outputHook('PreToolUse', additionalContext, {
+    permissionDecision: 'deny',
+    permissionDecisionReason: `${code}: ${message}`,
+  });
+}
 
-  if (!isCodeagentCall && !isTeamSpawn) {
-    process.exit(0);
-  }
+function explicitRole(value) {
+  const match = String(value || '').match(/(?:^|\n|\s)CCG_ROLE\s*[:=]\s*(research|implement|review|debug)(?:\s|$)/i);
+  return match ? match[1].toLowerCase() : null;
+}
 
-  const cwd = process.env.CLAUDE_PROJECT_DIR || process.cwd();
-  const root = findProjectRoot(cwd);
-  if (!root) process.exit(0);
-
-  const task = getActiveTask(root);
-  if (!task) process.exit(0);
-
-  // --- Role detection ---
-  const ROLE_FILE_MAP = {
-    reviewer: 'review',
-    analyzer: 'research',
-    debugger: 'debug',
-    tester: 'review',
-    architect: 'implement',
-    optimizer: 'implement',
-    frontend: 'implement',
-  };
-  const AGENT_NAME_PATTERNS = [
-    { pattern: /dev|builder|fix|impl/i, role: 'implement' },
-    { pattern: /review|check|audit/i, role: 'review' },
-    { pattern: /research|scout|explore|analy/i, role: 'research' },
-    { pattern: /debug|diagnos/i, role: 'debug' },
-  ];
-
-  let detectedRole = 'implement'; // default
+function detectRole(isCodeagentCall, command, toolInput) {
+  const explicit = explicitRole(isCodeagentCall ? command : toolInput.prompt);
+  if (explicit) return explicit;
 
   if (isCodeagentCall) {
-    const roleMatch = command.match(/ROLE_FILE:.*\/(\w+)\.md/);
-    if (roleMatch) {
-      detectedRole = ROLE_FILE_MAP[roleMatch[1]] || 'implement';
-    }
-  } else if (isTeamSpawn && agentName) {
-    for (const { pattern, role } of AGENT_NAME_PATTERNS) {
-      if (pattern.test(agentName)) {
-        detectedRole = role;
-        break;
-      }
-    }
+    const roleMatch = command.match(/ROLE_FILE\s*:\s*[^\n\r]*[/\\]([\w-]+)\.md/i);
+    return roleMatch ? ROLE_FILE_MAP[roleMatch[1].toLowerCase()] || 'unknown' : 'unknown';
   }
 
-  const contextParts = [];
+  const agentName = String(toolInput.name || toolInput.subagent_type || '');
+  for (const { pattern, role } of AGENT_NAME_PATTERNS) {
+    if (pattern.test(agentName)) return role;
+  }
+  // A generic Agent has no reliable role label. Supplying every linked section
+  // is preferable to silently omitting role-scoped authority from its prompt.
+  return 'all';
+}
 
-  if (isTeamSpawn) {
-    contextParts.push(`<ccg-active-task>
-Active task: ${task.dir}
-Task: ${task.title || task.id} (${task.status})
-Strategy: ${task.strategy}
-Phase: ${task.currentPhase}
-Agent role: ${detectedRole}
-</ccg-active-task>`);
+function main() {
+  const input = readHookInput();
+  const toolInput = input.tool_input || {};
+  const command = typeof toolInput.command === 'string' ? toolInput.command : '';
+  const isCodeagentCall = input.tool_name === 'Bash' && findCodeagentWrapperCalls(command).length > 0;
+  const isAgentSpawn = input.tool_name === 'Agent' && typeof toolInput.prompt === 'string';
+  if (!isCodeagentCall && !isAgentSpawn) return;
+  protectExecution = true;
+
+  const cwd = input.cwd || process.env.CLAUDE_PROJECT_DIR || process.cwd();
+  const root = findProjectRoot(cwd);
+  if (!root) return;
+
+  const role = detectRole(isCodeagentCall, command, toolInput);
+  const snapshot = buildTaskSnapshot(root, { mode: 'agent', role });
+  if (snapshot.resolution.kind === 'none') return;
+  if (snapshot.resolution.kind !== 'active' || snapshot.kind === 'invalid') {
+    const code =
+      snapshot.resolution.kind === 'active'
+        ? snapshot.code || 'TASK_CONTEXT_INVALID'
+        : snapshot.resolution.reasonCode || snapshot.resolution.code || 'TASK_STATE_UNAVAILABLE';
+    const message =
+      snapshot.resolution.kind === 'active'
+        ? snapshot.message || 'Task context is invalid'
+        : snapshot.resolution.message || 'Resolve task state before continuing';
+    const diagnostic =
+      snapshot.resolution.kind === 'active'
+        ? `<ccg-task-state>${escapeXml(code)}\n${escapeXml(message)}</ccg-task-state>`
+        : renderResolution(snapshot.resolution, 'ccg-task-state');
+    denyTool(code, message, diagnostic);
+    return;
   }
 
-  // Read context.jsonl with role-based filtering
-  const allEntries = readContextJsonl(task.dir);
-  const entries = allEntries.filter((entry) => {
-    if (!entry.roles || !Array.isArray(entry.roles) || entry.roles.length === 0) {
-      return true; // no roles field = inject to all
-    }
-    return entry.roles.includes(detectedRole) || entry.roles.includes('all');
-  });
-
-  if (entries.length > 0) {
-    const specContents = [];
-    for (const entry of entries) {
-      const filePath = path.isAbsolute(entry.file) ? entry.file : path.join(root, entry.file);
-      const content = readFileSafe(filePath);
-      if (content) {
-        specContents.push(`--- ${entry.file} (${entry.reason || 'context'}) ---\n${content}`);
-      }
-    }
-    if (specContents.length > 0) {
-      contextParts.push(`<ccg-specs>\n${specContents.join('\n\n')}\n</ccg-specs>`);
-    }
-  }
-
-  // Read PRD and plan (always inject, role-independent)
-  const prd = readFileSafe(path.join(task.dir, 'requirements.md'));
-  const plan = readFileSafe(path.join(task.dir, 'plan.md'));
-
-  if (prd || plan) {
-    const taskContext = ['<ccg-task-context>'];
-    if (prd) {
-      const prdSummary = prd.length > 2000 ? prd.substring(0, 2000) + '\n...(truncated)' : prd;
-      taskContext.push(`## Requirements\n${prdSummary}`);
-    }
-    if (plan) {
-      const planSummary = plan.length > 3000 ? plan.substring(0, 3000) + '\n...(truncated)' : plan;
-      taskContext.push(`## Plan\n${planSummary}`);
-    }
-    taskContext.push('</ccg-task-context>');
-    contextParts.push(taskContext.join('\n'));
-  }
-
-  // Read research files (only for research + implement roles)
-  if (detectedRole === 'research' || detectedRole === 'implement') {
-    const researchDir = path.join(task.dir, 'research');
-    if (fs.existsSync(researchDir)) {
-      try {
-        const researchFiles = fs.readdirSync(researchDir).filter((f) => f.endsWith('.md'));
-        if (researchFiles.length > 0) {
-          const researchContents = researchFiles
-            .map((f) => {
-              const content = readFileSafe(path.join(researchDir, f));
-              return content ? `--- research/${f} ---\n${content.substring(0, 1500)}` : null;
-            })
-            .filter(Boolean);
-          if (researchContents.length > 0) {
-            contextParts.push(`<ccg-research>\n${researchContents.join('\n\n')}\n</ccg-research>`);
-          }
-        }
-      } catch {
-        /* silent */
-      }
-    }
-  }
-
-  if (contextParts.length === 0) process.exit(0);
-
-  const injectedContext = `<ccg-injected-context>\n${contextParts.join('\n\n')}\n</ccg-injected-context>`;
-  if (isTeamSpawn && typeof toolInput.prompt === 'string') {
+  const injectedContext = `<ccg-injected-context>\n${renderTaskSnapshot(snapshot, 'agent', role)}\n</ccg-injected-context>`;
+  if (isAgentSpawn) {
     outputHook('PreToolUse', null, {
       updatedInput: {
         ...toolInput,
         prompt: `${injectedContext}\n\n---\n\n${toolInput.prompt}`,
       },
     });
-  } else {
-    outputHook('PreToolUse', injectedContext);
+    return;
   }
-} catch {
-  process.exit(0);
+
+  const rewritten = injectIntoQuotedHeredoc(command, injectedContext, {
+    parallel: /(?:^|\s)--parallel(?:\s|$)/.test(command),
+  });
+  if (!rewritten.ok) {
+    denyTool(
+      'CONTEXT_NOT_INJECTED',
+      rewritten.message,
+      `<ccg-task-state>CONTEXT_NOT_INJECTED\n${escapeXml(rewritten.message)}\nThe wrapper request was blocked.</ccg-task-state>`
+    );
+    return;
+  }
+
+  outputHook('PreToolUse', null, {
+    updatedInput: {
+      ...toolInput,
+      command: rewritten.command,
+    },
+  });
+}
+
+try {
+  main();
+} catch (error) {
+  const message = error instanceof Error ? error.message : String(error);
+  const diagnostic = `<ccg-task-state>CCG_HOOK_ERROR\n${escapeXml(message)}</ccg-task-state>`;
+  if (protectExecution) denyTool('CCG_HOOK_ERROR', message, diagnostic);
+  else outputHook('PreToolUse', diagnostic);
 }

@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	version               = "5.14.0-aug.1"
+	version               = "5.15.0-aug.1"
 	defaultWorkdir        = "."
 	defaultTimeout        = 7200 // seconds (2 hours)
 	defaultCoverageTarget = 90.0
@@ -212,6 +212,7 @@ func run() (exitCode int) {
 			backendName := defaultBackendName
 			fullOutput := false
 			progressFlag := false
+			withMCP := false
 			claudeModel := strings.TrimSpace(os.Getenv("CLAUDE_MODEL"))
 			claudeEffort := strings.TrimSpace(os.Getenv("CLAUDE_EFFORT"))
 			noSessionPersistence := false
@@ -231,6 +232,8 @@ func run() (exitCode int) {
 					liteMode = true
 				case arg == "--progress":
 					progressFlag = true
+				case arg == "--with-mcp":
+					withMCP = true
 				case arg == "--backend":
 					if i+1 >= len(args) {
 						fmt.Fprintln(os.Stderr, "ERROR: --backend flag requires a value")
@@ -366,6 +369,7 @@ func run() (exitCode int) {
 				cfg.Tasks[i].KimiModel = kimiModel
 				cfg.Tasks[i].OpencodeModel = opencodeModel
 				cfg.Tasks[i].Progress = progressFlag
+				cfg.Tasks[i].WithMCP = withMCP
 				// Inject ROLE_FILE content if present
 				injectedTask, err := injectRoleFile(cfg.Tasks[i].Task)
 				if err != nil {
@@ -565,6 +569,7 @@ func run() (exitCode int) {
 		KimiModel:            cfg.KimiModel,
 		OpencodeModel:        cfg.OpencodeModel,
 		Progress:             cfg.Progress,
+		WithMCP:              cfg.WithMCP,
 		Backend:              cfg.Backend,
 	}
 
@@ -670,6 +675,7 @@ Options:
     --no-session-persistence
                           Run the Claude print-mode task without persisting a session; incompatible with resume
     --progress            Emit compact progress lines to stderr during execution
+    --with-mcp            Let the sub-agent load configured MCP servers (off by default)
 
 Environment Variables:
     CODEX_TIMEOUT              Timeout in milliseconds (default: 7200000)

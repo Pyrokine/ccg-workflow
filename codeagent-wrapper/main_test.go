@@ -1502,6 +1502,7 @@ func TestRunBuildCodexArgs_NewMode(t *testing.T) {
 		"e",
 		"--dangerously-bypass-approvals-and-sandbox",
 		"--skip-git-repo-check",
+		"-c", "mcp_servers={}",
 		"-C", "/test/dir",
 		"--json",
 		"my task",
@@ -1527,6 +1528,7 @@ func TestRunBuildCodexArgs_ResumeMode(t *testing.T) {
 		"e",
 		"--dangerously-bypass-approvals-and-sandbox",
 		"--skip-git-repo-check",
+		"-c", "mcp_servers={}",
 		"--json",
 		"resume",
 		"session-abc",
@@ -1550,7 +1552,7 @@ func TestRunBuildCodexArgs_ResumeMode_EmptySessionHandledGracefully(t *testing.T
 	cfg := &Config{Mode: "resume", SessionID: "   ", WorkDir: "/test/dir"}
 	args := buildCodexArgs(cfg, "task")
 	expected := []string{
-		"e", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "-C", "/test/dir", "--json", "task",
+		"e", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "-c", "mcp_servers={}", "-C", "/test/dir", "--json", "task",
 	}
 	if len(args) != len(expected) {
 		t.Fatalf("len mismatch")
@@ -1646,6 +1648,7 @@ func TestBackendBuildArgs_CodexBackend(t *testing.T) {
 		"e",
 		"--dangerously-bypass-approvals-and-sandbox",
 		"--skip-git-repo-check",
+		"-c", "mcp_servers={}",
 		"-C", "/test/dir",
 		"--json",
 		"task",
@@ -3237,6 +3240,7 @@ review with kimi`,
 		"--parallel",
 		"--lite",
 		"--progress",
+		"--with-mcp",
 		"--backend",
 		"grok",
 		"--grok-model=grok-4.5",
@@ -3256,11 +3260,13 @@ review with kimi`,
 	mu.Unlock()
 
 	if !grokOK || grokTask.Backend != "grok" || grokTask.GrokModel != "grok-4.5" ||
-		grokTask.KimiModel != "kimi-code" || grokTask.OpencodeModel != "anthropic/claude-opus-5" || !grokTask.Progress {
+		grokTask.KimiModel != "kimi-code" || grokTask.OpencodeModel != "anthropic/claude-opus-5" || !grokTask.Progress ||
+		!grokTask.WithMCP {
 		t.Fatalf("grok task = %+v", grokTask)
 	}
 	if !kimiOK || kimiTask.Backend != "kimi" || kimiTask.GrokModel != "grok-4.5" ||
-		kimiTask.KimiModel != "kimi-code" || kimiTask.OpencodeModel != "anthropic/claude-opus-5" || !kimiTask.Progress {
+		kimiTask.KimiModel != "kimi-code" || kimiTask.OpencodeModel != "anthropic/claude-opus-5" || !kimiTask.Progress ||
+		!kimiTask.WithMCP {
 		t.Fatalf("kimi task = %+v", kimiTask)
 	}
 }
@@ -3429,7 +3435,7 @@ func TestVersionFlag(t *testing.T) {
 		},
 	)
 
-	want := "codeagent-wrapper version 5.14.0-aug.1\n"
+	want := "codeagent-wrapper version 5.15.0-aug.1\n"
 
 	if output != want {
 		t.Fatalf("output = %q, want %q", output, want)
@@ -3447,7 +3453,7 @@ func TestVersionShortFlag(t *testing.T) {
 		},
 	)
 
-	want := "codeagent-wrapper version 5.14.0-aug.1\n"
+	want := "codeagent-wrapper version 5.15.0-aug.1\n"
 
 	if output != want {
 		t.Fatalf("output = %q, want %q", output, want)
@@ -3465,7 +3471,7 @@ func TestVersionLegacyAlias(t *testing.T) {
 		},
 	)
 
-	want := "codex-wrapper version 5.14.0-aug.1\n"
+	want := "codex-wrapper version 5.15.0-aug.1\n"
 
 	if output != want {
 		t.Fatalf("output = %q, want %q", output, want)
@@ -3633,15 +3639,20 @@ func TestVersionCoverageFullRun(t *testing.T) {
 					},
 				}, nil
 			}
+			var gotTask TaskSpec
 			runTaskFn = func(task TaskSpec, silent bool, timeout int) TaskResult {
+				gotTask = task
 				return TaskResult{TaskID: "task-id", ExitCode: 0, Message: "ok", SessionID: "sess-123"}
 			}
 
 			stdinReader = strings.NewReader("task line with $ and \\\nnext line with `tick` and \"quote\" and 'single'")
 			isTerminalFn = func() bool { return false }
-			os.Args = []string{"codeagent-wrapper", "-", "/tmp/workdir"}
+			os.Args = []string{"codeagent-wrapper", "--with-mcp", "-", "/tmp/workdir"}
 			if code := run(); code != 0 {
 				t.Fatalf("run exit = %d, want 0", code)
+			}
+			if !gotTask.WithMCP {
+				t.Fatal("--with-mcp was not propagated to the single task")
 			}
 		},
 	)

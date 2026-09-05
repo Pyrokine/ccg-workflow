@@ -1,110 +1,75 @@
 #!/usr/bin/env node
 // CCG Session Start Hook — SessionStart
-// Injects full project context when session starts, clears, or compacts.
+// Restores project and active-task context for every session start source.
 
 'use strict';
 
-try {
-  const path = require('path');
-  const fs = require('fs');
-  const {
-    findProjectRoot,
-    getActiveTask,
-    readFileSafe,
-    detectTechStack,
-    getGitInfo,
-    outputHook,
-  } = require('./task-utils.js');
+const path = require('path');
+const fs = require('fs');
+const {
+  findProjectRoot,
+  readFileSafe,
+  readHookInput,
+  buildTaskSnapshot,
+  renderTaskSnapshot,
+  detectTechStack,
+  getGitInfo,
+  outputHook,
+  escapeXml,
+  truncateUtf8,
+  SESSION_CONTEXT_LIMIT,
+  SESSION_TASK_CONTEXT_LIMIT,
+} = require('./task-utils.js');
 
-  const cwd = process.env.CLAUDE_PROJECT_DIR || process.cwd();
+function renderSession(sections) {
+  return `<ccg-session>\n${sections.join('\n\n')}\n</ccg-session>`;
+}
+
+function main() {
+  const input = readHookInput();
+  const cwd = input.cwd || process.env.CLAUDE_PROJECT_DIR || process.cwd();
   const root = findProjectRoot(cwd);
+  if (!root) return;
 
-  if (!root) process.exit(0);
-
-  const sections = [];
-
-  // Project info
-  const techStack = detectTechStack(root);
+  const supplemental = [];
   const git = getGitInfo(root);
-  sections.push(`<project>
-Tech: ${techStack}
-Branch: ${git.branch}
+  supplemental.push(`<project>
+Tech: ${escapeXml(detectTechStack(root))}
+Branch: ${escapeXml(git.branch)}
 Dirty files: ${git.dirtyCount}
-Root: ${root}
+Root: ${escapeXml(root)}
 </project>`);
 
-  // Model routing config
   const configPath = path.join(root, '.ccg', 'config.toml');
   if (fs.existsSync(configPath)) {
-    const configRaw = readFileSafe(configPath);
-    if (configRaw) {
-      const frontendMatch = configRaw.match(/primary\s*=\s*"(\w+)"/);
-      const models = frontendMatch
-        ? `Configured (see .ccg/config.toml)`
-        : 'Default (frontend=antigravity, backend=codex)';
-      sections.push(`<models>${models}</models>`);
-    }
+    const configRaw = readFileSafe(configPath, 16 * 1024);
+    const models =
+      configRaw && /primary\s*=\s*"([\w-]+)"/.test(configRaw)
+        ? 'Configured (see .ccg/config.toml)'
+        : 'Default (frontend=claude, backend=claude)';
+    supplemental.push(`<models>${models}</models>`);
   } else {
-    sections.push('<models>Default (frontend=antigravity, backend=codex)</models>');
+    supplemental.push('<models>Default (frontend=claude, backend=claude)</models>');
   }
 
-  // Active task
-  const task = getActiveTask(root);
-  if (task) {
-    const taskLines = [
-      `<active-task>`,
-      `Task: ${task.title || task.id} (${task.status})`,
-      `Strategy: ${task.strategy}`,
-      `Phase: ${task.currentPhase}`,
-    ];
-
-    if (task.gate) taskLines.push(`⛔ GATE: ${task.gate}`);
-    taskLines.push(`Next: ${task.nextAction || 'Continue'}`);
-    taskLines.push(`Dir: ${task.dir}`);
-
-    // Check for plan/prd
-    const planPath = path.join(task.dir, 'plan.md');
-    const prdPath = path.join(task.dir, 'requirements.md');
-    if (fs.existsSync(planPath)) taskLines.push(`Plan: ${planPath}`);
-    if (fs.existsSync(prdPath)) taskLines.push(`PRD: ${prdPath}`);
-
-    taskLines.push('</active-task>');
-    sections.push(taskLines.join('\n'));
-  } else {
-    sections.push('<active-task>No active task. Use /ccg:go to start.</active-task>');
-  }
-
-  // Spec availability
-  const specDir = path.join(root, '.ccg', 'spec');
-  if (fs.existsSync(specDir)) {
-    try {
-      const specPaths = [];
-      const walk = (dir, prefix) => {
-        for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-          const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
-          if (entry.isDirectory()) walk(path.join(dir, entry.name), rel);
-          else if (entry.name.endsWith('.md')) specPaths.push(rel);
-        }
-      };
-      walk(specDir, '');
-      if (specPaths.length > 0) {
-        sections.push(
-          `<specs>\nAvailable specs in .ccg/spec/:\n${specPaths.map((p) => `  - ${p}`).join('\n')}\n</specs>`
-        );
-      }
-    } catch {
-      /* silent */
-    }
-  }
-
-  // Available commands hint
-  sections.push(`<commands>
+  supplemental.push(`<commands>
 Key commands: /ccg:go (smart entry), /ccg:commit, /ccg:review
 All /ccg:* commands available. Use /ccg:go for intelligent routing.
 </commands>`);
 
-  const context = `<ccg-session>\n${sections.join('\n\n')}\n</ccg-session>`;
-  outputHook('SessionStart', context);
-} catch {
-  process.exit(0);
+  const snapshot = buildTaskSnapshot(root, { mode: 'session', role: 'all' });
+  const sections = [renderTaskSnapshot(snapshot, 'session', 'all', SESSION_TASK_CONTEXT_LIMIT)];
+  for (const section of supplemental) {
+    if (Buffer.byteLength(renderSession([...sections, section]), 'utf-8') <= SESSION_CONTEXT_LIMIT)
+      sections.push(section);
+  }
+
+  outputHook('SessionStart', truncateUtf8(renderSession(sections), SESSION_CONTEXT_LIMIT));
+}
+
+try {
+  main();
+} catch (error) {
+  const message = error instanceof Error ? error.message : String(error);
+  outputHook('SessionStart', `<ccg-session-error>CCG_HOOK_ERROR\n${escapeXml(message)}</ccg-session-error>`);
 }

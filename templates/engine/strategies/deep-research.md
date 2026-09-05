@@ -58,10 +58,11 @@ Gate: 双模型探索已返回 ✓
      目的: [决策/了解/评估]
      约束: [时间/技术/资源约束]
    ```
+3. 确认后使用 `update-requirements` 更新研究契约，再用 `checkpoint` 记录 `1-clarify`
 
 ### Phase 2: 多模型并行探索 [required]
 
-**Task 更新**：`currentPhase → "2-explore"`, `nextAction → "双模型并行探索"`
+使用 `checkpoint` 更新为 `2-explore`，下一动作设为“双模型并行探索”。
 
 **并行调用**（`run_in_background: true`）：
 
@@ -82,7 +83,7 @@ Gate: 双模型探索已返回 ✓
   OUTPUT: 用户/体验视角分析（UX 影响、用户流程、设计选项）
   ```
 
-等待双模型返回。
+等待双模型返回。返回后重新 `resolve`，确认 active task 和 revision 未变化。
 
 ### Phase 3: 综合分析
 
@@ -90,10 +91,7 @@ Gate: 双模型探索已返回 ✓
 
 交叉对比双方视角。
 
-**持久化研究成果**（如有任务目录）：
-
-- 将双模型原始分析写入 `.ccg/tasks/{task-name}/research/backend-analysis.md`
-- 将双模型原始分析写入 `.ccg/tasks/{task-name}/research/frontend-analysis.md`
+使用 `write-artifact` 将双模型原始分析分别写入 `research/backend-analysis.md` 和 `research/frontend-analysis.md`。每次调用后使用响应中的新 task revision。随后用 `checkpoint` 更新为 `3-synthesize`，下一动作设为“综合研究结论”。
 
 输出结构化报告：
 
@@ -133,7 +131,7 @@ Gate: 双模型探索已返回 ✓
 📍 研究已完成。如需实施推荐方案，可以用 /ccg:go implement [方案描述]
 ```
 
-**Task 更新**（如有）：`status → "completed"`, `nextAction → "研究完成，可实施推荐方案"`
+讨论结束后用 `checkpoint` 记录 `4-discuss`。本研究未改变项目规范时，用 `set-spec-evolution` 记录 `not_applicable`，然后调用 `finish` 标记为 `completed`。后续实施创建新任务，不复用已完成的研究任务。
 
 ---
 

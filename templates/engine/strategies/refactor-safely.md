@@ -53,7 +53,7 @@ Gate: 所有步骤已执行 ✓
 
 ### Phase 1: 理解 [required]
 
-**Task 更新**：`currentPhase → "1-understand"`, `nextAction → "读取代码，映射依赖"`
+使用 `checkpoint` 更新为 `1-understand`，下一动作设为“读取代码，映射依赖”。先逐字段核对 `requirements.md` 和 authoritative spec 中声明的不变量。
 
 1. 读取所有涉及重构的文件
 2. 映射依赖关系（谁调用了这些代码？谁被这些代码调用？）
@@ -72,6 +72,7 @@ Gate: 所有步骤已执行 ✓
      失败: [M] 个（已有的，非重构引入）
      覆盖: [相关模块的测试覆盖情况]
    ```
+5. 使用 `checkpoint` 更新为 `2-baseline`，将基线结果写入 progress，下一动作设为“撰写增量重构计划”
 
 ### Phase 3: 规划
 
@@ -94,11 +95,11 @@ Gate: 所有步骤已执行 ✓
 
 对于 L/XL 任务，可选调用外部模型做架构审查。
 
-展示计划，等待用户确认。
+使用 `write-artifact` 写入 `plan.md`，再用 `checkpoint` 更新为 `3-plan`，`gate` 设为 `user_approval_required`。展示计划并等待用户确认。用户确认后，用 `checkpoint` 清除 Gate，阶段更新为 `4-execute`。
 
 ### Phase 4: 增量执行
 
-**Task 更新**：`currentPhase → "4-execute"`, `nextAction → "逐步执行重构"`
+实施期间通过 `checkpoint` 把 `nextAction` 写成当前步骤，不直接改任务 JSON。
 
 **逐步执行**，每步之后：
 
@@ -118,15 +119,15 @@ Step [N/M]: [描述] — ✅ 测试通过 / ❌ 测试失败
 1. 运行完整测试套件
 2. 对比基线：确保不引入新的失败
 
-参考 `phase-guide.md § 10 Ralph Loop` 执行迭代审查（最多 3 轮）。
+参考 `phase-guide.md § 9 Ralph Loop` 执行迭代审查（最多 3 轮）。
 
 #### Round N 流程
 
-**⛔ 审查线程（每轮使用不持久化新会话）：**
+**⛔ 审查线程：**
 
 3. 获取变更：`git diff` 全量输出
-4. 在同一条消息中并行调用 GPT、Grok：GPT 使用 `--backend claude --no-session-persistence --claude-model {{REVIEW_GPT_MODEL}} --claude-effort {{REVIEW_GPT_EFFORT}}` 审查后端逻辑、正确性、安全、回归与测试缺口；Grok 使用 `--backend claude --no-session-persistence --claude-model {{REVIEW_GROK_MODEL}} --claude-effort {{REVIEW_GROK_EFFORT}}` 审查前端交互、可访问性、设计一致性与前端安全
-5. 等待两份报告。reviewer 不使用 `resume` 或 `SESSION_ID`，Lead 汇总并确认 finding
+4. 创建独立 Claude Code 审查 Agent，使用完整 diff、相关文件和验收标准检查正确性、安全、回归与测试缺口，不调用 codeagent-wrapper 或外部 CLI
+5. 只有用户明确请求 GPT、Grok、双模型审查或 `/ccg:spec-review` 时，才启动对应外部 review profile。外部 reviewer 使用 `--no-session-persistence`，不使用 `resume` 或 `SESSION_ID`。Lead 汇总并确认 finding
 
 **⛔ 质量关卡（必须逐个调用 Skill，不可跳过，不可用自己的判断替代）：**
 
@@ -143,7 +144,7 @@ Step [N/M]: [描述] — ✅ 测试通过 / ❌ 测试失败
 - 用户选择继续 → 修复后回到 Round N+1
 - 用户选择停止 → 退出审查循环
 
-追加进度到 `.ccg/tasks/{task-name}/fix-log.jsonl`。
+每轮审查写入 `review.md`，使用 `write-artifact` 登记，并通过 `checkpoint` 更新 progress。
 
 9. `git diff` 展示全部变更
 10. 对比基线，确认无回归
@@ -157,22 +158,11 @@ Step [N/M]: [描述] — ✅ 测试通过 / ❌ 测试失败
      📍 Next: /ccg:commit 提交
    ```
 
-#### Spec Evolution（归档前必须执行）
+#### Spec Evolution 与完成
 
-参考 `phase-guide.md § 8 Spec Evolution Protocol` 执行：
+按 `phase-guide.md § 7` 检查重构模式和架构约定是否需要更新项目已有的 tracked 文档或 OpenSpec，并用 `set-spec-evolution` 记录结果。
 
-1. 分析本次重构的 `git diff`，提炼可复用的重构模式和架构约定
-2. 如有值得记录的经验 → 草拟 Spec 条目，展示给用户确认后追加到 `.ccg/spec/{domain}/index.md`
-3. 无值得提炼的经验 → 跳过
-
-**Task 更新**：`status → "archived"`
-
-**归档任务**：
-
-```bash
-mkdir -p .ccg/tasks/archive/$(date +%Y-%m) && mv .ccg/tasks/{task-name} .ccg/tasks/archive/$(date +%Y-%m)/
-git add .ccg/tasks/ && git commit -m "chore: archive ccg task"
-```
+完整测试、基线对比和审查完成后，用 `finish` 标记任务为 `completed`。任务目录保持原路径，不移动、不提交 `.ccg/`。
 
 ---
 

@@ -2,13 +2,14 @@
 name: audit
 description: "Run technical quality checks across accessibility, performance, theming, responsive design, and anti-patterns. Generates a scored report with P0-P3 severity ratings and actionable plan. Use when the user wants an accessibility check, performance audit, or technical quality review."
 argument-hint: "[area (feature, page, component...)]"
-user-invocable: true
+user-invocable: false
 ---
 
 ## MANDATORY PREPARATION
 
-Invoke /frontend-design — it contains design principles, anti-patterns, and the **Context Gathering Protocol**. Follow
-the protocol before proceeding — if no design context exists yet, you MUST run /teach-impeccable first.
+Use the `frontend-design` skill as the governing entry point and follow its design principles, anti-patterns, and
+**Context Gathering Protocol**. If design context is missing, ask only for the missing audience, use case, or brand
+direction.
 
 ---
 
@@ -129,9 +130,9 @@ For each issue, document:
 - **Impact**: How it affects users
 - **WCAG/Standard**: Which standard it violates (if applicable)
 - **Recommendation**: How to fix it
-- **Suggested command**: Which command to use (prefer: /audit, /critique, /normalize, /polish, /distill, /clarify,
-  /optimize, /harden, /animate, /colorize, /bolder, /quieter, /delight, /extract, /adapt, /onboard, /typeset, /arrange,
-  /overdrive, /teach-impeccable)
+- **Suggested playbook**: Which focused playbook to use (`audit`, `critique`, `normalize`, `polish`, `distill`,
+  `clarify`, `optimize`, `harden`, `animate`, `colorize`, `bolder`, `quieter`, `delight`, `extract`, `adapt`,
+  `onboard`, `typeset`, `arrange`, `overdrive`, or `teach-impeccable`)
 
 ### Patterns & Systemic Issues
 
@@ -146,21 +147,19 @@ Note what's working well — good practices to maintain and replicate.
 
 ## Recommended Actions
 
-List recommended commands in priority order (P0 first, then P1, then P2):
+List recommended playbooks in priority order (P0 first, then P1, then P2):
 
-1. **[P?] `/command-name`** — Brief description (specific context from audit findings)
-2. **[P?] `/command-name`** — Brief description (specific context)
+1. **[P?] `playbook-name`** — Brief description (specific context from audit findings)
+2. **[P?] `playbook-name`** — Brief description (specific context)
 
-**Rules**: Only recommend commands from: /audit, /critique, /normalize, /polish, /distill, /clarify, /optimize, /harden,
-/animate, /colorize, /bolder, /quieter, /delight, /extract, /adapt, /onboard, /typeset, /arrange, /overdrive,
-/teach-impeccable. Map findings to the most appropriate command. End with `/polish` as the final step if any fixes were
-recommended.
+Only recommend playbooks listed by the `frontend-design` skill. Map findings to the most appropriate playbook and end
+with `polish` when fixes were recommended.
 
 After presenting the summary, tell the user:
 
-> You can ask me to run these one at a time, all at once, or in any order you prefer.
+> Use `/ccg:frontend-design` with these playbooks one at a time, together, or in the order you prefer.
 >
-> Re-run `/audit` after fixes to see your score improve.
+> Apply the `audit` playbook again after fixes to compare the score.
 
 **IMPORTANT**: Be thorough but actionable. Too many P3 issues creates noise. Focus on what actually matters.
 

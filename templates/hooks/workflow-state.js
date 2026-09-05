@@ -1,57 +1,121 @@
 #!/usr/bin/env node
-// CCG Workflow State Hook — UserPromptSubmit
-// Injects per-turn breadcrumb based on active task state.
-// Includes loop detection: warns when same phase+nextAction repeats 3+ turns.
-// Runs on EVERY user message. Must be fast (<1s) and never crash.
+// CCG Workflow State Hook — authority refresh after prompts and external results
 
 'use strict';
 
-try {
-  const { findProjectRoot, getActiveTask, outputHook, trackTurn, detectLoop } = require('./task-utils.js');
+const {
+  findProjectRoot,
+  readHookInput,
+  buildTaskSnapshot,
+  renderTaskSnapshot,
+  outputHook,
+  trackTurn,
+  detectLoop,
+  findCodeagentWrapperCalls,
+  truncateUtf8,
+  escapeXml,
+  AUTHORITY_CONTEXT_LIMIT,
+} = require('./task-utils.js');
 
-  const cwd = process.env.CLAUDE_PROJECT_DIR || process.cwd();
-  const root = findProjectRoot(cwd);
+const SUPPORTED_EVENTS = new Set(['UserPromptSubmit', 'PostToolUse', 'PostToolUseFailure']);
+let outputEventName = 'UserPromptSubmit';
 
-  if (!root) process.exit(0);
+function isWrapperCall(input) {
+  const toolInput = input.tool_input || {};
+  return (
+    input.tool_name === 'Bash' &&
+    typeof toolInput.command === 'string' &&
+    findCodeagentWrapperCalls(toolInput.command).length > 0
+  );
+}
 
-  const task = getActiveTask(root);
+function isBackgroundLaunch(input) {
+  const toolInput = input.tool_input || {};
+  if (toolInput.run_in_background === true) return true;
 
-  if (!task) {
-    process.exit(0);
-  }
-
-  const turns = trackTurn(task.dir, task.currentPhase, task.nextAction);
-  const loop = detectLoop(turns, 3);
-
-  const lines = [
-    '<ccg-state>',
-    `Task: ${task.title || task.id} (${task.status})`,
-    `Strategy: ${task.strategy}`,
-    `Phase: ${task.currentPhase}`,
-  ];
-
-  if (task.gate) {
-    lines.push(`⛔ GATE: ${task.gate}`);
-  }
-
-  lines.push(`Next: ${task.nextAction || 'Continue current phase'}`);
-
-  if (loop) {
-    lines.push('');
-    lines.push(
-      `⚠️ LOOP DETECTED: Phase "${loop.phase}" with same nextAction repeated ${loop.count} turns (${loop.elapsedSec}s).`
+  const response = input.tool_response;
+  if (typeof response === 'string') {
+    return /(?:running|started|launched) in (?:the )?background|background task (?:id|ID)|task (?:id|ID):/i.test(
+      response
     );
-    lines.push('🔄 BREAK-LOOP PROTOCOL:');
-    lines.push('  1. STOP current approach immediately');
-    lines.push('  2. Root-cause analysis: why is this phase not progressing?');
-    lines.push('  3. Options: (a) try alternative approach, (b) escalate to user, (c) upgrade strategy');
-    lines.push('  4. If blocked by external dependency → tell user explicitly');
-    lines.push('  5. Do NOT repeat the same action — that is what caused this loop');
+  }
+  if (!response || typeof response !== 'object' || Array.isArray(response)) return false;
+  if (response.isAsync === true || response.background === true) return true;
+  if (['pending', 'running'].includes(String(response.status || '').toLowerCase())) return true;
+
+  const idKeys = ['task_id', 'taskId', 'agent_id', 'agentId', 'backgroundTaskId'];
+  const hasTaskId = idKeys.some((key) => typeof response[key] === 'string' && response[key].trim());
+  const resultKeys = ['result', 'output', 'content', 'stdout', 'stderr', 'error', 'exitCode', 'exit_code'];
+  const hasResult = resultKeys.some(
+    (key) => response[key] !== undefined && response[key] !== null && response[key] !== ''
+  );
+  return hasTaskId && !hasResult;
+}
+
+function shouldRefresh(input, eventName) {
+  if (eventName === 'UserPromptSubmit') return true;
+  if (eventName === 'PostToolUseFailure') return input.tool_name === 'Agent' || isWrapperCall(input);
+  if (eventName !== 'PostToolUse') return false;
+  if (input.tool_name === 'TaskOutput') return true;
+  if (input.tool_name !== 'Agent' && !isWrapperCall(input)) return false;
+  return !isBackgroundLaunch(input);
+}
+
+function appendSignal(context, lines) {
+  if (lines.length === 0) return context;
+  const signal = `<ccg-authority-signal>\n${lines.join('\n')}\n</ccg-authority-signal>`;
+  const candidate = `${context}\n\n${signal}`;
+  return Buffer.byteLength(candidate, 'utf-8') <= AUTHORITY_CONTEXT_LIMIT ? candidate : context;
+}
+
+function main() {
+  const input = readHookInput();
+  const requestedEvent = typeof input.hook_event_name === 'string' ? input.hook_event_name : 'UserPromptSubmit';
+  outputEventName = SUPPORTED_EVENTS.has(requestedEvent) ? requestedEvent : 'UserPromptSubmit';
+  if (!shouldRefresh(input, outputEventName)) return;
+
+  const cwd = input.cwd || process.env.CLAUDE_PROJECT_DIR || process.cwd();
+  const root = findProjectRoot(cwd);
+  if (!root) return;
+
+  const snapshot = buildTaskSnapshot(root, { mode: 'authority', role: 'all' });
+  if (snapshot.resolution.kind === 'none') return;
+
+  let context = renderTaskSnapshot(snapshot, 'authority', 'all', AUTHORITY_CONTEXT_LIMIT);
+  if (outputEventName === 'UserPromptSubmit' && snapshot.resolution.kind === 'active' && snapshot.kind !== 'invalid') {
+    const additions = [];
+    if (typeof input.session_id !== 'string' || !input.session_id.trim()) {
+      additions.push('Diagnostic: SESSION_ID_MISSING: loop detection disabled');
+    } else {
+      const tracked = trackTurn(
+        snapshot.task.dir,
+        input.session_id,
+        snapshot.task.currentPhase,
+        snapshot.task.nextAction
+      );
+      if (!tracked.ok) {
+        additions.push(`Diagnostic: ${escapeXml(tracked.code)}: loop detection disabled`);
+      } else {
+        const loop = detectLoop(tracked.turns, 3);
+        if (loop) {
+          additions.push(
+            `Loop: phase and next action repeated ${loop.count} turns; change approach or report the blocker.`
+          );
+        }
+      }
+    }
+    context = appendSignal(context, additions);
   }
 
-  lines.push('</ccg-state>');
+  outputHook(outputEventName, context);
+}
 
-  outputHook('UserPromptSubmit', lines.join('\n'));
-} catch {
-  process.exit(0);
+try {
+  main();
+} catch (error) {
+  const message = error instanceof Error ? error.message : String(error);
+  outputHook(
+    outputEventName,
+    truncateUtf8(`<ccg-authority>CCG_HOOK_ERROR\n${escapeXml(message)}</ccg-authority>`, AUTHORITY_CONTEXT_LIMIT)
+  );
 }

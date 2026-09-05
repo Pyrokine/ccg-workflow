@@ -2,7 +2,7 @@
 name: clarify
 description: "Improve unclear UX copy, error messages, microcopy, labels, and instructions to make interfaces easier to understand. Use when the user mentions confusing text, unclear labels, bad error messages, hard-to-follow instructions, or wanting better UX writing."
 argument-hint: "[target]"
-user-invocable: true
+user-invocable: false
 ---
 
 Identify and improve unclear, confusing, or poorly written interface text to make the product easier to understand and
@@ -10,8 +10,9 @@ use.
 
 ## MANDATORY PREPARATION
 
-Invoke /frontend-design — it contains design principles, anti-patterns, and the **Context Gathering Protocol**. Follow
-the protocol before proceeding — if no design context exists yet, you MUST run /teach-impeccable first. Additionally
+Use the `frontend-design` skill as the governing entry point and follow its design principles, anti-patterns, and
+**Context Gathering Protocol**. If design context is missing, ask only for the missing audience, use case, or brand
+direction. Additionally
 gather: audience technical level and users' mental state in context.
 
 ---

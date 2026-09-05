@@ -2,7 +2,7 @@
 name: bolder
 description: "Amplify safe or boring designs to make them more visually interesting and stimulating. Increases impact while maintaining usability. Use when the user says the design looks bland, generic, too safe, lacks personality, or wants more visual impact and character."
 argument-hint: "[target]"
-user-invocable: true
+user-invocable: false
 ---
 
 Increase visual impact and personality in designs that are too safe, generic, or visually underwhelming, creating more
@@ -10,8 +10,9 @@ engaging and memorable experiences.
 
 ## MANDATORY PREPARATION
 
-Invoke /frontend-design — it contains design principles, anti-patterns, and the **Context Gathering Protocol**. Follow
-the protocol before proceeding — if no design context exists yet, you MUST run /teach-impeccable first.
+Use the `frontend-design` skill as the governing entry point and follow its design principles, anti-patterns, and
+**Context Gathering Protocol**. If design context is missing, ask only for the missing audience, use case, or brand
+direction.
 
 ---
 

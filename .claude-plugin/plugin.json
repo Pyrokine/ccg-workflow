@@ -1,0 +1,25 @@
+{
+  "name": "ccg",
+  "description": "CCG skills bundle for web operations, quality gates, documentation, frontend design, web scraping, and domain references. The complete multi-model workflow supports Claude Code, Codex, Antigravity, Grok, Kimi Code, and OpenCode through the private repository installer.",
+  "version": "3.6.4-aug.1",
+  "author": {
+    "name": "Pyrokine",
+    "url": "https://github.com/Pyrokine"
+  },
+  "homepage": "https://github.com/Pyrokine/ccg-workflow",
+  "repository": "https://github.com/Pyrokine/ccg-workflow",
+  "license": "MIT",
+  "keywords": [
+    "skills",
+    "deployment",
+    "baota",
+    "aapanel",
+    "seo",
+    "adsense",
+    "web-scraping",
+    "frontend-design",
+    "code-review",
+    "quality-gate"
+  ],
+  "skills": "./templates/skills"
+}

@@ -1,6 +1,6 @@
 # Strategy: Review Audit — 代码审查
 
-> 适用于代码审查需求，由 GPT、Grok 两路独立审查交叉验证，结果分级输出。
+> 适用于代码审查需求，默认由独立 Claude Code Agent 审查；用户明确请求外部审查时才调用 GPT、Grok profile。
 
 ## 适用条件
 
@@ -20,18 +20,18 @@ Read("~/.claude/.ccg/engine/model-router.md")
 
 [phase-state:1-scope]
 当前阶段：确定审查范围
-📍 Next: 范围确定后启动GPT、Grok 双路审查
+📍 Next: 范围确定后启动独立 Claude Code 审查
 [/phase-state:1-scope]
 
 [phase-state:2-review]
-当前阶段：GPT、Grok 双路审查
+当前阶段：Claude Code 审查
 Gate: 审查范围已确定 ✓
-📍 Next: GPT、Grok 双路审查返回后综合报告
+📍 Next: 审查返回后综合报告
 [/phase-state:2-review]
 
 [phase-state:3-report]
 当前阶段：综合报告
-Gate: GPT、Grok 双路审查已返回 ✓
+Gate: 审查已返回 ✓
 📍 Next: 报告输出后等待用户决定
 [/phase-state:3-report]
 
@@ -56,33 +56,21 @@ Gate: GPT、Grok 双路审查已返回 ✓
   文件: [文件列表]
 ```
 
-### Phase 2: GPT、Grok 双路审查 [required]
+使用 `checkpoint` 更新为 `1-scope`，把精确范围写入 progress。存在 linked spec 时，把对应 section 作为 reviewer 的验收约束，不用摘要替代。
+
+### Phase 2: Claude Code 审查 [required]
 
 **Gate check**: 审查范围已确定
 
-在同一条消息中并行启动 GPT、Grok 两个 `Bash` 调用。两个 reviewer 都接收完整 `git diff`、完整文件上下文和验收规则，互不依赖彼此的会话或结果。GPT 的任务文本必须列出后端审查维度，Grok 的任务文本必须列出前端审查维度。主 Claude 只负责准备上下文和汇总发现。
+创建一个独立 Claude Code Agent。Agent 接收完整 `git diff`、完整文件上下文和验收规则，按 Critical/Warning/Info 输出，每条包含位置、问题和修复建议。默认不得调用 codeagent-wrapper 或任何外部 CLI。
 
-```text
-ROLE_FILE: ~/.claude/.ccg/prompts/claude/reviewer.md
-<TASK>
-审查以下代码变更。
-上下文：[git diff + 完整文件上下文]
-按 Critical/Warning/Info 输出，每条包含位置、问题和修复建议。
-</TASK>
-```
+用户明确请求 GPT、Grok、双模型审查或 `/ccg:spec-review` 时，才按 `review.profiles` 启动对应外部 reviewer。外部 profile 使用 `--backend claude --no-session-persistence`，GPT 审查后端逻辑、正确性、安全、回归与测试缺口，Grok 审查前端交互、可访问性、设计一致性与前端安全。外部 reviewer 不使用 `resume` 或保存 `SESSION_ID`；失败时只报告该 reviewer 不可用。
 
-| reviewer | wrapper 参数 | 审查重点 |
-| --- | --- | --- |
-| GPT | `--backend claude --no-session-persistence --claude-model {{REVIEW_GPT_MODEL}} --claude-effort {{REVIEW_GPT_EFFORT}}` | 后端逻辑、正确性、安全、回归与测试缺口 |
-| Grok | `--backend claude --no-session-persistence --claude-model {{REVIEW_GROK_MODEL}} --claude-effort {{REVIEW_GROK_EFFORT}}` | 前端交互、可访问性、设计一致性与前端安全 |
-
-GPT 与 Grok 使用独立临时会话，禁止使用 `resume` 或保存 `SESSION_ID`。两者的 model、effort 从 `review.profiles` 注入。若外部 reviewer 失败，只报告该 reviewer 不可用，不能将其它结果归入该来源。
-
-等待两个调用返回后再综合报告。
+审查返回后重新 `resolve`，确认 active task 和 revision 未变化，再用 `checkpoint` 更新为 `2-review`。
 
 ### Phase 3: 综合报告 + 质量关卡
 
-**Gate check**: GPT、Grok 双路审查已返回
+**Gate check**: 审查已返回
 
 #### 3a. 质量关卡
 
@@ -93,7 +81,7 @@ GPT 与 Grok 使用独立临时会话，禁止使用 `resume` 或保存 `SESSION
 
 #### 3b. 综合报告
 
-合并 GPT、Grok reviewer 发现与质量关卡结果，去重，按严重度分级：
+合并 Claude Code 审查、已显式调用的外部 reviewer 发现与质量关卡结果，去重，按严重度分级：
 
 ```
 📋 代码审查报告
@@ -101,7 +89,7 @@ GPT 与 Grok 使用独立临时会话，禁止使用 `resume` 或保存 `SESSION
 ## Critical（必须修复）
 1. [file:line] — [问题描述]
    建议: [具体修复建议]
-   来源: [GPT/Grok/质量关卡]
+   来源: [Claude Code/GPT/Grok/质量关卡]
 
 ## Warning（建议修复）
 1. [file:line] — [问题描述]
@@ -114,21 +102,18 @@ GPT 与 Grok 使用独立临时会话，禁止使用 `resume` 或保存 `SESSION
 总计: [N] Critical, [M] Warning, [K] Info
 ```
 
-如果有 Critical 发现，询问用户是否立即修复（可切换到 `direct-fix` 策略）。
+使用 `write-artifact` 写入 `review.md`，再用 `checkpoint` 更新为 `3-report`。如果有 Critical 发现，询问用户是否立即修复；修复属于新工作时使用 `interrupt` 创建临时任务。
 
-#### Spec Evolution（审查完成后执行）
+#### Spec Evolution 与完成
 
-参考 `phase-guide.md § 8 Spec Evolution Protocol` 执行：
-
-1. 从审查发现中提炼可复用的编码规范（特别是 Critical/Warning 级反复出现的模式）
-2. 如有值得记录的经验 → 草拟 Spec 条目，展示给用户确认后追加到 `.ccg/spec/{domain}/index.md`
-3. 无值得提炼的经验 → 跳过
+按 `phase-guide.md § 7` 检查审查结果是否需要更新项目已有的 tracked 文档或 OpenSpec，并用 `set-spec-evolution` 记录结果。报告交付后调用 `finish` 标记任务为 `completed`。
 
 ---
 
 ## 铁律
 
 - **审查结果必须分级** — 不可笼统说"代码看起来没问题"
-- **两个 reviewer 必须独立审查** — 交叉验证的价值在于独立性
+- **默认审查必须使用独立 Claude Code Agent**，不得因审查请求自动启动外部 CLI
+- **外部 reviewer 只在用户明确请求时启动**，多个外部 reviewer 必须独立审查
 - **Critical 必须明确标出** — 不可淡化严重问题
-- **如无发现，明确说明** — "经GPT、Grok 双路审查，未发现问题" 优于沉默
+- **如无发现，明确说明审查来源和范围**

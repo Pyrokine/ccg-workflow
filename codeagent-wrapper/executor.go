@@ -801,6 +801,12 @@ func buildCodexArgs(cfg *Config, targetArg string) []string {
 		args = append(args, "--skip-git-repo-check")
 	}
 
+	// Codex connects every server in ~/.codex/config.toml during startup.
+	// Sub-agents skip that cost unless a workflow explicitly needs MCP tools.
+	if !cfg.WithMCP {
+		args = append(args, "-c", "mcp_servers={}")
+	}
+
 	if isResume {
 		return append(
 			args,
@@ -870,6 +876,7 @@ func runCodexTaskWithContext(
 		KimiModel:            taskSpec.KimiModel,
 		OpencodeModel:        taskSpec.OpencodeModel,
 		Progress:             taskSpec.Progress,
+		WithMCP:              taskSpec.WithMCP,
 	}
 
 	commandName := codexCommand

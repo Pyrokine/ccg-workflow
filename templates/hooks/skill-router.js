@@ -8,23 +8,11 @@
 try {
   const fs = require('fs');
   const path = require('path');
-  const { findProjectRoot, outputHook } = require('./task-utils.js');
+  const { outputHook, readHookInput, readFileBounded, escapeXml } = require('./task-utils.js');
 
-  // Read hook input (contains user's message)
-  let inputData = '';
-  if (!process.stdin.isTTY) {
-    inputData = fs.readFileSync(0, 'utf-8');
-  }
-
-  // Extract user message from hook input
-  let userMessage = '';
-  try {
-    const parsed = JSON.parse(inputData);
-    userMessage = parsed.message || parsed.content || parsed.prompt || '';
-    if (typeof userMessage === 'object') userMessage = JSON.stringify(userMessage);
-  } catch {
-    userMessage = inputData;
-  }
+  const input = readHookInput();
+  let userMessage = input.prompt || input.message || input.content || '';
+  if (typeof userMessage === 'object') userMessage = JSON.stringify(userMessage);
 
   if (!userMessage || userMessage.length < 5) process.exit(0);
 
@@ -209,23 +197,17 @@ try {
 用户请求双模型${modelAction.role === 'reviewer' ? '审查' : '分析'}。请立即执行：
 
 1. 获取工作目录: WORKDIR=$(pwd)
-2. 读取 ${path.join(homeDir, '.claude', '.ccg', 'config.toml')}，确定 routing.backend.primary 与 routing.frontend.primary。缺少配置时分别使用 codex 与 antigravity。
-3. 为 Grok、Kimi Code 或 OpenCode 主路由读取 grokModel、kimiModel 或 opencodeModel，并将对应的 --grok-model、--kimi-model 或 --opencode-model 参数附在 --backend 后。
-4. 并行调用两个模型 (run_in_background: true)：
+2. 读取 ${path.join(homeDir, '.claude', '.ccg', 'config.toml')}，确定 routing.backend.primary 与 routing.frontend.primary。缺少配置时两者均使用 Claude Code。
+3. 若 backend.primary 与 frontend.primary 均为 Claude，直接在同一条消息中并行创建两个独立 Claude Code Agent，两个 prompt 都包含 CCG_ROLE: research 与任务 ${modelAction.action}。不得调用 codeagent-wrapper 或任何外部 CLI。
+4. 仅当用户已将某条 primary route 明确配置为 Codex、Antigravity、Grok、Kimi Code 或 OpenCode 时，才为该条 route 调用对应外部 CLI。为 Grok、Kimi Code 或 OpenCode 主路由读取 grokModel、kimiModel 或 opencodeModel，并将对应的 --grok-model、--kimi-model 或 --opencode-model 参数附在 --backend 后。
 
-   Backend (<routing.backend.primary>):
-   ${wrapperPath} --lite --progress --backend <backend primary 和可选型号参数> - "$WORKDIR" <<'EOF'
-   ROLE_FILE: ${path.join(homeDir, '.claude', '.ccg', 'prompts', '<backend primary>', modelAction.role + '.md')}
+   External route (<configured external primary>):
+   ${wrapperPath} --lite --progress --backend <configured external primary 和可选型号参数> - "$WORKDIR" <<'EOF'
+   ROLE_FILE: ${path.join(homeDir, '.claude', '.ccg', 'prompts', '<configured external primary>', modelAction.role + '.md')}
    <TASK>${modelAction.action}</TASK>
    EOF
 
-   Frontend (<routing.frontend.primary>):
-   ${wrapperPath} --lite --progress --backend <frontend primary 和可选型号参数> - "$WORKDIR" <<'EOF'
-   ROLE_FILE: ${path.join(homeDir, '.claude', '.ccg', 'prompts', '<frontend primary>', modelAction.role + '.md')}
-   <TASK>${modelAction.action}</TASK>
-   EOF
-
-   当某个主路由为 Claude 时，使用独立 Claude Code Agent 代替该 wrapper 调用。
+   某条 primary route 为 Claude 时，为该条 route 创建独立 Claude Code Agent，不得以 wrapper 的 Claude backend 替代。
 
 5. 等待结果，综合输出
 </ccg-model-action>`;
@@ -252,33 +234,52 @@ try {
   // ── Domain knowledge injection ──
   if (matched.length === 0) process.exit(0);
 
-  const cwd = process.env.CLAUDE_PROJECT_DIR || process.cwd();
   const homeDir = process.env.HOME || process.env.USERPROFILE || '';
   const skillsBase = path.join(homeDir, '.claude', 'skills', 'ccg');
 
   if (!fs.existsSync(skillsBase)) process.exit(0);
 
   const injections = [];
+  const diagnostics = [];
   for (const match of matched.slice(0, 2)) {
     const skillPath = path.join(skillsBase, match.skill);
     if (!fs.existsSync(skillPath)) continue;
 
     try {
-      const content = fs.readFileSync(skillPath, 'utf-8');
-      const lines = content.split('\n');
+      const source = readFileBounded(skillPath, 16 * 1024);
+      if (!source.ok) {
+        diagnostics.push(`${source.code}:${match.skill}`);
+        continue;
+      }
+      const lines = source.content.split('\n');
       const excerpt = lines.slice(0, 120).join('\n');
       injections.push(
-        `## ${match.name} (auto-injected)\n${excerpt}${lines.length > 120 ? '\n...(truncated, full: ' + match.skill + ')' : ''}`
+        `## ${match.name} (auto-injected)\n${excerpt}${source.truncated || lines.length > 120 ? '\n...(truncated, full: ' + match.skill + ')' : ''}`
       );
-    } catch {
-      /* silent */
+    } catch (error) {
+      diagnostics.push(`SKILL_READ_FAILED:${match.skill}:${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
-  if (injections.length === 0) process.exit(0);
+  if (injections.length === 0 && diagnostics.length === 0) process.exit(0);
 
-  const context = `<ccg-domain-knowledge>\n${injections.join('\n\n---\n\n')}\n</ccg-domain-knowledge>`;
-  outputHook('UserPromptSubmit', context);
-} catch {
-  process.exit(0);
+  const sections = [];
+  if (injections.length > 0)
+    sections.push(`<ccg-domain-knowledge>\n${injections.join('\n\n---\n\n')}\n</ccg-domain-knowledge>`);
+  if (diagnostics.length > 0)
+    sections.push(
+      `<ccg-domain-knowledge-diagnostics>\n${diagnostics.map((item) => escapeXml(item)).join('\n')}\n</ccg-domain-knowledge-diagnostics>`
+    );
+  outputHook('UserPromptSubmit', sections.join('\n\n'));
+} catch (error) {
+  const message = error instanceof Error ? error.message : String(error);
+  const escapedMessage = message.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  process.stdout.write(
+    `${JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: 'UserPromptSubmit',
+        additionalContext: `<ccg-skill-router-error>CCG_SKILL_ROUTER_ERROR\n${escapedMessage}</ccg-skill-router-error>`,
+      },
+    })}\n`
+  );
 }

@@ -2,7 +2,7 @@
 name: adapt
 description: "Adapt designs to work across different screen sizes, devices, contexts, or platforms. Implements breakpoints, fluid layouts, and touch targets. Use when the user mentions responsive design, mobile layouts, breakpoints, viewport adaptation, or cross-device compatibility."
 argument-hint: "[target] [context (mobile, tablet, print...)]"
-user-invocable: true
+user-invocable: false
 ---
 
 Adapt existing designs to work effectively across different contexts - different screen sizes, devices, platforms, or
@@ -10,8 +10,9 @@ use cases.
 
 ## MANDATORY PREPARATION
 
-Invoke /frontend-design — it contains design principles, anti-patterns, and the **Context Gathering Protocol**. Follow
-the protocol before proceeding — if no design context exists yet, you MUST run /teach-impeccable first. Additionally
+Use the `frontend-design` skill as the governing entry point and follow its design principles, anti-patterns, and
+**Context Gathering Protocol**. If design context is missing, ask only for the missing audience, use case, or brand
+direction. Additionally
 gather: target platforms/devices and usage contexts.
 
 ---

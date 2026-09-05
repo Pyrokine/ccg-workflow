@@ -1,0 +1,27 @@
+{
+  "name": "ccg",
+  "owner": {
+    "name": "Pyrokine",
+    "url": "https://github.com/Pyrokine"
+  },
+  "metadata": {
+    "description": "CCG multi-model collaboration system: install skills through Claude Code plugins, or the complete workflow through the private repository installer.",
+    "version": "3.6.4-aug.1"
+  },
+  "plugins": [
+    {
+      "name": "ccg",
+      "source": ".",
+      "description": "CCG skills bundle: web operations, quality gates, documentation tools, frontend design, web scraping, and domain references. Invoked as /ccg:<skill>.",
+      "version": "3.6.4-aug.1",
+      "category": "workflow",
+      "keywords": [
+        "skills",
+        "deployment",
+        "seo",
+        "frontend-design",
+        "code-review"
+      ]
+    }
+  ]
+}

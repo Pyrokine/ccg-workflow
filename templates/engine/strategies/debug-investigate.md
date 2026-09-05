@@ -53,7 +53,7 @@ Gate: 用户已确认修复方向 ✓
 
 ### Phase 1: 信息收集 [required]
 
-**Task 更新**：`currentPhase → "1-collect"`, `nextAction → "收集错误信息"`
+使用 `checkpoint` 更新为 `1-collect`，下一动作设为“收集错误信息”。把复现条件、错误消息和明确约束写入 `requirements.md`，需要修改契约时调用 `update-requirements`。
 
 1. 收集错误上下文：
     - 错误消息 / 堆栈跟踪
@@ -80,9 +80,7 @@ Gate: 用户已确认修复方向 ✓
   ```
 - **frontend 模型**：debugger 角色（相同格式）
 
-等待双模型返回。
-
-**Task 更新**：`currentPhase → "2-diagnose"`, `nextAction → "等待双模型诊断返回"`
+等待双模型返回。返回后重新 `resolve`，确认 active task 和 revision 未变化。将诊断证据与假设使用 `write-artifact` 写入 `analysis.md`，再用 `checkpoint` 更新为 `2-diagnose`，下一动作设为“交叉验证诊断假设”。
 
 ### Phase 3: 交叉验证
 
@@ -108,6 +106,8 @@ Gate: 用户已确认修复方向 ✓
 - [假设] — [排除理由]
 ```
 
+完成假设排序后，更新 `analysis.md` 并使用 `checkpoint` 记录 `3-validate`，下一动作设为“等待用户选择修复方向”。
+
 ### Phase 4: 用户确认 [required · HARD STOP]
 
 **Gate check**: 假设已排序
@@ -119,18 +119,11 @@ Gate: 用户已确认修复方向 ✓
 - 需要更多调查
 - 其他方向
 
-**Task 更新**：
-
-```
-更新 task.json:
-  currentPhase → "4-confirm"
-  gate → "user_approval_required"
-  nextAction → "等待用户确认修复方向"
-```
+使用 `checkpoint` 更新为 `4-confirm`，`gate` 设为 `user_approval_required`，下一动作设为“等待用户确认修复方向”。
 
 **必须等待用户明确确认**，不可自动选择。
 
-用户确认后：`task.json: gate → null, currentPhase → "5-fix"`
+用户确认后，更新 `analysis.md` 记录选定假设，再用 `checkpoint` 将 `gate` 设为 `null`，阶段更新为 `5-fix`。
 
 ### Phase 5: 修复与验证
 
@@ -148,22 +141,11 @@ Gate: 用户已确认修复方向 ✓
      📍 Next: /ccg commit 提交修复
    ```
 
-#### Spec Evolution（归档前必须执行）
+#### Spec Evolution 与完成
 
-参考 `phase-guide.md § 8 Spec Evolution Protocol` 执行：
+按 `phase-guide.md § 7` 检查根因和修复是否需要更新项目已有的 tracked 文档或 OpenSpec，并用 `set-spec-evolution` 记录结果。
 
-1. 分析本次调试的根因和修复方案，提炼可复用的调试经验和防御性编码约定
-2. 如有值得记录的经验（特别是非显而易见的坑）→ 草拟 Spec 条目，展示给用户确认后追加到 `.ccg/spec/{domain}/index.md`
-3. 无值得提炼的经验 → 跳过
-
-**Task 更新**：`status → "archived"`
-
-**归档任务**：
-
-```bash
-mkdir -p .ccg/tasks/archive/$(date +%Y-%m) && mv .ccg/tasks/{task-name} .ccg/tasks/archive/$(date +%Y-%m)/
-git add .ccg/tasks/ && git commit -m "chore: archive ccg task"
-```
+验证通过且 Gate 为 `null` 后，用 `finish` 标记任务为 `completed`。任务目录保持原路径，不移动、不提交 `.ccg/`。
 
 ---
 

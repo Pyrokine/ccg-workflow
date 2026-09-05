@@ -118,14 +118,14 @@ export function injectConfigVariables(
   const routing = config.routing || {}
 
   // Frontend models
-  const frontendModels = routing.frontend?.models || ['antigravity', 'codex']
-  const frontendPrimary = routing.frontend?.primary || 'antigravity'
+  const frontendModels = routing.frontend?.models || ['claude']
+  const frontendPrimary = routing.frontend?.primary || 'claude'
   processed = processed.replace(/\{\{FRONTEND_MODELS\}\}/g, JSON.stringify(frontendModels))
   processed = processed.replace(/\{\{FRONTEND_PRIMARY\}\}/g, frontendPrimary)
 
   // Backend models
-  const backendModels = routing.backend?.models || ['codex']
-  const backendPrimary = routing.backend?.primary || 'codex'
+  const backendModels = routing.backend?.models || ['claude']
+  const backendPrimary = routing.backend?.primary || 'claude'
   processed = processed.replace(/\{\{BACKEND_MODELS\}\}/g, JSON.stringify(backendModels))
   processed = processed.replace(/\{\{BACKEND_PRIMARY\}\}/g, backendPrimary)
 
@@ -218,12 +218,12 @@ export function injectConfigVariables(
   const conditionalModelRoutes = `--backend <${modelRoute(backendPrimary)}|${modelRoute(frontendPrimary)}>`
   processed = processed.replaceAll(conditionalBackend, conditionalModelRoutes)
 
-  const pureClaudeCodeMode = frontendPrimary === 'claude' && backendPrimary === 'claude'
+  const pureClaudeCodeMode = routing.frontend?.primary === 'claude' && routing.backend?.primary === 'claude'
   if (pureClaudeCodeMode) {
     const directive = `
 ## Pure Claude Code mode
 
-Both primary routes use Claude. Do not execute \`codeagent-wrapper\` for frontend or backend work. Use independent Claude Code Agent or Agent Teams work instead. Review commands that explicitly use \`--no-session-persistence\` remain enabled and must run in independent contexts.
+Both primary routes use Claude. This section overrides every later primary-route \`codeagent-wrapper\` example. Do not execute a later wrapper call that resolves to \`--backend claude\` without \`--no-session-persistence\`; it is a non-Pure-Claude alternative. Use independent Claude Code Agent or Agent Teams work instead. Set \`CCG_ROLE: research\` for research or analysis work and \`CCG_ROLE: implement\` for implementation work so role-scoped specifications are injected. Review commands that explicitly use \`--no-session-persistence\` remain enabled and must run in independent contexts.
 `
     const frontmatter = /^---\n[\s\S]*?\n---\n/
     if (frontmatter.test(processed)) {

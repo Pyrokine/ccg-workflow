@@ -2,17 +2,17 @@ import { describe, expect, it } from 'vitest'
 import { createDefaultConfig, createDefaultRouting, normalizeRoutingForInstall } from '../config'
 
 describe('createDefaultRouting', () => {
-  it('returns antigravity as frontend primary', () => {
+  it('returns Claude Code as frontend primary', () => {
     const routing = createDefaultRouting()
-    expect(routing.frontend.primary).toBe('antigravity')
-    expect(routing.frontend.models).toEqual(['antigravity', 'codex'])
+    expect(routing.frontend.primary).toBe('claude')
+    expect(routing.frontend.models).toEqual(['claude'])
     expect(routing.frontend.strategy).toBe('fallback')
   })
 
-  it('returns codex as backend primary', () => {
+  it('returns Claude Code as backend primary', () => {
     const routing = createDefaultRouting()
-    expect(routing.backend.primary).toBe('codex')
-    expect(routing.backend.models).toEqual(['codex'])
+    expect(routing.backend.primary).toBe('claude')
+    expect(routing.backend.models).toEqual(['claude'])
     expect(routing.backend.strategy).toBe('fallback')
   })
 
@@ -82,7 +82,21 @@ describe('normalizeRoutingForInstall', () => {
     })
   })
 
-  it('canonicalizes hand-written agy routing to antigravity', () => {
+  it('preserves configured Codex and Antigravity routes', () => {
+    const routing = normalizeRoutingForInstall({
+      frontend: { models: ['antigravity', 'codex'], primary: 'antigravity', strategy: 'fallback' },
+      backend: { models: ['codex'], primary: 'codex', strategy: 'fallback' },
+    })
+
+    expect(routing.frontend).toEqual({
+      models: ['antigravity', 'codex'],
+      primary: 'antigravity',
+      strategy: 'fallback',
+    })
+    expect(routing.backend).toEqual({ models: ['codex'], primary: 'codex', strategy: 'fallback' })
+  })
+
+  it('migrates Gemini to Grok and preserves agy as an Antigravity alias', () => {
     const routing = normalizeRoutingForInstall({
       frontend: {
         models: ['gemini'],
@@ -101,7 +115,7 @@ describe('normalizeRoutingForInstall', () => {
       mode: 'smart',
     })
 
-    expect(routing.frontend.primary).toBe('antigravity')
+    expect(routing.frontend.primary).toBe('grok')
     expect(routing.backend).toEqual({
       models: ['antigravity'],
       primary: 'antigravity',

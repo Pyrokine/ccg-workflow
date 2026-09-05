@@ -1,219 +1,256 @@
 # CCG 通用阶段指导
 
-> 本文件定义所有策略共享的阶段执行规范。策略文件可通过 Read 引用。
+本文件定义持久策略共享的状态、Gate、Agent dispatch、Spec 和审查规则。
 
-## 1. 阶段状态自检
+## 1. 状态控制器
 
-每完成一个阶段，回顾对应的 `[phase-state:N]` 块：
+唯一状态修改入口：
 
-1. 确认该阶段的 Gate 条件已满足
-2. 输出 `📍 Next: [具体动作]` 告知用户下一步
-3. 如有 `[required]` 标记的阶段未完成，不可跳过
-
-## 2. Gate Check 执行规范
-
-Gate 是阶段间的硬性检查点。执行方式：
-
-- **数据 Gate**：检查前序阶段是否产出了必要数据（分析结果？计划文件？）
-- **确认 Gate（HARD STOP）**：必须等待用户明确确认才能继续
-- **质量 Gate**：检查产出物是否达到最低质量标准
-
-Gate 失败时：说明缺失什么，给出补救建议，不可绕过。
-
-## 3. Next-Action 格式
-
-每个阶段完成后输出：
-
+```bash
+node ~/.claude/hooks/ccg/task-state.js <operation> --root "$WORKDIR" <<'CCG_TASK_JSON'
+{...}
+CCG_TASK_JSON
 ```
-📍 Next: [一句话描述下一步具体动作]
+
+动态标题、正文、路径、角色和进度只能放在 stdin JSON 中，不放进 shell 参数。
+
+### 1.1 只读操作
+
+```bash
+node ~/.claude/hooks/ccg/task-state.js resolve --root "$WORKDIR"
+node ~/.claude/hooks/ccg/task-state.js snapshot --root "$WORKDIR" --mode session --role all
+node ~/.claude/hooks/ccg/task-state.js snapshot --root "$WORKDIR" --mode authority --role implement
+node ~/.claude/hooks/ccg/task-state.js list --root "$WORKDIR"
 ```
+
+`resolve` 是 active task 的唯一来源。`state.json` 存在时，不得扫描任务目录选择其他任务。
+
+### 1.2 CAS 字段
+
+每个 mutation 都携带上一条成功响应中的值：
+
+```json
+{
+  "expected": {
+    "stateId": "uuid",
+    "stateRevision": 3,
+    "activeTaskId": "task-id",
+    "taskRevision": 7
+  }
+}
+```
+
+`start` 和 `migrate-legacy` 不需要 `taskRevision`。`activate` 使用候选任务的 revision。`recover` 在 active target 已结束时校验该任务 revision，在 target 已丢失或存在未完成 transaction 时只校验当前 state CAS。其他任务 mutation 都必须带 `taskRevision`。遇到 `STATE_ID_CONFLICT`、`REVISION_CONFLICT` 或 `ACTIVE_TASK_CONFLICT` 时，重新 `resolve` 并向用户说明状态已经变化，不自动重放新的写操作。
+
+### 1.3 操作表
+
+| 操作                        | 用途                                                              | revision 变化                         |
+| --------------------------- | ----------------------------------------------------------------- | ------------------------------------- |
+| `start`                     | 创建持久任务，支持 `activate`、`interrupt`、`replace`、`inactive` | 新 task 为 1；活动指针变化时 state +1 |
+| `activate`                  | 明确切换到 suspended task                                         | state +1                              |
+| `update-requirements`       | 更新任务契约                                                      | task +1                               |
+| `write-artifact`            | 写 analysis、plan、review 或 research Markdown                    | task +1                               |
+| `checkpoint`                | 更新 phase、nextAction、gate 与 progress                          | task +1                               |
+| `link-spec` / `unlink-spec` | 精确关联 tracked Markdown section                                 | task +1                               |
+| `set-spec-evolution`        | 记录规范演进结果                                                  | task +1                               |
+| `finish`                    | 标记 completed 或 cancelled，并按 return 链恢复父任务             | task +1；state +1                     |
+| `recover`                   | 重放未完成 transaction、清除丢失 target，或按 return 链恢复父任务 | 由恢复类型决定                        |
+| `migrate-legacy`            | 显式迁移旧任务                                                    | 创建新 state                          |
+
+跨 artifact、task 和 state 的修改先写入 `.ccg/transaction.json`，全部目标原子替换后才删除 marker。marker 存在时，`resolve` 返回 `INCOMPLETE_TRANSACTION`，`snapshot`、`list` 和其他 mutation 不得继续；用户确认后调用 `recover` 重放 marker 中的目标内容。
+
+任务目录完成后仍保留原路径。`active` 和 `suspended` 是 resolver 根据 `state.activeTaskId` 推导的状态，不能写入 `task.json`。`.ccg`、tasks、tmp、migrations、research 和 `.turns` 的父链中出现 symlink 时，控制器拒绝读写。
+
+## 2. 阶段检查点
+
+每个持久策略阶段结束后：
+
+1. 确认本阶段产物已经写入
+2. 使用 `write-artifact` 登记 analysis、plan、review 或 research 文件
+3. 使用 `checkpoint` 写入新的 `currentPhase`、`nextAction`、`gate` 和 `progress`
+4. 保存响应中的新 `task.revision`
+5. 向用户显示 `Next: [具体动作]`
 
 示例：
 
-- `📍 Next: 加载模型路由器，启动双模型并行分析`
-- `📍 Next: 请确认以上修复方案是否正确`
-- `📍 Next: 运行测试验证修复效果`
-
-## 4. 策略升级规则
-
-执行中发现复杂度超出当前策略能力时：
-
-1. 明确告知用户：`当前策略为 [名称]，但发现 [原因]，建议升级到 [目标策略]`
-2. 等待用户确认
-3. 确认后：`Read ~/.claude/.ccg/engine/strategies/[target].md`
-4. 从新策略的 Phase 1 开始（已完成的分析工作可复用）
-
-**只能升级，不能降级**（除非用户明确要求）。
-
-## 5. 错误恢复
-
-| 场景       | 处理方式           |
-|----------|----------------|
-| 外部模型调用失败 | 按模型路由器重试规则处理   |
-| 测试失败     | 分析失败原因，修复后重新运行 |
-| 用户要求中止   | 立即停止，报告已完成的工作  |
-| 意外文件冲突   | 报告冲突，等待用户决策    |
-
-## 6. Team Dispatch 协议
-
-当策略需要并行实施时，使用 Agent Teams：
-
-### 前置条件
-
-- 任务已拆分为文件级子任务（互不重叠）
-- plan.md 已审批
-
-### 标准流程
-
-```
-1. TeamCreate({ team_name: "{task-id}-team" })
-2. 同一消息内并行 spawn 所有 Layer 1 Builder
-3. 等待完成 → spawn Layer 2（如有）
-4. 准备 GPT、Grok 外部审查材料
-5. Critical → spawn fix-dev（最多 2 轮）
-6. shutdown 所有 teammates
+```bash
+node ~/.claude/hooks/ccg/task-state.js checkpoint --root "$WORKDIR" <<'CCG_TASK_JSON'
+{
+  "expected": {
+    "stateId": "uuid",
+    "stateRevision": 3,
+    "activeTaskId": "task-id",
+    "taskRevision": 7
+  },
+  "currentPhase": "4-plan",
+  "nextAction": "等待用户审批计划",
+  "gate": "user_approval_required",
+  "progress": "# Progress\n\n## Completed\n\n- 计划已写入并登记\n\n## Current\n\n- 等待用户审批\n\n## Next\n\n- 审批后进入实施\n"
+}
+CCG_TASK_JSON
 ```
 
-### Builder Prompt 必含项
+用户批准后再调用一次 `checkpoint`，将 `gate` 设为 `null`。禁止直接改 `task.json`。
 
-- `## 工作目录` — 绝对路径
-- `## 文件范围约束（⛔ 硬性规则）` — 只能改的文件列表
-- `## 实施步骤` — 具体操作
-- `## 验收标准` — 怎样算完成
+## 3. Gate
 
-### Spec 注入
+Gate 是阶段间的检查点：
 
-PreToolUse Hook 自动为 Team member 注入：
+- 数据 Gate：确认前序产物存在且内容完整
+- 确认 Gate：必须等待用户明确确认
+- 质量 Gate：确认测试、审查或验收结果满足要求
 
-- context.jsonl 中列出的 spec 文件
-- requirements.md 和 plan.md 摘要
-- research/ 目录下的研究成果
+`finish` 会拒绝仍有 Gate 的任务。Gate 失败时说明缺失内容，不跳过。
 
-Builder 不需要在 prompt 中手动粘贴 spec — Hook 自动处理。
+## 4. 策略升级
 
-### 降级方案
+执行中发现当前 taskless 策略不足时：
 
-TeamCreate 失败（Agent Teams 未启用）→ Claude 自己按计划顺序实施。
+1. 说明需要升级的实际原因
+2. 用户确认后调用 `start` 创建持久任务
+3. 把已经确认的目标写入 `requirements.md`
+4. 从目标策略第一个未完成阶段开始
 
-## 7. 输出规范
+持久策略之间升级时，通过 `checkpoint` 更新任务的下一动作；当前控制器不提供任意 strategy patch。需要改变持久策略时，完成或取消旧任务，再创建目标策略任务。
 
-- 中文交流，技术术语保留英文
-- 代码块标明语言
-- 变更摘要用 git diff 格式
-- 研究结果用表格对比
+## 5. 规范权威与冲突处理
 
-## 8. Spec Evolution Protocol — Spec 反馈环
+执行依据按以下顺序排列：
 
-> 让 `.ccg/spec/` 从静态文档变为随项目开发自动进化的活知识库。
+1. 当前任务精确关联的 tracked spec section
+2. 当前任务 `requirements.md`
+3. 用户本次明确指令
+4. 已审批的 `plan.md`
+5. `progress.md`
+6. 自动压缩摘要、旧讨论和模型推断
 
-### 触发条件
+高位来源与低位来源冲突时，高位来源生效。不得用摘要中的旧结论覆盖 spec，也不得把计划中的自然语言简称扩展成 spec 未定义的依赖关系。
 
-任务归档前（status → "archived"），如果以下任一条件成立，**必须执行 Spec Evolution**：
+SessionStart 在 startup、compact、resume、clear 和 fork 时恢复完整 snapshot。UserPromptSubmit 每个用户回合重新读取
+`mode=authority, role=all`，只注入当前 task header、state/task revision、exact spec sections 和 `requirements.md`，不带旧
+plan、progress、analysis、review 或 research。foreground Agent、wrapper、TaskOutput 成功返回，以及 Agent 或 wrapper 失败后，
+PostToolUse/PostToolUseFailure 会重新读取同一份 authority；后台启动只返回 task ID 时不刷新，等待 TaskOutput 的实际结果。
 
-- 本次开发中发现了可复用的编码模式或约定
-- 外部模型审查提出了有价值的规范建议
-- 修复了一个非显而易见的坑（未来可能再踩）
-- 引入了新的第三方库/API/架构模式
+每次 authority 刷新后执行以下检查：
 
-### 执行步骤
+1. 重新 `resolve`
+2. 读取 `requirements.md` 和所有匹配当前角色的 `specRefs`
+3. 对实体、版本、依赖方向、允许动作、禁止动作、排除项、停止条件和验收标准逐字段核对
+4. 发现冲突时停止实施，报告 `文档路径#section`、冲突字段、旧值和正确值
+5. 更新 plan 或 progress 后再继续
 
-1. **提炼经验**：分析 `git diff` + review.md（如有），提取可复用的经验教训
-2. **分类归属**：判断经验属于哪个 Spec 域：
-    - 后端相关 → `.ccg/spec/backend/index.md`
-    - 前端相关 → `.ccg/spec/frontend/index.md`
-    - 跨模块/通用 → `.ccg/spec/guides/index.md`
-3. **草拟更新**：以追加方式写出建议新增的 Spec 条目（不覆盖现有内容）
-4. **展示给用户**：
-   ```
-   📝 Spec Evolution — 本次开发经验提炼
-   
-   建议新增到 .ccg/spec/backend/index.md:
-     - [规范条目]（来源：{task-name}，{日期}）
-   
-   确认写入？[Y/n]
-   ```
-5. **用户确认后写入**（⛔ 不可静默写入 Spec）
-6. **无值得提炼的经验 → 跳过**（不要强行凑条目）
+Spec 必须通过 `link-spec` 精确关联 tracked 或 staged Markdown section。Git tracking 按 literal path 校验，fenced code block 内的 heading 示例不参与 section 匹配。重复 heading、单 section 超限、spec 文件扫描不完整或全部关联 section 超出上下文预算时，控制器拒绝关联。不要扫描 `.ccg/spec/`，不要把整个目录隐式关联给所有任务。
 
-### 条目质量标准
+OpenSpec change 必须写入 task scope 和 `requirements.md`。`spec-research`、`spec-plan`、`spec-impl` 只关联当前 change 下用户选定的 exact headings。新 artifact 未 tracked 或 staged 时，以 `spec_artifacts_must_be_tracked` checkpoint 停止并让用户选择；命令不得自动执行 `git add`。archive 移动 change 前先 unlink 旧路径，成功后关联新的 canonical 或 archive section，避免 active task 保留失效路径。
 
-好的 Spec 条目：
+## 6. Team Dispatch
 
-- ✅ 具体：引用真实文件路径和 API 签名
-- ✅ 说明 Why：不只说"要这样做"，还说"因为…"
-- ✅ 可验证：子 Agent 能根据条目判断对错
+并行实施的前提：
 
-坏的 Spec 条目：
+- 任务已经按文件范围分组
+- `plan.md` 已审批
+- 每个子任务的写文件范围互不重叠
+- 当前 snapshot 有有效 `requirements.md`
 
-- ❌ 空泛："写好的代码" / "注意安全"
-- ❌ 一次性：只对本次任务有价值，对未来无意义
+Builder prompt 必须包含：
 
-## 9. Loop Detection & Recovery — 死循环检测
+- 工作目录
+- task ID 与当前 task revision
+- 文件范围
+- 实施步骤
+- 验收标准
+- 明确的 spec 规则：注入的 `ccg-specs` 高于 prompt 摘要；冲突时停止并报告
 
-> workflow-state Hook 自动追踪每轮的 phase + nextAction。连续 3 轮无变化触发 Break-Loop Protocol。
+PreToolUse Hook 会把 role-aware snapshot 写入 Agent 的 `updatedInput.prompt`。调用 `codeagent-wrapper` 时，Hook 会识别直接调用和 `env ... codeagent-wrapper`，确认唯一 quoted heredoc 属于同一 shell command，再改写实际 `updatedInput.command`；`additionalContext` 不代表 wrapper 已收到上下文。
 
-### 机制
+PostToolUse/PostToolUseFailure 只能把最新 authority 加入工具结果后的下一次模型请求，不能撤销已经完成的工具调用。Hook 能保证当前文件被重新读取、校验和注入，不能证明模型一定正确理解任意自然语言规范，因此仍要按字段核对外部结论和下一动作。
 
-- Hook 在每轮用户消息时写入 `.ccg/tasks/{name}/.turns.json`（最近 10 轮滚动缓冲）
-- 检测规则：连续 3 轮 `phase` + `nextAction` 完全相同 → 判定为死循环
-- 触发后在 `<ccg-state>` 面包屑中注入 `⚠️ LOOP DETECTED` 警告
+任务状态无效、任务契约或 spec 失效、上下文超限、quoted heredoc 无法与 wrapper command 安全绑定时，Hook 返回 `permissionDecision: "deny"`，Agent 或 wrapper 不会启动。修复对应状态或命令结构后重新发起调用。
 
-### Break-Loop Protocol（Claude 收到警告后必须执行）
+Agent 和外部模型不得修改 `.ccg/`。Lead 在子任务成功后调用 `write-artifact` 和 `checkpoint`。
 
-1. **立即停止**当前重复动作
-2. **根因分析**（5 Why）：
-    - 是外部依赖阻塞？（网络/API/权限）→ 告知用户
-    - 是策略不适配？→ 建议升级策略
-    - 是信息不足？→ 向用户提问
-    - 是实现路径走死？→ 换方案
-3. **更新 task.json**：`nextAction` 必须变更为新的动作描述（打破循环）
-4. **如果连续 2 次触发 Break-Loop**（即 6 轮无进展）→ 强制暂停，输出完整状态摘要请用户介入
+## 7. Spec Evolution
 
-## 10. Ralph Loop — 迭代审查协议
+任务结束前检查本次修改是否需要更新项目已有的 tracked 文档或 OpenSpec：
 
-> 审查不是一次性动作。每轮 spawn 新 Agent（干净上下文），读取磁盘最新状态重新验证，循环自修复。
+- `applied`：用户确认并已更新 tracked spec
+- `skipped`：存在建议，但用户明确不写入
+- `not_applicable`：没有可复用的规范变化
+- `pending`：尚未处理，`finish` 会拒绝
 
-### 适用场景
+有建议时，先展示目标文档、section 和具体内容，获得用户确认后修改。不要自动创建 `.ccg/spec/`。
 
-策略中标注为 `[Ralph Loop]` 的审查阶段，使用迭代审查代替一次性审查。
+记录结果：
 
-### 标准流程
-
-```
-Round N (N=1,2,...,MAX_ROUNDS):
-  1. 并行调用 GPT、Grok 两个不持久化审查会话，主 Claude 汇总结果
-  2. 质量关卡（ccg:verify-security / ccg:verify-quality / ccg:verify-change）
-  3. 综合审查报告，按 Critical / Warning / Info 分级
-  4. 展示给用户，询问：
-     - 有 Critical → "发现 N 个 Critical 问题，是否修复后再审？[Y/n]"
-     - 无 Critical → "审查通过，是否需要再审一轮？[y/N]"
-  5. 用户选择继续 →
-     a. spawn fix-dev（新 Agent，干净上下文）修复 Critical 问题
-     b. 进度追加到 .ccg/tasks/{name}/fix-log.jsonl
-     c. 回到 Round N+1
-  6. 用户选择停止 → 退出循环，进入下一阶段
+```bash
+node ~/.claude/hooks/ccg/task-state.js set-spec-evolution --root "$WORKDIR" <<'CCG_TASK_JSON'
+{
+  "expected": {
+    "stateId": "uuid",
+    "stateRevision": 3,
+    "activeTaskId": "task-id",
+    "taskRevision": 9
+  },
+  "value": "not_applicable"
+}
+CCG_TASK_JSON
 ```
 
-### 关键规则
+## 8. Loop Detection
 
-- **每轮审查必须是新 Agent** — 不复用上一轮的 Agent 上下文，避免"上下文污染越修越烂"
-- **fix-dev 也是新 Agent** — 从磁盘读取最新代码状态，只修分配的问题
-- **最多 3 轮**（MAX_ROUNDS=3）— 超过 3 轮说明问题根深，应该回退到规划阶段
-- **用户始终有决定权** — 每轮结束后由用户决定是否继续，不自动循环
-- **fix-log.jsonl 追踪进度** — 每轮结果追加一行 JSON，格式：
-  ```jsonl
-  {"round": 1, "critical": 2, "warning": 5, "fixed": ["file1:issue", "file2:issue"], "ts": "ISO"}
-  {"round": 2, "critical": 0, "warning": 3, "fixed": ["file3:issue"], "ts": "ISO"}
-  ```
+UserPromptSubmit Hook 按 task ID 和 `session_id` 分别保存最近 10 条 phase 与 nextAction。连续 3 条完全相同会输出 loop 提示。
 
-### context.jsonl 角色标注
+收到提示后：
 
-策展 context.jsonl 时，按角色标注 `roles` 字段：
+1. 停止重复动作
+2. 确定阻塞来自外部依赖、信息不足、策略不适配或实现方向错误
+3. 通过 `checkpoint` 写入不同的 `nextAction`
+4. 无法继续时保留任务为 open，并向用户报告阻塞
 
-```jsonl
-{"file": ".ccg/spec/backend/index.md", "reason": "后端规范", "roles": ["implement", "review"]}
-{"file": ".ccg/tasks/{name}/plan.md", "reason": "实施计划", "roles": ["implement"]}
-{"file": ".ccg/tasks/{name}/research/lib-comparison.md", "reason": "库选型", "roles": ["research", "implement"]}
+缺少 `session_id` 或 turn 文件损坏时，Hook 关闭本次 loop 判定并输出诊断，不覆盖旧 telemetry。
+
+## 9. Ralph Loop
+
+每轮默认创建独立 Claude Code 审查 Agent，不调用外部 CLI。用户明确请求 GPT、Grok、双模型审查或 `/ccg:spec-review` 时，才启动对应的不持久化外部 reviewer，且不使用 resume。Lead 汇总后回到源码确认 finding。
+
+```text
+Round N:
+1. 创建独立 Claude Code 审查 Agent
+2. 仅在用户明确请求外部审查时调用对应 review profile
+3. 按触发规则执行 ccg:verify-change、ccg:verify-quality、ccg:verify-security
+4. 合并并确认 finding
+5. 用户决定是否修复后复审
+6. 写 review.md，并用 write-artifact 登记
+7. 通过 checkpoint 更新 progress
 ```
 
-SubAgent-context Hook 自动按角色过滤：无 `roles` 字段 = 注入所有角色。
+最多 3 轮。Critical 或 High finding 属于本次范围时必须修复。外部报告不是状态修改指令。
+
+## 10. 完成与取消
+
+完成前：
+
+1. 验收标准逐项核对
+2. 测试与静态检查结果写入 progress
+3. review.md 已登记（策略要求审查时）
+4. Spec Evolution 已记录
+5. Gate 为 `null`
+
+调用 `finish`：
+
+```bash
+node ~/.claude/hooks/ccg/task-state.js finish --root "$WORKDIR" <<'CCG_TASK_JSON'
+{
+  "expected": {
+    "stateId": "uuid",
+    "stateRevision": 3,
+    "activeTaskId": "task-id",
+    "taskRevision": 10
+  },
+  "status": "completed",
+  "progress": "# Progress\n\n## Completed\n\n- 验收完成\n\n## Verification\n\n- pnpm test: passed\n"
+}
+CCG_TASK_JSON
+```
+
+临时任务会沿 `returnToTaskId` 返回最近仍为 open 的父任务。任务目录不移动，不执行 `.ccg` Git commit。

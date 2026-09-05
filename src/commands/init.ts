@@ -15,6 +15,7 @@ import {
   writeCcgConfig,
 } from '../utils/config'
 import {
+  configureApiMartForCodex,
   getAllCommandIds,
   getCoreCommandIds,
   installAceTool,
@@ -207,7 +208,7 @@ async function installGrokSearchMcp(keys: {
 
 export async function init(options: InitOptions = {}): Promise<void> {
   console.log()
-  console.log(ansis.cyan.bold(`  CCG - Claude + Codex + Antigravity`))
+  console.log(ansis.cyan.bold(`  CCG - Claude Code + GPT + Grok`))
   console.log(ansis.gray(`  Multi-Model Collaboration Workflow`))
   console.log()
 
@@ -248,8 +249,8 @@ export async function init(options: InitOptions = {}): Promise<void> {
   }
 
   // Model routing configuration (user-selectable since v2.1.0)
-  let frontendModels: ModelType[] = normalizeModelNames(options.frontend, ['antigravity'])
-  let backendModels: ModelType[] = normalizeModelNames(options.backend, ['codex'])
+  let frontendModels: ModelType[] = normalizeModelNames(options.frontend, ['claude'])
+  let backendModels: ModelType[] = normalizeModelNames(options.backend, ['claude'])
   let routingProxy: ModelRouting['proxy']
   let reviewRouting: ModelRouting['review'] | undefined
   let grokModel = ''
@@ -310,6 +311,8 @@ export async function init(options: InitOptions = {}): Promise<void> {
   // Claude Code API configuration
   let apiUrl = ''
   let apiKey = ''
+  let apimartWireCodex = false
+  let apimartActivateCodex = false
 
   // ═══════════════════════════════════════════════════════
   // Non-interactive mode (--skip-prompt): preserve existing settings
@@ -374,8 +377,8 @@ export async function init(options: InitOptions = {}): Promise<void> {
             { name: `${ansis.green('●')} ${i18n.t('init:api.officialOption')}`, value: 'official' },
             { name: `${ansis.cyan('●')} ${i18n.t('init:api.thirdPartyOption')}`, value: 'thirdparty' },
             {
-              name: `${ansis.yellow('★')} ${i18n.t('init:api.sponsor302AI')} ${ansis.gray('— https://share.302.ai/oUDqQ6')}`,
-              value: '302ai',
+              name: `${ansis.yellow('★')} ${i18n.t('init:api.sponsorAPIMart')} ${ansis.gray('— https://go.apimart.ai/gh-ccg-workflow')}`,
+              value: 'apimart',
             },
             { name: `${ansis.gray('○')} ${i18n.t('init:api.skipOption')}`, value: 'skip' },
             ...navSentinels(canGoBack),
@@ -389,24 +392,49 @@ export async function init(options: InitOptions = {}): Promise<void> {
       // Clear stale values before collecting fresh input
       apiUrl = ''
       apiKey = ''
+      apimartWireCodex = false
+      apimartActivateCodex = false
 
-      if (apiProvider === '302ai') {
-        apiUrl = 'https://api.302.ai/cc'
+      if (apiProvider === 'apimart') {
+        // Claude Code appends /v1/messages, so ANTHROPIC_BASE_URL must not include /v1.
+        apiUrl = 'https://api.apimart.ai'
         console.log()
         console.log(
-          `    ${ansis.yellow('★')} ${i18n.t('init:api.sponsor302AIGetKey')}: ${ansis.cyan.underline('https://share.302.ai/oUDqQ6')}`
+          `    ${ansis.yellow('★')} ${i18n.t('init:api.sponsorAPIMartGetKey')}: ${ansis.cyan.underline('https://go.apimart.ai/gh-ccg-workflow')}`
         )
         console.log()
         const { key } = await inquirer.prompt([
           {
             type: 'password',
             name: 'key',
-            message: `302.AI API Key ${ansis.gray(`(${i18n.t('init:api.keyRequired')})`)}`,
+            message: `APIMart API Key ${ansis.gray(`(${i18n.t('init:api.keyRequired')})`)}`,
             mask: '*',
             validate: (v: string) => v.trim() !== '' || i18n.t('init:api.enterKey'),
           },
         ])
         apiKey = key?.trim() || ''
+
+        const { wire } = await inquirer.prompt([
+          {
+            type: 'confirm',
+            name: 'wire',
+            message: i18n.t('init:api.apimartCodexPrompt'),
+            default: true,
+          },
+        ])
+        apimartWireCodex = wire
+
+        if (apimartWireCodex) {
+          const { activate } = await inquirer.prompt([
+            {
+              type: 'confirm',
+              name: 'activate',
+              message: i18n.t('init:api.apimartCodexActivatePrompt'),
+              default: false,
+            },
+          ])
+          apimartActivateCodex = activate
+        }
       } else if (apiProvider === 'thirdparty') {
         const apiAnswers = await inquirer.prompt([
           {
@@ -448,17 +476,17 @@ export async function init(options: InitOptions = {}): Promise<void> {
           message: i18n.t('init:model.selectFrontend'),
           choices: [
             {
-              name: `Antigravity ${ansis.green(`(${i18n.t('init:model.recommended')})`)}`,
-              value: 'antigravity' as ModelType,
+              name: `Claude Code ${ansis.green(`(${i18n.t('init:model.recommended')})`)}`,
+              value: 'claude' as ModelType,
             },
             { name: 'Grok', value: 'grok' as ModelType },
             { name: 'Kimi Code', value: 'kimi' as ModelType },
             { name: 'Codex', value: 'codex' as ModelType },
+            { name: 'Antigravity', value: 'antigravity' as ModelType },
             { name: 'OpenCode', value: 'opencode' as ModelType },
-            { name: 'Claude Code', value: 'claude' as ModelType },
             ...navSentinels(canGoBack),
           ],
-          default: frontendModels[0] || 'antigravity',
+          default: frontendModels[0] || 'claude',
         },
       ])
 
@@ -471,15 +499,18 @@ export async function init(options: InitOptions = {}): Promise<void> {
           name: 'selectedBackend',
           message: i18n.t('init:model.selectBackend'),
           choices: [
-            { name: `Codex ${ansis.green(`(${i18n.t('init:model.recommended')})`)}`, value: 'codex' as ModelType },
+            {
+              name: `Claude Code ${ansis.green(`(${i18n.t('init:model.recommended')})`)}`,
+              value: 'claude' as ModelType,
+            },
             { name: 'Grok', value: 'grok' as ModelType },
             { name: 'Kimi Code', value: 'kimi' as ModelType },
+            { name: 'Codex', value: 'codex' as ModelType },
             { name: 'Antigravity', value: 'antigravity' as ModelType },
             { name: 'OpenCode', value: 'opencode' as ModelType },
-            { name: 'Claude Code', value: 'claude' as ModelType },
             ...navSentinels(canGoBack),
           ],
-          default: backendModels[0] || 'codex',
+          default: backendModels[0] || 'claude',
         },
       ])
 
@@ -1121,6 +1152,21 @@ export async function init(options: InitOptions = {}): Promise<void> {
       await fs.writeJSON(settingsPath, settings, { spaces: 2 })
       console.log()
       console.log(`    ${ansis.green('✓')} API ${ansis.gray(`→ ${settingsPath}`)}`)
+    }
+
+    if (apimartWireCodex) {
+      const codexApi = await configureApiMartForCodex(apimartActivateCodex)
+      console.log()
+      if (codexApi.success) {
+        console.log(`    ${ansis.green('✓')} Codex ${ansis.gray(`→ ${codexApi.configPath}`)}`)
+        console.log(`      ${ansis.gray(i18n.t('init:api.apimartCodexEnvHint'))}`)
+        console.log(`      ${ansis.cyan('export APIMART_API_KEY="<your-apimart-api-key>"')}`)
+        if (!codexApi.activated) {
+          console.log(`      ${ansis.gray(i18n.t('init:api.apimartCodexNotActive'))}`)
+        }
+      } else {
+        console.log(`    ${ansis.yellow('!')} ${codexApi.message}`)
+      }
     }
 
     // Always install codeagent-wrapper auto-approve via permissions.allow

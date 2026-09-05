@@ -323,7 +323,8 @@ func TestExecutorHelperCoverage(t *testing.T) {
 			args := buildCodexArgs(&Config{Mode: "new", WorkDir: "/tmp"}, "task")
 			if !slices.Equal(
 				args, []string{
-					"e", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "-C", "/tmp", "--json",
+					"e", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "-c", "mcp_servers={}",
+					"-C", "/tmp", "--json",
 					"task",
 				},
 			) {
@@ -332,7 +333,8 @@ func TestExecutorHelperCoverage(t *testing.T) {
 			args = buildCodexArgs(&Config{Mode: "resume", SessionID: "sess"}, "target")
 			if !slices.Equal(
 				args, []string{
-					"e", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "--json", "resume",
+					"e", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "-c", "mcp_servers={}",
+					"--json", "resume",
 					"sess", "target",
 				},
 			) {

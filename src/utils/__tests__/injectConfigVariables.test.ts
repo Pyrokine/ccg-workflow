@@ -294,6 +294,7 @@ describe('additional backend model flags', () => {
     const result = injectConfigVariables(input, {
       routing: {
         frontend: { models: ['grok'], primary: 'grok' },
+        backend: { models: ['codex'], primary: 'codex' },
         grokModel: 'grok-4.5',
       },
     })
@@ -392,7 +393,9 @@ describe('additional backend model flags', () => {
     ]) {
       const result = injectConfigVariables(input, config)
       expect(result).toContain('## Pure Claude Code mode')
-      expect(result).toContain('Do not execute `codeagent-wrapper` for frontend or backend work')
+      expect(result).toContain('This section overrides every later primary-route `codeagent-wrapper` example')
+      expect(result).toContain('CCG_ROLE: research')
+      expect(result).toContain('CCG_ROLE: implement')
     }
   })
 })

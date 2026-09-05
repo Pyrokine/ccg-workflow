@@ -13,7 +13,7 @@ skill file exists.
 > `cp -r $(npm root -g)/ccg-workflow/templates/skills/domains/security/ ~/.claude/skills/ccg/domains/security/`
 
 | Trigger Keywords                                                                             | Skill File                                               | Description                           |
-|----------------------------------------------------------------------------------------------|----------------------------------------------------------|---------------------------------------|
+| -------------------------------------------------------------------------------------------- | -------------------------------------------------------- | ------------------------------------- |
 | pentest, red team, exploit, C2, lateral movement, privilege escalation, evasion, persistence | `~/.claude/skills/ccg/domains/security/red-team.md`      | Red team attack techniques            |
 | blue team, alert, IOC, incident response, forensics, SIEM, EDR, containment                  | `~/.claude/skills/ccg/domains/security/blue-team.md`     | Blue team defense & incident response |
 | web pentest, API security, OWASP, SQLi, XSS, SSRF, RCE, injection                            | `~/.claude/skills/ccg/domains/security/pentest.md`       | Web & API penetration testing         |
@@ -24,7 +24,7 @@ skill file exists.
 ## Architecture Domain (`domains/architecture/`)
 
 | Trigger Keywords                                             | Skill File                                                   |
-|--------------------------------------------------------------|--------------------------------------------------------------|
+| ------------------------------------------------------------ | ------------------------------------------------------------ |
 | API design, REST, GraphQL, gRPC, endpoint, versioning        | `~/.claude/skills/ccg/domains/architecture/api-design.md`    |
 | caching, Redis, Memcached, cache invalidation, CDN           | `~/.claude/skills/ccg/domains/architecture/caching.md`       |
 | cloud native, Kubernetes, Docker, microservice, service mesh | `~/.claude/skills/ccg/domains/architecture/cloud-native.md`  |
@@ -34,7 +34,7 @@ skill file exists.
 ## AI / MLOps Domain (`domains/ai/`)
 
 | Trigger Keywords                                                     | Skill File                                           |
-|----------------------------------------------------------------------|------------------------------------------------------|
+| -------------------------------------------------------------------- | ---------------------------------------------------- |
 | RAG, retrieval augmented, vector database, embedding, chunking       | `~/.claude/skills/ccg/domains/ai/rag-system.md`      |
 | AI agent, tool use, function calling, agent framework, orchestration | `~/.claude/skills/ccg/domains/ai/agent-dev.md`       |
 | LLM security, prompt injection, jailbreak, guardrail                 | `~/.claude/skills/ccg/domains/ai/llm-security.md`    |
@@ -43,7 +43,7 @@ skill file exists.
 ## DevOps Domain (`domains/devops/`)
 
 | Trigger Keywords                                                 | Skill File                                                 |
-|------------------------------------------------------------------|------------------------------------------------------------|
+| ---------------------------------------------------------------- | ---------------------------------------------------------- |
 | Git workflow, branching strategy, trunk-based, GitFlow           | `~/.claude/skills/ccg/domains/devops/git-workflow.md`      |
 | testing strategy, unit test, integration test, e2e, test pyramid | `~/.claude/skills/ccg/domains/devops/testing.md`           |
 | database, migration, schema design, indexing, query optimization | `~/.claude/skills/ccg/domains/devops/database.md`          |
@@ -52,13 +52,31 @@ skill file exists.
 | DevSecOps, CI security, SAST, DAST, supply chain                 | `~/.claude/skills/ccg/domains/devops/devsecops.md`         |
 | cost optimization, cloud cost, FinOps, resource right-sizing     | `~/.claude/skills/ccg/domains/devops/cost-optimization.md` |
 
+## Data Engineering Domain (`domains/data-engineering/`)
+
+| Trigger Keywords                                                                                    | Skill File                                               |
+| --------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| data pipeline, ETL, Airflow, Dagster, Prefect, stream processing, Flink, dbt, data quality, lineage | `~/.claude/skills/ccg/domains/data-engineering/SKILL.md` |
+
+## Infrastructure Domain (`domains/infrastructure/`)
+
+| Trigger Keywords                                                                 | Skill File                                             |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| Kubernetes, K8s, Helm, Kustomize, Operator, CRD, GitOps, ArgoCD, Flux, Terraform | `~/.claude/skills/ccg/domains/infrastructure/SKILL.md` |
+
+## Mobile Domain (`domains/mobile/`)
+
+| Trigger Keywords                                                                         | Skill File                                     |
+| ---------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| mobile development, iOS, SwiftUI, UIKit, Android, Jetpack Compose, React Native, Flutter | `~/.claude/skills/ccg/domains/mobile/SKILL.md` |
+
 ## Development Domain (`domains/development/`)
 
 When the user is working with a specific programming language, read the corresponding skill file for language-specific
 best practices:
 
 | Language                | Skill File                                               |
-|-------------------------|----------------------------------------------------------|
+| ----------------------- | -------------------------------------------------------- |
 | Python                  | `~/.claude/skills/ccg/domains/development/python.md`     |
 | Go                      | `~/.claude/skills/ccg/domains/development/go.md`         |
 | Rust                    | `~/.claude/skills/ccg/domains/development/rust.md`       |
@@ -70,7 +88,7 @@ best practices:
 ## Frontend Design Domain (`domains/frontend-design/`)
 
 | Trigger Keywords                                              | Skill File                                                            |
-|---------------------------------------------------------------|-----------------------------------------------------------------------|
+| ------------------------------------------------------------- | --------------------------------------------------------------------- |
 | UI aesthetics, visual design, color theory, layout            | `~/.claude/skills/ccg/domains/frontend-design/ui-aesthetics.md`       |
 | UX principles, usability, user flow, information architecture | `~/.claude/skills/ccg/domains/frontend-design/ux-principles.md`       |
 | component patterns, design system, atomic design              | `~/.claude/skills/ccg/domains/frontend-design/component-patterns.md`  |

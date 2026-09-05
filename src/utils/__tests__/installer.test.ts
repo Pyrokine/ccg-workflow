@@ -184,10 +184,10 @@ describe('injectConfigVariables — routing variables', () => {
     expect(result).toBe('mode: smart')
   })
 
-  it('defaults to standard routing when not specified', () => {
+  it('defaults to Pure Claude Code routing when not specified', () => {
     const input = '{{FRONTEND_PRIMARY}} / {{BACKEND_PRIMARY}}'
     const result = injectConfigVariables(input, {})
-    expect(result).toBe('antigravity / codex')
+    expect(result).toBe('claude / claude')
   })
 })
 
@@ -392,7 +392,7 @@ describe('installWorkflows — binary installation', () => {
     const binDir = join(tmpDir, 'bin')
     const binaryPath = join(binDir, binaryName)
     await fs.ensureDir(binDir)
-    await fs.writeFile(binaryPath, '#!/usr/bin/env sh\necho "codeagent-wrapper version 5.14.0-aug.1"\n', 'utf-8')
+    await fs.writeFile(binaryPath, '#!/usr/bin/env sh\necho "codeagent-wrapper version 5.15.0-aug.1"\n', 'utf-8')
     if (process.platform !== 'win32') {
       await fs.chmod(binaryPath, 0o755)
     }
@@ -417,7 +417,7 @@ describe('installWorkflows — prompts installation', () => {
     await fs.remove(tmpDir)
   })
 
-  it('installs codex, antigravity, and claude prompts', async () => {
+  it('installs Claude prompts for the default routes', async () => {
     const result = await installWorkflows(getAllCommandIds(), tmpDir, true, {
       mcpProvider: 'skip',
       skipBinary: true,
@@ -426,18 +426,129 @@ describe('installWorkflows — prompts installation', () => {
     expect(result.installedPrompts.length).toBeGreaterThan(0)
 
     const promptsDir = join(tmpDir, '.ccg', 'prompts')
-    expect(fs.existsSync(join(promptsDir, 'codex'))).toBe(true)
-    expect(fs.existsSync(join(promptsDir, 'antigravity'))).toBe(true)
+    expect(fs.existsSync(join(promptsDir, 'claude'))).toBe(true)
+    expect(fs.existsSync(join(promptsDir, 'codex'))).toBe(false)
+    expect(fs.existsSync(join(promptsDir, 'antigravity'))).toBe(false)
 
-    const codexFiles = readdirSync(join(promptsDir, 'codex')).filter((f) => f.endsWith('.md'))
-    const antigravityFiles = readdirSync(join(promptsDir, 'antigravity')).filter((f) => f.endsWith('.md'))
-    expect(codexFiles.length).toBeGreaterThanOrEqual(5)
-    expect(antigravityFiles.length).toBeGreaterThanOrEqual(5)
+    const claudeFiles = readdirSync(join(promptsDir, 'claude')).filter((file) => file.endsWith('.md'))
+    expect(claudeFiles.length).toBeGreaterThanOrEqual(5)
   })
 })
 
 // ─────────────────────────────────────────────────────────────
-// H. Skills namespace isolation (skills/ccg/)
+// H. Persistent task Hook installation
+// ─────────────────────────────────────────────────────────────
+describe('installWorkflows — persistent task Hooks', () => {
+  const tmpDir = join(tmpdir(), `ccg test hooks ${Date.now()}`)
+  const invalidDir = join(tmpdir(), `ccg-test-invalid-settings-${Date.now()}`)
+
+  afterAll(async () => {
+    await Promise.all([fs.remove(tmpDir), fs.remove(invalidDir)])
+  })
+
+  it('installs the complete CommonJS runtime and registers supported events', async () => {
+    const result = await installWorkflows(['go'], tmpDir, true, {
+      mcpProvider: 'skip',
+      skipBinary: true,
+    })
+    expect(result.success).toBe(true)
+
+    const hookDir = join(tmpDir, 'hooks', 'ccg')
+    for (const file of [
+      'package.json',
+      'task-utils.js',
+      'task-state.js',
+      'workflow-state.js',
+      'session-start.js',
+      'subagent-context.js',
+      'skill-router.js',
+    ]) {
+      expect(fs.existsSync(join(hookDir, file)), `${file} missing`).toBe(true)
+    }
+    expect(await fs.readJson(join(hookDir, 'package.json'))).toEqual({ type: 'commonjs' })
+
+    const settings = await fs.readJson(join(tmpDir, 'settings.json'))
+    expect(settings.hooks.SessionStart).toEqual([
+      {
+        matcher: 'startup|resume|clear|compact|fork',
+        hooks: [{ type: 'command', command: `node "${join(hookDir, 'session-start.js')}"`, timeout: 15 }],
+      },
+    ])
+    expect(settings.hooks.PreToolUse).toEqual([
+      {
+        matcher: 'Bash|Agent',
+        hooks: [{ type: 'command', command: `node "${join(hookDir, 'subagent-context.js')}"`, timeout: 15 }],
+      },
+    ])
+    expect(settings.hooks.UserPromptSubmit[0].hooks).toEqual([
+      { type: 'command', command: `node "${join(hookDir, 'workflow-state.js')}"`, timeout: 10 },
+      { type: 'command', command: `node "${join(hookDir, 'skill-router.js')}"`, timeout: 5 },
+    ])
+    expect(settings.hooks.PostToolUse).toEqual([
+      {
+        matcher: 'Bash|Agent|TaskOutput',
+        hooks: [{ type: 'command', command: `node "${join(hookDir, 'workflow-state.js')}"`, timeout: 10 }],
+      },
+    ])
+    expect(settings.hooks.PostToolUseFailure).toEqual([
+      {
+        matcher: 'Bash|Agent',
+        hooks: [{ type: 'command', command: `node "${join(hookDir, 'workflow-state.js')}"`, timeout: 10 }],
+      },
+    ])
+  })
+
+  it('replaces old CCG commands while preserving every user Hook entry', async () => {
+    const oldCcg = `node ${join(tmpDir, 'hooks', 'ccg', 'old-session.js')}`
+    await fs.writeJson(join(tmpDir, 'settings.json'), {
+      hooks: {
+        SessionStart: [
+          {
+            matcher: 'startup',
+            hooks: [
+              { type: 'command', command: oldCcg },
+              { type: 'command', command: 'node /tmp/user-startup.js' },
+            ],
+          },
+          {
+            matcher: 'compact',
+            hooks: [{ type: 'command', command: 'node /tmp/user-compact.js' }],
+          },
+        ],
+      },
+    })
+
+    const result = await installWorkflows(['go'], tmpDir, true, {
+      mcpProvider: 'skip',
+      skipBinary: true,
+    })
+    expect(result.success).toBe(true)
+
+    const settings = await fs.readJson(join(tmpDir, 'settings.json'))
+    const serialized = JSON.stringify(settings.hooks.SessionStart)
+    expect(serialized).not.toContain('old-session.js')
+    expect(serialized).toContain('/tmp/user-startup.js')
+    expect(serialized).toContain('/tmp/user-compact.js')
+    expect(settings.hooks.SessionStart).toHaveLength(3)
+  })
+
+  it('does not overwrite malformed settings JSON', async () => {
+    await fs.ensureDir(invalidDir)
+    const settingsPath = join(invalidDir, 'settings.json')
+    await fs.writeFile(settingsPath, '{malformed', 'utf-8')
+
+    const result = await installWorkflows(['go'], invalidDir, true, {
+      mcpProvider: 'skip',
+      skipBinary: true,
+    })
+    expect(result.success).toBe(false)
+    expect(result.errors.join('\n')).toContain('invalid JSON')
+    expect(await fs.readFile(settingsPath, 'utf-8')).toBe('{malformed')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────
+// I. Skills namespace isolation (skills/ccg/)
 // ─────────────────────────────────────────────────────────────
 describe('skills namespace isolation', () => {
   const tmpDir = join(tmpdir(), `ccg-test-skills-${Date.now()}`)
