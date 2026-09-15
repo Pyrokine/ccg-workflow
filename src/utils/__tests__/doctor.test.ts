@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process'
+import { stripVTControlCharacters } from 'node:util'
 import fs from 'fs-extra'
 import { join } from 'pathe'
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -38,7 +39,7 @@ async function captureConsole(callback: () => Promise<void>): Promise<string> {
   } finally {
     spy.mockRestore()
   }
-  return lines.join('\n')
+  return stripVTControlCharacters(lines.join('\n'))
 }
 
 async function createInstalledFixture(): Promise<void> {
