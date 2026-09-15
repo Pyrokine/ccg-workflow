@@ -6,10 +6,11 @@
 
 const fs = require('fs');
 const path = require('path');
-const { randomUUID } = require('crypto');
+const { createHash, randomUUID } = require('crypto');
 const { execFileSync } = require('child_process');
 
-const STATE_SCHEMA_VERSION = 1;
+const STATE_SCHEMA_VERSION = 2;
+const BINDING_SCHEMA_VERSION = 1;
 const TASK_SCHEMA_VERSION = 1;
 const HOOK_INPUT_LIMIT = 1024 * 1024;
 const STATE_FILE_LIMIT = 256 * 1024;
@@ -31,6 +32,7 @@ const SPEC_TOTAL_LIMIT = 12 * 1024;
 const SPEC_SOURCE_LIMIT = 256 * 1024;
 const TASK_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const STATE_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const SESSION_KEY_PATTERN = /^(?:claude|codex)-[0-9a-f]{64}$/;
 const VALID_STATUSES = new Set(['open', 'completed', 'cancelled']);
 const VALID_COMPLEXITIES = new Set(['S', 'M', 'L', 'XL']);
 const VALID_RISKS = new Set(['low', 'medium', 'high']);
@@ -45,7 +47,7 @@ const LEGACY_OPEN_STATUSES = new Set([
   'paused',
   'suspended',
 ]);
-const LEGACY_CANCELLED_STATUSES = new Set(['cancelled', 'canceled', 'abandoned']);
+const LEGACY_CANCELLED_STATUSES = new Set(['cancelled', 'canceled', 'abandoned', 'deleted', 'superseded']);
 const LEGACY_COMPLETED_STATUSES = new Set([
   'completed',
   'complete',
@@ -93,6 +95,23 @@ function isValidTaskId(taskId) {
   return value.length <= 80 && TASK_ID_PATTERN.test(value);
 }
 
+function isValidSessionKey(sessionKey) {
+  return typeof sessionKey === 'string' && SESSION_KEY_PATTERN.test(sessionKey);
+}
+
+function deriveSessionKey(namespace, sessionId) {
+  const normalizedNamespace = String(namespace || '')
+    .trim()
+    .toLowerCase();
+  if (typeof sessionId !== 'string') return null;
+  const rawSessionId = sessionId;
+  if (!['claude', 'codex'].includes(normalizedNamespace) || !rawSessionId.trim() || byteLength(rawSessionId) > 1024) {
+    return null;
+  }
+  const digest = createHash('sha256').update(`${normalizedNamespace}\0${rawSessionId}`, 'utf-8').digest('hex');
+  return `${normalizedNamespace}-${digest}`;
+}
+
 function findProjectRoot(startDir) {
   let dir = path.resolve(startDir || process.cwd());
   let ccgFallback = null;
@@ -108,6 +127,15 @@ function findProjectRoot(startDir) {
 
 function getStatePath(projectRoot) {
   return path.join(projectRoot, '.ccg', 'state.json');
+}
+
+function getSessionsDir(projectRoot) {
+  return path.join(projectRoot, '.ccg', 'sessions');
+}
+
+function getBindingPath(projectRoot, sessionKey) {
+  if (!isValidSessionKey(sessionKey)) return null;
+  return path.join(getSessionsDir(projectRoot), `${sessionKey}.json`);
 }
 
 function getTasksDir(projectRoot) {
@@ -272,14 +300,25 @@ function readJsonSafe(filePath) {
   return result.ok && result.exists ? result.data : null;
 }
 
-function validateTransactionTarget(taskId, target, operation, index, writeCount) {
-  if (target === '.ccg/state.json') return operation === 'finish' && index === writeCount - 1;
+function isSessionBindingTarget(target) {
+  return /^\.ccg\/sessions\/(?:claude|codex)-[0-9a-f]{64}\.json$/.test(target);
+}
+
+function validateTransactionTarget(taskId, target, operation) {
+  if (target === '.ccg/state.json') return operation === 'start';
+  if (isSessionBindingTarget(target)) return ['start', 'finish', 'takeover'].includes(operation);
   const prefix = `.ccg/tasks/${taskId}/`;
   if (!target.startsWith(prefix)) return false;
   const relative = target.slice(prefix.length);
-  if (relative === 'task.json') return true;
-  if (['requirements.md', 'progress.md', 'analysis.md', 'plan.md', 'review.md'].includes(relative)) return true;
-  return /^research\/[a-z0-9]+(?:[._-][a-z0-9]+)*\.md$/.test(relative) && !relative.includes('..');
+  if (relative === 'task.json') return operation !== 'takeover';
+  if (['requirements.md', 'progress.md', 'analysis.md', 'plan.md', 'review.md'].includes(relative)) {
+    return ['start', 'checkpoint', 'update-requirements', 'write-artifact', 'finish'].includes(operation);
+  }
+  return (
+    operation === 'write-artifact' &&
+    /^research\/[a-z0-9]+(?:[._-][a-z0-9]+)*\.md$/.test(relative) &&
+    !relative.includes('..')
+  );
 }
 
 function readPendingTransaction(projectRoot) {
@@ -292,6 +331,7 @@ function readPendingTransaction(projectRoot) {
   }
   if (!parsed.exists) return { ok: true, exists: false, path: location.path, transaction: null };
   const transaction = parsed.data;
+  const operations = new Set(['start', 'checkpoint', 'update-requirements', 'write-artifact', 'finish', 'takeover']);
   if (
     !transaction ||
     typeof transaction !== 'object' ||
@@ -299,26 +339,27 @@ function readPendingTransaction(projectRoot) {
     transaction.schemaVersion !== 1 ||
     typeof transaction.transactionId !== 'string' ||
     !STATE_ID_PATTERN.test(transaction.transactionId) ||
-    !['checkpoint', 'update-requirements', 'write-artifact', 'finish'].includes(transaction.operation) ||
+    !operations.has(transaction.operation) ||
     !isValidTaskId(transaction.taskId) ||
+    (transaction.sessionKey !== undefined && !isValidSessionKey(transaction.sessionKey)) ||
     !isIsoTimestamp(transaction.createdAt) ||
     !Array.isArray(transaction.writes) ||
     transaction.writes.length < 1 ||
-    transaction.writes.length > 3
+    transaction.writes.length > 70
   ) {
     return { ok: false, code: 'TRANSACTION_INVALID', message: 'transaction.json has an invalid structure' };
   }
   const seen = new Set();
   let hasTaskWrite = false;
   let hasStateWrite = false;
-  for (let index = 0; index < transaction.writes.length; index += 1) {
-    const write = transaction.writes[index];
+  let hasSessionWrite = false;
+  for (const write of transaction.writes) {
     const target = write && normalizeRelativeProjectPath(write.path);
     if (
       !target ||
       typeof write.content !== 'string' ||
       seen.has(target) ||
-      !validateTransactionTarget(transaction.taskId, target, transaction.operation, index, transaction.writes.length)
+      !validateTransactionTarget(transaction.taskId, target, transaction.operation)
     ) {
       return { ok: false, code: 'TRANSACTION_INVALID', message: 'transaction.json contains an invalid write' };
     }
@@ -326,15 +367,49 @@ function readPendingTransaction(projectRoot) {
     if (!targetLocation.ok) return { ok: false, code: 'TRANSACTION_INVALID', message: targetLocation.message };
     if (target === `.ccg/tasks/${transaction.taskId}/task.json`) hasTaskWrite = true;
     if (target === '.ccg/state.json') hasStateWrite = true;
+    if (isSessionBindingTarget(target)) hasSessionWrite = true;
     seen.add(target);
   }
-  if (!hasTaskWrite || (transaction.operation === 'finish' && !hasStateWrite)) {
+  if (
+    (['start', 'checkpoint', 'update-requirements', 'write-artifact', 'finish'].includes(transaction.operation) &&
+      !hasTaskWrite) ||
+    (transaction.operation === 'start' && !hasStateWrite) ||
+    (['finish', 'takeover'].includes(transaction.operation) && !hasSessionWrite)
+  ) {
     return { ok: false, code: 'TRANSACTION_INVALID', message: 'transaction.json is missing a required write' };
   }
   return { ok: true, exists: true, path: location.path, transaction };
 }
 
-function readState(projectRoot) {
+function emptyState() {
+  return {
+    schemaVersion: STATE_SCHEMA_VERSION,
+    stateId: null,
+    revision: 0,
+    updatedAt: null,
+  };
+}
+
+function validateStateIdentity(state, statePath) {
+  if (typeof state.stateId !== 'string' || !STATE_ID_PATTERN.test(state.stateId)) {
+    return { ok: false, code: 'STATE_INVALID', message: 'stateId is invalid', path: statePath };
+  }
+  if (!Number.isSafeInteger(state.revision) || state.revision < 1) {
+    return {
+      ok: false,
+      code: 'STATE_INVALID',
+      message: 'state revision must be a positive safe integer',
+      path: statePath,
+    };
+  }
+  if (!isIsoTimestamp(state.updatedAt)) {
+    return { ok: false, code: 'STATE_INVALID', message: 'updatedAt is invalid', path: statePath };
+  }
+  return { ok: true };
+}
+
+function readState(projectRoot, options) {
+  const opts = options || {};
   const location = validateRuntimePath(projectRoot, '.ccg/state.json', { allowMissing: true, kind: 'file' });
   if (!location.ok) {
     return { ok: false, code: 'STATE_PATH_INVALID', message: location.message, path: location.path || null };
@@ -351,23 +426,37 @@ function readState(projectRoot) {
     return { ok: false, code, message: `Cannot read ${statePath}`, path: statePath };
   }
   if (!parsed.exists) {
-    return {
-      ok: true,
-      exists: false,
-      state: {
-        schemaVersion: STATE_SCHEMA_VERSION,
-        stateId: null,
-        revision: 0,
-        activeTaskId: null,
-        updatedAt: null,
-      },
-      path: statePath,
-    };
+    return { ok: true, exists: false, legacy: false, state: emptyState(), path: statePath, raw: null };
   }
 
   const state = parsed.data;
   if (!state || typeof state !== 'object' || Array.isArray(state)) {
     return { ok: false, code: 'STATE_INVALID', message: 'state.json must contain an object', path: statePath };
+  }
+  const identity = validateStateIdentity(state, statePath);
+  if (!identity.ok) return identity;
+
+  if (state.schemaVersion === 1) {
+    if (state.activeTaskId !== null && !isValidTaskId(state.activeTaskId)) {
+      return { ok: false, code: 'STATE_INVALID', message: 'activeTaskId is invalid', path: statePath };
+    }
+    const legacyState = {
+      schemaVersion: 1,
+      stateId: state.stateId,
+      revision: state.revision,
+      activeTaskId: state.activeTaskId,
+      updatedAt: state.updatedAt,
+    };
+    if (opts.allowLegacy === true) {
+      return { ok: true, exists: true, legacy: true, state: legacyState, path: statePath, raw: parsed.raw };
+    }
+    return {
+      ok: false,
+      code: 'STATE_MIGRATION_REQUIRED',
+      message: 'state.json schema v1 requires explicit migration',
+      path: statePath,
+      legacyState,
+    };
   }
   if (state.schemaVersion !== STATE_SCHEMA_VERSION) {
     return {
@@ -377,36 +466,129 @@ function readState(projectRoot) {
       path: statePath,
     };
   }
-  if (typeof state.stateId !== 'string' || !STATE_ID_PATTERN.test(state.stateId)) {
-    return { ok: false, code: 'STATE_INVALID', message: 'stateId is invalid', path: statePath };
-  }
-  if (!Number.isSafeInteger(state.revision) || state.revision < 1) {
+  if (Object.prototype.hasOwnProperty.call(state, 'activeTaskId')) {
     return {
       ok: false,
       code: 'STATE_INVALID',
-      message: 'state revision must be a positive safe integer',
+      message: 'state schema v2 cannot contain activeTaskId',
       path: statePath,
     };
-  }
-  if (state.activeTaskId !== null && !isValidTaskId(state.activeTaskId)) {
-    return { ok: false, code: 'STATE_INVALID', message: 'activeTaskId is invalid', path: statePath };
-  }
-  if (!isIsoTimestamp(state.updatedAt)) {
-    return { ok: false, code: 'STATE_INVALID', message: 'updatedAt is invalid', path: statePath };
   }
 
   return {
     ok: true,
     exists: true,
+    legacy: false,
     state: {
       schemaVersion: STATE_SCHEMA_VERSION,
       stateId: state.stateId,
       revision: state.revision,
-      activeTaskId: state.activeTaskId,
       updatedAt: state.updatedAt,
     },
     path: statePath,
+    raw: parsed.raw,
   };
+}
+
+function emptyBinding(stateId) {
+  return {
+    schemaVersion: BINDING_SCHEMA_VERSION,
+    stateId,
+    revision: 0,
+    activeTaskId: null,
+    createdAt: null,
+    updatedAt: null,
+  };
+}
+
+function readBinding(projectRoot, sessionKey, stateId) {
+  if (!isValidSessionKey(sessionKey)) {
+    return { ok: false, code: 'SESSION_KEY_INVALID', message: 'A valid CCG session key is required' };
+  }
+  const relativePath = `.ccg/sessions/${sessionKey}.json`;
+  const location = validateRuntimePath(projectRoot, relativePath, { allowMissing: true, kind: 'file' });
+  if (!location.ok)
+    return { ok: false, code: 'BINDING_PATH_INVALID', message: location.message, path: location.path || null };
+  const parsed = readJsonDetailed(location.path, STATE_FILE_LIMIT);
+  if (!parsed.ok) {
+    const code = parsed.code === 'FILE_TOO_LARGE' ? 'BINDING_TOO_LARGE' : 'BINDING_INVALID';
+    return { ok: false, code, message: `Cannot read ${location.path}`, path: location.path };
+  }
+  if (!parsed.exists) {
+    return { ok: true, exists: false, binding: emptyBinding(stateId), path: location.path };
+  }
+  const binding = parsed.data;
+  if (
+    !binding ||
+    typeof binding !== 'object' ||
+    Array.isArray(binding) ||
+    binding.schemaVersion !== BINDING_SCHEMA_VERSION ||
+    typeof binding.stateId !== 'string' ||
+    !STATE_ID_PATTERN.test(binding.stateId) ||
+    !Number.isSafeInteger(binding.revision) ||
+    binding.revision < 1 ||
+    (binding.activeTaskId !== null && !isValidTaskId(binding.activeTaskId)) ||
+    !isIsoTimestamp(binding.createdAt) ||
+    !isIsoTimestamp(binding.updatedAt)
+  ) {
+    return {
+      ok: false,
+      code: 'BINDING_INVALID',
+      message: `Session binding is invalid: ${location.path}`,
+      path: location.path,
+    };
+  }
+  if (stateId && binding.stateId !== stateId) {
+    return {
+      ok: false,
+      code: 'BINDING_STATE_CONFLICT',
+      message: 'Session binding belongs to a different task state identity',
+      path: location.path,
+    };
+  }
+  return {
+    ok: true,
+    exists: true,
+    binding: {
+      schemaVersion: BINDING_SCHEMA_VERSION,
+      stateId: binding.stateId,
+      revision: binding.revision,
+      activeTaskId: binding.activeTaskId,
+      createdAt: binding.createdAt,
+      updatedAt: binding.updatedAt,
+    },
+    path: location.path,
+  };
+}
+
+function listBindings(projectRoot, stateId) {
+  const location = validateRuntimePath(projectRoot, '.ccg/sessions', { allowMissing: true, kind: 'directory' });
+  if (!location.ok) return { ok: false, code: 'BINDING_PATH_INVALID', message: location.message };
+  if (!location.exists) return { ok: true, bindings: [] };
+  let entries;
+  try {
+    entries = fs.readdirSync(location.path, { withFileTypes: true });
+  } catch {
+    return { ok: false, code: 'BINDING_READ_FAILED', message: `Cannot list ${location.path}` };
+  }
+  const bindings = [];
+  for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
+    if (entry.isSymbolicLink()) {
+      return { ok: false, code: 'BINDING_PATH_INVALID', message: `Session binding entry is a symlink: ${entry.name}` };
+    }
+    if (!entry.isFile() || !entry.name.endsWith('.json')) continue;
+    const sessionKey = entry.name.slice(0, -5);
+    if (!isValidSessionKey(sessionKey)) {
+      return { ok: false, code: 'BINDING_INVALID', message: `Session binding filename is invalid: ${entry.name}` };
+    }
+    const result = readBinding(projectRoot, sessionKey, stateId);
+    if (!result.ok) {
+      if (result.code === 'BINDING_STATE_CONFLICT') continue;
+      return result;
+    }
+    bindings.push({ sessionKey, ...result.binding, path: result.path });
+  }
+  return { ok: true, bindings };
 }
 
 function validateTaskDirectory(projectRoot, taskId) {
@@ -555,7 +737,7 @@ function listTasks(projectRoot, options) {
   const opts = options || {};
   const location = validateRuntimePath(projectRoot, '.ccg/tasks', { allowMissing: true, kind: 'directory' });
   if (!location.ok) return { ok: false, code: 'PATH_INVALID', message: location.message };
-  if (!location.exists) return { ok: true, tasks: [], orphans: [] };
+  if (!location.exists) return { ok: true, tasks: [], orphans: [], legacyTaskIds: [] };
   const tasksDir = location.path;
   let entries;
   try {
@@ -566,6 +748,7 @@ function listTasks(projectRoot, options) {
 
   const tasks = [];
   const orphans = [];
+  const legacyTaskIds = [];
   for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
     if (entry.name === 'archive') continue;
     if (entry.isSymbolicLink())
@@ -578,9 +761,10 @@ function listTasks(projectRoot, options) {
     }
     const result = readTask(projectRoot, entry.name, { allowLegacy: opts.allowLegacy === true });
     if (!result.ok) return result;
+    if (result.legacy) legacyTaskIds.push(entry.name);
     tasks.push(result.task);
   }
-  return { ok: true, tasks, orphans };
+  return { ok: true, tasks, orphans, legacyTaskIds };
 }
 
 function listOpenTasks(projectRoot, options) {
@@ -647,32 +831,231 @@ function inspectReturnChain(projectRoot, startTaskId) {
   return { ok: true, chain };
 }
 
-function resolutionBase(stateResult) {
+function resolutionBase(stateResult, bindingResult) {
+  const binding = bindingResult ? bindingResult.binding : emptyBinding(stateResult.state.stateId);
   return {
     source: stateResult.exists ? 'state' : 'legacy',
     state: stateResult.state,
+    binding,
     stateId: stateResult.state.stateId,
     stateRevision: stateResult.state.revision,
-    activeTaskId: stateResult.state.activeTaskId,
+    bindingRevision: binding.revision,
+    activeTaskId: binding.activeTaskId,
     diagnostics: [],
   };
 }
 
-function resolveTaskState(projectRoot) {
+function taskIdsReservedByTask(projectRoot, task) {
+  if (!task || task.status !== 'open') return { ok: true, taskIds: [] };
+  const chain = inspectReturnChain(projectRoot, task.returnToTaskId);
+  if (!chain.ok) return chain;
+  return {
+    ok: true,
+    taskIds: [task.id, ...chain.chain.filter((parent) => parent.status === 'open').map((parent) => parent.id)],
+  };
+}
+
+function taskIdsReservedByBinding(projectRoot, binding) {
+  if (!binding.activeTaskId) return [];
+  const active = readTask(projectRoot, binding.activeTaskId);
+  if (!active.ok || active.task.status !== 'open') return [];
+  const reserved = taskIdsReservedByTask(projectRoot, active.task);
+  return reserved.ok ? reserved.taskIds : [active.task.id];
+}
+
+function claimOwnersForTask(projectRoot, task, claims) {
+  const reserved = taskIdsReservedByTask(projectRoot, task);
+  if (!reserved.ok) return reserved;
+  const owners = new Set();
+  for (const taskId of reserved.taskIds) {
+    for (const owner of claims.get(taskId) || []) owners.add(owner);
+  }
+  return { ok: true, taskIds: reserved.taskIds, owners: [...owners] };
+}
+
+function collectTaskClaims(projectRoot, bindings) {
+  const claims = new Map();
+  for (const binding of bindings) {
+    for (const taskId of taskIdsReservedByBinding(projectRoot, binding)) {
+      const owners = claims.get(taskId) || [];
+      owners.push(binding.sessionKey);
+      claims.set(taskId, owners);
+    }
+  }
+  return claims;
+}
+
+function migrationCandidates(projectRoot) {
+  const tasks = listTasks(projectRoot, { allowLegacy: true });
+  if (!tasks.ok) return tasks;
+  return {
+    ok: true,
+    orphans: tasks.orphans,
+    legacyTaskIds: tasks.legacyTaskIds,
+    candidates: tasks.tasks
+      .filter((task) => task.status === 'open')
+      .map((task) => ({ id: task.id, title: task.title || task.id, revision: task.revision, status: task.status })),
+  };
+}
+
+function taskMigrationResolution(projectRoot, base, claims, sessionKey) {
+  const listed = migrationCandidates(projectRoot);
+  if (!listed.ok) {
+    return { ...base, kind: 'invalid', code: listed.code, message: listed.message, diagnostics: [listed.code] };
+  }
+  if (listed.orphans.length > 0) {
+    return {
+      ...base,
+      kind: 'invalid',
+      code: 'ORPHAN_TASK_DIR',
+      message: `Task directories without task.json: ${listed.orphans.join(', ')}`,
+      diagnostics: ['ORPHAN_TASK_DIR'],
+    };
+  }
+  return {
+    ...base,
+    kind: 'migration-required',
+    code: 'TASK_MIGRATION_REQUIRED',
+    message: 'Legacy tasks require explicit migration',
+    candidates: listed.candidates.map((task) => ({
+      ...task,
+      claimed: claims ? (claims.get(task.id) || []).some((owner) => owner !== sessionKey) : false,
+    })),
+    diagnostics: ['TASK_MIGRATION_REQUIRED'],
+  };
+}
+
+function resolveTaskState(projectRoot, sessionKey) {
+  if (!isValidSessionKey(sessionKey)) {
+    return {
+      kind: 'invalid',
+      source: 'session',
+      stateId: null,
+      stateRevision: null,
+      bindingRevision: null,
+      activeTaskId: null,
+      code: sessionKey ? 'SESSION_KEY_INVALID' : 'SESSION_KEY_REQUIRED',
+      message: 'A valid CCG session key is required',
+      diagnostics: [sessionKey ? 'SESSION_KEY_INVALID' : 'SESSION_KEY_REQUIRED'],
+    };
+  }
+
   const stateResult = readState(projectRoot);
   if (!stateResult.ok) {
+    if (stateResult.code === 'STATE_MIGRATION_REQUIRED') {
+      const listed = migrationCandidates(projectRoot);
+      if (!listed.ok) {
+        return {
+          kind: 'invalid',
+          source: 'state-v1',
+          stateId: stateResult.legacyState.stateId,
+          stateRevision: stateResult.legacyState.revision,
+          bindingRevision: 0,
+          activeTaskId: null,
+          code: listed.code,
+          message: listed.message,
+          diagnostics: [listed.code],
+        };
+      }
+      return {
+        kind: 'migration-required',
+        source: 'state-v1',
+        state: stateResult.legacyState,
+        stateId: stateResult.legacyState.stateId,
+        stateRevision: stateResult.legacyState.revision,
+        bindingRevision: 0,
+        activeTaskId: null,
+        legacyActiveTaskId: stateResult.legacyState.activeTaskId,
+        code: 'STATE_MIGRATION_REQUIRED',
+        message: 'state.json schema v1 requires explicit migration before a session can claim a task',
+        candidates: listed.candidates,
+        orphans: listed.orphans,
+        diagnostics: ['STATE_MIGRATION_REQUIRED'],
+      };
+    }
     return {
       kind: 'invalid',
       source: 'state',
       stateId: null,
       stateRevision: null,
+      bindingRevision: null,
       activeTaskId: null,
       code: stateResult.code,
       message: stateResult.message,
       diagnostics: [stateResult.code],
     };
   }
-  const base = resolutionBase(stateResult);
+
+  if (!stateResult.exists) {
+    const base = resolutionBase(stateResult, null);
+    const pendingTransaction = readPendingTransaction(projectRoot);
+    if (!pendingTransaction.ok) {
+      return {
+        ...base,
+        kind: 'invalid',
+        code: pendingTransaction.code,
+        message: pendingTransaction.message,
+        diagnostics: [pendingTransaction.code],
+      };
+    }
+    if (pendingTransaction.exists) {
+      return {
+        ...base,
+        kind: 'recovery-required',
+        code: 'RECOVERY_REQUIRED',
+        reasonCode: 'INCOMPLETE_TRANSACTION',
+        transactionId: pendingTransaction.transaction.transactionId,
+        taskRevision: null,
+        proposedActiveTaskId: null,
+        message: `Incomplete ${pendingTransaction.transaction.operation} transaction requires recovery`,
+        diagnostics: ['RECOVERY_REQUIRED', 'INCOMPLETE_TRANSACTION'],
+      };
+    }
+    const listed = migrationCandidates(projectRoot);
+    if (!listed.ok)
+      return { ...base, kind: 'invalid', code: listed.code, message: listed.message, diagnostics: [listed.code] };
+    if (listed.orphans.length > 0) {
+      return {
+        ...base,
+        kind: 'invalid',
+        code: 'ORPHAN_TASK_DIR',
+        message: `Task directories without task.json: ${listed.orphans.join(', ')}`,
+        diagnostics: ['ORPHAN_TASK_DIR'],
+      };
+    }
+    if (listed.legacyTaskIds.length > 0) {
+      return {
+        ...base,
+        kind: 'migration-required',
+        code: 'TASK_MIGRATION_REQUIRED',
+        message: 'Legacy tasks require explicit migration',
+        candidates: listed.candidates.map((task) => ({ ...task, claimed: false })),
+        diagnostics: ['TASK_MIGRATION_REQUIRED'],
+      };
+    }
+    if (listed.candidates.length === 0) return { ...base, kind: 'none' };
+    return {
+      ...base,
+      kind: 'migration-required',
+      code: 'TASK_MIGRATION_REQUIRED',
+      message: 'Task directories exist without .ccg/state.json',
+      candidates: listed.candidates.map((task) => ({ ...task, claimed: false })),
+      diagnostics: ['TASK_MIGRATION_REQUIRED'],
+    };
+  }
+
+  const bindingResult = readBinding(projectRoot, sessionKey, stateResult.state.stateId);
+  if (!bindingResult.ok) {
+    const base = resolutionBase(stateResult, null);
+    return {
+      ...base,
+      kind: 'invalid',
+      code: bindingResult.code,
+      message: bindingResult.message,
+      diagnostics: [bindingResult.code],
+    };
+  }
+  const base = resolutionBase(stateResult, bindingResult);
   const pendingTransaction = readPendingTransaction(projectRoot);
   if (!pendingTransaction.ok) {
     return {
@@ -684,15 +1067,6 @@ function resolveTaskState(projectRoot) {
     };
   }
   if (pendingTransaction.exists) {
-    if (!stateResult.exists) {
-      return {
-        ...base,
-        kind: 'invalid',
-        code: 'TRANSACTION_INVALID',
-        message: 'A task transaction exists without initialized state',
-        diagnostics: ['TRANSACTION_INVALID'],
-      };
-    }
     return {
       ...base,
       kind: 'recovery-required',
@@ -706,38 +1080,20 @@ function resolveTaskState(projectRoot) {
     };
   }
 
-  if (!stateResult.exists) {
-    const tasks = listTasks(projectRoot, { allowLegacy: true });
-    if (!tasks.ok)
-      return { ...base, kind: 'invalid', code: tasks.code, message: tasks.message, diagnostics: [tasks.code] };
-    if (tasks.orphans.length > 0) {
-      return {
-        ...base,
-        kind: 'invalid',
-        code: 'ORPHAN_TASK_DIR',
-        message: `Task directories without task.json: ${tasks.orphans.join(', ')}`,
-        diagnostics: ['ORPHAN_TASK_DIR'],
-      };
-    }
-    if (tasks.tasks.length === 0) return { ...base, kind: 'none' };
+  const bindingList = listBindings(projectRoot, stateResult.state.stateId);
+  if (!bindingList.ok) {
     return {
       ...base,
-      kind: 'migration-required',
-      code: 'TASK_MIGRATION_REQUIRED',
-      message: 'Task directories exist without .ccg/state.json',
-      candidates: tasks.tasks
-        .filter((task) => task.status === 'open')
-        .map((task) => ({
-          id: task.id,
-          title: task.title || task.id,
-          revision: task.revision,
-        })),
-      diagnostics: ['TASK_MIGRATION_REQUIRED'],
+      kind: 'invalid',
+      code: bindingList.code,
+      message: bindingList.message,
+      diagnostics: [bindingList.code],
     };
   }
+  const claims = collectTaskClaims(projectRoot, bindingList.bindings);
 
-  if (stateResult.state.activeTaskId) {
-    const taskResult = readTask(projectRoot, stateResult.state.activeTaskId);
+  if (bindingResult.binding.activeTaskId) {
+    const taskResult = readTask(projectRoot, bindingResult.binding.activeTaskId);
     if (!taskResult.ok) {
       if (taskResult.code === 'TASK_NOT_FOUND') {
         return {
@@ -750,6 +1106,9 @@ function resolveTaskState(projectRoot) {
           message: taskResult.message,
           diagnostics: ['RECOVERY_REQUIRED', 'ACTIVE_TASK_MISSING'],
         };
+      }
+      if (taskResult.code === 'LEGACY_TASK') {
+        return taskMigrationResolution(projectRoot, base, claims, sessionKey);
       }
       return {
         ...base,
@@ -783,6 +1142,26 @@ function resolveTaskState(projectRoot) {
         diagnostics: [returnChain.code],
       };
     }
+    const ownership = claimOwnersForTask(projectRoot, task, claims);
+    if (!ownership.ok) {
+      return {
+        ...base,
+        kind: 'invalid',
+        code: ownership.code,
+        message: ownership.message,
+        diagnostics: [ownership.code],
+      };
+    }
+    const otherOwners = ownership.owners.filter((owner) => owner !== sessionKey);
+    if (otherOwners.length > 0) {
+      return {
+        ...base,
+        kind: 'invalid',
+        code: 'TASK_CLAIM_CONFLICT',
+        message: `Task or its return chain has multiple session bindings: ${task.id}`,
+        diagnostics: ['TASK_CLAIM_CONFLICT'],
+      };
+    }
     const git = getGitInfo(projectRoot);
     const diagnostics = [];
     if (
@@ -798,13 +1177,16 @@ function resolveTaskState(projectRoot) {
       kind: 'active',
       task,
       taskRevision: task.revision,
-      effectiveStatus: 'active',
+      effectiveStatus: 'in_progress',
       diagnostics,
     };
   }
 
   const openTasks = listOpenTasks(projectRoot);
-  if (!openTasks.ok)
+  if (!openTasks.ok) {
+    if (openTasks.code === 'LEGACY_TASK') {
+      return taskMigrationResolution(projectRoot, base, claims, sessionKey);
+    }
     return {
       ...base,
       kind: 'invalid',
@@ -812,19 +1194,40 @@ function resolveTaskState(projectRoot) {
       message: openTasks.message,
       diagnostics: [openTasks.code],
     };
+  }
   if (openTasks.tasks.length === 0) return { ...base, kind: 'none' };
+  const candidates = [];
+  for (const task of openTasks.tasks) {
+    const ownership = claimOwnersForTask(projectRoot, task, claims);
+    if (!ownership.ok) {
+      return {
+        ...base,
+        kind: 'invalid',
+        code: ownership.code,
+        message: ownership.message,
+        diagnostics: [ownership.code],
+      };
+    }
+    candidates.push({
+      id: task.id,
+      title: task.title,
+      revision: task.revision,
+      status: task.status,
+      claimed: ownership.owners.some((owner) => owner !== sessionKey),
+    });
+  }
   return {
     ...base,
     kind: 'selection-required',
     code: 'SELECTION_REQUIRED',
-    message: 'Open tasks exist but none is active',
-    candidates: openTasks.tasks.map((task) => ({ id: task.id, title: task.title, revision: task.revision })),
+    message: 'Open tasks exist but none is active for this session',
+    candidates,
     diagnostics: ['SELECTION_REQUIRED'],
   };
 }
 
-function getActiveTask(projectRoot) {
-  const resolution = resolveTaskState(projectRoot);
+function getActiveTask(projectRoot, sessionKey) {
+  const resolution = resolveTaskState(projectRoot, sessionKey);
   return resolution.kind === 'active' ? resolution.task : null;
 }
 
@@ -1275,12 +1678,20 @@ function collectSnapshot(projectRoot, resolution, mode, role) {
 }
 
 function snapshotFingerprint(resolution) {
-  if (resolution.kind !== 'active')
-    return JSON.stringify([resolution.kind, resolution.stateId, resolution.stateRevision, resolution.activeTaskId]);
+  if (resolution.kind !== 'active') {
+    return JSON.stringify([
+      resolution.kind,
+      resolution.stateId,
+      resolution.stateRevision,
+      resolution.bindingRevision,
+      resolution.activeTaskId,
+    ]);
+  }
   return JSON.stringify([
     resolution.kind,
     resolution.stateId,
     resolution.stateRevision,
+    resolution.bindingRevision,
     resolution.activeTaskId,
     resolution.taskRevision,
   ]);
@@ -1294,6 +1705,7 @@ function invalidSnapshot(code, message) {
       source: 'state',
       stateId: null,
       stateRevision: null,
+      bindingRevision: null,
       activeTaskId: null,
       code,
       message,
@@ -1316,7 +1728,7 @@ function buildTaskSnapshot(projectRoot, options) {
     if (fs.existsSync(lockPath)) {
       return invalidSnapshot('STATE_LOCKED', 'Task state is being modified; retry after the mutation finishes');
     }
-    const before = resolveTaskState(projectRoot);
+    const before = resolveTaskState(projectRoot, opts.sessionKey);
     if (before.kind !== 'active')
       return {
         kind: before.kind === 'invalid' ? 'invalid' : 'ok',
@@ -1324,7 +1736,7 @@ function buildTaskSnapshot(projectRoot, options) {
         diagnostics: before.diagnostics || [],
       };
     const snapshot = collectSnapshot(projectRoot, before, mode, role);
-    const after = resolveTaskState(projectRoot);
+    const after = resolveTaskState(projectRoot, opts.sessionKey);
     if (fs.existsSync(lockPath)) continue;
     if (snapshotFingerprint(before) === snapshotFingerprint(after)) return snapshot;
   }
@@ -1356,7 +1768,15 @@ function renderResolution(resolution, tagName) {
   if (resolution.kind === 'none') return `<${tag}>\nNo active task. Use /ccg:go to start.\n</${tag}>`;
   if (resolution.kind === 'selection-required' || resolution.kind === 'migration-required') {
     const candidates = (resolution.candidates || [])
-      .map((candidate) => `- ${escapeXml(candidate.id)}: ${escapeXml(candidate.title)}`)
+      .map((candidate) => {
+        const metadata = [
+          candidate.status ? `status=${candidate.status}` : null,
+          candidate.claimed ? 'claimed=true' : null,
+        ]
+          .filter(Boolean)
+          .join(', ');
+        return `- ${escapeXml(candidate.id)}: ${escapeXml(candidate.title)}${metadata ? ` [${escapeXml(metadata)}]` : ''}`;
+      })
       .join('\n');
     return `<${tag}>\n${escapeXml(resolution.code)}\n${candidates}\nChoose a task explicitly before continuing.\n</${tag}>`;
   }
@@ -1375,11 +1795,11 @@ function renderBreadcrumb(snapshot) {
   const lines = [
     '<ccg-state>',
     `Task: ${escapeXml(task.title)} [${escapeXml(task.id)}]`,
-    `Status: active`,
+    `Status: in_progress`,
     `Strategy: ${escapeXml(task.strategy)}`,
     `Phase: ${escapeXml(task.currentPhase)}`,
     `Next: ${escapeXml(task.nextAction)}`,
-    `Revision: state=${snapshot.resolution.stateRevision}, task=${task.revision}`,
+    `Revision: state=${snapshot.resolution.stateRevision}, binding=${snapshot.resolution.bindingRevision}, task=${task.revision}`,
   ];
   if (task.gate) lines.push(`Gate: ${escapeXml(task.gate)}`);
   for (const diagnostic of snapshot.diagnostics || []) lines.push(`Diagnostic: ${escapeXml(diagnostic)}`);
@@ -1394,11 +1814,11 @@ function renderTaskHeader(snapshot, mode, role) {
   const parts = [
     `<${tag}>`,
     `Task: ${escapeXml(task.title)} [${escapeXml(task.id)}]`,
-    'Status: active',
+    'Status: in_progress',
     `Strategy: ${escapeXml(task.strategy)}`,
     `Phase: ${escapeXml(task.currentPhase)}`,
     `Next: ${escapeXml(task.nextAction)}`,
-    `Revision: state=${snapshot.resolution.stateRevision}, task=${task.revision}`,
+    `Revision: state=${snapshot.resolution.stateRevision}, binding=${snapshot.resolution.bindingRevision}, task=${task.revision}`,
     `Dir: ${escapeXml(task.dir)}`,
   ];
   if (role) parts.push(`Role: ${escapeXml(role)}`);
@@ -1559,14 +1979,8 @@ function atomicWriteJson(filePath, value) {
   atomicWriteFile(filePath, `${JSON.stringify(value, null, 2)}\n`);
 }
 
-function sanitizeSessionId(sessionId) {
-  const value = String(sessionId || '').replace(/[^A-Za-z0-9._-]/g, '_');
-  return value.slice(0, 128);
-}
-
-function getTurnsPath(taskDir, sessionId) {
-  const safe = sanitizeSessionId(sessionId);
-  return safe ? path.join(taskDir, '.turns', `${safe}.json`) : null;
+function getTurnsPath(taskDir, sessionKey) {
+  return isValidSessionKey(sessionKey) ? path.join(taskDir, '.turns', `${sessionKey}.json`) : null;
 }
 
 function validateTaskSubdirectory(taskDir, name, allowMissing) {
@@ -1593,9 +2007,9 @@ function validateTaskSubdirectory(taskDir, name, allowMissing) {
   }
 }
 
-function readTurns(taskDir, sessionId) {
-  const turnsPath = getTurnsPath(taskDir, sessionId);
-  if (!turnsPath) return { ok: false, code: 'SESSION_ID_MISSING', turns: [] };
+function readTurns(taskDir, sessionKey) {
+  const turnsPath = getTurnsPath(taskDir, sessionKey);
+  if (!turnsPath) return { ok: false, code: 'SESSION_KEY_INVALID', turns: [] };
   const turnsDirectory = validateTaskSubdirectory(taskDir, '.turns', true);
   if (!turnsDirectory.ok) return { ok: false, code: turnsDirectory.code, turns: [] };
   const existing = readJsonDetailed(turnsPath, 16 * 1024);
@@ -1610,8 +2024,8 @@ function readTurns(taskDir, sessionId) {
     : { ok: false, code: 'TURN_STATE_INVALID', turns: [], path: turnsPath };
 }
 
-function trackTurn(taskDir, sessionId, phase, nextAction) {
-  const current = readTurns(taskDir, sessionId);
+function trackTurn(taskDir, sessionKey, phase, nextAction) {
+  const current = readTurns(taskDir, sessionKey);
   if (!current.ok) return current;
   const turnsDirectory = validateTaskSubdirectory(taskDir, '.turns', true);
   if (!turnsDirectory.ok) return { ok: false, code: turnsDirectory.code, turns: [] };
@@ -1643,7 +2057,33 @@ function detectLoop(turns, threshold) {
   return { phase: recent[0].phase, nextAction: recent[0].next, count };
 }
 
+function hasGitMarker(projectRoot) {
+  let current = path.resolve(projectRoot);
+  while (true) {
+    try {
+      fs.lstatSync(path.join(current, '.git'));
+      return true;
+    } catch (error) {
+      if (!error || (error.code !== 'ENOENT' && error.code !== 'ENOTDIR')) return true;
+    }
+    const parent = path.dirname(current);
+    if (parent === current) return false;
+    current = parent;
+  }
+}
+
 function ensureLocalCcgExclude(projectRoot) {
+  try {
+    const insideWorktree = execFileSync('git', ['rev-parse', '--is-inside-work-tree'], {
+      cwd: projectRoot,
+      stdio: ['ignore', 'pipe', 'ignore'],
+      encoding: 'utf-8',
+    }).trim();
+    if (insideWorktree !== 'true') return { ok: false, code: 'GIT_EXCLUDE_UPDATE_FAILED' };
+  } catch {
+    if (!hasGitMarker(projectRoot)) return { ok: true, changed: false, skipped: 'not-git-worktree' };
+    return { ok: false, code: 'GIT_EXCLUDE_UPDATE_FAILED' };
+  }
   try {
     execFileSync('git', ['check-ignore', '-q', '.ccg/state.json'], {
       cwd: projectRoot,
@@ -1692,6 +2132,183 @@ function chooseHeredocDelimiter(command, body, context) {
   return delimiter;
 }
 
+function splitShellWords(value) {
+  const words = [];
+  let word = '';
+  let quote = null;
+  let escaped = false;
+  for (const character of value) {
+    if (escaped) {
+      word += character;
+      escaped = false;
+      continue;
+    }
+    if (quote === "'") {
+      if (character === "'") quote = null;
+      else word += character;
+      continue;
+    }
+    if (character === '"') {
+      quote = quote === '"' ? null : quote || '"';
+      continue;
+    }
+    if (character === '\\') {
+      escaped = true;
+      continue;
+    }
+    if (quote === '"') {
+      word += character;
+      continue;
+    }
+    if (character === "'") {
+      quote = "'";
+      continue;
+    }
+    if (/\s/.test(character)) {
+      if (word) {
+        words.push(word);
+        word = '';
+      }
+      continue;
+    }
+    if (';&|()'.includes(character)) return null;
+    word += character;
+  }
+  if (escaped || quote) return null;
+  if (word) words.push(word);
+  return words;
+}
+
+function isShellAssignment(value) {
+  return /^[A-Za-z_][A-Za-z0-9_]*=/.test(value);
+}
+
+const SHELL_COMMAND_CONTROLS = new Set(['!', '{', 'if', 'then', 'elif', 'else', 'while', 'until', 'do', 'coproc']);
+const PREFIX_OPTIONS = {
+  command: { values: new Set(), nonExecuting: new Set(['-v', '-V', '--help']) },
+  exec: { values: new Set(['-a']), nonExecuting: new Set(['--help']) },
+  env: {
+    values: new Set(['-a', '--argv0', '-C', '--chdir', '-S', '--split-string', '-u', '--unset']),
+    nonExecuting: new Set(['--help', '--version']),
+  },
+  nice: { values: new Set(['-n', '--adjustment']), nonExecuting: new Set(['--help', '--version']) },
+  nohup: { values: new Set(), nonExecuting: new Set(['--help', '--version']) },
+  sudo: {
+    values: new Set([
+      '-C',
+      '--close-from',
+      '-D',
+      '--chdir',
+      '-g',
+      '--group',
+      '-h',
+      '--host',
+      '-p',
+      '--prompt',
+      '-r',
+      '--role',
+      '-t',
+      '--type',
+      '-T',
+      '--command-timeout',
+      '-U',
+      '--other-user',
+      '-u',
+      '--user',
+    ]),
+    nonExecuting: new Set([
+      '-K',
+      '--remove-timestamp',
+      '-k',
+      '--reset-timestamp',
+      '-V',
+      '--version',
+      '-v',
+      '--validate',
+      '--help',
+    ]),
+  },
+  time: {
+    values: new Set(['-f', '--format', '-o', '--output']),
+    nonExecuting: new Set(['--help', '--version']),
+  },
+};
+
+function consumePrefixOptions(words, index, prefix) {
+  const options = PREFIX_OPTIONS[prefix];
+  while (index < words.length) {
+    const word = words[index];
+    if (word === '--') return index + 1;
+    if (!word.startsWith('-') || word === '-') return index;
+
+    const longName = word.startsWith('--') ? word.split('=', 1)[0] : null;
+    const shortName = !longName && word.length >= 2 ? word.slice(0, 2) : null;
+    const optionName = longName || shortName;
+    if (options.nonExecuting.has(optionName)) return -1;
+    if (!options.values.has(optionName)) {
+      index += 1;
+      continue;
+    }
+
+    const hasAttachedValue = longName ? word.includes('=') : word.length > 2;
+    if (hasAttachedValue) {
+      index += 1;
+      continue;
+    }
+    if (index + 1 >= words.length) return -1;
+    index += 2;
+  }
+  return index;
+}
+
+function isWrapperCommandPosition(command, start) {
+  let commandStart = 0;
+  let quote = null;
+  let escaped = false;
+  for (let index = 0; index < start; index += 1) {
+    const character = command[index];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (quote === "'") {
+      if (character === "'") quote = null;
+      continue;
+    }
+    if (character === '"') {
+      quote = quote === '"' ? null : quote || '"';
+      continue;
+    }
+    if (character === '\\') {
+      escaped = true;
+      continue;
+    }
+    if (quote === '"') continue;
+    if (character === "'") {
+      quote = "'";
+      continue;
+    }
+    if ('\r\n;&|()'.includes(character)) commandStart = index + 1;
+  }
+  if (quote || escaped) return false;
+
+  const words = splitShellWords(command.slice(commandStart, start));
+  if (!words) return false;
+  let index = 0;
+  while (index < words.length && SHELL_COMMAND_CONTROLS.has(words[index])) index += 1;
+  while (index < words.length) {
+    if (isShellAssignment(words[index])) {
+      index += 1;
+      continue;
+    }
+    const prefix = path.basename(words[index]);
+    if (!Object.prototype.hasOwnProperty.call(PREFIX_OPTIONS, prefix)) return false;
+    index = consumePrefixOptions(words, index + 1, prefix);
+    if (index < 0) return false;
+  }
+  return true;
+}
+
 function findCodeagentWrapperCalls(command) {
   if (typeof command !== 'string') return [];
   const calls = [];
@@ -1700,9 +2317,10 @@ function findCodeagentWrapperCalls(command) {
   let match;
   while ((match = pattern.exec(command)) !== null) {
     const token = match[2] || match[3];
-    const offset = match[0].lastIndexOf(token);
-    const start = match.index + offset;
-    calls.push({ start, end: start + token.length + (match[1] ? 1 : 0), token });
+    const rawToken = match[1] ? `${match[1]}${token}${match[1]}` : token;
+    const start = match.index + match[0].lastIndexOf(rawToken);
+    if (!isWrapperCommandPosition(command, start)) continue;
+    calls.push({ start, end: start + rawToken.length, token });
   }
   return calls;
 }
@@ -1810,6 +2428,7 @@ function injectIntoQuotedHeredoc(command, context, options) {
 
 module.exports = {
   STATE_SCHEMA_VERSION,
+  BINDING_SCHEMA_VERSION,
   TASK_SCHEMA_VERSION,
   HOOK_INPUT_LIMIT,
   STATE_FILE_LIMIT,
@@ -1827,7 +2446,11 @@ module.exports = {
   normalizeLegacyTaskStatus,
   isTerminalStatus,
   isValidTaskId,
+  isValidSessionKey,
+  deriveSessionKey,
   getStatePath,
+  getSessionsDir,
+  getBindingPath,
   getTasksDir,
   getTaskDir,
   getTaskPath,
@@ -1838,9 +2461,15 @@ module.exports = {
   readJsonSafe,
   readPendingTransaction,
   readState,
+  readBinding,
+  listBindings,
   readTask,
+  validateCanonicalTask,
   listTasks,
   listOpenTasks,
+  taskIdsReservedByTask,
+  claimOwnersForTask,
+  collectTaskClaims,
   resolveTaskState,
   getActiveTask,
   readStdinBounded,

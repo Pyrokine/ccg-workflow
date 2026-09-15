@@ -1,15 +1,17 @@
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { rename } from 'node:fs/promises'
 import ansis from 'ansis'
 import fs from 'fs-extra'
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'pathe'
+import { parse as parseToml } from 'smol-toml'
 import type { InstallResult } from '../types'
 import { normalizeRoutingForInstall, readCcgConfig } from './config'
-import { configureApiMartForCodex, removeApiMartFromCodex } from './installer-codex-api'
+import { configureAllSponsorsForCodex, removeSponsorsFromCodex } from './installer-codex-api'
 import { getAllCommandIds, getLegacyCommandIds, getWorkflowById } from './installer-data'
 import { injectConfigVariables, PACKAGE_ROOT, replaceHomePathsInTemplate } from './installer-template'
 import { collectSkills, installSkillCommands } from './skill-registry'
+import { SPONSORS } from './sponsors'
 
 // ═══════════════════════════════════════════════════════
 // Re-exports — all consumers import from './installer'
@@ -32,9 +34,33 @@ export { injectConfigVariables } from './installer-template'
 export {
   APIMART_CODEX_PROVIDER,
   APIMART_CODEX_PROVIDER_ID,
+  PACKYCODE_CODEX_PROVIDER,
+  PACKYCODE_CODEX_PROVIDER_ID,
+  configureAllSponsorsForCodex,
   configureApiMartForCodex,
+  configurePackyCodeForCodex,
+  configureSponsorForCodex,
+  removeAllSponsorsFromCodex,
   removeApiMartFromCodex,
+  removePackyCodeFromCodex,
+  removeSponsorFromCodex,
 } from './installer-codex-api'
+export type {
+  CodexApiResult,
+  CodexProviderStatus,
+  CodexSponsorResult,
+  CodexSponsorsResult,
+} from './installer-codex-api'
+
+export {
+  SPONSORS,
+  getSponsor,
+  promptSponsorInit,
+  promptSponsorMenuKey,
+  sponsorCopy,
+  sponsorInquirerChoices,
+} from './sponsors'
+export type { CodexProviderSpec, SponsorGateway } from './sponsors'
 
 export {
   installAceTool,
@@ -276,31 +302,705 @@ async function createCodexInstallConfig(): Promise<InstallConfig> {
   }
 }
 
-function renderCodexTemplate(content: string, config: InstallConfig): string {
+function renderCodexPaths(content: string): string {
   const userHome = homedir().replace(/\\/g, '/')
-  return injectConfigVariables(content, config).replace(/~\//g, `${userHome}/`)
+  return content.replace(/~\//g, `${userHome}/`)
 }
 
-async function writeRenderedCodexFile(src: string, dest: string, config: InstallConfig): Promise<void> {
-  const content = renderCodexTemplate(await fs.readFile(src, 'utf-8'), config)
-  await fs.writeFile(dest, content, 'utf-8')
+function renderCodexTemplate(content: string, config: InstallConfig): string {
+  return renderCodexPaths(injectConfigVariables(content, config))
 }
 
 const TASK_STATE_RUNTIME_FILES = ['package.json', 'task-utils.js', 'task-state.js']
+const CODEX_MANAGED_BLOCK_START_PREFIX = '<!-- CCG:START'
+const CODEX_MANAGED_BLOCK_START = '<!-- CCG:START — Managed by CCG Workflow. Do not edit this block manually. -->'
+const CODEX_MANAGED_BLOCK_END = '<!-- CCG:END -->'
+const CODEX_MODE_MANIFEST = '.ccg/codex-mode.json'
+const CODEX_MANAGED_FILES = [
+  'agents/ccg-implement.toml',
+  'agents/ccg-review.toml',
+  'agents/ccg-research.toml',
+  'hooks/ccg-workflow.py',
+  ...TASK_STATE_RUNTIME_FILES.map((file) => `hooks/ccg/${file}`),
+]
+const CODEX_BACKUP_FILES = ['AGENTS.md', 'config.toml', 'hooks.json', ...CODEX_MANAGED_FILES, CODEX_MODE_MANIFEST]
+
+type JsonRecord = Record<string, unknown>
+
+type CodexPlannedFile = {
+  relativePath: string
+  content: string
+  mode: number
+}
+
+type CodexBackupEntry = {
+  relativePath: string
+  existed: boolean
+  mode?: number
+  backupPath?: string
+}
+
+type CodexBackup = {
+  path: string
+  entries: CodexBackupEntry[]
+}
+
+type CodexOriginalFile = {
+  backupName: string
+  mode: number
+  sha256: string
+}
+
+type CodexManagedFile = {
+  relativePath: string
+  installedSha256: string
+  original: CodexOriginalFile | null
+}
+
+type CodexModeManifest = {
+  schemaVersion: 1
+  files: CodexManagedFile[]
+  sponsorProviderIds: string[]
+}
+
+type CodexInstallPlan = {
+  files: CodexPlannedFile[]
+  activeProvider: unknown
+  previousManifest: CodexModeManifest | null
+  retainedSponsorProviderIds: string[]
+}
+
+function asRecord(value: unknown): JsonRecord | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? (value as JsonRecord) : null
+}
+
+function codexFileSha256(content: string | Buffer): string {
+  return createHash('sha256').update(content).digest('hex')
+}
+
+function isCodexSponsorProvider(value: unknown, sponsorId: string): boolean {
+  const sponsor = SPONSORS.find(({ id }) => id === sponsorId)
+  const provider = asRecord(value)
+  return Boolean(
+    sponsor &&
+    provider &&
+    Object.keys(provider).length === Object.keys(sponsor.codex).length &&
+    Object.entries(sponsor.codex).every(([key, expected]) => provider[key] === expected)
+  )
+}
+
+function parseCodexModeManifest(content: string): CodexModeManifest {
+  const root = parseJsonRecord(content, 'Codex mode ownership manifest')
+  if (root.schemaVersion !== 1 || !Array.isArray(root.files) || !Array.isArray(root.sponsorProviderIds)) {
+    throw new Error('Codex mode ownership manifest has an unsupported structure')
+  }
+
+  const expectedFiles = new Set(CODEX_MANAGED_FILES)
+  const files: CodexManagedFile[] = []
+  const seenFiles = new Set<string>()
+  for (const value of root.files) {
+    const entry = asRecord(value)
+    const relativePath = entry?.relativePath
+    const installedSha256 = entry?.installedSha256
+    if (
+      !entry ||
+      typeof relativePath !== 'string' ||
+      !expectedFiles.has(relativePath) ||
+      seenFiles.has(relativePath) ||
+      typeof installedSha256 !== 'string' ||
+      !/^[a-f0-9]{64}$/.test(installedSha256)
+    ) {
+      throw new Error('Codex mode ownership manifest contains an invalid managed-file entry')
+    }
+
+    let original: CodexOriginalFile | null = null
+    if (entry.original !== null) {
+      const originalRecord = asRecord(entry.original)
+      const backupName = originalRecord?.backupName
+      const mode = originalRecord?.mode
+      const sha256 = originalRecord?.sha256
+      if (
+        !originalRecord ||
+        typeof backupName !== 'string' ||
+        backupName === '.' ||
+        backupName === '..' ||
+        basename(backupName) !== backupName ||
+        !/^[A-Za-z0-9._-]+$/.test(backupName) ||
+        !Number.isInteger(mode) ||
+        (mode as number) < 0 ||
+        (mode as number) > 0o777 ||
+        typeof sha256 !== 'string' ||
+        !/^[a-f0-9]{64}$/.test(sha256)
+      ) {
+        throw new Error('Codex mode ownership manifest contains an invalid original-file entry')
+      }
+      original = { backupName, mode: mode as number, sha256 }
+    }
+
+    seenFiles.add(relativePath)
+    files.push({ relativePath, installedSha256, original })
+  }
+  if (seenFiles.size !== expectedFiles.size) {
+    throw new Error('Codex mode ownership manifest does not cover every managed runtime file')
+  }
+
+  const knownSponsors = new Set(SPONSORS.map(({ id }) => id))
+  const sponsorProviderIds: string[] = []
+  const seenSponsors = new Set<string>()
+  for (const value of root.sponsorProviderIds) {
+    if (typeof value !== 'string' || !knownSponsors.has(value) || seenSponsors.has(value)) {
+      throw new Error('Codex mode ownership manifest contains an invalid sponsor provider')
+    }
+    seenSponsors.add(value)
+    sponsorProviderIds.push(value)
+  }
+
+  return { schemaVersion: 1, files, sponsorProviderIds }
+}
+
+async function lstatOptional(path: string): Promise<import('node:fs').Stats | undefined> {
+  return fs.lstat(path).catch((error: unknown) => {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+    throw error
+  })
+}
+
+async function assertSafeCodexDirectory(path: string): Promise<boolean> {
+  const current = await lstatOptional(path)
+  if (!current) return false
+  if (!current.isDirectory() || current.isSymbolicLink()) {
+    throw new Error(`Refusing to use non-regular Codex directory: ${path}`)
+  }
+  return true
+}
+
+async function ensureSafeCodexDirectory(path: string): Promise<void> {
+  if (await assertSafeCodexDirectory(path)) return
+  await fs.mkdir(path, { mode: 0o700 })
+}
+
+async function assertCodexPathLayout(codexHome: string): Promise<void> {
+  if (!(await assertSafeCodexDirectory(codexHome))) return
+  for (const relativePath of ['agents', 'hooks', 'hooks/ccg', '.ccg', '.ccg/backups']) {
+    const path = join(codexHome, relativePath)
+    const current = await lstatOptional(path)
+    if (current && (!current.isDirectory() || current.isSymbolicLink())) {
+      throw new Error(`Refusing to use non-regular Codex directory: ${path}`)
+    }
+  }
+}
+
+async function ensureCodexPathLayout(codexHome: string): Promise<void> {
+  for (const path of [
+    codexHome,
+    join(codexHome, 'agents'),
+    join(codexHome, 'hooks'),
+    join(codexHome, 'hooks', 'ccg'),
+  ]) {
+    await ensureSafeCodexDirectory(path)
+  }
+}
+
+async function readOptionalCodexFile(path: string): Promise<{ content: string; mode: number } | null> {
+  const current = await lstatOptional(path)
+  if (!current) return null
+  if (!current.isFile() || current.isSymbolicLink()) {
+    throw new Error(`Refusing to read non-regular Codex file: ${path}`)
+  }
+  return { content: await fs.readFile(path, 'utf-8'), mode: current.mode & 0o777 }
+}
+
+async function readRequiredCodexSource(path: string): Promise<string> {
+  const current = await lstatOptional(path)
+  if (!current?.isFile() || current.isSymbolicLink()) {
+    throw new Error(`Required Codex mode source file not found: ${path}`)
+  }
+  return fs.readFile(path, 'utf-8')
+}
+
+async function writeCodexFileAtomic(path: string, content: string | Buffer, defaultMode: number): Promise<void> {
+  const current = await lstatOptional(path)
+  if (current && (!current.isFile() || current.isSymbolicLink())) {
+    throw new Error(`Refusing to replace non-regular Codex file: ${path}`)
+  }
+
+  const mode = current ? current.mode & 0o777 : defaultMode
+  const tempPath = `${path}.${process.pid}.${randomUUID()}.tmp`
+  try {
+    await fs.writeFile(tempPath, content, { flag: 'wx', mode })
+    await fs.chmod(tempPath, mode)
+    await fs.rename(tempPath, path)
+  } finally {
+    await fs.remove(tempPath).catch(() => undefined)
+  }
+}
+
+async function removeRegularCodexFile(path: string): Promise<boolean> {
+  const current = await lstatOptional(path)
+  if (!current) return false
+  if (!current.isFile() || current.isSymbolicLink()) {
+    throw new Error(`Refusing to remove non-regular Codex file: ${path}`)
+  }
+  await fs.remove(path)
+  return true
+}
+
+function markerOffsets(content: string, marker: string): number[] {
+  const offsets: number[] = []
+  let offset = 0
+  while (offset < content.length) {
+    const found = content.indexOf(marker, offset)
+    if (found < 0) break
+    offsets.push(found)
+    offset = found + marker.length
+  }
+  return offsets
+}
+
+function locateCodexManagedBlock(content: string): { start: number; end: number } | null {
+  const startPrefixes = markerOffsets(content, CODEX_MANAGED_BLOCK_START_PREFIX)
+  const starts = markerOffsets(content, CODEX_MANAGED_BLOCK_START)
+  const ends = markerOffsets(content, CODEX_MANAGED_BLOCK_END)
+  if (startPrefixes.length === 0 && ends.length === 0) return null
+  if (
+    startPrefixes.length !== 1 ||
+    starts.length !== 1 ||
+    startPrefixes[0] !== starts[0] ||
+    ends.length !== 1 ||
+    starts[0] >= ends[0]
+  ) {
+    throw new Error('Codex AGENTS.md contains damaged or duplicate CCG managed-block markers')
+  }
+  return { start: starts[0], end: ends[0] + CODEX_MANAGED_BLOCK_END.length }
+}
+
+function extractCodexManagedBlock(content: string): string {
+  const location = locateCodexManagedBlock(content)
+  if (!location || content.slice(0, location.start).trim() || content.slice(location.end).trim()) {
+    throw new Error('Codex AGENTS.md template must contain exactly one standalone CCG managed block')
+  }
+  return content.slice(location.start, location.end)
+}
+
+function renderCodexManagedBlock(template: string, config: InstallConfig): string {
+  extractCodexManagedBlock(template)
+  const rendered = renderCodexTemplate(template, config)
+  const location = locateCodexManagedBlock(rendered)
+  if (!location || rendered.slice(location.end).trim()) {
+    throw new Error('Rendered Codex AGENTS.md template has content after the CCG managed block')
+  }
+
+  const prefix = rendered.slice(0, location.start).trim()
+  const block = rendered.slice(location.start, location.end)
+  if (!prefix) return block
+  const startMarkerEnd = block.indexOf('-->') + 3
+  const body = block.slice(startMarkerEnd).replace(/^\s*/, '')
+  return `${block.slice(0, startMarkerEnd)}\n\n${prefix}\n\n${body}`
+}
+
+function mergeCodexManagedBlock(existing: string | null, block: string): string {
+  if (existing === null || existing.length === 0) return `${block}\n`
+  const location = locateCodexManagedBlock(existing)
+  if (location) return `${existing.slice(0, location.start)}${block}${existing.slice(location.end)}`
+  const separator = existing.endsWith('\n') ? '\n' : '\n\n'
+  return `${existing}${separator}${block}\n`
+}
+
+function removeCodexManagedBlock(existing: string): { content: string; changed: boolean } {
+  const location = locateCodexManagedBlock(existing)
+  if (!location) return { content: existing, changed: false }
+  let content = `${existing.slice(0, location.start)}${existing.slice(location.end)}`
+  if (!content.trim()) return { content: '', changed: true }
+  if (content.startsWith('\n') && location.start === 0) content = content.slice(1)
+  if (content.endsWith('\n\n') && location.end === existing.length) content = content.slice(0, -1)
+  return { content, changed: true }
+}
+
+function parseJsonRecord(content: string, label: string): JsonRecord {
+  let value: unknown
+  try {
+    value = JSON.parse(content)
+  } catch (error) {
+    throw new Error(`${label} is invalid JSON`, { cause: error })
+  }
+  const record = asRecord(value)
+  if (!record) throw new Error(`${label} root must be an object`)
+  return record
+}
+
+function isCodexWorkflowHookCommand(command: unknown, codexHome: string): boolean {
+  if (typeof command !== 'string') return false
+  const normalized = command.replace(/\\/g, '/').trim()
+  const match = /^python3\s+(?:"([^"]+)"|'([^']+)'|(\S+))$/.exec(normalized)
+  const scriptPath = match?.[1] || match?.[2] || match?.[3]
+  if (!scriptPath) return false
+  const expected = join(codexHome, 'hooks', 'ccg-workflow.py').replace(/\\/g, '/')
+  return scriptPath === expected || scriptPath === '~/.codex/hooks/ccg-workflow.py'
+}
+
+function removeCodexWorkflowHooks(root: JsonRecord, codexHome: string): { root: JsonRecord; changed: boolean } {
+  const configuredHooks = root.hooks
+  if (configuredHooks === undefined) return { root: { ...root }, changed: false }
+  const hooks = asRecord(configuredHooks)
+  if (!hooks) throw new Error('Codex hooks.json hooks must be an object')
+
+  const nextHooks: JsonRecord = { ...hooks }
+  let changed = false
+  for (const [event, value] of Object.entries(hooks)) {
+    if (!Array.isArray(value)) throw new Error(`Codex hooks.json hooks.${event} must be an array`)
+    const entries = value
+      .map((entry) => {
+        const entryRecord = asRecord(entry)
+        if (!entryRecord || !Array.isArray(entryRecord.hooks)) return entry
+        const kept = entryRecord.hooks.filter((hook) => {
+          const hookRecord = asRecord(hook)
+          return !hookRecord || !isCodexWorkflowHookCommand(hookRecord.command, codexHome)
+        })
+        if (kept.length === entryRecord.hooks.length) return entry
+        changed = true
+        return kept.length > 0 ? { ...entryRecord, hooks: kept } : null
+      })
+      .filter((entry) => entry !== null)
+    if (entries.length > 0) nextHooks[event] = entries
+    else delete nextHooks[event]
+  }
+
+  const nextRoot = { ...root }
+  if (Object.keys(nextHooks).length > 0) nextRoot.hooks = nextHooks
+  else delete nextRoot.hooks
+  return { root: nextRoot, changed }
+}
+
+function canonicalCodexHookDefinition(content: string, codexHome: string): JsonRecord {
+  const root = parseJsonRecord(content, 'Codex hooks template')
+  const hooks = asRecord(root.hooks)
+  const entries = hooks?.UserPromptSubmit
+  if (!Array.isArray(entries) || entries.length !== 1) {
+    throw new Error('Codex hooks template must define exactly one UserPromptSubmit entry')
+  }
+  const entry = asRecord(entries[0])
+  const commands = entry?.hooks
+  if (
+    !entry ||
+    !Array.isArray(commands) ||
+    commands.length !== 1 ||
+    !isCodexWorkflowHookCommand(asRecord(commands[0])?.command, codexHome)
+  ) {
+    throw new Error('Codex hooks template does not contain the expected CCG command Hook')
+  }
+  return JSON.parse(JSON.stringify(entry)) as JsonRecord
+}
+
+function mergeCodexHooks(existing: string | null, definition: JsonRecord, codexHome: string): string {
+  const root = existing === null ? {} : parseJsonRecord(existing, 'Codex hooks.json')
+  const cleaned = removeCodexWorkflowHooks(root, codexHome).root
+  const hooks = asRecord(cleaned.hooks) || {}
+  const existingEntries = hooks.UserPromptSubmit
+  if (existingEntries !== undefined && !Array.isArray(existingEntries)) {
+    throw new Error('Codex hooks.json hooks.UserPromptSubmit must be an array')
+  }
+  cleaned.hooks = {
+    ...hooks,
+    UserPromptSubmit: [...((existingEntries || []) as unknown[]), definition],
+  }
+  return `${JSON.stringify(cleaned, null, 2)}\n`
+}
+
+function removeCodexHookRegistration(
+  existing: string,
+  codexHome: string
+): { content: string; changed: boolean; empty: boolean } {
+  const root = parseJsonRecord(existing, 'Codex hooks.json')
+  const cleaned = removeCodexWorkflowHooks(root, codexHome)
+  return {
+    content: `${JSON.stringify(cleaned.root, null, 2)}\n`,
+    changed: cleaned.changed,
+    empty: Object.keys(cleaned.root).length === 0,
+  }
+}
+
+function parseCodexConfig(content: string | null): JsonRecord {
+  if (content === null) return {}
+  const config = asRecord(parseToml(content))
+  if (!config) throw new Error('Codex config.toml root must be a TOML table')
+  return config
+}
+
+function assertCodexModeFeatures(config: JsonRecord): void {
+  const features = config.features
+  if (features === undefined) return
+  const featureTable = asRecord(features)
+  if (!featureTable) throw new Error('Codex config.toml features must be a TOML table')
+  if (featureTable.hooks === false) {
+    throw new Error('Codex config.toml explicitly disables the hooks feature required by CCG Codex mode')
+  }
+  if (featureTable.multi_agent === false) {
+    throw new Error('Codex config.toml explicitly disables the multi_agent feature required by CCG Codex mode')
+  }
+}
+
+async function createCodexBackup(codexHome: string): Promise<CodexBackup> {
+  const ccgDir = join(codexHome, '.ccg')
+  const backupsDir = join(ccgDir, 'backups')
+  await ensureSafeCodexDirectory(ccgDir)
+  await ensureSafeCodexDirectory(backupsDir)
+  const backupName = `${new Date().toISOString().replace(/[:.]/g, '-')}-${randomUUID()}`
+  const backupPath = join(backupsDir, backupName)
+  await ensureSafeCodexDirectory(backupPath)
+  const filesPath = join(backupPath, 'files')
+  await ensureSafeCodexDirectory(filesPath)
+
+  const entries: CodexBackupEntry[] = []
+  for (const relativePath of CODEX_BACKUP_FILES) {
+    const source = join(codexHome, relativePath)
+    const current = await lstatOptional(source)
+    if (!current) {
+      entries.push({ relativePath, existed: false })
+      continue
+    }
+    if (!current.isFile() || current.isSymbolicLink()) {
+      throw new Error(`Refusing to back up non-regular Codex file: ${source}`)
+    }
+    const backupFile = join(filesPath, relativePath)
+    await fs.ensureDir(dirname(backupFile), { mode: 0o700 })
+    await fs.copyFile(source, backupFile)
+    await fs.chmod(backupFile, current.mode & 0o777)
+    entries.push({
+      relativePath,
+      existed: true,
+      mode: current.mode & 0o777,
+      backupPath: backupFile,
+    })
+  }
+
+  await writeCodexFileAtomic(
+    join(backupPath, 'manifest.json'),
+    `${JSON.stringify({ schemaVersion: 1, createdAt: new Date().toISOString(), files: entries }, null, 2)}\n`,
+    0o600
+  )
+  return { path: backupPath, entries }
+}
+
+async function restoreCodexBackup(codexHome: string, backup: CodexBackup): Promise<void> {
+  for (const entry of [...backup.entries].reverse()) {
+    const target = join(codexHome, entry.relativePath)
+    if (!entry.existed) {
+      await removeRegularCodexFile(target)
+      continue
+    }
+    if (!entry.backupPath || entry.mode === undefined) {
+      throw new Error(`Codex backup entry is incomplete: ${entry.relativePath}`)
+    }
+    const source = await lstatOptional(entry.backupPath)
+    if (!source?.isFile() || source.isSymbolicLink()) {
+      throw new Error(`Codex backup file is unavailable: ${entry.relativePath}`)
+    }
+    await writeCodexFileAtomic(target, await fs.readFile(entry.backupPath), entry.mode)
+  }
+}
+
+async function readCodexOriginalFile(
+  codexHome: string,
+  managedFile: CodexManagedFile
+): Promise<{ content: Buffer; mode: number } | null> {
+  const original = managedFile.original
+  if (!original) return null
+
+  const backupsRoot = join(codexHome, '.ccg', 'backups')
+  const backupDir = join(backupsRoot, original.backupName)
+  const filesDir = join(backupDir, 'files')
+  for (const directory of [backupsRoot, backupDir, filesDir]) {
+    if (!(await assertSafeCodexDirectory(directory))) {
+      throw new Error(`Codex original-file backup directory is unavailable: ${managedFile.relativePath}`)
+    }
+  }
+
+  let parent = filesDir
+  for (const segment of dirname(managedFile.relativePath).split('/')) {
+    if (segment === '.') continue
+    parent = join(parent, segment)
+    if (!(await assertSafeCodexDirectory(parent))) {
+      throw new Error(`Codex original-file backup directory is unavailable: ${managedFile.relativePath}`)
+    }
+  }
+
+  const sourcePath = join(filesDir, managedFile.relativePath)
+  const source = await lstatOptional(sourcePath)
+  if (!source?.isFile() || source.isSymbolicLink()) {
+    throw new Error(`Codex original-file backup is unavailable: ${managedFile.relativePath}`)
+  }
+  const content = await fs.readFile(sourcePath)
+  if (codexFileSha256(content) !== original.sha256) {
+    throw new Error(`Codex original-file backup checksum mismatch: ${managedFile.relativePath}`)
+  }
+  return { content, mode: original.mode }
+}
+
+async function buildCodexModeManifest(
+  plan: CodexInstallPlan,
+  backup: CodexBackup,
+  sponsorResults: Array<{ id: string; status: string }>
+): Promise<CodexModeManifest> {
+  const previousFiles = new Map(plan.previousManifest?.files.map((file) => [file.relativePath, file]) || [])
+  const backupEntries = new Map(backup.entries.map((entry) => [entry.relativePath, entry]))
+  const plannedFiles = new Map(plan.files.map((file) => [file.relativePath, file]))
+  const files: CodexManagedFile[] = []
+
+  for (const relativePath of CODEX_MANAGED_FILES) {
+    const planned = plannedFiles.get(relativePath)
+    const backupEntry = backupEntries.get(relativePath)
+    if (!planned || !backupEntry) throw new Error(`Codex ownership data is incomplete: ${relativePath}`)
+
+    const previous = previousFiles.get(relativePath)
+    let original = previous?.original ?? null
+    if (!previous && backupEntry.existed) {
+      if (!backupEntry.backupPath || backupEntry.mode === undefined) {
+        throw new Error(`Codex backup entry is incomplete: ${relativePath}`)
+      }
+      const originalContent = await fs.readFile(backupEntry.backupPath)
+      original = {
+        backupName: basename(backup.path),
+        mode: backupEntry.mode,
+        sha256: codexFileSha256(originalContent),
+      }
+    }
+    files.push({ relativePath, installedSha256: codexFileSha256(planned.content), original })
+  }
+
+  const sponsorProviderIds = new Set(plan.retainedSponsorProviderIds)
+  for (const result of sponsorResults) {
+    if (result.status === 'added') sponsorProviderIds.add(result.id)
+  }
+  return { schemaVersion: 1, files, sponsorProviderIds: [...sponsorProviderIds] }
+}
+
+async function removeOrRestoreCodexManagedFile(
+  codexHome: string,
+  managedFile: CodexManagedFile
+): Promise<'removed' | 'restored' | 'missing' | 'preserved'> {
+  const targetPath = join(codexHome, managedFile.relativePath)
+  const current = await readOptionalCodexFile(targetPath)
+  if (current && codexFileSha256(current.content) !== managedFile.installedSha256) return 'preserved'
+
+  const original = await readCodexOriginalFile(codexHome, managedFile)
+  if (original) {
+    await writeCodexFileAtomic(targetPath, original.content, original.mode)
+    return 'restored'
+  }
+  if (!current) return 'missing'
+  await removeRegularCodexFile(targetPath)
+  return 'removed'
+}
+
+async function prepareCodexInstall(
+  codexTemplateDir: string,
+  codexHome: string,
+  config: InstallConfig
+): Promise<CodexInstallPlan> {
+  await assertCodexPathLayout(codexHome)
+
+  const agentsTemplate = await readRequiredCodexSource(join(codexTemplateDir, 'AGENTS.md'))
+  const managedBlock = renderCodexManagedBlock(agentsTemplate, config)
+  const existingAgents = await readOptionalCodexFile(join(codexHome, 'AGENTS.md'))
+
+  const hooksTemplate = renderCodexPaths(await readRequiredCodexSource(join(codexTemplateDir, 'hooks.json')))
+  const hookDefinition = canonicalCodexHookDefinition(hooksTemplate, codexHome)
+  const existingHooks = await readOptionalCodexFile(join(codexHome, 'hooks.json'))
+
+  const existingConfig = await readOptionalCodexFile(join(codexHome, 'config.toml'))
+  const parsedConfig = parseCodexConfig(existingConfig?.content ?? null)
+  assertCodexModeFeatures(parsedConfig)
+
+  const manifestFile = await readOptionalCodexFile(join(codexHome, CODEX_MODE_MANIFEST))
+  const previousManifest = manifestFile ? parseCodexModeManifest(manifestFile.content) : null
+  if (previousManifest) {
+    for (const managedFile of previousManifest.files) {
+      if (managedFile.original) await readCodexOriginalFile(codexHome, managedFile)
+    }
+  }
+  const providers = asRecord(parsedConfig.model_providers)
+  const retainedSponsorProviderIds =
+    previousManifest?.sponsorProviderIds.filter((id) => providers && isCodexSponsorProvider(providers[id], id)) || []
+
+  const files: CodexPlannedFile[] = [
+    {
+      relativePath: 'AGENTS.md',
+      content: mergeCodexManagedBlock(existingAgents?.content ?? null, managedBlock),
+      mode: existingAgents?.mode ?? 0o644,
+    },
+    {
+      relativePath: 'hooks.json',
+      content: mergeCodexHooks(existingHooks?.content ?? null, hookDefinition, codexHome),
+      mode: existingHooks?.mode ?? 0o600,
+    },
+  ]
+
+  for (const name of ['ccg-implement.toml', 'ccg-review.toml', 'ccg-research.toml']) {
+    files.push({
+      relativePath: `agents/${name}`,
+      content: await readRequiredCodexSource(join(codexTemplateDir, 'agents', name)),
+      mode: 0o644,
+    })
+  }
+  files.push({
+    relativePath: 'hooks/ccg-workflow.py',
+    content: renderCodexPaths(await readRequiredCodexSource(join(codexTemplateDir, 'hooks', 'ccg-workflow.py'))),
+    mode: 0o644,
+  })
+  for (const name of TASK_STATE_RUNTIME_FILES) {
+    files.push({
+      relativePath: `hooks/ccg/${name}`,
+      content: await readRequiredCodexSource(join(PACKAGE_ROOT, 'templates', 'hooks', name)),
+      mode: 0o644,
+    })
+  }
+
+  for (const file of CODEX_BACKUP_FILES) {
+    await readOptionalCodexFile(join(codexHome, file))
+  }
+  return {
+    files,
+    activeProvider: parsedConfig.model_provider,
+    previousManifest,
+    retainedSponsorProviderIds,
+  }
+}
+
+async function verifyCodexInstall(
+  codexHome: string,
+  plan: CodexInstallPlan,
+  expectedManifest: CodexModeManifest
+): Promise<void> {
+  for (const file of plan.files) {
+    const installed = await readOptionalCodexFile(join(codexHome, file.relativePath))
+    if (!installed || installed.content !== file.content) {
+      throw new Error(`Codex mode verification failed for ${file.relativePath}`)
+    }
+  }
+
+  const configFile = await readOptionalCodexFile(join(codexHome, 'config.toml'))
+  const config = parseCodexConfig(configFile?.content ?? null)
+  assertCodexModeFeatures(config)
+  const providers = asRecord(config.model_providers)
+  for (const sponsor of SPONSORS) {
+    if (!providers || !Object.prototype.hasOwnProperty.call(providers, sponsor.id)) {
+      throw new Error(`Codex mode verification failed for model_providers.${sponsor.id}`)
+    }
+  }
+  if (JSON.stringify(config.model_provider) !== JSON.stringify(plan.activeProvider)) {
+    throw new Error('Codex mode installation changed the active model provider')
+  }
+
+  const manifestFile = await readOptionalCodexFile(join(codexHome, CODEX_MODE_MANIFEST))
+  if (!manifestFile) throw new Error('Codex mode ownership manifest is missing')
+  const manifest = parseCodexModeManifest(manifestFile.content)
+  if (JSON.stringify(manifest) !== JSON.stringify(expectedManifest)) {
+    throw new Error('Codex mode ownership manifest verification failed')
+  }
+}
 
 function isCcgHookCommand(command: unknown): boolean {
   return typeof command === 'string' && command.replace(/\\/g, '/').includes('/hooks/ccg/')
-}
-
-async function installTaskStateRuntime(srcDir: string, destDir: string): Promise<void> {
-  await fs.ensureDir(destDir)
-  for (const file of TASK_STATE_RUNTIME_FILES) {
-    const src = join(srcDir, file)
-    if (!(await fs.pathExists(src))) {
-      throw new Error(`Required task state runtime file not found: ${src}`)
-    }
-    await fs.copy(src, join(destDir, file), { overwrite: true })
-  }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -491,9 +1191,9 @@ async function installSkillFiles(ctx: InstallContext): Promise<void> {
       errorOnExist: false,
     })
 
-    // Remove security domain files — contains red team/pentest reference content
-    // that triggers antivirus/corporate security tool false positives.
-    // Users who need it can manually copy from templates/skills/domains/security/.
+    // Drop red-team / pentest notes even when installing from a git checkout.
+    // They are also excluded from local tarballs because security scanners may
+    // flag the reference content. Users who need them can copy from GitHub.
     const securityDir = join(skillsDestDir, 'domains', 'security')
     if (await fs.pathExists(securityDir)) {
       await fs.remove(securityDir)
@@ -592,9 +1292,7 @@ async function installSkillGeneratedCommands(ctx: InstallContext): Promise<void>
 }
 
 /**
- * Install Codex-mode files: AGENTS.md + .codex/config.toml + .codex/agents/*.toml
- * These enable Codex CLI as an alternative lead orchestrator (Codex-led multi-model mode).
- * Files are installed to ~/.codex/ (global) and user copies AGENTS.md to project root.
+ * Install the optional Codex-led runtime without replacing user-owned Codex configuration.
  */
 export async function installCodexMode(): Promise<{ success: boolean; message: string }> {
   const codexTemplateDir = join(PACKAGE_ROOT, 'templates', 'codex')
@@ -602,182 +1300,173 @@ export async function installCodexMode(): Promise<{ success: boolean; message: s
     return { success: false, message: 'Codex template directory not found' }
   }
 
+  const codexHome = join(homedir(), '.codex')
+  let backup: CodexBackup | undefined
   try {
     const config = await createCodexInstallConfig()
-    const codexHome = join(homedir(), '.codex')
-    await fs.ensureDir(join(codexHome, 'agents'))
+    const plan = await prepareCodexInstall(codexTemplateDir, codexHome, config)
+    await ensureCodexPathLayout(codexHome)
+    backup = await createCodexBackup(codexHome)
 
-    const configSrc = join(codexTemplateDir, 'config.toml')
-    const configDest = join(codexHome, 'config.toml')
-    if ((await fs.pathExists(configSrc)) && !(await fs.pathExists(configDest))) {
-      await fs.copy(configSrc, configDest)
+    for (const file of plan.files) {
+      await writeCodexFileAtomic(join(codexHome, file.relativePath), file.content, file.mode)
     }
 
-    const codexApi = await configureApiMartForCodex(false)
-    const codexApiWarning = codexApi.success ? '' : `\n  APIMart provider warning: ${codexApi.message}`
-
-    const agentsSrc = join(codexTemplateDir, 'agents')
-    if (await fs.pathExists(agentsSrc)) {
-      await fs.copy(agentsSrc, join(codexHome, 'agents'), { overwrite: true })
-    }
-
-    const agentsMdSrc = join(codexTemplateDir, 'AGENTS.md')
-    if (await fs.pathExists(agentsMdSrc)) {
-      await writeRenderedCodexFile(agentsMdSrc, join(codexHome, 'AGENTS.md'), config)
-    }
-
-    // hooks/
-    const hooksSrc = join(codexTemplateDir, 'hooks')
-    if (await fs.pathExists(hooksSrc)) {
-      await fs.ensureDir(join(codexHome, 'hooks'))
-      await writeRenderedCodexFile(
-        join(hooksSrc, 'ccg-workflow.py'),
-        join(codexHome, 'hooks', 'ccg-workflow.py'),
-        config
-      )
-    }
-    await installTaskStateRuntime(join(PACKAGE_ROOT, 'templates', 'hooks'), join(codexHome, 'hooks', 'ccg'))
-
-    // hooks.json
-    const hooksJsonSrc = join(codexTemplateDir, 'hooks.json')
-    if (await fs.pathExists(hooksJsonSrc)) {
-      await writeRenderedCodexFile(hooksJsonSrc, join(codexHome, 'hooks.json'), config)
-    }
+    const sponsorApis = await configureAllSponsorsForCodex()
+    if (!sponsorApis.success) throw new Error(sponsorApis.message)
+    const manifest = await buildCodexModeManifest(plan, backup, sponsorApis.results)
+    await writeCodexFileAtomic(join(codexHome, CODEX_MODE_MANIFEST), `${JSON.stringify(manifest, null, 2)}\n`, 0o600)
+    await verifyCodexInstall(codexHome, plan, manifest)
 
     return {
       success: true,
-      message: `Codex mode installed:\n  ~/.codex/AGENTS.md\n  ~/.codex/config.toml\n  ~/.codex/hooks.json\n  ~/.codex/hooks/ccg-workflow.py\n  ~/.codex/hooks/ccg/task-state.js\n  ~/.codex/agents/ccg-implement.toml\n  ~/.codex/agents/ccg-review.toml\n  ~/.codex/agents/ccg-research.toml${codexApiWarning}`,
+      message: `Codex mode installed:\n  ~/.codex/AGENTS.md (CCG block merged)\n  ~/.codex/config.toml (user settings preserved; sponsor providers registered but not activated)\n  ~/.codex/hooks.json (CCG Hook merged)\n  ~/.codex/hooks/ccg-workflow.py\n  ~/.codex/hooks/ccg/task-state.js\n  ~/.codex/agents/ccg-implement.toml\n  ~/.codex/agents/ccg-review.toml\n  ~/.codex/agents/ccg-research.toml\n  Backup: ${backup.path.replace(homedir(), '~')}`,
     }
   } catch (error) {
-    return { success: false, message: `Failed to install Codex mode: ${error}` }
+    if (!backup) return { success: false, message: `Failed to install Codex mode: ${error}` }
+    try {
+      await restoreCodexBackup(codexHome, backup)
+      return {
+        success: false,
+        message: `Failed to install Codex mode: ${error}. Original files restored from ${backup.path.replace(homedir(), '~')}`,
+      }
+    } catch (restoreError) {
+      return {
+        success: false,
+        message: `Failed to install Codex mode: ${error}. Restore also failed: ${restoreError}. Backup: ${backup.path.replace(homedir(), '~')}`,
+      }
+    }
   }
 }
 
 /**
- * Uninstall CCG Codex mode — only removes files installed by CCG, preserves user files.
+ * Remove only CCG-managed Codex content and preserve user-owned instructions and Hooks.
  */
 export async function uninstallCodexMode(): Promise<{ success: boolean; removed: string[]; skipped: string[] }> {
   const codexHome = join(homedir(), '.codex')
   const removed: string[] = []
   const skipped: string[] = []
-
-  // CCG-managed files (exact paths)
-  const ccgFiles = [
-    join(codexHome, 'agents', 'ccg-implement.toml'),
-    join(codexHome, 'agents', 'ccg-review.toml'),
-    join(codexHome, 'agents', 'ccg-research.toml'),
-    join(codexHome, 'hooks', 'ccg-workflow.py'),
-    join(codexHome, 'hooks', 'ccg', 'package.json'),
-    join(codexHome, 'hooks', 'ccg', 'task-utils.js'),
-    join(codexHome, 'hooks', 'ccg', 'task-state.js'),
-    join(codexHome, 'hooks.json'),
-  ]
-
-  // AGENTS.md — only remove if it contains CCG marker
-  const agentsMd = join(codexHome, 'AGENTS.md')
+  let backup: CodexBackup | undefined
 
   try {
-    for (const file of ccgFiles) {
-      if (await fs.pathExists(file)) {
-        await fs.remove(file)
-        removed.push(file.replace(homedir(), '~'))
+    if (!(await assertSafeCodexDirectory(codexHome))) {
+      return { success: true, removed, skipped: ['~/.codex/ (not present)'] }
+    }
+    await assertCodexPathLayout(codexHome)
+
+    const agentsPath = join(codexHome, 'AGENTS.md')
+    const agentsFile = await readOptionalCodexFile(agentsPath)
+    const agentsResult = agentsFile ? removeCodexManagedBlock(agentsFile.content) : null
+
+    const hooksPath = join(codexHome, 'hooks.json')
+    const hooksFile = await readOptionalCodexFile(hooksPath)
+    const hooksResult = hooksFile ? removeCodexHookRegistration(hooksFile.content, codexHome) : null
+
+    const configFile = await readOptionalCodexFile(join(codexHome, 'config.toml'))
+    parseCodexConfig(configFile?.content ?? null)
+    const manifestFile = await readOptionalCodexFile(join(codexHome, CODEX_MODE_MANIFEST))
+    const manifest = manifestFile ? parseCodexModeManifest(manifestFile.content) : null
+    const existingRuntimeFiles: string[] = []
+    for (const relativePath of CODEX_MANAGED_FILES) {
+      if (await readOptionalCodexFile(join(codexHome, relativePath))) existingRuntimeFiles.push(relativePath)
+    }
+    if (!manifest && (existingRuntimeFiles.length > 0 || agentsResult?.changed || hooksResult?.changed)) {
+      throw new Error('Codex mode ownership manifest is missing; reinstall Codex mode before uninstalling')
+    }
+    if (manifest) {
+      for (const managedFile of manifest.files) {
+        if (managedFile.original) await readCodexOriginalFile(codexHome, managedFile)
       }
     }
 
-    if (await fs.pathExists(agentsMd)) {
-      const content = await fs.readFile(agentsMd, 'utf-8')
-      if (content.includes('<!-- CCG:START')) {
-        await fs.remove(agentsMd)
-        removed.push('~/.codex/AGENTS.md')
+    await ensureCodexPathLayout(codexHome)
+    backup = await createCodexBackup(codexHome)
+
+    if (agentsFile && agentsResult?.changed) {
+      if (agentsResult.content) {
+        await writeCodexFileAtomic(agentsPath, agentsResult.content, agentsFile.mode)
       } else {
-        skipped.push('~/.codex/AGENTS.md (not managed by CCG)')
+        await removeRegularCodexFile(agentsPath)
+      }
+      removed.push('~/.codex/AGENTS.md [CCG block]')
+    } else if (agentsFile) {
+      skipped.push('~/.codex/AGENTS.md (no CCG block)')
+    }
+
+    if (hooksFile && hooksResult?.changed) {
+      if (hooksResult.empty) {
+        await removeRegularCodexFile(hooksPath)
+      } else {
+        await writeCodexFileAtomic(hooksPath, hooksResult.content, hooksFile.mode)
+      }
+      removed.push('~/.codex/hooks.json [CCG registration]')
+    } else if (hooksFile) {
+      skipped.push('~/.codex/hooks.json (no CCG registration)')
+    }
+
+    if (manifest) {
+      for (const managedFile of manifest.files) {
+        const action = await removeOrRestoreCodexManagedFile(codexHome, managedFile)
+        if (action === 'removed') removed.push(`~/.codex/${managedFile.relativePath}`)
+        else if (action === 'restored') removed.push(`~/.codex/${managedFile.relativePath} (original restored)`)
+        else if (action === 'preserved') {
+          skipped.push(`~/.codex/${managedFile.relativePath} (modified after installation; preserved)`)
+        }
       }
     }
 
-    // config.toml — preserve user settings and remove only the provider table CCG added.
-    const codexApi = await removeApiMartFromCodex()
-    if (!codexApi.success) {
-      throw new Error(codexApi.message)
+    const sponsorApis = await removeSponsorsFromCodex(manifest?.sponsorProviderIds || [])
+    if (!sponsorApis.success) throw new Error(sponsorApis.message)
+    for (const result of sponsorApis.results) {
+      if (result.status === 'removed') {
+        removed.push(`~/.codex/config.toml [model_providers.${result.id}]`)
+      } else if (result.status === 'preserved') {
+        skipped.push(`~/.codex/config.toml [model_providers.${result.id}] (modified after installation; preserved)`)
+      }
     }
-    if (codexApi.configPath) {
-      removed.push('~/.codex/config.toml [model_providers.apimart]')
+    if (manifestFile) {
+      await removeRegularCodexFile(join(codexHome, CODEX_MODE_MANIFEST))
+      removed.push('~/.codex/.ccg/codex-mode.json')
     }
-    skipped.push('~/.codex/config.toml (preserved — may contain user settings)')
+    skipped.push('~/.codex/config.toml (user settings preserved)')
+    skipped.push(`${backup.path.replace(homedir(), '~')} (pre-uninstall backup)`)
 
-    // Clean up empty dirs
     const taskHooksDir = join(codexHome, 'hooks', 'ccg')
-    if ((await fs.pathExists(taskHooksDir)) && (await fs.readdir(taskHooksDir)).length === 0) {
+    if ((await assertSafeCodexDirectory(taskHooksDir)) && (await fs.readdir(taskHooksDir)).length === 0) {
       await fs.remove(taskHooksDir)
-      removed.push('~/.codex/hooks/ccg/ (empty, removed)')
+      removed.push('~/.codex/hooks/ccg/ (empty)')
     }
     for (const dir of ['agents', 'hooks']) {
       const dirPath = join(codexHome, dir)
-      if (await fs.pathExists(dirPath)) {
-        const files = await fs.readdir(dirPath)
-        if (files.length === 0) {
-          await fs.remove(dirPath)
-          removed.push(`~/.codex/${dir}/ (empty, removed)`)
-        }
+      if ((await assertSafeCodexDirectory(dirPath)) && (await fs.readdir(dirPath)).length === 0) {
+        await fs.remove(dirPath)
+        removed.push(`~/.codex/${dir}/ (empty)`)
       }
     }
 
     return { success: true, removed, skipped }
   } catch (error) {
-    return { success: false, removed, skipped: [...skipped, `Error: ${error}`] }
-  }
-}
-
-async function _installCodexFilesInternal(ctx: InstallContext): Promise<void> {
-  const codexTemplateDir = join(ctx.templateDir, 'codex')
-  if (!(await fs.pathExists(codexTemplateDir))) return
-  const taskStateRuntimeDir = join(ctx.templateDir, 'hooks')
-
-  try {
-    const config = ctx.config
-    const codexHome = join(homedir(), '.codex')
-    await fs.ensureDir(join(codexHome, 'agents'))
-
-    // .codex/config.toml (merge, don't overwrite user's existing config)
-    const configSrc = join(codexTemplateDir, 'config.toml')
-    const configDest = join(codexHome, 'config.toml')
-    if (await fs.pathExists(configSrc)) {
-      if (!(await fs.pathExists(configDest))) {
-        await fs.copy(configSrc, configDest)
+    if (!backup) return { success: false, removed, skipped: [...skipped, `Error: ${error}`] }
+    try {
+      await ensureCodexPathLayout(codexHome)
+      await restoreCodexBackup(codexHome, backup)
+      return {
+        success: false,
+        removed: [],
+        skipped: [...skipped, `Error: ${error}`, `Original files restored from ${backup.path.replace(homedir(), '~')}`],
+      }
+    } catch (restoreError) {
+      return {
+        success: false,
+        removed,
+        skipped: [
+          ...skipped,
+          `Error: ${error}`,
+          `Restore failed: ${restoreError}`,
+          `Backup: ${backup.path.replace(homedir(), '~')}`,
+        ],
       }
     }
-
-    // .codex/agents/*.toml
-    const agentsSrc = join(codexTemplateDir, 'agents')
-    if (await fs.pathExists(agentsSrc)) {
-      await fs.copy(agentsSrc, join(codexHome, 'agents'), { overwrite: true })
-    }
-
-    // AGENTS.md → ~/.codex/AGENTS.md (global fallback)
-    const agentsMdSrc = join(codexTemplateDir, 'AGENTS.md')
-    if (await fs.pathExists(agentsMdSrc)) {
-      await writeRenderedCodexFile(agentsMdSrc, join(codexHome, 'AGENTS.md'), config)
-    }
-
-    // hooks/
-    const hooksSrc = join(codexTemplateDir, 'hooks')
-    if (await fs.pathExists(hooksSrc)) {
-      await fs.ensureDir(join(codexHome, 'hooks'))
-      await writeRenderedCodexFile(
-        join(hooksSrc, 'ccg-workflow.py'),
-        join(codexHome, 'hooks', 'ccg-workflow.py'),
-        config
-      )
-    }
-    await installTaskStateRuntime(taskStateRuntimeDir, join(codexHome, 'hooks', 'ccg'))
-
-    // hooks.json
-    const hooksJsonSrc = join(codexTemplateDir, 'hooks.json')
-    if (await fs.pathExists(hooksJsonSrc)) {
-      await writeRenderedCodexFile(hooksJsonSrc, join(codexHome, 'hooks.json'), config)
-    }
-  } catch (error) {
-    // Non-fatal: Codex mode is optional
-    ctx.result.errors.push(`Codex files install warning: ${error}`)
   }
 }
 
@@ -1192,7 +1881,7 @@ export async function installWorkflows(
         review: {
           profiles: [
             { id: 'gpt', model: 'gpt-5.6-sol', effort: 'xhigh' },
-            { id: 'grok', model: 'grok-4.5', effort: 'high' },
+            { id: 'grok', model: 'grok-4.6', effort: 'high' },
           ],
           strategy: 'parallel',
         },

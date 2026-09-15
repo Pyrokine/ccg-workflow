@@ -7,23 +7,23 @@
 唯一状态修改入口：
 
 ```bash
-node ~/.claude/hooks/ccg/task-state.js <operation> --root "$WORKDIR" <<'CCG_TASK_JSON'
+node ~/.claude/hooks/ccg/task-state.js <operation> --root "$WORKDIR" --session-key "$CCG_SESSION_KEY" <<'CCG_TASK_JSON'
 {...}
 CCG_TASK_JSON
 ```
 
-动态标题、正文、路径、角色和进度只能放在 stdin JSON 中，不放进 shell 参数。
+动态标题、正文、路径、角色和进度只能放在 stdin JSON 中，不放进 shell 参数。`CCG_SESSION_KEY` 由当前 Claude Code session 的 `SessionStart` Hook 导出；所有 controller 调用都必须携带它。缺失或非法时停止，不得退回共享 active pointer。
 
 ### 1.1 只读操作
 
 ```bash
-node ~/.claude/hooks/ccg/task-state.js resolve --root "$WORKDIR"
-node ~/.claude/hooks/ccg/task-state.js snapshot --root "$WORKDIR" --mode session --role all
-node ~/.claude/hooks/ccg/task-state.js snapshot --root "$WORKDIR" --mode authority --role implement
-node ~/.claude/hooks/ccg/task-state.js list --root "$WORKDIR"
+node ~/.claude/hooks/ccg/task-state.js resolve --root "$WORKDIR" --session-key "$CCG_SESSION_KEY"
+node ~/.claude/hooks/ccg/task-state.js snapshot --root "$WORKDIR" --session-key "$CCG_SESSION_KEY" --mode session --role all
+node ~/.claude/hooks/ccg/task-state.js snapshot --root "$WORKDIR" --session-key "$CCG_SESSION_KEY" --mode authority --role implement
+node ~/.claude/hooks/ccg/task-state.js list --root "$WORKDIR" --session-key "$CCG_SESSION_KEY"
 ```
 
-`resolve` 是 active task 的唯一来源。`state.json` 存在时，不得扫描任务目录选择其他任务。
+`resolve` 是当前 session active task 的唯一来源。`.ccg/state.json` 只保存 worktree state 身份与 revision，`.ccg/sessions/<opaque-key>.json` 保存当前 session 的 binding；不得扫描任务目录或其他 binding 选择任务。`list` 只显示 task 元数据、effective status 和 `claimed`，不返回其他 session key 或任务正文。
 
 ### 1.2 CAS 字段
 
@@ -34,32 +34,50 @@ node ~/.claude/hooks/ccg/task-state.js list --root "$WORKDIR"
   "expected": {
     "stateId": "uuid",
     "stateRevision": 3,
+    "bindingRevision": 1,
     "activeTaskId": "task-id",
     "taskRevision": 7
   }
 }
 ```
 
-`start` 和 `migrate-legacy` 不需要 `taskRevision`。`activate` 使用候选任务的 revision。`recover` 在 active target 已结束时校验该任务 revision，在 target 已丢失或存在未完成 transaction 时只校验当前 state CAS。其他任务 mutation 都必须带 `taskRevision`。遇到 `STATE_ID_CONFLICT`、`REVISION_CONFLICT` 或 `ACTIVE_TASK_CONFLICT` 时，重新 `resolve` 并向用户说明状态已经变化，不自动重放新的写操作。
+每个 mutation 都校验 `stateId`、共享 `stateRevision`、当前 session 的 `bindingRevision` 和 `activeTaskId`。`start`、`migrate-state`、`migrate-legacy`、`quarantine-orphans` 和 `restore-orphans` 不需要 `taskRevision`；`activate` 与 `takeover` 使用候选任务 revision。`recover` 在 active target 已结束时校验该任务 revision，在 target 已丢失或存在未完成 transaction 时不带 task revision。其他任务 mutation 都必须带 `taskRevision`。遇到 `STATE_ID_CONFLICT`、`STATE_REVISION_CONFLICT`、`BINDING_REVISION_CONFLICT`、`ACTIVE_TASK_CONFLICT`、`TASK_REVISION_CONFLICT` 或 `REVISION_CONFLICT` 时，重新 `resolve` 并向用户说明状态已经变化，不自动重放新的写操作。
 
 ### 1.3 操作表
 
-| 操作                        | 用途                                                              | revision 变化                         |
-| --------------------------- | ----------------------------------------------------------------- | ------------------------------------- |
-| `start`                     | 创建持久任务，支持 `activate`、`interrupt`、`replace`、`inactive` | 新 task 为 1；活动指针变化时 state +1 |
-| `activate`                  | 明确切换到 suspended task                                         | state +1                              |
-| `update-requirements`       | 更新任务契约                                                      | task +1                               |
-| `write-artifact`            | 写 analysis、plan、review 或 research Markdown                    | task +1                               |
-| `checkpoint`                | 更新 phase、nextAction、gate 与 progress                          | task +1                               |
-| `link-spec` / `unlink-spec` | 精确关联 tracked Markdown section                                 | task +1                               |
-| `set-spec-evolution`        | 记录规范演进结果                                                  | task +1                               |
-| `finish`                    | 标记 completed 或 cancelled，并按 return 链恢复父任务             | task +1；state +1                     |
-| `recover`                   | 重放未完成 transaction、清除丢失 target，或按 return 链恢复父任务 | 由恢复类型决定                        |
-| `migrate-legacy`            | 显式迁移旧任务                                                    | 创建新 state                          |
+| 操作                        | 用途                                                                   | revision 变化                                 |
+| --------------------------- | ---------------------------------------------------------------------- | --------------------------------------------- |
+| `start`                     | 创建持久任务，支持 `activate`、`interrupt`、`replace`、`inactive`      | 新 task 为 1；state +1；认领时当前 binding +1 |
+| `activate`                  | 当前 session 认领未被占用的 open task                                  | 当前 binding +1                               |
+| `takeover`                  | 用户明确要求后把 task claim 转移到当前 session                         | 被释放和当前 binding 各自 +1                  |
+| `update-requirements`       | 更新任务契约                                                           | task +1                                       |
+| `write-artifact`            | 写 analysis、plan、review 或 research Markdown                         | task +1                                       |
+| `checkpoint`                | 更新 phase、nextAction、gate 与 progress                               | task +1                                       |
+| `link-spec` / `unlink-spec` | 精确关联 tracked Markdown section                                      | task +1                                       |
+| `set-spec-evolution`        | 记录规范演进结果                                                       | task +1                                       |
+| `finish`                    | 标记 completed 或 cancelled，并在当前 binding 中按 return 链恢复父任务 | task +1；当前 binding +1                      |
+| `recover`                   | 重放未完成 transaction、清除当前 binding 的丢失 target，或恢复父任务   | 由恢复类型决定                                |
+| `migrate-state`             | schema v1 state 备份后转换为不含 global pointer 的 schema v2           | state +1；不自动创建 session claim            |
+| `migrate-legacy`            | 显式迁移旧 task；unfinished status 保持 open                           | task 集合变化时 state +1                      |
+| `repair-status`             | 只修复有明确证据的 canonical `in_progress` 或旧 `superseded` 映射错误  | task +1                                       |
+| `quarantine-orphans`        | 原子移动无 `task.json` 的目录到 historical artifacts                   | 有目录变更时 state +1                         |
+| `restore-orphans`           | 按 manifest 原子恢复 historical artifact                               | state +1                                      |
 
-跨 artifact、task 和 state 的修改先写入 `.ccg/transaction.json`，全部目标原子替换后才删除 marker。marker 存在时，`resolve` 返回 `INCOMPLETE_TRANSACTION`，`snapshot`、`list` 和其他 mutation 不得继续；用户确认后调用 `recover` 重放 marker 中的目标内容。
+一个 open task 默认只允许一个 session claim；`activate` 遇到其他 claim 时返回 `TASK_CLAIMED`，必须经用户明确选择后调用 `takeover`。open `returnToTaskId` 链也由当前 binding 保留，防止另一 session 同时认领父任务。
 
-任务目录完成后仍保留原路径。`active` 和 `suspended` 是 resolver 根据 `state.activeTaskId` 推导的状态，不能写入 `task.json`。`.ccg`、tasks、tmp、migrations、research 和 `.turns` 的父链中出现 symlink 时，控制器拒绝读写。
+跨 artifact、task、state 和 session binding 的修改先写入 `.ccg/transaction.json`，全部目标原子替换后才删除 marker。marker 存在时，`resolve` 返回 `INCOMPLETE_TRANSACTION`，`snapshot`、`list` 和其他 mutation 不得继续；用户确认后调用 `recover` 重放 marker 中的目标内容。
+
+任务目录完成后仍保留原路径。`task.json.status` 只允许 `open`、`completed` 和 `cancelled`；当前 session binding 指向一个 open task 时，resolver 对外显示 `in_progress`，其他 open task 显示 `suspended`。`.ccg`、tasks、sessions、migrations、historical artifacts、research 和 `.turns` 的父链中出现 symlink 时，控制器拒绝读写。
+
+### 1.4 迁移、修复与认领顺序
+
+1. `STATE_MIGRATION_REQUIRED`：使用 resolver 返回的 `stateId`、`stateRevision`、`legacyActiveTaskId`，并固定 `bindingRevision: 0`、`activeTaskId: null` 调用 `migrate-state`。原 state 按字节备份；旧 pointer 只写入 manifest，不分配给当前 session
+2. `ORPHAN_TASK_DIR`：使用最新 state/binding CAS 调用 `quarantine-orphans`。目录通过同文件系统 rename 移到 `.ccg/historical-artifacts/orphans/`，不读取内容、不生成 task、不推断 lifecycle
+3. `TASK_MIGRATION_REQUIRED`：先调用 `preflight-legacy`；blocked contract 需要人工修复。其余使用最新 state/binding CAS 调用 `migrate-legacy`，迁移后重新 `resolve`
+4. `selection-required`：展示 ID、title、revision、durable status 和 `claimed`。未占用任务调用 `activate`；被占用任务只有在用户明确选择接管后调用 `takeover`
+5. canonical task 持久化了 `in_progress` 时，只能在 `finishedAt: null` 且 revision 匹配时调用 `repair-status` 的 `canonical-in-progress`；有 legacy backup 明确证明原状态为 `superseded` 时，才可调用 `superseded-completed`
+
+迁移、修复和 quarantine 后都必须重新 `resolve`，使用新 revision 继续。不得把旧 global pointer 自动认领给当前 session，不得把 unfinished task 改成 terminal status，也不得从 orphan 内容推断任务状态。
 
 ## 2. 阶段检查点
 
@@ -74,11 +92,12 @@ node ~/.claude/hooks/ccg/task-state.js list --root "$WORKDIR"
 示例：
 
 ```bash
-node ~/.claude/hooks/ccg/task-state.js checkpoint --root "$WORKDIR" <<'CCG_TASK_JSON'
+node ~/.claude/hooks/ccg/task-state.js checkpoint --root "$WORKDIR" --session-key "$CCG_SESSION_KEY" <<'CCG_TASK_JSON'
 {
   "expected": {
     "stateId": "uuid",
     "stateRevision": 3,
+    "bindingRevision": 1,
     "activeTaskId": "task-id",
     "taskRevision": 7
   },
@@ -126,10 +145,10 @@ Gate 是阶段间的检查点：
 
 高位来源与低位来源冲突时，高位来源生效。不得用摘要中的旧结论覆盖 spec，也不得把计划中的自然语言简称扩展成 spec 未定义的依赖关系。
 
-SessionStart 在 startup、compact、resume、clear 和 fork 时恢复完整 snapshot。UserPromptSubmit 每个用户回合重新读取
-`mode=authority, role=all`，只注入当前 task header、state/task revision、exact spec sections 和 `requirements.md`，不带旧
+SessionStart 在 startup、compact、resume、clear 和 fork 时从 Hook payload 的 `session_id` 派生 opaque key，并恢复该 binding 的完整 snapshot。startup、compact、resume 和 clear 只有在 Claude Code 保持同一 session ID 时继续同一 task；fork 使用新 ID，不自动继承父 session claim。UserPromptSubmit 每个用户回合重新读取
+`mode=authority, role=all`，只注入当前 session task header、state/binding/task revision、exact spec sections 和 `requirements.md`，不带旧
 plan、progress、analysis、review 或 research。foreground Agent、wrapper、TaskOutput 成功返回，以及 Agent 或 wrapper 失败后，
-PostToolUse/PostToolUseFailure 会重新读取同一份 authority；后台启动只返回 task ID 时不刷新，等待 TaskOutput 的实际结果。
+PostToolUse/PostToolUseFailure 会使用同一父 session key 重新读取 authority；后台启动只返回 task ID 时不刷新，等待 TaskOutput 的实际结果。
 
 每次 authority 刷新后执行以下检查：
 
@@ -183,11 +202,12 @@ Agent 和外部模型不得修改 `.ccg/`。Lead 在子任务成功后调用 `wr
 记录结果：
 
 ```bash
-node ~/.claude/hooks/ccg/task-state.js set-spec-evolution --root "$WORKDIR" <<'CCG_TASK_JSON'
+node ~/.claude/hooks/ccg/task-state.js set-spec-evolution --root "$WORKDIR" --session-key "$CCG_SESSION_KEY" <<'CCG_TASK_JSON'
 {
   "expected": {
     "stateId": "uuid",
     "stateRevision": 3,
+    "bindingRevision": 1,
     "activeTaskId": "task-id",
     "taskRevision": 9
   },
@@ -198,7 +218,7 @@ CCG_TASK_JSON
 
 ## 8. Loop Detection
 
-UserPromptSubmit Hook 按 task ID 和 `session_id` 分别保存最近 10 条 phase 与 nextAction。连续 3 条完全相同会输出 loop 提示。
+UserPromptSubmit Hook 按 task ID 和从 `session_id` 派生的 opaque session key 分别保存最近 10 条 phase 与 nextAction。原始 session ID 不写入 `.turns`。连续 3 条完全相同会输出 loop 提示。
 
 收到提示后：
 
@@ -239,11 +259,12 @@ Round N:
 调用 `finish`：
 
 ```bash
-node ~/.claude/hooks/ccg/task-state.js finish --root "$WORKDIR" <<'CCG_TASK_JSON'
+node ~/.claude/hooks/ccg/task-state.js finish --root "$WORKDIR" --session-key "$CCG_SESSION_KEY" <<'CCG_TASK_JSON'
 {
   "expected": {
     "stateId": "uuid",
     "stateRevision": 3,
+    "bindingRevision": 1,
     "activeTaskId": "task-id",
     "taskRevision": 10
   },

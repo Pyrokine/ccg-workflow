@@ -248,9 +248,9 @@ describe('review profile defaults', () => {
 
     expect(result).toBe(
       [
-        '[{"id":"gpt","model":"gpt-5.6-sol","effort":"max"},{"id":"grok","model":"grok-4.5","effort":"high"}]',
+        '[{"id":"gpt","model":"gpt-5.6-sol","effort":"max"},{"id":"grok","model":"grok-4.6","effort":"high"}]',
         'gpt-5.6-sol / max',
-        'grok-4.5 / high',
+        'grok-4.6 / high',
       ].join('\n')
     )
   })
@@ -295,15 +295,15 @@ describe('additional backend model flags', () => {
       routing: {
         frontend: { models: ['grok'], primary: 'grok' },
         backend: { models: ['codex'], primary: 'codex' },
-        grokModel: 'grok-4.5',
+        grokModel: 'grok-4.6',
       },
     })
 
     expect(result).toBe(
       [
         '--backend codex - "/w"',
-        '--backend grok --grok-model grok-4.5 - "/w"',
-        '--backend <codex|grok --grok-model grok-4.5> - "/w"',
+        '--backend grok --grok-model grok-4.6 - "/w"',
+        '--backend <codex|grok --grok-model grok-4.6> - "/w"',
       ].join('\n')
     )
   })
@@ -349,14 +349,14 @@ describe('additional backend model flags', () => {
       routing: {
         frontend: { models: ['grok'], primary: 'grok' },
         backend: { models: ['opencode'], primary: 'opencode' },
-        grokModel: 'grok-4.5',
+        grokModel: 'grok-4.6',
         opencodeModel: 'anthropic/claude-opus-5',
       },
     })
 
     expect(result).toBe(
       [
-        'codeagent-wrapper --backend grok --grok-model grok-4.5 - "/w"',
+        'codeagent-wrapper --backend grok --grok-model grok-4.6 - "/w"',
         'codeagent-wrapper --backend codex - "/w"',
         'codeagent-wrapper --backend opencode --opencode-model anthropic/claude-opus-5 - "/w"',
       ].join('\n')
@@ -369,13 +369,13 @@ describe('additional backend model flags', () => {
       routing: {
         frontend: { models: ['grok'], primary: 'grok' },
         backend: { models: ['opencode'], primary: 'opencode' },
-        grokModel: 'grok-4.5',
+        grokModel: 'grok-4.6',
         opencodeModel: 'anthropic/claude-opus-5',
       },
     })
 
     expect(result).toBe(
-      'codeagent-wrapper --backend <opencode --opencode-model anthropic/claude-opus-5|grok --grok-model grok-4.5> - "/w"'
+      'codeagent-wrapper --backend <opencode --opencode-model anthropic/claude-opus-5|grok --grok-model grok-4.6> - "/w"'
     )
   })
 

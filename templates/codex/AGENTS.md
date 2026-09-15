@@ -10,36 +10,39 @@ Before analysis or file changes:
 
 ```bash
 WORKDIR=$(pwd)
-node ~/.codex/hooks/ccg/task-state.js resolve --root "$WORKDIR"
+CCG_SESSION_KEY="<value from the latest ccg-session-key Hook block>"
+node ~/.codex/hooks/ccg/task-state.js resolve --root "$WORKDIR" --session-key "$CCG_SESSION_KEY"
 ```
 
-The controller is the only authority for the active task. Never select a task by directory name, mtime, branch, or conversation summary.
+The main-session Hook derives an opaque `codex-<sha256>` key from the current Codex `session_id` and renders it in `<ccg-session-key>`. Set `CCG_SESSION_KEY` from that latest block in the same shell command as every controller call; never invent, persist, or reuse a key from another Codex session. Leaf agents do not receive the key and never modify task state.
+
+The controller is the only authority for the current session's active task. Never select a task by directory name, mtime, branch, or conversation summary.
 
 Handle the result:
 
-- `active`: continue only when the request belongs to that task; unrelated work requires an explicit `interrupt`, `replace`, or another worktree decision
-- `selection-required`: present candidates and activate the selected task
-- `migration-required`: run explicit legacy migration with an active task ID or `null`
-- `recovery-required`: show the proposed recovery and run `recover` after confirmation
+- `active`: the current session has claimed an open task, exposed as effective `in_progress`; continue only when the request belongs to it
+- `selection-required`: present candidate metadata; use `activate` for an unclaimed task, or `takeover` only after explicit user approval when `claimed: true`
+- `migration-required`: use `migrate-state` for `STATE_MIGRATION_REQUIRED`; quarantine orphans and use `migrate-legacy` for `TASK_MIGRATION_REQUIRED`, then resolve and select explicitly
+- `recovery-required`: show the proposed recovery and run `recover` for this session after confirmation
 - `invalid`: stop and report the machine code and file
 - `none`: assess the new request
 
-One worktree has one shared active pointer. Independent concurrent write tasks use separate worktrees.
+A worktree can hold multiple session bindings. Each session has at most one active task, and one open task is claimed by at most one session unless the user explicitly requests takeover. Sessions receive only their own task contract; concurrent tasks that may modify the same product files still use separate worktrees.
 
 ## 2. Assess complexity, risk, and strategy
 
-| Complexity | Meaning |
-| --- | --- |
-| `S` | One file, clear behavior, fewer than about 30 changed lines |
-| `M` | Two to five files in one module |
-| `L` | More than five files or cross-module work |
-| `XL` | Architecture, public API, Schema, or multi-module coordination |
+| Complexity | Meaning                                                        |
+| ---------- | -------------------------------------------------------------- |
+| `S`        | One file, clear behavior, fewer than about 30 changed lines    |
+| `M`        | Two to five files in one module                                |
+| `L`        | More than five files or cross-module work                      |
+| `XL`       | Architecture, public API, Schema, or multi-module coordination |
 
-| Risk | Meaning |
-| --- | --- |
-| `low` | Reversible and no existing external behavior changes |
-| `medium` | Existing behavior changes and requires tests |
-| `high` | Public contract, migration, authentication, authorization, or cryptography |
+| Risk     | Meaning                                                                    |
+| -------- | -------------------------------------------------------------------------- |
+| `low`    | Reversible and no existing external behavior changes                       |
+| `medium` | Existing behavior changes and requires tests                               |
+| `high`   | Public contract, migration, authentication, authorization, or cryptography |
 
 Persistent strategies:
 
@@ -60,11 +63,13 @@ All mutations read one JSON request from stdin. Dynamic content never belongs in
 ### Start
 
 ```bash
-node ~/.codex/hooks/ccg/task-state.js start --root "$WORKDIR" <<'CCG_TASK_JSON'
+CCG_SESSION_KEY="<value from the latest ccg-session-key Hook block>"
+node ~/.codex/hooks/ccg/task-state.js start --root "$WORKDIR" --session-key "$CCG_SESSION_KEY" <<'CCG_TASK_JSON'
 {
   "expected": {
     "stateId": null,
     "stateRevision": 0,
+    "bindingRevision": 0,
     "activeTaskId": null
   },
   "mode": "activate",
@@ -86,31 +91,38 @@ node ~/.codex/hooks/ccg/task-state.js start --root "$WORKDIR" <<'CCG_TASK_JSON'
 CCG_TASK_JSON
 ```
 
-Replace `expected` with the latest `resolve` values. Use `interrupt` to create a temporary task that returns to the current task, `replace` to switch without an automatic return, and `inactive` to create a suspended task.
+Replace `expected` with the latest `resolve` values. Use `interrupt` to create a temporary task that returns to the current task, `replace` to switch without an automatic return, and `inactive` to create a suspended task. The task remains durably `open`; only this session sees effective `in_progress` while its binding points to the task.
 
 ### Checkpoint and artifacts
 
-Use the latest `stateId`, `stateRevision`, `activeTaskId`, and `taskRevision` on every mutation:
+Use the latest `stateId`, `stateRevision`, `bindingRevision`, `activeTaskId`, and `taskRevision` on every mutation:
 
 ```json
 {
   "expected": {
     "stateId": "uuid",
     "stateRevision": 2,
+    "bindingRevision": 1,
     "activeTaskId": "task-id",
     "taskRevision": 5
   }
 }
 ```
 
+- `activate`: claim an unclaimed open task for this session
+- `takeover`: transfer a claimed task only after the user explicitly selects takeover
 - `update-requirements`: replace the complete task contract
 - `write-artifact`: write `analysis`, `plan`, `review`, or a named `research` Markdown file
 - `checkpoint`: update `currentPhase`, `nextAction`, `gate`, and progress
 - `link-spec` / `unlink-spec`: associate an exact tracked Markdown section
 - `set-spec-evolution`: record `applied`, `skipped`, or `not_applicable`
-- `finish`: write `completed` or `cancelled` and return to an open parent task when applicable
+- `finish`: write `completed` or `cancelled` and update only this session's return chain
+- `migrate-state`: back up schema v1 state, remove its global pointer, and preserve the legacy task ID only as a selection hint
+- `preflight-legacy` / `migrate-legacy`: inspect and migrate legacy tasks without turning unfinished work into terminal status
+- `quarantine-orphans`: rename directories without `task.json` into historical artifacts without reading or classifying their content
+- `repair-status`: use only the two evidence-limited repairs defined by the controller
 
-Do not edit task lifecycle JSON directly. Do not move task directories or commit local task state.
+Every controller invocation uses the current `<ccg-session-key>` value. Do not edit task lifecycle JSON directly. Do not move task directories or commit local task state.
 
 ## 4. Authoritative specification rules
 
@@ -157,7 +169,7 @@ After model completion, run `resolve` again before accepting or persisting the r
 
 ### Review
 
-GPT and Grok use independent non-persistent Claude Code provider sessions:
+Only when the user explicitly requests external review, GPT and Grok use independent non-persistent Claude Code provider sessions:
 
 ```bash
 ~/.claude/bin/codeagent-wrapper --lite --progress --backend claude --no-session-persistence --claude-model {{REVIEW_GPT_MODEL}} --claude-effort {{REVIEW_GPT_EFFORT}} - "$WORKDIR" <<'GPT_REVIEW_EOF'
@@ -183,10 +195,10 @@ Run both calls in parallel. Do not use `resume` or save their session IDs. The l
 
 ## 6. Implementation modes
 
-| Complexity | Mode |
-| --- | --- |
-| `S-M` | Inline, one file group at a time |
-| `L-XL` | Parallel sub-agents with non-overlapping file ownership |
+| Complexity | Mode                                                    |
+| ---------- | ------------------------------------------------------- |
+| `S-M`      | Inline, one file group at a time                        |
+| `L-XL`     | Parallel sub-agents with non-overlapping file ownership |
 
 For L or XL, an approved `plan.md` is required before dispatch.
 
@@ -221,7 +233,7 @@ Before completion:
 - Inspect the complete diff
 - Confirm the diff stays inside requirements and approved plan
 - Recheck linked specs field by field
-- Run GPT and Grok review when changes exceed 30 lines or touch high-risk behavior
+- Run an independent Codex or Claude Code review when changes exceed 30 lines or touch high-risk behavior; run GPT or Grok only when the user explicitly requests external review
 - Write `review.md` with `write-artifact`
 - Record final verification in `checkpoint`
 - Record Spec Evolution as `applied`, `skipped`, or `not_applicable`
@@ -232,13 +244,14 @@ Critical and High findings in scope must be fixed. If a reviewer is unavailable,
 
 ## 8. Iron rules
 
-1. Resolve state before acting
-2. Never infer an active task from task directories
-3. Never write task lifecycle JSON directly
-4. Treat exact linked spec sections and requirements as execution constraints, not optional background
-5. Never let a compact summary or old plan override authoritative documents
-6. Keep sub-agent file ownership disjoint
-7. Do not report completion without actual verification
-8. Do not move or Git-commit local task state
+1. Resolve state with the current session key before acting
+2. Never infer an active task from task directories or another session binding
+3. Never expose or reuse another session's key
+4. Never write task lifecycle JSON directly
+5. Treat exact linked spec sections and requirements as execution constraints, not optional background
+6. Never let a compact summary or old plan override authoritative documents
+7. Keep sub-agent file ownership disjoint
+8. Do not report completion without actual verification
+9. Do not move or Git-commit local task state
 
 <!-- CCG:END -->

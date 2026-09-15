@@ -34,22 +34,22 @@ description: '按规范执行 + 多模型协作 + 归档'
    - Resolve from the current worktree:
      ```bash
      WORKDIR=$(pwd)
-     node ~/.claude/hooks/ccg/task-state.js resolve --root "$WORKDIR"
+     node ~/.claude/hooks/ccg/task-state.js resolve --root "$WORKDIR" --session-key "$CCG_SESSION_KEY"
      ```
-   - Continue only when the result is `active`, `task.scope` identifies `OpenSpec change: <change_id>`, and
+   - `CCG_SESSION_KEY` must come from the current Claude Code session. Continue only when that session's result is `active`, `task.scope` identifies `OpenSpec change: <change_id>`, and
      `requirements.md` identifies `openspec/changes/<change_id>/`. Do not infer task identity from branch, directory name,
      mtime, prior plan, or conversation summary.
    - Load current implementation authority:
      ```bash
-     node ~/.claude/hooks/ccg/task-state.js snapshot --root "$WORKDIR" --mode authority --role implement
+     node ~/.claude/hooks/ccg/task-state.js snapshot --root "$WORKDIR" --mode authority --role implement --session-key "$CCG_SESSION_KEY"
      ```
    - Require a valid non-empty task contract and at least one matching exact `specRef` under
      `openspec/changes/<change_id>/`. Stop on missing, oversized, changed, ambiguous, selection, migration, or recovery
      state. Direct the user to `/ccg:spec-plan` when artifacts or links are missing.
    - Before every Agent or `codeagent-wrapper` dispatch, rebuild this authority snapshot. PreToolUse injects the same
      current authority into the real prompt or heredoc. After a foreground Agent, wrapper, or TaskOutput result, the
-     PostToolUse Hook refreshes authority for the next model decision; then re-run `resolve` and verify the task identity
-     and revision before any controller mutation.
+     PostToolUse Hook refreshes authority for the next model decision; then re-run `resolve` with the same session key and verify the task identity,
+     binding revision, and task revision before any controller mutation. Every mutation uses `--session-key "$CCG_SESSION_KEY"`.
 
 3. **Apply OPSX Change (Pre-flight Check)**
    - Call `/opsx:apply` internally to enter implementation mode:
@@ -106,7 +106,7 @@ description: '按规范执行 + 多模型协作 + 归档'
    - Mark completed task in `tasks.md`: `- [x] Task description`.
    - Rebuild `snapshot --mode authority --role implement` after changing a linked section. If its exact heading moved,
      duplicated, disappeared, or exceeded the budget, stop and repair the spec link before another dispatch.
-   - Use `checkpoint` with the latest state/task revision to record the completed phase, verification evidence, current
+   - Use `checkpoint` with the latest state/binding/task revision to record the completed phase, verification evidence, current
      OpenSpec progress, and next task. Do not edit `.ccg/tasks/*/task.json` or `progress.md` directly.
    - Commit changes only when the user has authorized that Git operation.
 

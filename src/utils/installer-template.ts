@@ -57,7 +57,7 @@ const MCP_PROVIDERS: Record<string, { tool: string; param: string }> = {
 
 const DEFAULT_REVIEW_PROFILES: readonly ReviewProfile[] = [
   { id: 'gpt', model: 'gpt-5.6-sol', effort: 'xhigh' },
-  { id: 'grok', model: 'grok-4.5', effort: 'high' },
+  { id: 'grok', model: 'grok-4.6', effort: 'high' },
 ]
 
 const REVIEW_PROFILE_IDS = new Set<ReviewProfile['id']>(['gpt', 'grok'])

@@ -170,7 +170,7 @@ try {
 用户请求 GPT、Grok 双 profile 审查。请立即执行：
 
 1. 获取工作目录: WORKDIR=$(pwd)
-2. 读取 ${path.join(homeDir, '.claude', '.ccg', 'config.toml')} 中 routing.review.profiles 的 GPT、Grok model 与 effort。缺少配置时使用 gpt-5.6-sol / xhigh 和 grok-4.5 / high。
+2. 读取 ${path.join(homeDir, '.claude', '.ccg', 'config.toml')} 中 routing.review.profiles 的 GPT、Grok model 与 effort。缺少配置时使用 gpt-5.6-sol / xhigh 和 grok-4.6 / high。
 3. 在同一条消息中并行启动 GPT、Grok 两个 reviewer，均使用 run_in_background: true。GPT 调用 ${wrapperPath} --lite --progress --backend claude --no-session-persistence --claude-model <GPT model> --claude-effort <GPT effort>；Grok 调用 ${wrapperPath} --lite --progress --backend claude --no-session-persistence --claude-model <Grok model> --claude-effort <Grok effort>。两者均使用 ${path.join(homeDir, '.claude', '.ccg', 'prompts', 'claude', 'reviewer.md')}。GPT 审查后端逻辑、正确性、安全、回归与测试缺口，Grok 审查前端交互、可访问性、设计一致性与前端安全。
 4. reviewer 不使用 resume 或 SESSION_ID。等待两个结果后由主 Claude 汇总并确认 finding。
 </ccg-model-action>`;
@@ -188,7 +188,7 @@ try {
 用户请求 Antigravity 审查视角。该视角由 Grok profile 通过当前 Claude Code provider 执行。请立即执行：
 
 1. 获取工作目录: WORKDIR=$(pwd)
-2. 读取 ${path.join(homeDir, '.claude', '.ccg', 'config.toml')} 中 Grok profile 的 model 与 effort。缺少配置时使用 grok-4.5 / high。
+2. 读取 ${path.join(homeDir, '.claude', '.ccg', 'config.toml')} 中 Grok profile 的 model 与 effort。缺少配置时使用 grok-4.6 / high。
 3. 使用 ${wrapperPath} --lite --progress --backend claude --no-session-persistence --claude-model <Grok model> --claude-effort <Grok effort> 启动一个 reviewer，ROLE_FILE 为 ${path.join(homeDir, '.claude', '.ccg', 'prompts', 'claude', 'reviewer.md')}。审查前端交互、可访问性、设计一致性与前端安全。
 4. 不使用 resume 或 SESSION_ID。等待结果后确认 finding。
 </ccg-model-action>`;

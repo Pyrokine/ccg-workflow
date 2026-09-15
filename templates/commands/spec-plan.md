@@ -37,19 +37,19 @@ description: '多模型分析 → 消除歧义 → 零决策可执行计划'
    - Resolve from the current worktree:
      ```bash
      WORKDIR=$(pwd)
-     node ~/.claude/hooks/ccg/task-state.js resolve --root "$WORKDIR"
+     node ~/.claude/hooks/ccg/task-state.js resolve --root "$WORKDIR" --session-key "$CCG_SESSION_KEY"
      ```
-   - Continue only when the result is `active`, `task.scope` identifies `OpenSpec change: <change_id>`, and
+   - `CCG_SESSION_KEY` must come from the current Claude Code session. Continue only when that session's result is `active`, `task.scope` identifies `OpenSpec change: <change_id>`, and
      `requirements.md` identifies `openspec/changes/<change_id>/`. Do not infer a match from branch, task directory, or
      conversation history.
    - Run an authority snapshot before analysis:
      ```bash
-     node ~/.claude/hooks/ccg/task-state.js snapshot --root "$WORKDIR" --mode authority --role research
+     node ~/.claude/hooks/ccg/task-state.js snapshot --root "$WORKDIR" --mode authority --role research --session-key "$CCG_SESSION_KEY"
      ```
    - Require a valid task contract and at least one matching exact `specRef` under
      `openspec/changes/<change_id>/`. On missing, invalid, selection, migration, or recovery state, stop and direct the
      user to `/ccg:spec-research` or the controller action named by the error.
-   - Save the current state revision and task revision. Every mutation below uses the latest successful response.
+   - Save the current state revision, binding revision, active task ID, and task revision. Every mutation below uses the latest successful response and `--session-key "$CCG_SESSION_KEY"`.
 
 3. **Implementation Analysis (PARALLEL)**
    - 当 `{{BACKEND_PRIMARY}}` 与 `{{FRONTEND_PRIMARY}}` 都是 Claude 时，在同一条消息中创建两个独立 Claude Code Agent。后端 Agent 的 prompt 包含 `CCG_ROLE: research`，分析实现方案、技术风险、替代架构和边界条件；前端 Agent 的 prompt 也包含 `CCG_ROLE: research`，分析可维护性、扩展性和集成冲突。不得调用 codeagent-wrapper 或任何外部 CLI。

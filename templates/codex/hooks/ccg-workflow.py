@@ -4,6 +4,7 @@
 Task identity and context come only from the shared Node.js task controller.
 """
 
+import hashlib
 import html
 import json
 import os
@@ -36,6 +37,13 @@ def read_input():
     return value
 
 
+def derive_session_key(value):
+    if not isinstance(value, str) or not value.strip() or len(value.encode("utf-8")) > 1024:
+        return None
+    digest = hashlib.sha256(b"codex\0" + value.encode("utf-8")).hexdigest()
+    return f"codex-{digest}"
+
+
 def find_worktree_root(start):
     current = Path(start).resolve()
     fallback = None
@@ -50,12 +58,17 @@ def find_worktree_root(start):
     return fallback
 
 
-def is_sub_agent():
-    return bool(os.environ.get("CODEX_AGENT_TYPE")) or os.environ.get("CODEX_FORK_TURNS") == "none"
+def is_sub_agent(hook_input):
+    return (
+        bool(hook_input.get("agent_id"))
+        or bool(hook_input.get("agent_type"))
+        or bool(os.environ.get("CODEX_AGENT_TYPE"))
+        or os.environ.get("CODEX_FORK_TURNS") == "none"
+    )
 
 
-def detect_agent_role():
-    agent_type = os.environ.get("CODEX_AGENT_TYPE", "").lower()
+def detect_agent_role(hook_input):
+    agent_type = str(hook_input.get("agent_type") or os.environ.get("CODEX_AGENT_TYPE", "")).lower()
     if any(token in agent_type for token in ("review", "audit", "check", "qa", "test")):
         return "review"
     if any(token in agent_type for token in ("research", "scout", "explore", "analy", "plan")):
@@ -65,7 +78,7 @@ def detect_agent_role():
     return "implement"
 
 
-def run_snapshot(root, role):
+def run_snapshot(root, role, session_key):
     controller = Path(__file__).resolve().parent / "ccg" / "task-state.js"
     if not controller.is_file():
         return None, "CONTROLLER_UNAVAILABLE: task-state.js is missing"
@@ -81,6 +94,8 @@ def run_snapshot(root, role):
                 "agent",
                 "--role",
                 role,
+                "--session-key",
+                session_key,
             ],
             capture_output=True,
             text=True,
@@ -239,7 +254,7 @@ def build_guidance(payload, progress, limit):
         f"Task: {html.escape(str(task.get('title', task.get('id', '?'))))} [{html.escape(str(task.get('id', '?')))}]",
         f"Complexity: {html.escape(str(task.get('complexity', '?')))} | Risk: {html.escape(str(task.get('risk', '?')))} | Phase: {html.escape(str(task.get('currentPhase', '?')))}",
         f"Next: {html.escape(str(task.get('nextAction', '?')))}",
-        f"Revision: state={html.escape(str(resolution.get('stateRevision', '?')))}, task={html.escape(str(task.get('revision', '?')))}",
+        f"Revision: state={html.escape(str(resolution.get('stateRevision', '?')))}, binding={html.escape(str(resolution.get('bindingRevision', '?')))}, task={html.escape(str(task.get('revision', '?')))}",
     ]
     if task.get("gate"):
         parts.append(f"Gate: {html.escape(str(task['gate']))}")
@@ -261,7 +276,7 @@ def build_guidance(payload, progress, limit):
         candidates.append(
             (
                 "runtime:review",
-                f"\n{progress['changed_lines']} changed lines detected. Run the configured GPT and Grok review profiles before delivery.",
+                f"\n{progress['changed_lines']} changed lines detected. Run an independent Codex or Claude Code review before delivery. Use GPT or Grok only when the user explicitly requests external review.",
             )
         )
     if progress["high_risk_files"]:
@@ -304,17 +319,27 @@ def main():
         root = find_worktree_root(start)
         if root is None:
             return
-        sub_agent = is_sub_agent()
-        role = detect_agent_role() if sub_agent else "all"
-        snapshot, error = run_snapshot(root, role)
+        sub_agent = is_sub_agent(hook_input)
+        role = detect_agent_role(hook_input) if sub_agent else "all"
+        session_key = derive_session_key(hook_input.get("session_id"))
+        if session_key is None:
+            context = "<ccg-state>\nSESSION_KEY_REQUIRED: Codex Hook payload must include a stable session_id\n</ccg-state>"
+            output_context(f"{SUB_AGENT_NOTICE}\n\n{context}" if sub_agent else context)
+            return
+        snapshot, error = run_snapshot(root, role, session_key)
         if error:
             context = f"<ccg-state>\n{html.escape(error)}\n</ccg-state>"
             output_context(f"{SUB_AGENT_NOTICE}\n\n{context}" if sub_agent else context)
             return
         prefix = f"{SUB_AGENT_NOTICE}\n\n" if sub_agent else ""
-        guidance = build_guidance(snapshot, detect_progress(root), OUTPUT_LIMIT - byte_length(prefix))
+        session_notice = "" if sub_agent else f"<ccg-session-key>{session_key}</ccg-session-key>\n\n"
+        guidance = build_guidance(
+            snapshot,
+            detect_progress(root),
+            OUTPUT_LIMIT - byte_length(prefix) - byte_length(session_notice),
+        )
         if guidance:
-            output_context(f"{prefix}{guidance}")
+            output_context(f"{prefix}{session_notice}{guidance}")
     except Exception as error:
         output_context(f"<ccg-state>\nCCG_HOOK_ERROR: {html.escape(str(error))}\n</ccg-state>")
 

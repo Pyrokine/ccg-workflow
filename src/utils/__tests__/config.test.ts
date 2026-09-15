@@ -20,7 +20,7 @@ describe('createDefaultRouting', () => {
     const routing = createDefaultRouting()
     expect(routing.review.profiles).toEqual([
       { id: 'gpt', model: 'gpt-5.6-sol', effort: 'xhigh' },
-      { id: 'grok', model: 'grok-4.5', effort: 'high' },
+      { id: 'grok', model: 'grok-4.6', effort: 'high' },
     ])
     expect(routing.review.strategy).toBe('parallel')
   })
@@ -73,7 +73,7 @@ describe('normalizeRoutingForInstall', () => {
     })
     expect(routing.review.profiles).toEqual([
       { id: 'gpt', model: 'gpt-5.6-sol', effort: 'xhigh' },
-      { id: 'grok', model: 'grok-4.5', effort: 'high' },
+      { id: 'grok', model: 'grok-4.6', effort: 'high' },
     ])
     expect(routing.proxy).toEqual({
       models: ['antigravity'],
@@ -123,7 +123,7 @@ describe('normalizeRoutingForInstall', () => {
     })
     expect(routing.review.profiles).toEqual([
       { id: 'gpt', model: 'gpt-5.6-sol', effort: 'xhigh' },
-      { id: 'grok', model: 'grok-4.5', effort: 'high' },
+      { id: 'grok', model: 'grok-4.6', effort: 'high' },
     ])
   })
 
@@ -157,14 +157,14 @@ describe('normalizeRoutingForInstall', () => {
   it('ignores the retired Claude profile and fills missing external profiles', () => {
     const routing = normalizeRoutingForInstall({
       review: {
-        profiles: [{ id: 'claude' }, { id: 'grok', model: 'grok-4.5', effort: 'high' }],
+        profiles: [{ id: 'claude' }, { id: 'grok', model: 'grok-4.6', effort: 'high' }],
         strategy: 'parallel',
       },
     })
 
     expect(routing.review.profiles).toEqual([
       { id: 'gpt', model: 'gpt-5.6-sol', effort: 'xhigh' },
-      { id: 'grok', model: 'grok-4.5', effort: 'high' },
+      { id: 'grok', model: 'grok-4.6', effort: 'high' },
     ])
   })
 
@@ -173,15 +173,49 @@ describe('normalizeRoutingForInstall', () => {
       review: {
         profiles: [
           { id: 'gpt', model: 'gpt-5.6-sol', effort: 'max' },
-          { id: 'grok', model: 'grok-4.5', effort: 'xhigh' },
+          { id: 'grok', model: 'grok-4.6', effort: 'xhigh' },
         ],
       },
     })
 
     expect(routing.review.profiles).toEqual([
       { id: 'gpt', model: 'gpt-5.6-sol', effort: 'max' },
-      { id: 'grok', model: 'grok-4.5', effort: 'xhigh' },
+      { id: 'grok', model: 'grok-4.6', effort: 'xhigh' },
     ])
+  })
+
+  it('migrates the exact Grok 4.5 defaults and preserves the configured effort', () => {
+    const routing = normalizeRoutingForInstall({
+      review: {
+        profiles: [
+          { id: 'gpt', model: 'gpt-5.6-sol', effort: 'xhigh' },
+          { id: 'grok', model: 'grok-4.5', effort: 'xhigh' },
+        ],
+      },
+      grokModel: 'grok-4.5',
+    })
+
+    expect(routing.review.profiles).toEqual([
+      { id: 'gpt', model: 'gpt-5.6-sol', effort: 'xhigh' },
+      { id: 'grok', model: 'grok-4.6', effort: 'xhigh' },
+    ])
+    expect(routing.grokModel).toBe('grok-4.6')
+  })
+
+  it('preserves custom Grok model names', () => {
+    const routing = normalizeRoutingForInstall({
+      review: {
+        profiles: [{ id: 'grok', model: 'grok-4.5-preview', effort: 'high' }],
+      },
+      grokModel: 'provider/grok-custom',
+    })
+
+    expect(routing.review.profiles).toContainEqual({
+      id: 'grok',
+      model: 'grok-4.5-preview',
+      effort: 'high',
+    })
+    expect(routing.grokModel).toBe('provider/grok-custom')
   })
 
   it('keeps active additional backends and their model overrides', () => {
@@ -200,7 +234,7 @@ describe('normalizeRoutingForInstall', () => {
         models: ['grok', 'kimi', 'opencode'],
         strategy: 'parallel',
       },
-      grokModel: 'grok-4.5',
+      grokModel: 'grok-4.6',
       kimiModel: 'kimi-code',
       opencodeModel: 'anthropic/claude-opus-5',
     })
@@ -209,9 +243,9 @@ describe('normalizeRoutingForInstall', () => {
     expect(routing.backend.models).toEqual(['kimi'])
     expect(routing.review.profiles).toEqual([
       { id: 'gpt', model: 'gpt-5.6-sol', effort: 'xhigh' },
-      { id: 'grok', model: 'grok-4.5', effort: 'high' },
+      { id: 'grok', model: 'grok-4.6', effort: 'high' },
     ])
-    expect(routing.grokModel).toBe('grok-4.5')
+    expect(routing.grokModel).toBe('grok-4.6')
     expect(routing.kimiModel).toBe('kimi-code')
     expect(routing.opencodeModel).toBe('anthropic/claude-opus-5')
   })

@@ -9,7 +9,7 @@
 [![npm version](https://img.shields.io/npm/v/ccg-workflow.svg)](https://www.npmjs.com/package/ccg-workflow)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-Compatible-green.svg)](https://claude.ai/code)
-[![Tests](https://img.shields.io/badge/Tests-201%20passed-brightgreen.svg)](#)
+[![Tests](https://img.shields.io/badge/Tests-340%20passed-brightgreen.svg)](#)
 [![Follow on X](https://img.shields.io/badge/X-@CCG__Workflow-black?logo=x&logoColor=white)](https://x.com/CCG_Workflow)
 ![star](https://atomgit.com/fengshao1227/ccg-workflow/star/badge.svg)
 [![Docs](https://img.shields.io/badge/文档站-ccg.fengshao1227.com-blue?style=for-the-badge&logo=readthedocs&logoColor=white)](https://github.com/Pyrokine/ccg-workflow/)
@@ -20,10 +20,16 @@
 
 ## ♥️ Sponsor
 
+[![PackyCode](assets/sponsors/packycode.png)](https://www.packyapi.ai/register?aff=m21P)
+
+[PackyCode](https://www.packyapi.ai/register?aff=m21P) 通过同一域名和 API key 提供 Claude Code 与 Codex 专用通道；安装器可配置 Claude Code，并在不改变当前 active provider 的情况下注册 Codex provider
+
+---
+
 [![APIMart](assets/sponsors/apimart.jpg)](https://go.apimart.ai/gh-ccg-workflow)
 
-[APIMart](https://go.apimart.ai/gh-ccg-workflow) 赞助本项目，并提供图片、视频、Claude 和 GPT API。安装器可将其
-Anthropic 兼容端点配置为 Claude Code API 提供方，也可单独注册 Codex provider；是否激活 Codex provider 由用户明确选择。
+[APIMart](https://go.apimart.ai/gh-ccg-workflow) 赞助本项目，并提供图片、视频、Claude 和 GPT API；安装器可将其
+Anthropic 兼容端点配置为 Claude Code API 提供方，也可单独注册 Codex provider，是否激活由用户明确选择
 
 ---
 
@@ -54,9 +60,13 @@ CCG 是 Claude Code 的工作流引擎。默认前端、后端和审查都使用
 
 Gemini CLI 已禁用：2026-06-18 后 consumer OAuth 请求不再处理。旧 Gemini 路由迁移为 Grok，`agy` 保留为 Antigravity 别名。
 
-## v3.6.4-aug.1 更新
+## v3.6.7-aug.1 更新
 
-- APIMart 可作为 Claude Code API 提供方；Codex provider 单独注册，只有用户明确选择时才激活
+- package tarball 改用明确的 skill 子目录白名单并排除 `templates/skills/domains/security/`；红队和渗透参考笔记仍保留在 Git 中，默认安装也继续排除该目录
+- PackyCode 与 APIMart 进入共享 sponsor registry，init、API 菜单、Codex mode 和卸载使用同一配置来源
+- Codex mode 只在现有 `~/.codex/AGENTS.md` 中合并一个 managed block，在保留用户 Hook 的前提下注册一个 `UserPromptSubmit` command，并在安装前备份；任一安装步骤失败时恢复全部目标文件；ownership manifest 会在卸载时恢复安装前已有的同名 runtime 文件，并保留安装后的用户修改
+- sponsor Codex provider 只做增量注册，不覆盖用户已有 provider table、认证或配置权限，只有用户明确选择时才激活；卸载只移除本次 Codex mode 安装新增的 provider table；沿用当前 Codex 的稳定 Hook 和 multi-agent 默认值，不再强制写入过时的 `multi_agent_v2` timeout table
+- GPT 审查保持 `gpt-5.6-sol / xhigh`；Grok 审查默认升级为 `grok-4.6 / high`，安装时迁移精确的 `grok-4.5` 旧默认值
 - Claude Code 可从当前仓库以原生 plugin 方式安装技能包；完整多模型工作流仍由安装器提供
 - 新增 `bt-panel`、`seo-page-builder` 和 `adsense-site-auditor` 三个 Web 运维技能
 - `frontend-design` 成为唯一直接设计入口，内部使用 20 个 Impeccable playbook
@@ -69,8 +79,8 @@ Gemini CLI 已禁用：2026-06-18 后 consumer OAuth 请求不再处理。旧 Ge
 v3.0 从底层重写。一个命令替代 29 个。
 
 - `/ccg:go` — 用自然语言描述任务，引擎自动分析意图、选择策略、执行到底。
-- **Hook 引擎** — 用户消息只注入限长任务摘要；startup、resume、clear、compact 和 fork 会恢复完整任务契约、artifact 与精确关联的 spec section。
-- **Task 持久化** — 持久策略在每个 worktree 的 `.ccg/state.json` 保存唯一 active pointer。revision 检查、文件锁、临时任务返回链和显式迁移避免按目录顺序猜任务，也拒绝过期并发写入。
+- **Hook 引擎** — 用户消息只注入限长任务摘要；startup、resume、clear 和 compact 恢复当前 session 的完整任务契约、artifact 与精确关联的 spec section；fork 使用新的未绑定 session identity。
+- **Task 持久化** — 每个 worktree 保存共享 task 和 opaque per-session binding。durable status 仍为 `open`、`completed`、`cancelled`；当前 session 认领的 open task 对外显示 `in_progress`。state、binding、task 三层 revision 拒绝过期并发写入。
 - **Agent Teams** — 大型任务通过 TeamCreate 并行 spawn 多个 Builder。每个 Builder 有独立文件所有权。
 - **质量关卡** — `ccg:verify-security`、`ccg:verify-quality`、`ccg:verify-change` 作为 Skill 在策略验证阶段强制调用。
 - **域知识 Hook** — 消息涉及安全、缓存、RAG 等关键词时，相关知识文件自动注入上下文。
@@ -98,7 +108,7 @@ CCG 引擎:
   1. 读取项目上下文（git、技术栈、文件结构）
   2. 分类: feature / L 复杂度 / backend / high 风险
   3. 选择策略: full-collaborate
-  4. 创建 .ccg/state.json 和 .ccg/tasks/add-jwt-auth/
+  4. 创建 .ccg/state.json、当前 session binding 和 .ccg/tasks/add-jwt-auth/
   5. 写入完整 requirements 契约，并关联 tracked 文档中的精确 spec section
   6. 需要双视角时并行启动独立 Claude Code 分析 Agent
   7. 产出计划 → HARD STOP 等待审批
@@ -110,11 +120,11 @@ CCG 引擎:
 每轮 Hook 注入:
   <ccg-state>
   Task: add-jwt-auth [add-jwt-auth]
-  Status: active
+  Status: in_progress
   Strategy: full-collaborate
   Phase: 4-implementation
   Next: Layer 1 Builders 执行中
-  Revision: state=3, task=7
+  Revision: state=3, binding=1, task=7
   </ccg-state>
 ```
 
@@ -122,18 +132,18 @@ CCG 引擎:
 
 引擎根据任务类型和复杂度自动选择策略：
 
-| 策略              | 场景                | 外部模型           | Teams |
-| ----------------- | ------------------- | ------------------ | ----- |
-| direct-fix        | 简单 bug，单文件    | 无                 | 无    |
-| quick-implement   | 小功能，范围清晰    | 无                 | 无    |
-| guided-develop    | 中等功能，需要规划  | 仅显式路由         | 无    |
-| full-collaborate  | 复杂功能，跨模块    | 仅显式路由         | 强制  |
-| debug-investigate | 复杂 bug，原因不明  | 仅显式路由         | 无    |
-| refactor-safely   | 代码重构            | 仅显式外部审查     | 无    |
-| deep-research     | 技术研究、方案对比  | 仅显式路由         | 无    |
-| optimize-measure  | 性能优化            | 可选               | 无    |
-| review-audit      | 代码审查            | 仅显式外部审查     | 无    |
-| git-action        | commit、rollback 等 | 无                 | 无    |
+| 策略              | 场景                | 外部模型       | Teams |
+| ----------------- | ------------------- | -------------- | ----- |
+| direct-fix        | 简单 bug，单文件    | 无             | 无    |
+| quick-implement   | 小功能，范围清晰    | 无             | 无    |
+| guided-develop    | 中等功能，需要规划  | 仅显式路由     | 无    |
+| full-collaborate  | 复杂功能，跨模块    | 仅显式路由     | 强制  |
+| debug-investigate | 复杂 bug，原因不明  | 仅显式路由     | 无    |
+| refactor-safely   | 代码重构            | 仅显式外部审查 | 无    |
+| deep-research     | 技术研究、方案对比  | 仅显式路由     | 无    |
+| optimize-measure  | 性能优化            | 可选           | 无    |
+| review-audit      | 代码审查            | 仅显式外部审查 | 无    |
+| git-action        | commit、rollback 等 | 无             | 无    |
 
 简单任务零开销快速执行。复杂任务启动完整引擎。
 
@@ -177,22 +187,26 @@ v3.0 默认安装 12 个核心命令。Legacy 模式额外安装 18 个。
 
 CCG 安装 CommonJS Hook runtime，并在 `~/.claude/settings.json` 的五类 Hook event 中注册四个处理脚本：
 
-| Hook                  | 事件                                                     | 作用                                                                         |
-| --------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| Hook                  | 事件                                                    | 作用                                                                         |
+| --------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | `workflow-state.js`   | `UserPromptSubmit`、`PostToolUse`、`PostToolUseFailure` | 每次输入及前台外部结果返回后刷新精确权威                                     |
-| `session-start.js`    | `SessionStart`                                           | 在 startup、resume、clear、compact、fork 时恢复完整任务 snapshot             |
-| `subagent-context.js` | Bash/Agent 的 `PreToolUse`                               | 修改实际 Agent prompt 或 wrapper heredoc，注入按角色匹配的任务与 spec 上下文 |
-| `skill-router.js`     | `UserPromptSubmit`                                       | 注入命中的领域知识                                                           |
+| `session-start.js`    | `SessionStart`                                          | 在 startup、resume、clear、compact、fork 时恢复完整任务 snapshot             |
+| `subagent-context.js` | Bash/Agent 的 `PreToolUse`                              | 修改实际 Agent prompt 或 wrapper heredoc，注入按角色匹配的任务与 spec 上下文 |
+| `skill-router.js`     | `UserPromptSubmit`                                      | 注入命中的领域知识                                                           |
+
+`SessionStart` 从 Claude Code `session_id` 派生 opaque key，并通过 `CLAUDE_ENV_FILE` 导出。所有 controller 调用和 authority refresh 都使用该 key。Agent prompt 与 wrapper heredoc 继承父 Claude session binding；原始 session ID 不写入 state、binding 或 turn 文件。
 
 `task-state.js` 是唯一允许修改任务生命周期的入口。Hook 输入、任务文件和 spec section 都有大小限制。任务状态无效、权威上下文缺失或超限、quoted heredoc 无法绑定到 wrapper command 时，`PreToolUse` Hook 返回 `permissionDecision: "deny"`，Agent 或 wrapper 不会在缺少任务契约的情况下启动。
 
 ## Task 系统
 
-持久策略使用当前 worktree 的 active pointer 和固定任务目录：
+持久策略使用 worktree 共享 task 和 session-scoped active binding：
 
 ```text
 .ccg/
-├── state.json                    # stateId、revision、activeTaskId
+├── state.json                    # stateId 与共享结构 revision，不含 active pointer
+├── sessions/
+│   └── claude-<sha256>.json      # 当前 session 的 activeTaskId 与 binding revision
 ├── state.lock                    # 生命周期写入的短期文件锁
 ├── transaction.json             # 多文件修改待恢复时存在
 ├── tasks/
@@ -204,12 +218,15 @@ CCG 安装 CommonJS Hook runtime，并在 `~/.claude/settings.json` 的五类 Ho
 │       ├── plan.md               # 可选审批计划
 │       ├── review.md             # 可选审查结果
 │       └── research/             # 可选研究成果
-└── migrations/v1/                # 显式迁移旧任务时创建的备份
+├── migrations/                   # state 与 legacy task 的字节级备份
+└── historical-artifacts/orphans/ # 无 task.json 目录的可逆隔离区
 ```
 
-`active` 和 `suspended` 由 `state.activeTaskId` 推导，task 文件只持久化 `open`、`completed` 或 `cancelled`。临时任务记录 `returnToTaskId`，完成后返回最近仍为 open 的父任务。完成的任务保持原路径。所有状态修改都校验 `stateId` 和 revision，拒绝过期或并发写入。跨 artifact、task 和 state 的多文件修改会保留可重放的 transaction marker，直到全部原子 rename 完成。
+Task 文件只持久化 `open`、`completed` 或 `cancelled`。当前 session binding 指向 open task 时，resolver 返回 effective `in_progress`；其他 open task 显示 `suspended`。一个 open task 默认只由一个 session 认领，其 open `returnToTaskId` 链也属于同一 claim。选择已占用任务返回 `TASK_CLAIMED`，只有显式 takeover 才转移 binding。完成或恢复任务只修改调用 session 的 binding。state、binding、task 三层 compare-and-swap revision 拒绝过期写入；多文件修改会保留可重放的 transaction marker，直到全部原子替换完成。
 
-active pointer 为空但仍有 open task 时，控制器要求显式选择。旧任务目录要求显式迁移。active target 已结束、丢失或事务中断时要求显式恢复。运行态父路径必须是 worktree 内的普通目录，symlink 会被拒绝。分支名和目录时间只用于诊断，不能选择任务。
+当前 session 没有 binding 但仍有 open task 时，控制器只返回候选元数据并要求显式选择。它不返回其他 session key，也不向当前 session 注入其他任务的 requirements、spec 或 artifact。这属于任务路由隔离，不是同一操作系统用户下的文件系统保密边界。
+
+Schema v1 state、legacy task、有证据的无效状态和 orphan directory 分别使用显式迁移、修复与 quarantine 操作。旧 global pointer 只保留为重新认领提示，不自动分配。unfinished legacy task 保持 open；orphan directory 仅做 rename，不读取内容或推断 lifecycle。运行态父路径必须是 worktree 内的普通目录，symlink 会被拒绝。分支名和目录时间只用于诊断，不能选择任务。
 
 ## 规范权威
 
@@ -241,12 +258,12 @@ Hook 验证项目相对路径、普通文件、literal Git 跟踪状态、fenced
 
 安装器和 Claude Code 原生 plugin 都提供以下直接入口：
 
-| 技能 | 用途 |
-| ---- | ---- |
-| `/ccg:frontend-design` | 前端设计入口，内部包含 20 个 Impeccable playbook |
-| `/ccg:bt-panel` | 通过宝塔/aaPanel HTTP API 部署和管理站点 |
-| `/ccg:seo-page-builder` | 创建和审计 SEO 工具页，附可执行的 on-page audit 脚本 |
-| `/ccg:adsense-site-auditor` | 检查 AdSense 申请准备情况和政策要求 |
+| 技能                        | 用途                                                 |
+| --------------------------- | ---------------------------------------------------- |
+| `/ccg:frontend-design`      | 前端设计入口，内部包含 20 个 Impeccable playbook     |
+| `/ccg:bt-panel`             | 通过宝塔/aaPanel HTTP API 部署和管理站点             |
+| `/ccg:seo-page-builder`     | 创建和审计 SEO 工具页，附可执行的 on-page audit 脚本 |
+| `/ccg:adsense-site-auditor` | 检查 AdSense 申请准备情况和政策要求                  |
 
 只从 private fork 安装技能包：
 
@@ -261,7 +278,7 @@ claude plugin install ccg@ccg
 
 ```bash
 npx ccg-workflow doctor                   # 环境健康检查
-npx ccg-workflow status                   # 安装状态和 active task 概览
+npx ccg-workflow status                   # 安装状态和当前 session task 概览
 npx ccg-workflow codex-mode install       # 安装 Codex 主导模式
 npx ccg-workflow codex-mode uninstall     # 卸载 Codex 主导模式
 npx ccg-workflow dsh install              # 安装 dsh-ccg
@@ -288,13 +305,14 @@ npx ccg-workflow uninstall                # 卸载 CCG
 
 在 `~/.claude/settings.json` 的 `"env"` 中设置：
 
-| 变量                                   | 默认值 | 说明                           |
-| -------------------------------------- | ------ | ------------------------------ |
-| `CODEX_TIMEOUT`                        | `7200`   | Wrapper 超时（秒）                                  |
-| `CODEAGENT_POST_MESSAGE_DELAY`         | `5`      | 后端完成后的等待时间（秒）                          |
-| `APIMART_API_KEY`                      | 未设置   | 选择 APIMart Codex provider 时使用的 API key        |
-| `DSH_HOME`                             | `~/.dsh` | `dsh-ccg` 使用的 DeepSeek Harness home              |
-| `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` | 未设置   | 设为 `1` 启用 Agent Teams 并行                      |
+| 变量                                   | 默认值   | 说明                                           |
+| -------------------------------------- | -------- | ---------------------------------------------- |
+| `CODEX_TIMEOUT`                        | `7200`   | Wrapper 超时（秒）                             |
+| `CODEAGENT_POST_MESSAGE_DELAY`         | `5`      | 后端完成后的等待时间（秒）                     |
+| `APIMART_API_KEY`                      | 未设置   | 选择 APIMart Codex provider 时使用的 API key   |
+| `PACKYCODE_API_KEY`                    | 未设置   | 选择 PackyCode Codex provider 时使用的 API key |
+| `DSH_HOME`                             | `~/.dsh` | `dsh-ccg` 使用的 DeepSeek Harness home         |
+| `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` | 未设置   | 设为 `1` 启用 Agent Teams 并行                 |
 
 ## 更新 / 卸载
 
@@ -342,4 +360,4 @@ MIT
 
 ---
 
-v3.6.4-aug.1 | [Issues](https://github.com/fengshao1227/ccg-workflow/issues) | [Contributing](./CONTRIBUTING.md)
+v3.6.7-aug.1 | [Issues](https://github.com/fengshao1227/ccg-workflow/issues) | [Contributing](./CONTRIBUTING.md)

@@ -14,7 +14,12 @@ export {
   getConfigPath,
 } from './utils/config'
 export {
+  SPONSORS,
+  configureAllSponsorsForCodex,
   configureApiMartForCodex,
+  configurePackyCodeForCodex,
+  configureSponsorForCodex,
+  getSponsor,
   getWorkflowConfigs,
   getWorkflowById,
   installWorkflows,
@@ -22,10 +27,21 @@ export {
   installAceTool,
   installAceToolRs,
   installCodexMode,
+  removeAllSponsorsFromCodex,
   removeApiMartFromCodex,
+  removePackyCodeFromCodex,
+  removeSponsorFromCodex,
   uninstallCodexMode,
   uninstallWorkflows,
   uninstallAceTool,
+} from './utils/installer'
+export type {
+  CodexApiResult,
+  CodexProviderSpec,
+  CodexProviderStatus,
+  CodexSponsorResult,
+  CodexSponsorsResult,
+  SponsorGateway,
 } from './utils/installer'
 export {
   DSH_PLUGIN_NAME,

@@ -1,6 +1,6 @@
 import { spawn, spawnSync } from 'node:child_process'
 import { execFileSync } from 'node:child_process'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { lstatSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -17,6 +17,11 @@ interface CommandResult {
 }
 
 interface StateValue {
+  stateId: string | null
+  revision: number
+}
+
+interface BindingValue {
   stateId: string | null
   revision: number
   activeTaskId: string | null
@@ -48,6 +53,16 @@ const hooksDir = join(packageRoot, 'templates', 'hooks')
 const controllerPath = join(hooksDir, 'task-state.js')
 const codexHookSource = join(packageRoot, 'templates', 'codex', 'hooks', 'ccg-workflow.py')
 const cleanupPaths = new Set<string>()
+const DEFAULT_SESSION_ID = 'claude-test-session'
+
+function deriveSessionKey(namespace: 'claude' | 'codex', sessionId: string): string {
+  const digest = createHash('sha256').update(`${namespace}\0${sessionId}`, 'utf-8').digest('hex')
+  return `${namespace}-${digest}`
+}
+
+const DEFAULT_SESSION_KEY = deriveSessionKey('claude', DEFAULT_SESSION_ID)
+const CODEX_SESSION_ID = 'codex-test'
+const CODEX_SESSION_KEY = deriveSessionKey('codex', CODEX_SESSION_ID)
 
 function git(root: string, args: string[]): string {
   return execFileSync('git', args, { cwd: root, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
@@ -105,8 +120,14 @@ function runScript(
   return { status: result.status, output, stdout, stderr: result.stderr || '' }
 }
 
-function runController(root: string, operation: string, request?: JsonObject, options: string[] = []): CommandResult {
-  return runScript(controllerPath, [operation, '--root', root, ...options], request, root)
+function runController(
+  root: string,
+  operation: string,
+  request?: JsonObject,
+  options: string[] = [],
+  sessionKey = DEFAULT_SESSION_KEY
+): CommandResult {
+  return runScript(controllerPath, [operation, '--root', root, '--session-key', sessionKey, ...options], request, root)
 }
 
 function runHook(
@@ -115,7 +136,10 @@ function runHook(
   input: JsonObject,
   envOverrides: NodeJS.ProcessEnv = {}
 ): CommandResult {
-  return runScript(join(hooksDir, hookName), [], input, root, envOverrides)
+  const hookInput = Object.prototype.hasOwnProperty.call(input, 'session_id')
+    ? input
+    : { ...input, session_id: DEFAULT_SESSION_ID }
+  return runScript(join(hooksDir, hookName), [], hookInput, root, envOverrides)
 }
 
 function expectSuccess(result: CommandResult): JsonObject {
@@ -131,15 +155,16 @@ function expectFailure(result: CommandResult, code: string): JsonObject {
   return result.output
 }
 
-function resolve(root: string): JsonObject {
-  return expectSuccess(runController(root, 'resolve'))
+function resolve(root: string, sessionKey = DEFAULT_SESSION_KEY): JsonObject {
+  return expectSuccess(runController(root, 'resolve', undefined, [], sessionKey))
 }
 
-function currentExpected(root: string, includeTask = false): JsonObject {
-  const current = resolve(root)
+function currentExpected(root: string, includeTask = false, sessionKey = DEFAULT_SESSION_KEY): JsonObject {
+  const current = resolve(root, sessionKey)
   const expected: JsonObject = {
     stateId: current.stateId,
     stateRevision: current.stateRevision,
+    bindingRevision: current.bindingRevision,
     activeTaskId: current.activeTaskId,
   }
   if (includeTask) expected.taskRevision = current.taskRevision
@@ -163,24 +188,42 @@ function taskInput(id: string, overrides: JsonObject = {}): JsonObject {
   }
 }
 
-function startTask(root: string, id: string, mode = 'activate', overrides: JsonObject = {}): JsonObject {
+function startTask(
+  root: string,
+  id: string,
+  mode = 'activate',
+  overrides: JsonObject = {},
+  sessionKey = DEFAULT_SESSION_KEY
+): JsonObject {
   return expectSuccess(
-    runController(root, 'start', {
-      expected: currentExpected(root),
-      mode,
-      task: taskInput(id, overrides),
-      requirements: `# Requirements\n\n## Objective\n\nComplete ${id}.\n\n## Constraints\n\nFollow the linked specification.\n`,
-    })
+    runController(
+      root,
+      'start',
+      {
+        expected: currentExpected(root, false, sessionKey),
+        mode,
+        task: taskInput(id, overrides),
+        requirements: `# Requirements\n\n## Objective\n\nComplete ${id}.\n\n## Constraints\n\nFollow the linked specification.\n`,
+      },
+      [],
+      sessionKey
+    )
   )
 }
 
-function finishActive(root: string, status = 'completed'): JsonObject {
+function finishActive(root: string, status = 'completed', sessionKey = DEFAULT_SESSION_KEY): JsonObject {
   return expectSuccess(
-    runController(root, 'finish', {
-      expected: currentExpected(root, true),
-      status,
-      progress: `# Progress\n\n${status}\n`,
-    })
+    runController(
+      root,
+      'finish',
+      {
+        expected: currentExpected(root, true, sessionKey),
+        status,
+        progress: `# Progress\n\n${status}\n`,
+      },
+      [],
+      sessionKey
+    )
   )
 }
 
@@ -206,11 +249,16 @@ async function installCodexHookRuntime(): Promise<string> {
 function runCodexHook(root: string, hookPath: string, agentType = ''): CommandResult {
   const result = spawnSync('python3', [hookPath], {
     cwd: root,
-    input: JSON.stringify({ cwd: root, session_id: 'codex-test' }),
+    input: JSON.stringify({
+      cwd: root,
+      session_id: CODEX_SESSION_ID,
+      agent_id: agentType ? 'leaf-agent-id' : null,
+      agent_type: agentType || null,
+    }),
     encoding: 'utf-8',
     env: {
       ...process.env,
-      CODEX_AGENT_TYPE: agentType,
+      CODEX_AGENT_TYPE: '',
       CODEX_FORK_TURNS: '',
       CODEX_PROJECT_DIR: '',
     },
@@ -222,11 +270,15 @@ function runCodexHook(root: string, hookPath: string, agentType = ''): CommandRe
 
 function asyncController(root: string, operation: string, request: JsonObject): Promise<CommandResult> {
   return new Promise((resolveChild, reject) => {
-    const child = spawn(process.execPath, [controllerPath, operation, '--root', root], {
-      cwd: root,
-      env: { ...process.env, CLAUDE_PROJECT_DIR: '' },
-      stdio: ['pipe', 'pipe', 'pipe'],
-    })
+    const child = spawn(
+      process.execPath,
+      [controllerPath, operation, '--root', root, '--session-key', DEFAULT_SESSION_KEY],
+      {
+        cwd: root,
+        env: { ...process.env, CLAUDE_PROJECT_DIR: '' },
+        stdio: ['pipe', 'pipe', 'pipe'],
+      }
+    )
     let stdout = ''
     let stderr = ''
     child.stdout.setEncoding('utf-8')
@@ -272,7 +324,9 @@ describe('persistent task state controller', () => {
       code: 'SELECTION_REQUIRED',
       activeTaskId: null,
     })
-    expect(current.candidates).toEqual([{ id: 'alpha-task', title: 'Task alpha-task', revision: 1 }])
+    expect(current.candidates).toEqual([
+      { id: 'alpha-task', title: 'Task alpha-task', revision: 1, status: 'open', claimed: false },
+    ])
     expect(await fs.pathExists(join(root, '.ccg', 'tasks', 'zeta-task', 'task.json'))).toBe(true)
 
     const activated = expectSuccess(
@@ -281,7 +335,7 @@ describe('persistent task state controller', () => {
         taskId: 'alpha-task',
       })
     )
-    expect((activated.state as StateValue).activeTaskId).toBe('alpha-task')
+    expect((activated.binding as BindingValue).activeTaskId).toBe('alpha-task')
   })
 
   it('returns through nested interrupted tasks without moving task directories', async () => {
@@ -290,9 +344,9 @@ describe('persistent task state controller', () => {
     startTask(root, 'child-task', 'interrupt')
     startTask(root, 'grandchild-task', 'interrupt')
 
-    expect((finishActive(root).state as StateValue).activeTaskId).toBe('child-task')
-    expect((finishActive(root).state as StateValue).activeTaskId).toBe('parent-task')
-    expect((finishActive(root).state as StateValue).activeTaskId).toBeNull()
+    expect((finishActive(root).binding as BindingValue).activeTaskId).toBe('child-task')
+    expect((finishActive(root).binding as BindingValue).activeTaskId).toBe('parent-task')
+    expect((finishActive(root).binding as BindingValue).activeTaskId).toBeNull()
 
     for (const id of ['parent-task', 'child-task', 'grandchild-task']) {
       const task = await fs.readJson(join(root, '.ccg', 'tasks', id, 'task.json'))
@@ -326,12 +380,13 @@ describe('persistent task state controller', () => {
         expected: {
           stateId: current.stateId,
           stateRevision: current.stateRevision,
+          bindingRevision: current.bindingRevision,
           activeTaskId: current.activeTaskId,
           taskRevision: current.taskRevision,
         },
       })
     )
-    expect((recovered.state as StateValue).activeTaskId).toBe('parent-task')
+    expect((recovered.binding as BindingValue).activeTaskId).toBe('parent-task')
   })
 
   it('recovers a missing active target using state CAS only', async () => {
@@ -352,12 +407,13 @@ describe('persistent task state controller', () => {
         expected: {
           stateId: current.stateId,
           stateRevision: current.stateRevision,
+          bindingRevision: current.bindingRevision,
           activeTaskId: current.activeTaskId,
         },
       })
     )
     expect(recovered).toMatchObject({ task: null, recoveredReason: 'ACTIVE_TASK_MISSING' })
-    expect((recovered.state as StateValue).activeTaskId).toBeNull()
+    expect((recovered.binding as BindingValue).activeTaskId).toBeNull()
     expect(resolve(root)).toMatchObject({ kind: 'none', activeTaskId: null })
   })
 
@@ -389,7 +445,7 @@ describe('persistent task state controller', () => {
       asyncController(root, 'checkpoint', request('second')),
     ])
     expect(results.filter((result) => result.output.ok === true)).toHaveLength(1)
-    expect(results.filter((result) => result.output.code === 'REVISION_CONFLICT')).toHaveLength(1)
+    expect(results.filter((result) => result.output.code === 'TASK_REVISION_CONFLICT')).toHaveLength(1)
     expect(resolve(root).taskRevision as number).toBe(2)
   })
 
@@ -443,7 +499,7 @@ describe('persistent task state controller', () => {
     expect((await fs.readJson(lockPath)).nonce).toBe(nonce)
   })
 
-  it('migrates legacy tasks only after an explicit active-task choice', async () => {
+  it('migrates legacy tasks without assigning them to a session', async () => {
     const root = await createProject()
     const legacyDir = join(root, '.ccg', 'tasks', 'legacy-task')
     await fs.ensureDir(legacyDir)
@@ -478,20 +534,16 @@ describe('persistent task state controller', () => {
     )
 
     expect(resolve(root)).toMatchObject({ kind: 'migration-required', code: 'TASK_MIGRATION_REQUIRED' })
-    expectFailure(
-      runController(root, 'migrate-legacy', {
-        expected: { stateId: null, stateRevision: 0, activeTaskId: null },
-      }),
-      'INVALID_REQUEST'
-    )
+    const preflight = expectSuccess(runController(root, 'preflight-legacy'))
+    expect(preflight).toMatchObject({ migrationRequired: true, blockedTaskIds: [] })
 
     const migrated = expectSuccess(
       runController(root, 'migrate-legacy', {
-        expected: { stateId: null, stateRevision: 0, activeTaskId: null },
-        activeTaskId: 'legacy-task',
+        expected: { stateId: null, stateRevision: 0, bindingRevision: 0, activeTaskId: null },
       })
     )
-    expect((migrated.state as StateValue).activeTaskId).toBe('legacy-task')
+    expect(migrated.binding).toMatchObject({ revision: 0, activeTaskId: null })
+    expect(resolve(root)).toMatchObject({ kind: 'selection-required', activeTaskId: null })
     const task = (await fs.readJson(join(legacyDir, 'task.json'))) as TaskValue
     expect(task).toMatchObject({ schemaVersion: 1, revision: 1, status: 'open' })
     expect(task.specRefs).toEqual([
@@ -505,6 +557,80 @@ describe('persistent task state controller', () => {
     expect(await fs.pathExists(join(legacyDir, 'requirements.md'))).toBe(true)
     expect(await fs.pathExists(join(root, '.ccg', 'migrations', 'v1', 'legacy-task', 'task.json'))).toBe(true)
     expect(await fs.pathExists(join(root, '.ccg', 'migrations', 'v1', 'legacy-task', 'context.jsonl'))).toBe(true)
+  })
+
+  it('requires migration for terminal legacy tasks even when no state file exists', async () => {
+    const root = await createProject()
+    const legacyDir = join(root, '.ccg', 'tasks', 'terminal-legacy-task')
+    await fs.ensureDir(legacyDir)
+    await fs.writeJson(join(legacyDir, 'task.json'), {
+      id: 'terminal-legacy-task',
+      title: 'Terminal legacy task',
+      status: 'completed',
+      completedAt: new Date().toISOString(),
+    })
+
+    const current = resolve(root)
+    expect(current).toMatchObject({
+      kind: 'migration-required',
+      code: 'TASK_MIGRATION_REQUIRED',
+      candidates: [],
+    })
+    expectSuccess(
+      runController(root, 'migrate-legacy', {
+        expected: { stateId: null, stateRevision: 0, bindingRevision: 0, activeTaskId: null },
+      })
+    )
+    expect(resolve(root)).toMatchObject({ kind: 'none' })
+    expect(await fs.readJson(join(legacyDir, 'task.json'))).toMatchObject({
+      schemaVersion: 1,
+      status: 'completed',
+    })
+  })
+
+  it('reports explicit task migration when legacy tasks coexist with state schema v2', async () => {
+    const root = await createProject()
+    const legacyDir = join(root, '.ccg', 'tasks', 'state-v2-legacy-task')
+    await fs.ensureDir(legacyDir)
+    await fs.writeJson(join(legacyDir, 'task.json'), {
+      id: 'state-v2-legacy-task',
+      title: 'State v2 legacy task',
+      status: 'active',
+    })
+    await fs.writeJson(join(root, '.ccg', 'state.json'), {
+      schemaVersion: 2,
+      stateId: randomUUID(),
+      revision: 1,
+      updatedAt: new Date().toISOString(),
+    })
+
+    const current = resolve(root)
+    expect(current).toMatchObject({
+      kind: 'migration-required',
+      code: 'TASK_MIGRATION_REQUIRED',
+      activeTaskId: null,
+    })
+    expect(current.candidates).toEqual([
+      {
+        id: 'state-v2-legacy-task',
+        title: 'State v2 legacy task',
+        revision: 0,
+        status: 'open',
+        claimed: false,
+      },
+    ])
+
+    expectSuccess(
+      runController(root, 'migrate-legacy', {
+        expected: {
+          stateId: current.stateId,
+          stateRevision: current.stateRevision,
+          bindingRevision: 0,
+          activeTaskId: null,
+        },
+      })
+    )
+    expect(resolve(root)).toMatchObject({ kind: 'selection-required' })
   })
 
   it('keeps runtime state local to a linked Git worktree', async () => {
@@ -536,7 +662,7 @@ describe('persistent task state controller', () => {
     expect(resolve(root)).toMatchObject({ kind: 'invalid', code: 'STATE_PATH_INVALID' })
     expectFailure(
       runController(root, 'start', {
-        expected: { stateId: null, stateRevision: 0, activeTaskId: null },
+        expected: { stateId: null, stateRevision: 0, bindingRevision: 0, activeTaskId: null },
         mode: 'activate',
         task: taskInput('external-runtime-task'),
         requirements: '# Requirements\n',
@@ -546,7 +672,7 @@ describe('persistent task state controller', () => {
     expect(await fs.readdir(outside)).toEqual([])
   })
 
-  it.each(['tasks', 'tmp'])('rejects a symlinked .ccg/%s runtime directory', async (directory) => {
+  it.each(['tasks', 'sessions'])('rejects a symlinked .ccg/%s runtime directory', async (directory) => {
     const root = await createProject()
     const outside = `${root}-${directory}-outside`
     cleanupPaths.add(outside)
@@ -556,12 +682,12 @@ describe('persistent task state controller', () => {
 
     expectFailure(
       runController(root, 'start', {
-        expected: { stateId: null, stateRevision: 0, activeTaskId: null },
+        expected: { stateId: null, stateRevision: 0, bindingRevision: 0, activeTaskId: null },
         mode: 'activate',
         task: taskInput(`${directory}-symlink-task`),
         requirements: '# Requirements\n',
       }),
-      'PATH_INVALID'
+      directory === 'sessions' ? 'BINDING_PATH_INVALID' : 'PATH_INVALID'
     )
     expect(await fs.readdir(outside)).toEqual([])
   })
@@ -596,7 +722,7 @@ describe('persistent task state controller', () => {
     await fs.symlink(migrationOutside, join(migrationRoot, '.ccg', 'migrations'))
     expectFailure(
       runController(migrationRoot, 'migrate-legacy', {
-        expected: { stateId: null, stateRevision: 0, activeTaskId: null },
+        expected: { stateId: null, stateRevision: 0, bindingRevision: 0, activeTaskId: null },
         activeTaskId: 'legacy-symlink-task',
       }),
       'PATH_INVALID'
@@ -648,6 +774,7 @@ describe('persistent task state controller', () => {
         expected: {
           stateId: current.stateId,
           stateRevision: current.stateRevision,
+          bindingRevision: current.bindingRevision,
           activeTaskId: current.activeTaskId,
           taskRevision: task.revision,
         },
@@ -663,6 +790,7 @@ describe('persistent task state controller', () => {
         expected: {
           stateId: current.stateId,
           stateRevision: current.stateRevision,
+          bindingRevision: current.bindingRevision,
           activeTaskId: current.activeTaskId,
         },
       })
@@ -674,6 +802,80 @@ describe('persistent task state controller', () => {
     expect(resolve(root)).toMatchObject({ kind: 'active', taskRevision: 2 })
   })
 
+  it('recovers a start transaction before state.json has been created', async () => {
+    const root = await createProject()
+    startTask(root, 'start-recovery-task')
+    const taskDir = join(root, '.ccg', 'tasks', 'start-recovery-task')
+    const stateContent = await fs.readFile(join(root, '.ccg', 'state.json'), 'utf-8')
+    const bindingContent = await fs.readFile(join(root, '.ccg', 'sessions', `${DEFAULT_SESSION_KEY}.json`), 'utf-8')
+    const taskContent = await fs.readFile(join(taskDir, 'task.json'), 'utf-8')
+    const requirements = await fs.readFile(join(taskDir, 'requirements.md'), 'utf-8')
+    const progress = await fs.readFile(join(taskDir, 'progress.md'), 'utf-8')
+
+    await fs.remove(join(root, '.ccg'))
+    await fs.ensureDir(join(root, '.ccg'))
+    await fs.writeJson(join(root, '.ccg', 'transaction.json'), {
+      schemaVersion: 1,
+      transactionId: randomUUID(),
+      operation: 'start',
+      taskId: 'start-recovery-task',
+      sessionKey: DEFAULT_SESSION_KEY,
+      createdAt: new Date().toISOString(),
+      writes: [
+        { path: '.ccg/tasks/start-recovery-task/requirements.md', content: requirements },
+        { path: '.ccg/tasks/start-recovery-task/progress.md', content: progress },
+        { path: '.ccg/tasks/start-recovery-task/task.json', content: taskContent },
+        { path: '.ccg/state.json', content: stateContent },
+        { path: `.ccg/sessions/${DEFAULT_SESSION_KEY}.json`, content: bindingContent },
+      ],
+    })
+
+    const current = resolve(root)
+    expect(current).toMatchObject({
+      kind: 'recovery-required',
+      reasonCode: 'INCOMPLETE_TRANSACTION',
+      stateId: null,
+      stateRevision: 0,
+      bindingRevision: 0,
+    })
+    const recovered = expectSuccess(
+      runController(root, 'recover', {
+        expected: {
+          stateId: null,
+          stateRevision: 0,
+          bindingRevision: 0,
+          activeTaskId: null,
+        },
+      })
+    )
+    expect(recovered).toMatchObject({
+      recoveredReason: 'INCOMPLETE_TRANSACTION',
+      resumedTaskId: 'start-recovery-task',
+    })
+    expect(resolve(root)).toMatchObject({ kind: 'active', activeTaskId: 'start-recovery-task' })
+  })
+
+  it('allows task migration in a project that is not inside a Git worktree', async () => {
+    const root = await fs.mkdtemp(join(tmpdir(), 'ccg-non-git-task-state-'))
+    cleanupPaths.add(root)
+    await fs.writeJson(join(root, 'package.json'), { name: 'non-git-fixture', private: true })
+    const orphanDir = join(root, '.ccg', 'tasks', 'historical-export')
+    await fs.ensureDir(orphanDir)
+    await fs.writeFile(join(orphanDir, 'payload.bin'), 'preserve\n')
+
+    const quarantined = expectSuccess(
+      runController(root, 'quarantine-orphans', {
+        expected: { stateId: null, stateRevision: 0, bindingRevision: 0, activeTaskId: null },
+      })
+    )
+
+    expect(quarantined.quarantined).toEqual(['historical-export'])
+    expect(await fs.pathExists(orphanDir)).toBe(false)
+    expect(
+      await fs.pathExists(join(root, '.ccg', 'historical-artifacts', 'orphans', 'historical-export', 'payload.bin'))
+    ).toBe(true)
+  })
+
   it('preserves an oversized Git exclude file instead of replacing it with truncated content', async () => {
     const root = await createProject()
     const excludePath = join(root, '.git', 'info', 'exclude')
@@ -682,7 +884,7 @@ describe('persistent task state controller', () => {
 
     expectFailure(
       runController(root, 'start', {
-        expected: { stateId: null, stateRevision: 0, activeTaskId: null },
+        expected: { stateId: null, stateRevision: 0, bindingRevision: 0, activeTaskId: null },
         mode: 'activate',
         task: taskInput('exclude-preservation-task'),
         requirements: '# Requirements\n',
@@ -1147,7 +1349,7 @@ describe('session and sub-agent Hooks', () => {
     expect((agent.updatedInput as JsonObject).prompt).not.toContain('environment-task')
   })
 
-  it('restores the same complete task context for startup, resume, compact, clear, and fork', async () => {
+  it('restores one session across startup, resume, compact, and clear without inheriting on fork', async () => {
     const root = await createProject()
     startTask(root, 'restore-task')
     expectSuccess(
@@ -1169,9 +1371,9 @@ describe('session and sub-agent Hooks', () => {
       })
     )
 
-    const contexts = ['startup', 'resume', 'compact', 'clear', 'fork'].map((source) => {
+    const contexts = ['startup', 'resume', 'compact', 'clear'].map((source) => {
       const output = hookOutput(
-        runHook(root, 'session-start.js', { cwd: root, source, session_id: `session-${source}` })
+        runHook(root, 'session-start.js', { cwd: root, source, session_id: DEFAULT_SESSION_ID })
       )
       return output.additionalContext as string
     })
@@ -1180,6 +1382,12 @@ describe('session and sub-agent Hooks', () => {
     expect(contexts[0]).toContain('Complete restore-task')
     expect(contexts[0]).toContain('Do not merge module-beta')
     expect(contexts[0]).toContain('module-beta is referenced by Planning build system and does not merge')
+
+    const fork = hookOutput(
+      runHook(root, 'session-start.js', { cwd: root, source: 'fork', session_id: 'forked-session' })
+    )
+    expect(fork.additionalContext).toContain('SELECTION_REQUIRED')
+    expect(fork.additionalContext).not.toContain('Complete restore-task')
   })
 
   it('refreshes exact authority on every user prompt without stale task artifacts', async () => {
@@ -1230,7 +1438,7 @@ describe('session and sub-agent Hooks', () => {
       runHook(root, 'workflow-state.js', {
         cwd: root,
         hook_event_name: 'UserPromptSubmit',
-        session_id: 'authority-prompt',
+        session_id: DEFAULT_SESSION_ID,
         prompt: 'Continue',
       })
     )
@@ -1464,6 +1672,27 @@ describe('session and sub-agent Hooks', () => {
     )
     expect((envOutput.updatedInput as JsonObject).command).toContain('<ccg-injected-context>')
 
+    for (const prefix of [
+      'command',
+      'exec',
+      'nohup',
+      'time -p',
+      'nice -n 5',
+      'sudo -u root',
+      'env -u CCG_OLD CCG_TEST=1',
+      'if true; then',
+    ]) {
+      const prefixed = `${prefix} codeagent-wrapper --backend codex - "${root}" <<'EOF'\nCCG_ROLE: implement\n<TASK>Implement.</TASK>\nEOF${prefix.startsWith('if ') ? '\nfi' : ''}`
+      const output = hookOutput(
+        runHook(root, 'subagent-context.js', {
+          cwd: root,
+          tool_name: 'Bash',
+          tool_input: { command: prefixed },
+        })
+      )
+      expect((output.updatedInput as JsonObject).command).toContain('<ccg-injected-context>')
+    }
+
     const unrelatedHeredoc = `codeagent-wrapper --version; cat <<'EOF'\nnot wrapper input\nEOF`
     const denied = hookOutput(
       runHook(root, 'subagent-context.js', {
@@ -1475,6 +1704,28 @@ describe('session and sub-agent Hooks', () => {
     expect(denied.permissionDecision).toBe('deny')
     expect(denied.permissionDecisionReason).toContain('does not belong to the codeagent-wrapper command')
     expect(denied.updatedInput).toBeUndefined()
+  })
+
+  it('ignores wrapper-looking arguments that are not executable command positions', async () => {
+    const root = await createProject()
+    startTask(root, 'wrapper-argument-task')
+
+    for (const command of [
+      'go -C codeagent-wrapper test ./...',
+      'rg -n "codeagent-wrapper" .',
+      'printf "%s\\n" codeagent-wrapper',
+      'command -v codeagent-wrapper',
+      'sudo -u codeagent-wrapper true',
+    ]) {
+      const result = runHook(root, 'subagent-context.js', {
+        cwd: root,
+        tool_name: 'Bash',
+        tool_input: { command },
+      })
+      expect(result.status).toBe(0)
+      expect(result.stdout).toBe('')
+      expect(result.stderr).toBe('')
+    }
   })
 
   it('changes a colliding heredoc delimiter and rejects ambiguous shell structures', async () => {
@@ -1539,7 +1790,7 @@ describe('session and sub-agent Hooks', () => {
       const output = hookOutput(
         runHook(root, 'workflow-state.js', {
           cwd: root,
-          session_id: 'session-a',
+          session_id: DEFAULT_SESSION_ID,
           prompt: `Turn ${turn}`,
         })
       )
@@ -1559,8 +1810,615 @@ describe('session and sub-agent Hooks', () => {
     )
     expect(otherSession.additionalContext).not.toContain('Loop:')
 
-    const missingSession = hookOutput(runHook(root, 'workflow-state.js', { cwd: root, prompt: 'No session id' }))
-    expect(missingSession.additionalContext).toContain('SESSION_ID_MISSING')
+    const missingSession = hookOutput(
+      runHook(root, 'workflow-state.js', { cwd: root, session_id: '', prompt: 'No session id' })
+    )
+    expect(missingSession.additionalContext).toContain('SESSION_KEY_REQUIRED')
+  })
+})
+
+describe('session-scoped bindings and safe migrations', () => {
+  it('keeps two sessions on separate tasks without cross-injecting task contracts', async () => {
+    const root = await createProject()
+    const sessionBId = 'claude-session-b'
+    const sessionBKey = deriveSessionKey('claude', sessionBId)
+    startTask(root, 'session-a-task')
+    startTask(root, 'session-b-task', 'inactive', {}, sessionBKey)
+
+    const beforeActivation = resolve(root, sessionBKey)
+    expect(beforeActivation).toMatchObject({ kind: 'selection-required', bindingRevision: 0 })
+    expectSuccess(
+      runController(
+        root,
+        'activate',
+        {
+          expected: { ...currentExpected(root, false, sessionBKey), taskRevision: 1 },
+          taskId: 'session-b-task',
+        },
+        [],
+        sessionBKey
+      )
+    )
+
+    expect(resolve(root)).toMatchObject({
+      kind: 'active',
+      activeTaskId: 'session-a-task',
+      effectiveStatus: 'in_progress',
+    })
+    expect(resolve(root, sessionBKey)).toMatchObject({
+      kind: 'active',
+      activeTaskId: 'session-b-task',
+      effectiveStatus: 'in_progress',
+    })
+    for (const id of ['session-a-task', 'session-b-task']) {
+      expect((await fs.readJson(join(root, '.ccg', 'tasks', id, 'task.json'))).status).toBe('open')
+    }
+
+    const listed = expectSuccess(runController(root, 'list'))
+    expect(listed.tasks).toContainEqual({
+      id: 'session-b-task',
+      title: 'Task session-b-task',
+      revision: 1,
+      status: 'open',
+      effectiveStatus: 'suspended',
+      claimed: true,
+    })
+    expect(JSON.stringify(listed)).not.toContain('Complete session-b-task')
+
+    const sessionA = hookOutput(
+      runHook(root, 'session-start.js', { cwd: root, source: 'resume', session_id: DEFAULT_SESSION_ID })
+    )
+    expect(sessionA.additionalContext).toContain('Complete session-a-task')
+    expect(sessionA.additionalContext).not.toContain('Complete session-b-task')
+
+    const sessionB = hookOutput(
+      runHook(root, 'session-start.js', { cwd: root, source: 'resume', session_id: sessionBId })
+    )
+    expect(sessionB.additionalContext).toContain('Complete session-b-task')
+    expect(sessionB.additionalContext).not.toContain('Complete session-a-task')
+
+    const agentA = hookOutput(
+      runHook(root, 'subagent-context.js', {
+        cwd: root,
+        session_id: DEFAULT_SESSION_ID,
+        tool_name: 'Agent',
+        tool_input: { name: 'implementer', prompt: 'Implement A' },
+      })
+    )
+    expect((agentA.updatedInput as JsonObject).prompt).toContain('Complete session-a-task')
+    expect((agentA.updatedInput as JsonObject).prompt).not.toContain('Complete session-b-task')
+  })
+
+  it('rejects a claimed task until an explicit takeover transfers the binding', async () => {
+    const root = await createProject()
+    const sessionBKey = deriveSessionKey('claude', 'takeover-session-b')
+    startTask(root, 'claimed-task')
+    const stateRevision = resolve(root).stateRevision
+    const expectedB = { ...currentExpected(root, false, sessionBKey), taskRevision: 1 }
+    const selection = hookOutput(
+      runHook(root, 'session-start.js', {
+        cwd: root,
+        source: 'startup',
+        session_id: 'takeover-session-b',
+      })
+    )
+    expect(selection.additionalContext).toContain('claimed=true')
+    expect(selection.additionalContext).not.toContain('Complete claimed-task')
+
+    expectFailure(
+      runController(root, 'activate', { expected: expectedB, taskId: 'claimed-task' }, [], sessionBKey),
+      'TASK_CLAIMED'
+    )
+    const takeover = expectSuccess(
+      runController(root, 'takeover', { expected: expectedB, taskId: 'claimed-task' }, [], sessionBKey)
+    )
+    expect(takeover).toMatchObject({ changed: true, transferredBindings: 1, effectiveStatus: 'in_progress' })
+    expect(resolve(root, sessionBKey)).toMatchObject({ kind: 'active', activeTaskId: 'claimed-task' })
+    expect(resolve(root)).toMatchObject({ kind: 'selection-required', activeTaskId: null })
+    expect(resolve(root).stateRevision).toBe(stateRevision)
+
+    expectFailure(
+      runController(root, 'activate', { expected: expectedB, taskId: 'claimed-task' }, [], sessionBKey),
+      'BINDING_REVISION_CONFLICT'
+    )
+  })
+
+  it('claims a task together with its open return chain during activation and takeover', async () => {
+    const root = await createProject()
+    const sessionBKey = deriveSessionKey('claude', 'return-chain-session-b')
+    const sessionCKey = deriveSessionKey('claude', 'return-chain-session-c')
+    startTask(root, 'return-parent')
+    startTask(root, 'return-child', 'interrupt')
+    startTask(root, 'replacement-task', 'replace')
+
+    const parentForB = resolve(root, sessionBKey)
+    expectSuccess(
+      runController(
+        root,
+        'activate',
+        {
+          expected: { ...currentExpected(root, false, sessionBKey), taskRevision: 1 },
+          taskId: 'return-parent',
+        },
+        [],
+        sessionBKey
+      )
+    )
+
+    const childForC = resolve(root, sessionCKey)
+    expect(childForC.candidates).toContainEqual({
+      id: 'return-child',
+      title: 'Task return-child',
+      revision: 1,
+      status: 'open',
+      claimed: true,
+    })
+    const expectedC = { ...currentExpected(root, false, sessionCKey), taskRevision: 1 }
+    expectFailure(
+      runController(root, 'activate', { expected: expectedC, taskId: 'return-child' }, [], sessionCKey),
+      'TASK_CLAIMED'
+    )
+
+    const takeover = expectSuccess(
+      runController(root, 'takeover', { expected: expectedC, taskId: 'return-child' }, [], sessionCKey)
+    )
+    expect(takeover).toMatchObject({ changed: true, transferredBindings: 1 })
+    expect(resolve(root, sessionCKey)).toMatchObject({ kind: 'active', activeTaskId: 'return-child' })
+    expect(resolve(root, sessionBKey)).toMatchObject({ kind: 'selection-required', activeTaskId: null })
+    expect(resolve(root)).toMatchObject({ kind: 'active', activeTaskId: 'replacement-task' })
+    expect(parentForB.stateRevision).toBe(resolve(root, sessionCKey).stateRevision)
+  })
+
+  it('exports an opaque session key and never stores the raw Hook session id', async () => {
+    const root = await createProject()
+    startTask(root, 'opaque-session-task')
+    const envFile = join(root, 'claude-env.sh')
+    await fs.writeFile(envFile, '')
+
+    const output = hookOutput(
+      runHook(
+        root,
+        'session-start.js',
+        { cwd: root, source: 'startup', session_id: DEFAULT_SESSION_ID },
+        { CLAUDE_ENV_FILE: envFile }
+      )
+    )
+    const envContent = await fs.readFile(envFile, 'utf-8')
+    expect(envContent).toBe(`export CCG_SESSION_KEY='${DEFAULT_SESSION_KEY}'\n`)
+    expect(envContent).not.toContain(DEFAULT_SESSION_ID)
+    expect(JSON.stringify(output)).not.toContain(DEFAULT_SESSION_ID)
+
+    hookOutput(
+      runHook(root, 'workflow-state.js', {
+        cwd: root,
+        hook_event_name: 'UserPromptSubmit',
+        session_id: DEFAULT_SESSION_ID,
+        prompt: 'Continue',
+      })
+    )
+    const sessionFiles = await fs.readdir(join(root, '.ccg', 'sessions'))
+    const turnFiles = await fs.readdir(join(root, '.ccg', 'tasks', 'opaque-session-task', '.turns'))
+    expect(sessionFiles).toEqual([`${DEFAULT_SESSION_KEY}.json`])
+    expect(turnFiles).toEqual([`${DEFAULT_SESSION_KEY}.json`])
+    expect(sessionFiles.join('\n')).not.toContain(DEFAULT_SESSION_ID)
+    expect(turnFiles.join('\n')).not.toContain(DEFAULT_SESSION_ID)
+  })
+
+  it('refuses a symlinked Claude environment file without modifying its target', async () => {
+    const root = await createProject()
+    const target = join(root, 'env-target.sh')
+    const envFile = join(root, 'claude-env.sh')
+    await fs.writeFile(target, 'preserve\n')
+    await fs.symlink(target, envFile)
+
+    const output = hookOutput(
+      runHook(
+        root,
+        'session-start.js',
+        { cwd: root, source: 'startup', session_id: DEFAULT_SESSION_ID },
+        { CLAUDE_ENV_FILE: envFile }
+      )
+    )
+
+    expect(output.additionalContext).toContain('CLAUDE_ENV_FILE_INVALID')
+    expect(await fs.readFile(target, 'utf-8')).toBe('preserve\n')
+  })
+
+  it('migrates state schema v1 without assigning its legacy pointer to a session', async () => {
+    const root = await createProject()
+    startTask(root, 'legacy-pointer-task')
+    const currentState = (await fs.readJson(join(root, '.ccg', 'state.json'))) as StateValue
+    await fs.remove(join(root, '.ccg', 'sessions'))
+    const legacyState = `${JSON.stringify(
+      {
+        schemaVersion: 1,
+        stateId: currentState.stateId,
+        revision: currentState.revision,
+        activeTaskId: 'legacy-pointer-task',
+        updatedAt: new Date().toISOString(),
+      },
+      null,
+      4
+    )}\n`
+    await fs.writeFile(join(root, '.ccg', 'state.json'), legacyState)
+
+    const migration = resolve(root)
+    expect(migration).toMatchObject({
+      kind: 'migration-required',
+      code: 'STATE_MIGRATION_REQUIRED',
+      legacyActiveTaskId: 'legacy-pointer-task',
+      activeTaskId: null,
+    })
+    const migrated = expectSuccess(
+      runController(root, 'migrate-state', {
+        expected: {
+          stateId: migration.stateId,
+          stateRevision: migration.stateRevision,
+          bindingRevision: 0,
+          activeTaskId: null,
+          legacyActiveTaskId: 'legacy-pointer-task',
+        },
+      })
+    )
+    expect(migrated).toMatchObject({ changed: true, legacyActiveTaskId: 'legacy-pointer-task' })
+    const state = await fs.readJson(join(root, '.ccg', 'state.json'))
+    expect(state).toMatchObject({ schemaVersion: 2, stateId: currentState.stateId })
+    expect(state).not.toHaveProperty('activeTaskId')
+    expect(await fs.readFile(join(root, '.ccg', 'migrations', 'state-v2', 'state.json'), 'utf-8')).toBe(legacyState)
+    expect(resolve(root)).toMatchObject({ kind: 'selection-required', activeTaskId: null })
+  })
+
+  it('repairs a schema v1 canonical in_progress task back to durable open', async () => {
+    const root = await createProject()
+    startTask(root, 'legacy-shape-task')
+    const statePath = join(root, '.ccg', 'state.json')
+    const state = await fs.readJson(statePath)
+    await fs.remove(join(root, '.ccg', 'sessions'))
+    await fs.writeJson(statePath, {
+      schemaVersion: 1,
+      stateId: state.stateId,
+      revision: state.revision,
+      activeTaskId: 'legacy-shape-task',
+      updatedAt: new Date().toISOString(),
+    })
+    const taskPath = join(root, '.ccg', 'tasks', 'legacy-shape-task', 'task.json')
+    const task = await fs.readJson(taskPath)
+    task.status = 'in_progress'
+    task.revision = 2
+    await fs.writeJson(taskPath, task)
+
+    const migration = resolve(root)
+    const repaired = expectSuccess(
+      runController(root, 'repair-status', {
+        expected: {
+          stateId: migration.stateId,
+          stateRevision: migration.stateRevision,
+          bindingRevision: 0,
+          activeTaskId: null,
+          legacyActiveTaskId: 'legacy-shape-task',
+          taskRevision: 2,
+        },
+        taskId: 'legacy-shape-task',
+        repair: 'canonical-in-progress',
+      })
+    )
+    expect(repaired.task).toMatchObject({ status: 'open', revision: 3, finishedAt: null })
+    expect((await fs.readJson(taskPath)).status).toBe('open')
+  })
+
+  it('repairs completed to cancelled only with a superseded migration backup', async () => {
+    const root = await createProject()
+    startTask(root, 'superseded-task')
+    const finished = finishActive(root)
+    const taskBefore = finished.task as TaskValue & JsonObject
+    const finishedAt = taskBefore.finishedAt
+    const backupDir = join(root, '.ccg', 'migrations', 'v1', 'superseded-task')
+    await fs.ensureDir(backupDir)
+    await fs.writeJson(join(backupDir, 'task.json'), { id: 'superseded-task', status: 'superseded' })
+
+    const expected = { ...currentExpected(root), taskRevision: taskBefore.revision }
+    const repaired = expectSuccess(
+      runController(root, 'repair-status', {
+        expected,
+        taskId: 'superseded-task',
+        repair: 'superseded-completed',
+      })
+    )
+    expect(repaired.task).toMatchObject({ status: 'cancelled', revision: taskBefore.revision + 1, finishedAt })
+  })
+
+  it('rejects superseded repair evidence that names another task', async () => {
+    const root = await createProject()
+    startTask(root, 'evidence-target')
+    const finished = finishActive(root)
+    const taskBefore = finished.task as TaskValue & JsonObject
+    const backupDir = join(root, '.ccg', 'migrations', 'v1', 'evidence-target')
+    await fs.ensureDir(backupDir)
+    await fs.writeJson(join(backupDir, 'task.json'), { id: 'different-task', status: 'superseded' })
+
+    expectFailure(
+      runController(root, 'repair-status', {
+        expected: { ...currentExpected(root), taskRevision: taskBefore.revision },
+        taskId: 'evidence-target',
+        repair: 'superseded-completed',
+      }),
+      'STATUS_REPAIR_EVIDENCE_MISSING'
+    )
+    expect(await fs.readJson(join(root, '.ccg', 'tasks', 'evidence-target', 'task.json'))).toMatchObject({
+      status: 'completed',
+      revision: taskBefore.revision,
+    })
+  })
+
+  it('maps unfinished legacy statuses to open and deleted or superseded to cancelled', async () => {
+    const root = await createProject()
+    const fixtures = [
+      ['unfinished-task', 'in_progress'],
+      ['deleted-task', 'deleted'],
+      ['superseded-task', 'superseded'],
+    ] as const
+    let originalTask = ''
+    for (const [id, status] of fixtures) {
+      const taskDir = join(root, '.ccg', 'tasks', id)
+      await fs.ensureDir(taskDir)
+      const source = `{\n  "id": "${id}",\n  "title": "${id}",\n  "status": "${status}"\n}\n`
+      await fs.writeFile(join(taskDir, 'task.json'), source)
+      if (id === 'unfinished-task') originalTask = source
+    }
+
+    const migrated = expectSuccess(
+      runController(root, 'migrate-legacy', {
+        expected: { stateId: null, stateRevision: 0, bindingRevision: 0, activeTaskId: null },
+      })
+    )
+    expect(migrated.migratedTaskIds).toEqual(fixtures.map(([id]) => id).sort())
+    expect((await fs.readJson(join(root, '.ccg', 'tasks', 'unfinished-task', 'task.json'))).status).toBe('open')
+    expect((await fs.readJson(join(root, '.ccg', 'tasks', 'deleted-task', 'task.json'))).status).toBe('cancelled')
+    expect((await fs.readJson(join(root, '.ccg', 'tasks', 'superseded-task', 'task.json'))).status).toBe('cancelled')
+    expect(await fs.readFile(join(root, '.ccg', 'migrations', 'v1', 'unfinished-task', 'task.json'), 'utf-8')).toBe(
+      originalTask
+    )
+  })
+
+  it('truncates multibyte legacy metadata by UTF-8 bytes', async () => {
+    const root = await createProject()
+    const taskDir = join(root, '.ccg', 'tasks', 'multibyte-legacy-task')
+    await fs.ensureDir(taskDir)
+    const repeated = '任'.repeat(1200)
+    await fs.writeJson(join(taskDir, 'task.json'), {
+      id: 'multibyte-legacy-task',
+      title: repeated,
+      status: 'active',
+      strategy: repeated,
+      domain: repeated,
+      scope: repeated,
+      currentPhase: repeated,
+      nextAction: repeated,
+      gate: repeated,
+      branchAtCreation: repeated,
+    })
+
+    expectSuccess(
+      runController(root, 'migrate-legacy', {
+        expected: { stateId: null, stateRevision: 0, bindingRevision: 0, activeTaskId: null },
+      })
+    )
+    const task = await fs.readJson(join(taskDir, 'task.json'))
+    for (const [field, maxBytes] of [
+      ['title', 240],
+      ['strategy', 80],
+      ['domain', 64],
+      ['scope', 1024],
+      ['currentPhase', 64],
+      ['nextAction', 1024],
+      ['gate', 256],
+      ['branchAtCreation', 512],
+    ] as const) {
+      expect(Buffer.byteLength(task[field], 'utf-8')).toBeLessThanOrEqual(maxBytes)
+      expect(task[field]).not.toContain('�')
+    }
+    expect(task).toMatchObject({ schemaVersion: 1, status: 'open' })
+  })
+
+  it('refuses to overwrite or reuse a mismatched legacy migration backup', async () => {
+    const root = await createProject()
+    const taskDir = join(root, '.ccg', 'tasks', 'backup-conflict-task')
+    const source = '{"id":"backup-conflict-task","title":"Source","status":"active"}\n'
+    await fs.ensureDir(taskDir)
+    await fs.writeFile(join(taskDir, 'task.json'), source)
+    const backupDir = join(root, '.ccg', 'migrations', 'v1', 'backup-conflict-task')
+    await fs.ensureDir(backupDir)
+    await fs.writeFile(join(backupDir, 'task.json'), source.replace('Source', 'Stale!'))
+
+    expectFailure(
+      runController(root, 'migrate-legacy', {
+        expected: { stateId: null, stateRevision: 0, bindingRevision: 0, activeTaskId: null },
+      }),
+      'MIGRATION_BACKUP_CONFLICT'
+    )
+    expect(await fs.readFile(join(taskDir, 'task.json'), 'utf-8')).toBe(source)
+  })
+
+  it('resumes the legacy migration state transition without incrementing it twice', async () => {
+    const root = await createProject()
+    const stateId = randomUUID()
+    const targetState = {
+      schemaVersion: 2,
+      stateId,
+      revision: 2,
+      updatedAt: new Date().toISOString(),
+    }
+    await fs.ensureDir(join(root, '.ccg', 'migrations', 'v1'))
+    await fs.writeJson(join(root, '.ccg', 'state.json'), targetState)
+    await fs.writeJson(join(root, '.ccg', 'migrations', 'v1', 'manifest.json'), {
+      schemaVersion: 1,
+      migrationId: randomUUID(),
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      stateApplied: false,
+      stateTransition: {
+        sourceExists: true,
+        sourceStateId: stateId,
+        sourceStateRevision: 1,
+        targetState,
+      },
+      tasks: [],
+    })
+
+    const migrated = expectSuccess(
+      runController(root, 'migrate-legacy', {
+        expected: { stateId, stateRevision: 2, bindingRevision: 0, activeTaskId: null },
+      })
+    )
+    expect((migrated.state as StateValue).revision).toBe(2)
+    expect((await fs.readJson(join(root, '.ccg', 'state.json'))).revision).toBe(2)
+    expect(await fs.readJson(join(root, '.ccg', 'migrations', 'v1', 'manifest.json'))).toMatchObject({
+      status: 'applied',
+      stateApplied: true,
+      stateRevision: 2,
+    })
+  })
+
+  it('backs up an invalid legacy contract before refusing to replace it', async () => {
+    const root = await createProject()
+    const taskDir = join(root, '.ccg', 'tasks', 'oversized-contract-task')
+    await fs.ensureDir(taskDir)
+    await fs.writeJson(join(taskDir, 'task.json'), {
+      id: 'oversized-contract-task',
+      title: 'Oversized contract task',
+      status: 'active',
+    })
+    const oversized = `# Requirements\n\n${'x'.repeat(9 * 1024)}\n`
+    await fs.writeFile(join(taskDir, 'requirements.md'), oversized)
+
+    expectFailure(
+      runController(root, 'migrate-legacy', {
+        expected: { stateId: null, stateRevision: 0, bindingRevision: 0, activeTaskId: null },
+      }),
+      'TASK_CONTRACT_INVALID'
+    )
+    expect(
+      await fs.readFile(join(root, '.ccg', 'migrations', 'v1', 'oversized-contract-task', 'requirements.md'), 'utf-8')
+    ).toBe(oversized)
+    expect((await fs.readJson(join(taskDir, 'task.json'))).schemaVersion).toBeUndefined()
+  })
+
+  it('quarantines and restores an orphan directory by rename without inventing task state', async () => {
+    const root = await createProject()
+    const name = 'user_messages_extract_history_search.json'
+    const orphanDir = join(root, '.ccg', 'tasks', name)
+    const payloadPath = join(orphanDir, 'history.bin')
+    await fs.ensureDir(orphanDir)
+    await fs.writeFile(payloadPath, Buffer.alloc(2 * 1024 * 1024, 7))
+
+    const quarantined = expectSuccess(
+      runController(root, 'quarantine-orphans', {
+        expected: { stateId: null, stateRevision: 0, bindingRevision: 0, activeTaskId: null },
+      })
+    )
+    expect(quarantined.quarantined).toEqual([name])
+    const targetDir = join(root, '.ccg', 'historical-artifacts', 'orphans', name)
+    expect(await fs.pathExists(orphanDir)).toBe(false)
+    expect((await fs.stat(join(targetDir, 'history.bin'))).size).toBe(2 * 1024 * 1024)
+    expect(await fs.pathExists(join(targetDir, 'task.json'))).toBe(false)
+
+    const restored = expectSuccess(
+      runController(root, 'restore-orphans', {
+        expected: currentExpected(root),
+        names: [name],
+      })
+    )
+    expect(restored.restored).toEqual([name])
+    expect(await fs.pathExists(orphanDir)).toBe(true)
+    expect(await fs.pathExists(targetDir)).toBe(false)
+    expect(
+      expectSuccess(
+        runController(root, 'restore-orphans', {
+          expected: currentExpected(root),
+          names: [name],
+        })
+      )
+    ).toMatchObject({ changed: false, restored: [] })
+
+    const requarantined = expectSuccess(
+      runController(root, 'quarantine-orphans', {
+        expected: currentExpected(root),
+      })
+    )
+    expect(requarantined.quarantined).toEqual([name])
+    expect(await fs.pathExists(orphanDir)).toBe(false)
+    expect(await fs.pathExists(targetDir)).toBe(true)
+  })
+
+  it('rejects orphan manifest entries whose paths do not match their names', async () => {
+    const root = await createProject()
+    const orphanDir = join(root, '.ccg', 'tasks', 'safe-orphan')
+    await fs.ensureDir(orphanDir)
+    await fs.ensureDir(join(root, '.ccg', 'historical-artifacts', 'orphans'))
+    const now = new Date().toISOString()
+    await fs.writeJson(join(root, '.ccg', 'historical-artifacts', 'orphans', 'manifest.json'), {
+      schemaVersion: 1,
+      stateApplied: true,
+      stateTransition: null,
+      createdAt: now,
+      updatedAt: now,
+      entries: [
+        {
+          name: 'safe-orphan',
+          source: '.ccg/tasks/another-directory',
+          target: '.ccg/historical-artifacts/orphans/safe-orphan',
+          status: 'pending',
+        },
+      ],
+    })
+
+    expectFailure(
+      runController(root, 'quarantine-orphans', {
+        expected: { stateId: null, stateRevision: 0, bindingRevision: 0, activeTaskId: null },
+      }),
+      'MIGRATION_MANIFEST_INVALID'
+    )
+    expect(await fs.pathExists(orphanDir)).toBe(true)
+  })
+
+  it('resumes orphan restoration after the directory rename', async () => {
+    const root = await createProject()
+    const name = 'interrupted-orphan'
+    const orphanDir = join(root, '.ccg', 'tasks', name)
+    const targetDir = join(root, '.ccg', 'historical-artifacts', 'orphans', name)
+    await fs.ensureDir(orphanDir)
+    await fs.writeFile(join(orphanDir, 'payload.txt'), 'preserve\n')
+    expectSuccess(
+      runController(root, 'quarantine-orphans', {
+        expected: { stateId: null, stateRevision: 0, bindingRevision: 0, activeTaskId: null },
+      })
+    )
+
+    const manifestPath = join(root, '.ccg', 'historical-artifacts', 'orphans', 'manifest.json')
+    const manifest = await fs.readJson(manifestPath)
+    manifest.stateApplied = false
+    manifest.stateTransition = null
+    manifest.updatedAt = new Date().toISOString()
+    await fs.writeJson(manifestPath, manifest)
+    await fs.rename(targetDir, orphanDir)
+
+    const before = resolve(root)
+    const restored = expectSuccess(
+      runController(root, 'restore-orphans', {
+        expected: {
+          stateId: before.stateId,
+          stateRevision: before.stateRevision,
+          bindingRevision: before.bindingRevision,
+          activeTaskId: before.activeTaskId,
+        },
+        names: [name],
+      })
+    )
+    expect(restored).toMatchObject({ changed: true, restored: [name] })
+    expect(await fs.readFile(join(orphanDir, 'payload.txt'), 'utf-8')).toBe('preserve\n')
+    expect(await fs.pathExists(targetDir)).toBe(false)
+    expect(await fs.readJson(manifestPath)).toMatchObject({ stateApplied: true })
   })
 })
 
@@ -1575,6 +2433,7 @@ describe('default OpenSpec task authority', () => {
     expect(implementation).toContain('CCG_ROLE: implement')
     for (const command of [research, plan, implementation]) {
       expect(command).toContain('task-state.js resolve')
+      expect(command).toContain('--session-key "$CCG_SESSION_KEY"')
       expect(command).toContain('openspec/changes/<change_id>/')
       expect(command).toContain('spec_artifacts_must_be_tracked')
       expect(command).toContain('must never run `git add` automatically')
@@ -1623,6 +2482,7 @@ describe('skill router Hook', () => {
       join(packageRoot, 'templates', 'commands', 'spec-research.md'),
       join(packageRoot, 'templates', 'commands', 'spec-plan.md'),
       join(packageRoot, 'templates', 'commands', 'spec-init.md'),
+      join(packageRoot, 'templates', 'codex', 'hooks', 'ccg-workflow.py'),
     ]
 
     for (const sourceFile of sourceFiles) {
@@ -1636,7 +2496,7 @@ describe('Codex shared task Hook', () => {
   it('injects all linked spec roles into the main Codex session', async () => {
     const root = await createProject()
     const hookPath = await installCodexHookRuntime()
-    startTask(root, 'codex-main-task')
+    startTask(root, 'codex-main-task', 'activate', {}, CODEX_SESSION_KEY)
     for (const specRef of [
       {
         path: 'docs/integration.md',
@@ -1652,15 +2512,23 @@ describe('Codex shared task Hook', () => {
       },
     ]) {
       expectSuccess(
-        runController(root, 'link-spec', {
-          expected: currentExpected(root, true),
-          specRef,
-        })
+        runController(
+          root,
+          'link-spec',
+          {
+            expected: currentExpected(root, true, CODEX_SESSION_KEY),
+            specRef,
+          },
+          [],
+          CODEX_SESSION_KEY
+        )
       )
     }
 
     const output = hookOutput(runCodexHook(root, hookPath))
     const context = output.additionalContext as string
+    expect(context).toContain(`<ccg-session-key>${CODEX_SESSION_KEY}</ccg-session-key>`)
+    expect(context).not.toContain(CODEX_SESSION_ID)
     expect(context).toContain('module-beta is referenced by Planning build system and does not merge')
     expect(context).toContain('Reject any plan that merges Planning, module-beta, or module-gamma')
     expect(context.indexOf('AUTHORITATIVE LINKED SPEC SECTIONS')).toBeLessThan(
@@ -1671,7 +2539,7 @@ describe('Codex shared task Hook', () => {
   it('injects the matching task snapshot into Codex leaf agents', async () => {
     const root = await createProject()
     const hookPath = await installCodexHookRuntime()
-    startTask(root, 'codex-leaf-task')
+    startTask(root, 'codex-leaf-task', 'activate', {}, CODEX_SESSION_KEY)
     for (const specRef of [
       {
         path: 'docs/integration.md',
@@ -1687,16 +2555,23 @@ describe('Codex shared task Hook', () => {
       },
     ]) {
       expectSuccess(
-        runController(root, 'link-spec', {
-          expected: currentExpected(root, true),
-          specRef,
-        })
+        runController(
+          root,
+          'link-spec',
+          {
+            expected: currentExpected(root, true, CODEX_SESSION_KEY),
+            specRef,
+          },
+          [],
+          CODEX_SESSION_KEY
+        )
       )
     }
 
     const output = hookOutput(runCodexHook(root, hookPath, 'ccg-review'))
     const context = output.additionalContext as string
     expect(context).toContain('SUB-AGENT NOTICE')
+    expect(context).not.toContain('<ccg-session-key>')
     expect(context).toContain('codex-leaf-task')
     expect(context).toContain('Reject any plan that merges Planning, module-beta, or module-gamma')
     expect(context).not.toContain('module-beta is referenced by Planning build system and does not merge')
@@ -1705,21 +2580,33 @@ describe('Codex shared task Hook', () => {
   it('includes research artifacts and omits oversized optional blocks without truncating XML', async () => {
     const root = await createProject()
     const hookPath = await installCodexHookRuntime()
-    startTask(root, 'codex-budget-task')
+    startTask(root, 'codex-budget-task', 'activate', {}, CODEX_SESSION_KEY)
     expectSuccess(
-      runController(root, 'write-artifact', {
-        expected: currentExpected(root, true),
-        kind: 'research',
-        name: 'finding.md',
-        content: '# Finding\n\nRESEARCH_SENTINEL\n',
-      })
+      runController(
+        root,
+        'write-artifact',
+        {
+          expected: currentExpected(root, true, CODEX_SESSION_KEY),
+          kind: 'research',
+          name: 'finding.md',
+          content: '# Finding\n\nRESEARCH_SENTINEL\n',
+        },
+        [],
+        CODEX_SESSION_KEY
+      )
     )
     expectSuccess(
-      runController(root, 'write-artifact', {
-        expected: currentExpected(root, true),
-        kind: 'plan',
-        content: `# Plan\n\nPLAN_SENTINEL\n${'&'.repeat(7000)}\n`,
-      })
+      runController(
+        root,
+        'write-artifact',
+        {
+          expected: currentExpected(root, true, CODEX_SESSION_KEY),
+          kind: 'plan',
+          content: `# Plan\n\nPLAN_SENTINEL\n${'&'.repeat(7000)}\n`,
+        },
+        [],
+        CODEX_SESSION_KEY
+      )
     )
 
     const output = hookOutput(runCodexHook(root, hookPath))

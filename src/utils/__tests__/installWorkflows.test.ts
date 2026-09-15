@@ -40,10 +40,10 @@ describe('installWorkflows E2E — additional backend prompts', () => {
         review: {
           profiles: [
             { id: 'gpt', model: 'gpt-5.6-sol', effort: 'xhigh' },
-            { id: 'grok', model: 'grok-4.5', effort: 'high' },
+            { id: 'grok', model: 'grok-4.6', effort: 'high' },
           ],
         },
-        grokModel: 'grok-4.5',
+        grokModel: 'grok-4.6',
         kimiModel: 'kimi-code',
         opencodeModel: 'anthropic/claude-opus-5',
       },
@@ -138,10 +138,10 @@ describe('syncRoutingTemplates', () => {
         review: {
           profiles: [
             { id: 'gpt', model: 'gpt-5.6-sol', effort: 'xhigh' },
-            { id: 'grok', model: 'grok-4.5', effort: 'high' },
+            { id: 'grok', model: 'grok-4.6', effort: 'high' },
           ],
         },
-        grokModel: 'grok-4.5',
+        grokModel: 'grok-4.6',
         opencodeModel: 'anthropic/claude-opus-5',
       },
     })
@@ -188,7 +188,7 @@ describe('syncRoutingTemplates', () => {
         review: {
           profiles: [
             { id: 'gpt', model: 'gpt-5.6-sol', effort: 'xhigh' },
-            { id: 'grok', model: 'grok-4.5', effort: 'high' },
+            { id: 'grok', model: 'grok-4.6', effort: 'high' },
           ],
         },
       },
@@ -216,7 +216,7 @@ describe('syncRoutingTemplates', () => {
     expect(result.success).toBe(true)
     const command = readFileSync(join(tmpDir, 'commands', 'ccg', 'spec-review.md'), 'utf-8')
     expect(command).toContain('--claude-model gpt-5.6-sol --claude-effort xhigh')
-    expect(command).toContain('--claude-model grok-4.5 --claude-effort high')
+    expect(command).toContain('--claude-model grok-4.6 --claude-effort high')
   })
 
   it('backs up replaced commands and engine files', async () => {
@@ -235,7 +235,7 @@ describe('syncRoutingTemplates', () => {
         review: {
           profiles: [
             { id: 'gpt', model: 'gpt-5.6-sol', effort: 'xhigh' },
-            { id: 'grok', model: 'grok-4.5', effort: 'high' },
+            { id: 'grok', model: 'grok-4.6', effort: 'high' },
           ],
         },
       },
@@ -270,7 +270,7 @@ describe('syncRoutingTemplates', () => {
       review: {
         profiles: [
           { id: 'gpt' as const, model: 'gpt-5.6-sol', effort: 'xhigh' as const },
-          { id: 'grok' as const, model: 'grok-4.5', effort: 'high' as const },
+          { id: 'grok' as const, model: 'grok-4.6', effort: 'high' as const },
         ],
       },
     }

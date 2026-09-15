@@ -15,15 +15,19 @@ import {
   writeCcgConfig,
 } from '../utils/config'
 import {
-  configureApiMartForCodex,
+  configureSponsorForCodex,
   getAllCommandIds,
   getCoreCommandIds,
+  getSponsor,
   installAceTool,
   installContextWeaver,
   installFastContext,
   installMcpServer,
   installWorkflows,
+  promptSponsorInit,
   showBinaryDownloadWarning,
+  sponsorCopy,
+  sponsorInquirerChoices,
   syncMcpToCodex,
   writeFastContextPrompt,
 } from '../utils/installer'
@@ -311,8 +315,9 @@ export async function init(options: InitOptions = {}): Promise<void> {
   // Claude Code API configuration
   let apiUrl = ''
   let apiKey = ''
-  let apimartWireCodex = false
-  let apimartActivateCodex = false
+  let sponsorId = ''
+  let sponsorWireCodex = false
+  let sponsorActivateCodex = false
 
   // ═══════════════════════════════════════════════════════
   // Non-interactive mode (--skip-prompt): preserve existing settings
@@ -376,10 +381,7 @@ export async function init(options: InitOptions = {}): Promise<void> {
           choices: [
             { name: `${ansis.green('●')} ${i18n.t('init:api.officialOption')}`, value: 'official' },
             { name: `${ansis.cyan('●')} ${i18n.t('init:api.thirdPartyOption')}`, value: 'thirdparty' },
-            {
-              name: `${ansis.yellow('★')} ${i18n.t('init:api.sponsorAPIMart')} ${ansis.gray('— https://go.apimart.ai/gh-ccg-workflow')}`,
-              value: 'apimart',
-            },
+            ...sponsorInquirerChoices('init'),
             { name: `${ansis.gray('○')} ${i18n.t('init:api.skipOption')}`, value: 'skip' },
             ...navSentinels(canGoBack),
           ],
@@ -392,49 +394,19 @@ export async function init(options: InitOptions = {}): Promise<void> {
       // Clear stale values before collecting fresh input
       apiUrl = ''
       apiKey = ''
-      apimartWireCodex = false
-      apimartActivateCodex = false
+      sponsorId = ''
+      sponsorWireCodex = false
+      sponsorActivateCodex = false
 
-      if (apiProvider === 'apimart') {
+      const sponsor = getSponsor(apiProvider)
+      if (sponsor) {
         // Claude Code appends /v1/messages, so ANTHROPIC_BASE_URL must not include /v1.
-        apiUrl = 'https://api.apimart.ai'
-        console.log()
-        console.log(
-          `    ${ansis.yellow('★')} ${i18n.t('init:api.sponsorAPIMartGetKey')}: ${ansis.cyan.underline('https://go.apimart.ai/gh-ccg-workflow')}`
-        )
-        console.log()
-        const { key } = await inquirer.prompt([
-          {
-            type: 'password',
-            name: 'key',
-            message: `APIMart API Key ${ansis.gray(`(${i18n.t('init:api.keyRequired')})`)}`,
-            mask: '*',
-            validate: (v: string) => v.trim() !== '' || i18n.t('init:api.enterKey'),
-          },
-        ])
-        apiKey = key?.trim() || ''
-
-        const { wire } = await inquirer.prompt([
-          {
-            type: 'confirm',
-            name: 'wire',
-            message: i18n.t('init:api.apimartCodexPrompt'),
-            default: true,
-          },
-        ])
-        apimartWireCodex = wire
-
-        if (apimartWireCodex) {
-          const { activate } = await inquirer.prompt([
-            {
-              type: 'confirm',
-              name: 'activate',
-              message: i18n.t('init:api.apimartCodexActivatePrompt'),
-              default: false,
-            },
-          ])
-          apimartActivateCodex = activate
-        }
+        apiUrl = sponsor.anthropicBaseUrl
+        sponsorId = sponsor.id
+        const picked = await promptSponsorInit(sponsor)
+        apiKey = picked.apiKey
+        sponsorWireCodex = picked.wireCodex
+        sponsorActivateCodex = picked.activateCodex
       } else if (apiProvider === 'thirdparty') {
         const apiAnswers = await inquirer.prompt([
           {
@@ -524,7 +496,7 @@ export async function init(options: InitOptions = {}): Promise<void> {
             type: 'input',
             name: 'model',
             message: i18n.t('init:model.grokModel'),
-            default: grokModel || 'grok-4.5',
+            default: grokModel || 'grok-4.6',
             validate: (value: string) => value.trim() !== '' || i18n.t('init:model.modelRequired'),
           },
         ])
@@ -979,7 +951,7 @@ export async function init(options: InitOptions = {}): Promise<void> {
     review: reviewRouting || {
       profiles: [
         { id: 'gpt', model: 'gpt-5.6-sol', effort: 'xhigh' },
-        { id: 'grok', model: 'grok-4.5', effort: 'high' },
+        { id: 'grok', model: 'grok-4.6', effort: 'high' },
       ],
       strategy: 'parallel',
     },
@@ -1154,15 +1126,17 @@ export async function init(options: InitOptions = {}): Promise<void> {
       console.log(`    ${ansis.green('✓')} API ${ansis.gray(`→ ${settingsPath}`)}`)
     }
 
-    if (apimartWireCodex) {
-      const codexApi = await configureApiMartForCodex(apimartActivateCodex)
+    if (sponsorWireCodex && sponsorId) {
+      const sponsor = getSponsor(sponsorId)
+      const codexApi = await configureSponsorForCodex(sponsorId, sponsorActivateCodex)
       console.log()
-      if (codexApi.success) {
+      if (codexApi.success && sponsor) {
+        const copy = sponsorCopy(sponsor)
         console.log(`    ${ansis.green('✓')} Codex ${ansis.gray(`→ ${codexApi.configPath}`)}`)
-        console.log(`      ${ansis.gray(i18n.t('init:api.apimartCodexEnvHint'))}`)
-        console.log(`      ${ansis.cyan('export APIMART_API_KEY="<your-apimart-api-key>"')}`)
-        if (!codexApi.activated) {
-          console.log(`      ${ansis.gray(i18n.t('init:api.apimartCodexNotActive'))}`)
+        console.log(`      ${ansis.gray(i18n.t('init:api.sponsorCodexEnvHint', copy))}`)
+        console.log(`      ${ansis.cyan(`export ${sponsor.codex.env_key}="<your-${sponsor.id}-api-key>"`)}`)
+        if (!codexApi.active) {
+          console.log(`      ${ansis.gray(i18n.t('init:api.sponsorCodexNotActive', copy))}`)
         }
       } else {
         console.log(`    ${ansis.yellow('!')} ${codexApi.message}`)

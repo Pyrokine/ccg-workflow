@@ -9,7 +9,7 @@
 [![npm version](https://img.shields.io/npm/v/ccg-workflow.svg)](https://www.npmjs.com/package/ccg-workflow)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-Compatible-green.svg)](https://claude.ai/code)
-[![Tests](https://img.shields.io/badge/Tests-201%20passed-brightgreen.svg)](#)
+[![Tests](https://img.shields.io/badge/Tests-340%20passed-brightgreen.svg)](#)
 [![Follow on X](https://img.shields.io/badge/X-@CCG__Workflow-black?logo=x&logoColor=white)](https://x.com/CCG_Workflow)
 ![star](https://atomgit.com/fengshao1227/ccg-workflow/star/badge.svg)
 [![Docs](https://img.shields.io/badge/Docs-ccg.fengshao1227.com-blue?style=for-the-badge&logo=readthedocs&logoColor=white)](https://github.com/Pyrokine/ccg-workflow/)
@@ -19,6 +19,13 @@
 </div>
 
 ## ♥️ Sponsor
+
+[![PackyCode](assets/sponsors/packycode.png)](https://www.packyapi.ai/register?aff=m21P)
+
+[PackyCode](https://www.packyapi.ai/register?aff=m21P) provides dedicated Claude Code and Codex routes through one domain
+and API key. The installer can configure Claude Code and register its Codex provider without changing the active provider.
+
+---
 
 [![APIMart](assets/sponsors/apimart.jpg)](https://go.apimart.ai/gh-ccg-workflow)
 
@@ -57,10 +64,19 @@ Codex, Antigravity, Grok, Kimi Code, OpenCode, and GPT/Grok external review run 
 
 Gemini CLI is disabled because consumer OAuth requests stopped being processed after 2026-06-18. Legacy Gemini routes migrate to Grok; `agy` remains an Antigravity alias.
 
-## What's new in v3.6.4-aug.1
+## What's new in v3.6.7-aug.1
 
-- APIMart can be selected as the Claude Code API provider. Its Codex provider is registered separately and activated only
-  when selected.
+- Package tarballs use an explicit skills whitelist and exclude `templates/skills/domains/security/`; the red-team and pentest reference notes remain available in Git and are still omitted from default installation.
+- PackyCode joins APIMart in a shared sponsor registry used by init, the API menu, Codex mode, and uninstall.
+- Codex mode merges one managed block into an existing `~/.codex/AGENTS.md`, preserves user Hooks while registering one
+  `UserPromptSubmit` command, creates a pre-install backup, and rolls back every target when installation fails. Its
+  ownership manifest restores pre-existing same-name runtime files and leaves later user edits untouched during uninstall.
+- Sponsor Codex providers are additive, never overwrite existing provider tables or authentication, preserve config file
+  permissions, and activate only after an explicit choice. Uninstall removes only provider tables added by that Codex-mode
+  installation. Current stable Codex Hook and multi-agent defaults are retained instead of forcing obsolete
+  `multi_agent_v2` timeout tables.
+- GPT review remains `gpt-5.6-sol / xhigh`; Grok review now defaults to `grok-4.6 / high`, with exact `grok-4.5` defaults
+  migrated during install.
 - Claude Code can install the skills bundle from this repository as a native plugin. The complete multi-model workflow
   remains available through the installer.
 - `bt-panel`, `seo-page-builder`, and `adsense-site-auditor` add focused web operations workflows.
@@ -75,8 +91,8 @@ v3.0 is a ground-up rewrite. One command replaces 29.
 
 - `/ccg:go` — Describe what you want in plain language. The engine analyzes your intent, picks the right strategy, and
   executes it.
-- **Hook engine** — User prompts receive a bounded task breadcrumb. Startup, resume, clear, compact, and fork restore the complete task contract, artifacts, and exact linked spec sections.
-- **Task persistence** — Persistent strategies give each worktree one explicit active pointer in `.ccg/state.json`. Revision checks, file locking, temporary-task return links, and explicit migration prevent directory-order guesses and stale concurrent writes.
+- **Hook engine** — User prompts receive a bounded task breadcrumb. Startup, resume, clear, and compact restore the current session's complete task contract, artifacts, and exact linked spec sections; fork starts with a new unbound session identity.
+- **Task persistence** — Each worktree stores shared tasks plus opaque per-session bindings. Durable task status remains `open`, `completed`, or `cancelled`; an open task claimed by the current session is exposed as `in_progress`. State, binding, and task revisions reject stale concurrent writes.
 - **Agent Teams** — Large tasks spawn parallel Builder teammates via TeamCreate. Each Builder gets isolated file
   ownership.
 - **Quality gates** — `ccg:verify-security`, `ccg:verify-quality`, `ccg:verify-change` run as Skill invocations inside strategy
@@ -108,7 +124,7 @@ CCG Engine:
   1. Reads project context (git status, tech stack, file structure)
   2. Classifies: feature / L complexity / backend / high risk
   3. Selects strategy: full-collaborate
-  4. Creates .ccg/state.json + .ccg/tasks/add-jwt-auth/
+  4. Creates .ccg/state.json + a session binding + .ccg/tasks/add-jwt-auth/
   5. Writes the complete requirements contract and links exact tracked spec sections
   6. Launches independent Claude Code analysis Agents when both perspectives apply
   7. Produces plan → HARD STOP for your approval
@@ -120,11 +136,11 @@ External CLI routes and GPT/Grok cross-review run only when explicitly requested
 Every turn, a hook injects:
   <ccg-state>
   Task: add-jwt-auth [add-jwt-auth]
-  Status: active
+  Status: in_progress
   Strategy: full-collaborate
   Phase: 4-implementation
   Next: Layer 1 Builders executing
-  Revision: state=3, task=7
+  Revision: state=3, binding=1, task=7
   </ccg-state>
 ```
 
@@ -132,18 +148,18 @@ Every turn, a hook injects:
 
 The engine picks a strategy based on task type and complexity:
 
-| Strategy          | When                           | External models        | Teams |
-| ----------------- | ------------------------------ | ---------------------- | ----- |
-| direct-fix        | Simple bug, single file        | No                     | No    |
-| quick-implement   | Small feature, clear scope     | No                     | No    |
-| guided-develop    | Medium feature, needs planning | Explicit route only    | No    |
-| full-collaborate  | Complex feature, multi-module  | Explicit route only    | Yes   |
-| debug-investigate | Complex bug, unknown cause     | Explicit route only    | No    |
-| refactor-safely   | Code restructuring             | Explicit review only   | No    |
-| deep-research     | Technical research, comparison | Explicit route only    | No    |
-| optimize-measure  | Performance optimization       | Optional               | No    |
-| review-audit      | Code review                    | Explicit review only   | No    |
-| git-action        | commit, rollback, branches     | No                     | No    |
+| Strategy          | When                           | External models      | Teams |
+| ----------------- | ------------------------------ | -------------------- | ----- |
+| direct-fix        | Simple bug, single file        | No                   | No    |
+| quick-implement   | Small feature, clear scope     | No                   | No    |
+| guided-develop    | Medium feature, needs planning | Explicit route only  | No    |
+| full-collaborate  | Complex feature, multi-module  | Explicit route only  | Yes   |
+| debug-investigate | Complex bug, unknown cause     | Explicit route only  | No    |
+| refactor-safely   | Code restructuring             | Explicit review only | No    |
+| deep-research     | Technical research, comparison | Explicit route only  | No    |
+| optimize-measure  | Performance optimization       | Optional             | No    |
+| review-audit      | Code review                    | Explicit review only | No    |
+| git-action        | commit, rollback, branches     | No                   | No    |
 
 Simple tasks run fast with no overhead. Complex tasks get the full engine.
 
@@ -188,22 +204,26 @@ v3.0 installs 12 core commands by default. Legacy mode adds 18 more.
 CCG installs a CommonJS Hook runtime and registers four handler scripts across five Hook event types in
 `~/.claude/settings.json`:
 
-| Hook                  | Event                                              | Purpose                                                                                   |
-| --------------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Hook                  | Event                                                   | Purpose                                                                                   |
+| --------------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
 | `workflow-state.js`   | `UserPromptSubmit`, `PostToolUse`, `PostToolUseFailure` | Refresh exact authority on every prompt and after foreground external results             |
-| `session-start.js`    | `SessionStart`                                     | Restore the full task snapshot on startup, resume, clear, compact, and fork               |
-| `subagent-context.js` | `PreToolUse` for Bash/Agent                        | Modify the actual Agent prompt or wrapper heredoc with role-matched task and spec context |
-| `skill-router.js`     | `UserPromptSubmit`                                 | Inject matching domain knowledge                                                          |
+| `session-start.js`    | `SessionStart`                                          | Restore the full task snapshot on startup, resume, clear, compact, and fork               |
+| `subagent-context.js` | `PreToolUse` for Bash/Agent                             | Modify the actual Agent prompt or wrapper heredoc with role-matched task and spec context |
+| `skill-router.js`     | `UserPromptSubmit`                                      | Inject matching domain knowledge                                                          |
+
+`SessionStart` derives an opaque key from the Claude Code `session_id` and exports it through `CLAUDE_ENV_FILE`. Every controller call and authority refresh uses that key. Agent prompts and wrapper heredocs inherit the parent Claude session binding; raw session IDs are not written to state, binding, or turn files.
 
 `task-state.js` is the only task lifecycle writer. Hook input, task files, and spec sections are size-bounded. Invalid task state, missing or oversized authoritative context, and quoted heredocs that cannot be bound to the wrapper command make the `PreToolUse` Hook return `permissionDecision: "deny"`, so the Agent or wrapper does not start without its task contract.
 
 ## Task System
 
-Persistent strategies use a worktree-local active pointer and fixed task directories:
+Persistent strategies use shared worktree tasks and session-scoped active bindings:
 
 ```text
 .ccg/
-├── state.json                    # stateId, revision, activeTaskId
+├── state.json                    # stateId and shared structure revision; no active pointer
+├── sessions/
+│   └── claude-<sha256>.json      # this session's activeTaskId and binding revision
 ├── state.lock                    # short-lived mutation lock
 ├── transaction.json             # present only while a multi-file mutation needs recovery
 ├── tasks/
@@ -215,12 +235,15 @@ Persistent strategies use a worktree-local active pointer and fixed task directo
 │       ├── plan.md               # optional approved plan
 │       ├── review.md             # optional review result
 │       └── research/             # optional research artifacts
-└── migrations/v1/                # backups created by explicit legacy migration
+├── migrations/                   # byte-preserving state and legacy-task backups
+└── historical-artifacts/orphans/ # reversible quarantine for directories without task.json
 ```
 
-`active` and `suspended` are derived from `state.activeTaskId`; task files persist only `open`, `completed`, or `cancelled`. A temporary task records `returnToTaskId`, so finishing it returns to the nearest open parent. Finished tasks stay at the same path. State changes use `stateId` and revision checks to reject stale or concurrent writes. Artifact, task, and state updates that span files keep a replayable transaction marker until every atomic rename succeeds.
+Task files persist only `open`, `completed`, or `cancelled`. When the current session binding points to an open task, the resolver reports effective `in_progress`; other open tasks are `suspended`. One open task is claimed by one session by default, including its open `returnToTaskId` chain. Selecting a claimed task returns `TASK_CLAIMED`; only an explicit takeover transfers the binding. Finishing or recovering a task updates only the calling session's binding. State, binding, and task compare-and-swap revisions reject stale writes, and multi-file updates keep a replayable transaction marker until every atomic replacement succeeds.
 
-When no pointer exists but open tasks remain, the controller requires an explicit selection. Legacy directories require explicit migration. A terminal or missing active target, or an interrupted transaction, requires explicit recovery. Runtime parent paths must remain ordinary directories inside the worktree; symbolic links are rejected. Branch names and directory timestamps are diagnostic data, never task selectors.
+When a session has no binding but open tasks remain, the controller returns candidate metadata and requires explicit selection. It does not expose another session key or inject another task's requirements, specifications, or artifacts. This is task-routing isolation, not a filesystem secrecy boundary for processes running as the same operating-system user.
+
+Schema v1 state, legacy tasks, evidenced invalid statuses, and orphan directories use separate explicit migration, repair, and quarantine operations. A former global pointer is retained only as a selection hint and is never assigned automatically. Unfinished legacy tasks remain open, while orphan directories are renamed without reading or classifying their contents. Runtime parent paths must remain ordinary directories inside the worktree; symbolic links are rejected. Branch names and directory timestamps are diagnostic data, never task selectors.
 
 ## Specification authority
 
@@ -252,12 +275,12 @@ Execution authority is: exact linked spec sections, `requirements.md`, the user'
 
 The installer and native Claude Code plugin both include these direct skill entries:
 
-| Skill | Purpose |
-| ----- | ------- |
-| `/ccg:frontend-design` | Frontend design entry with 20 internal Impeccable playbooks |
-| `/ccg:bt-panel` | Deploy and manage sites through the BaoTa/aaPanel HTTP API |
-| `/ccg:seo-page-builder` | Create and audit SEO tool pages with a runnable on-page audit script |
-| `/ccg:adsense-site-auditor` | Check AdSense application readiness and policy requirements |
+| Skill                       | Purpose                                                              |
+| --------------------------- | -------------------------------------------------------------------- |
+| `/ccg:frontend-design`      | Frontend design entry with 20 internal Impeccable playbooks          |
+| `/ccg:bt-panel`             | Deploy and manage sites through the BaoTa/aaPanel HTTP API           |
+| `/ccg:seo-page-builder`     | Create and audit SEO tool pages with a runnable on-page audit script |
+| `/ccg:adsense-site-auditor` | Check AdSense application readiness and policy requirements          |
 
 Install only the skills bundle from the private fork:
 
@@ -299,13 +322,14 @@ npx ccg-workflow uninstall                # Uninstall CCG
 
 Set in `~/.claude/settings.json` under `"env"`:
 
-| Variable                               | Default | Description                                         |
-| -------------------------------------- | ------- | --------------------------------------------------- |
-| `CODEX_TIMEOUT`                        | `7200`  | Wrapper timeout (seconds)                           |
-| `CODEAGENT_POST_MESSAGE_DELAY`         | `5`     | Post-completion delay (seconds)                     |
-| `APIMART_API_KEY`                      | unset   | API key used when the APIMart Codex provider is selected |
-| `DSH_HOME`                             | `~/.dsh` | DeepSeek Harness home used by `dsh-ccg`            |
-| `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` | unset   | Set to `1` to enable Agent Teams parallel execution |
+| Variable                               | Default  | Description                                                |
+| -------------------------------------- | -------- | ---------------------------------------------------------- |
+| `CODEX_TIMEOUT`                        | `7200`   | Wrapper timeout (seconds)                                  |
+| `CODEAGENT_POST_MESSAGE_DELAY`         | `5`      | Post-completion delay (seconds)                            |
+| `APIMART_API_KEY`                      | unset    | API key used when the APIMart Codex provider is selected   |
+| `PACKYCODE_API_KEY`                    | unset    | API key used when the PackyCode Codex provider is selected |
+| `DSH_HOME`                             | `~/.dsh` | DeepSeek Harness home used by `dsh-ccg`                    |
+| `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` | unset    | Set to `1` to enable Agent Teams parallel execution        |
 
 ## Update / Uninstall
 
@@ -357,4 +381,4 @@ MIT
 
 ---
 
-v3.6.4-aug.1 | [Issues](https://github.com/fengshao1227/ccg-workflow/issues) | [Contributing](./CONTRIBUTING.md)
+v3.6.7-aug.1 | [Issues](https://github.com/fengshao1227/ccg-workflow/issues) | [Contributing](./CONTRIBUTING.md)

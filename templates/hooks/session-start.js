@@ -10,6 +10,7 @@ const {
   findProjectRoot,
   readFileSafe,
   readHookInput,
+  deriveSessionKey,
   buildTaskSnapshot,
   renderTaskSnapshot,
   detectTechStack,
@@ -25,13 +26,56 @@ function renderSession(sections) {
   return `<ccg-session>\n${sections.join('\n\n')}\n</ccg-session>`;
 }
 
+function exportSessionKey(sessionKey) {
+  const envPath = process.env.CLAUDE_ENV_FILE;
+  if (!envPath) return { ok: false, code: 'CLAUDE_ENV_FILE_MISSING' };
+
+  let descriptor;
+  try {
+    try {
+      const stat = fs.lstatSync(envPath);
+      if (stat.isSymbolicLink() || !stat.isFile()) return { ok: false, code: 'CLAUDE_ENV_FILE_INVALID' };
+    } catch (error) {
+      if (!error || error.code !== 'ENOENT') return { ok: false, code: 'CLAUDE_ENV_FILE_INVALID' };
+    }
+
+    const flags =
+      fs.constants.O_WRONLY |
+      fs.constants.O_APPEND |
+      fs.constants.O_CREAT |
+      (fs.constants.O_NOFOLLOW || 0) |
+      (fs.constants.O_NONBLOCK || 0);
+    descriptor = fs.openSync(envPath, flags, 0o600);
+    if (!fs.fstatSync(descriptor).isFile()) return { ok: false, code: 'CLAUDE_ENV_FILE_INVALID' };
+    fs.writeFileSync(descriptor, `export CCG_SESSION_KEY='${sessionKey}'\n`, 'utf-8');
+    return { ok: true };
+  } catch {
+    return { ok: false, code: 'CLAUDE_ENV_FILE_WRITE_FAILED' };
+  } finally {
+    if (descriptor !== undefined) {
+      try {
+        fs.closeSync(descriptor);
+      } catch {
+        // The write result is already determined.
+      }
+    }
+  }
+}
+
 function main() {
   const input = readHookInput();
   const cwd = input.cwd || process.env.CLAUDE_PROJECT_DIR || process.cwd();
   const root = findProjectRoot(cwd);
   if (!root) return;
 
+  const sessionKey = deriveSessionKey('claude', input.session_id);
   const supplemental = [];
+  if (sessionKey) {
+    const exported = exportSessionKey(sessionKey);
+    if (!exported.ok) supplemental.push(`<session-env>Diagnostic: ${exported.code}</session-env>`);
+  } else {
+    supplemental.push('<session-env>Diagnostic: SESSION_KEY_REQUIRED</session-env>');
+  }
   const git = getGitInfo(root);
   supplemental.push(`<project>
 Tech: ${escapeXml(detectTechStack(root))}
@@ -57,7 +101,7 @@ Key commands: /ccg:go (smart entry), /ccg:commit, /ccg:review
 All /ccg:* commands available. Use /ccg:go for intelligent routing.
 </commands>`);
 
-  const snapshot = buildTaskSnapshot(root, { mode: 'session', role: 'all' });
+  const snapshot = buildTaskSnapshot(root, { mode: 'session', role: 'all', sessionKey });
   const sections = [renderTaskSnapshot(snapshot, 'session', 'all', SESSION_TASK_CONTEXT_LIMIT)];
   for (const section of supplemental) {
     if (Buffer.byteLength(renderSession([...sections, section]), 'utf-8') <= SESSION_CONTEXT_LIMIT)

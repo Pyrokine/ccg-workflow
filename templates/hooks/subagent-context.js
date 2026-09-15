@@ -7,6 +7,7 @@
 const {
   findProjectRoot,
   readHookInput,
+  deriveSessionKey,
   buildTaskSnapshot,
   renderTaskSnapshot,
   renderResolution,
@@ -80,7 +81,8 @@ function main() {
   if (!root) return;
 
   const role = detectRole(isCodeagentCall, command, toolInput);
-  const snapshot = buildTaskSnapshot(root, { mode: 'agent', role });
+  const sessionKey = deriveSessionKey('claude', input.session_id);
+  const snapshot = buildTaskSnapshot(root, { mode: 'agent', role, sessionKey });
   if (snapshot.resolution.kind === 'none') return;
   if (snapshot.resolution.kind !== 'active' || snapshot.kind === 'invalid') {
     const code =

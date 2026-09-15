@@ -59,7 +59,7 @@ Gemini CLI 已禁用：2026-06-18 后 consumer OAuth 请求不再处理。不要
 - 用户明确请求 GPT、Grok、双模型审查或 `/ccg:spec-review` 时，按 `review.profiles` 启动对应外部 reviewer
 - 外部 reviewer 都通过 `~/.claude/bin/codeagent-wrapper --backend claude` 启动，实际 provider 与当前 Claude Code 相同
 - GPT 负责后端逻辑、正确性、安全、回归和测试缺口，Grok 负责前端交互、可访问性、设计一致性和前端安全
-- GPT 与 Grok 使用各自 profile 中的 `model` 和 `effort`，默认值分别是 `gpt-5.6-sol` / `xhigh` 与 `grok-4.5` / `high`
+- GPT 与 Grok 使用各自 profile 中的 `model` 和 `effort`，默认值分别是 `gpt-5.6-sol` / `xhigh` 与 `grok-4.6` / `high`
 - 外部 reviewer 都传 `--no-session-persistence`，每次审查独立且不可 `resume`
 - 某个 reviewer 失败时只报告该 reviewer 不可用，禁止把其它结果标成它的结论
 

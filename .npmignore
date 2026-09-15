@@ -13,6 +13,10 @@ templates/schemas/
 templates/commands/execute.md
 templates/commands/plan.md
 
+# Red-team / pentest reference notes stay in git but are excluded from local
+# tarballs. The installer also removes this directory after copying skills.
+templates/skills/domains/security/
+
 # 开发文件
 *.log
 *.swp

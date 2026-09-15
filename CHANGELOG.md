@@ -7,7 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [3.6.4-aug.1] - Unreleased
+## [3.6.7-aug.1] - 2026-09-16
+
+### Added
+
+- Manually absorbed the applicable upstream v3.6.6 and v3.6.7 changes: PackyCode joins APIMart in a shared sponsor registry, and package tarballs now exclude red-team and pentest reference notes.
+- Added PackyCode Claude Code and Codex endpoint metadata, environment-variable guidance, sponsor artwork, and bilingual installer copy.
+- Added opaque per-session task bindings, exclusive task claims with explicit takeover, separate binding revisions, and effective `in_progress` status while durable task status remains `open`.
+- Added explicit state-v1 migration, evidence-limited status repair, resumable byte-preserving legacy-task migration, and reversible orphan-directory quarantine.
+
+### Changed
+
+- Grok external review and CLI-route defaults now use `grok-4.6` at `high`. Exact saved `grok-4.5` defaults migrate during install while custom model names and valid effort overrides remain unchanged.
+- Package and native plugin versions now use v3.6.7-aug.1. The expected codeagent-wrapper binary remains v5.15.0-aug.1.
+- `package.json` now lists skill subdirectories explicitly instead of packaging the complete `templates/skills/` tree. `domains/security/` remains in Git but is excluded from tarballs and default installation.
+- `.ccg/state.json` schema v2 now stores only worktree state identity and revision. Claude and Codex Hooks derive namespaced SHA-256 session keys, and Agent or wrapper authority refreshes use only the parent session binding.
+- Status and doctor output no longer guess a worktree-global active task. With `CCG_SESSION_KEY`, status resolves the current session; without it, status reports schema, open-task count, and binding count.
+
+### Fixed
+
+- Sponsor Codex registration preserves existing provider tables, authentication files, active provider selection, and restrictive config permissions. Activation remains explicit, and Codex-mode uninstall removes only provider tables recorded as added by that installation.
+- Corrected `dsh-ccg` documentation that referenced a standalone publish workflow which is not present in this private repository.
+- Prevented different Claude Code sessions in one worktree from replacing or receiving each other's active task contract. SessionStart now exports the current opaque binding key through `CLAUDE_ENV_FILE`, and controller examples carry the binding CAS revision.
+- Corrected canonical tasks that persisted `in_progress` through a constrained repair path, and corrected legacy `superseded` migrations only when the byte-preserved backup proves the original status.
+- Legacy tasks now remain migration-required after state v2 exists and when only terminal legacy tasks remain. Non-Git project roots can quarantine local orphan artifacts without requiring a Git exclude file.
+- Wrapper context injection now recognizes direct calls behind shell control words and `command`, `exec`, `env`, `nice`, `nohup`, `sudo`, or `time`, while paths used by commands such as `go -C` and search arguments are not treated as wrapper executions.
+- Return-chain claims now cover the target task and every open parent during selection, activation, conflict detection, and takeover, preventing one session from invalidating another session's parent task.
+- Orphan migration now validates manifest names, exact paths, statuses, and timestamps before rename, supports quarantine after restore, and requires matching task IDs for provenance-backed status repair. Legacy metadata truncation now respects UTF-8 byte limits.
+- Codex runtime guidance now uses internal Codex or Claude Code review for automatic quality checks and reserves GPT or Grok for explicit external-review requests. Doctor and status only report Codex mode installed when its managed instructions, agents, task runtime, and single Hook registration are complete.
+- Codex mode install and uninstall now merge only CCG-managed AGENTS and Hook content, reject noncanonical or duplicate markers, malformed JSON, symlink targets, and explicit required-feature conflicts, preserve user file permissions, create reversible backups, and restore every target after a failed write. An ownership manifest restores pre-existing same-name runtime files, preserves runtime files edited after installation, and prevents uninstall from claiming pre-existing sponsor tables. Leaf detection uses Codex Hook `agent_id` and `agent_type`; role files use current boolean feature syntax instead of nested `multi_agent_v2` tables.
+
+## [3.6.4-aug.1] - 2026-09-05
 
 ### Added
 

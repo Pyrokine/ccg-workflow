@@ -3,31 +3,39 @@ import { homedir } from 'node:os'
 import fs from 'fs-extra'
 import { join } from 'pathe'
 import { parse as parseToml, stringify as stringifyToml } from 'smol-toml'
+import { SPONSORS, getSponsor, type CodexProviderSpec, type SponsorGateway } from './sponsors'
 
-/**
- * APIMart provider registration for Codex CLI (~/.codex/config.toml).
- *
- * Codex speaks the OpenAI wire protocol, so its base_url KEEPS the /v1 suffix —
- * the opposite of Claude Code, where ANTHROPIC_BASE_URL must omit it because
- * Claude Code appends /v1/messages itself. Getting these two backwards yields a
- * silent 404, so they are deliberately defined in separate places.
- *
- * Source: https://docs.apimart.ai/en/integrations/dev-tool/codex-cli.md
- */
+export type { CodexProviderSpec }
+
 export const APIMART_CODEX_PROVIDER_ID = 'apimart'
+export const APIMART_CODEX_PROVIDER = getSponsor(APIMART_CODEX_PROVIDER_ID)!.codex
+export const PACKYCODE_CODEX_PROVIDER_ID = 'packycode'
+export const PACKYCODE_CODEX_PROVIDER = getSponsor(PACKYCODE_CODEX_PROVIDER_ID)!.codex
 
-export const APIMART_CODEX_PROVIDER = {
-  name: 'APIMart',
-  base_url: 'https://api.apimart.ai/v1',
-  wire_api: 'responses',
-  env_key: 'APIMART_API_KEY',
-} as const
+export type CodexProviderStatus = 'added' | 'preserved' | 'removed' | 'absent' | 'failed'
 
 export type CodexApiResult = {
   success: boolean
   message: string
-  /** true when `model_provider` was actually switched to APIMart */
+  /** true when model_provider was actually switched to this provider */
   activated: boolean
+  /** true when this provider is active after the operation */
+  active?: boolean
+  status?: CodexProviderStatus
+  configPath?: string
+}
+
+export type CodexSponsorResult = {
+  id: string
+  success: boolean
+  status: CodexProviderStatus
+  message: string
+}
+
+export type CodexSponsorsResult = {
+  success: boolean
+  results: CodexSponsorResult[]
+  message: string
   configPath?: string
 }
 
@@ -35,13 +43,54 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : null
 }
 
-function isCcgApiMartProvider(value: unknown): boolean {
+function hasOwn(record: Record<string, unknown>, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(record, key)
+}
+
+function isCcgProvider(value: unknown, expected: CodexProviderSpec): boolean {
   const provider = asRecord(value)
   return (
     provider !== null &&
-    Object.keys(provider).length === Object.keys(APIMART_CODEX_PROVIDER).length &&
-    Object.entries(APIMART_CODEX_PROVIDER).every(([key, expected]) => provider[key] === expected)
+    Object.keys(provider).length === Object.keys(expected).length &&
+    Object.entries(expected).every(([key, expectedValue]) => provider[key] === expectedValue)
   )
+}
+
+async function readCodexConfig(configPath: string): Promise<{
+  config: Record<string, unknown>
+  exists: boolean
+}> {
+  const current = await fs.lstat(configPath).catch((error: unknown) => {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+    throw error
+  })
+  if (!current) {
+    return { config: {}, exists: false }
+  }
+  if (!current.isFile() || current.isSymbolicLink()) {
+    throw new Error(`Refusing to read non-regular Codex config: ${configPath}`)
+  }
+
+  const config = asRecord(parseToml(await fs.readFile(configPath, 'utf-8')))
+  if (!config) {
+    throw new Error(`Codex config root must be a TOML table: ${configPath}`)
+  }
+  return { config, exists: true }
+}
+
+function getModelProviders(config: Record<string, unknown>, create: boolean): Record<string, unknown> | null {
+  if (config.model_providers === undefined) {
+    if (!create) return null
+    const providers: Record<string, unknown> = {}
+    config.model_providers = providers
+    return providers
+  }
+
+  const providers = asRecord(config.model_providers)
+  if (!providers) {
+    throw new Error('Codex model_providers must be a TOML table')
+  }
+  return providers
 }
 
 async function writeTomlAtomic(path: string, config: Record<string, unknown>): Promise<void> {
@@ -53,10 +102,11 @@ async function writeTomlAtomic(path: string, config: Record<string, unknown>): P
     throw new Error(`Refusing to replace non-regular Codex config: ${path}`)
   }
 
+  const mode = current ? current.mode & 0o777 : 0o600
   const tempPath = `${path}.${process.pid}.${randomUUID()}.tmp`
   try {
-    await fs.writeFile(tempPath, stringifyToml(config), 'utf-8')
-    if (current) await fs.chmod(tempPath, current.mode & 0o777)
+    await fs.writeFile(tempPath, stringifyToml(config), { encoding: 'utf-8', mode, flag: 'wx' })
+    await fs.chmod(tempPath, mode)
     await fs.rename(tempPath, path)
   } catch (error) {
     await fs.remove(tempPath).catch(() => undefined)
@@ -64,114 +114,236 @@ async function writeTomlAtomic(path: string, config: Record<string, unknown>): P
   }
 }
 
-/**
- * Register APIMart as a selectable model provider in ~/.codex/config.toml.
- *
- * Additive by design. The [model_providers.apimart] table is written so Codex
- * knows how to reach APIMart, but `model_provider` is left untouched unless the
- * caller explicitly passes `activate: true`.
- *
- * That default is deliberate: flipping `model_provider` globally diverts EVERY
- * Codex request away from the user's ChatGPT subscription onto pay-as-you-go
- * billing. Silently rerouting someone's paid usage is not a side effect an
- * installer gets to have, so activation stays an explicit, informed choice.
- *
- * An existing APIMart table belongs to the user. CCG leaves it unchanged rather
- * than replacing settings such as a custom endpoint or credential environment.
- */
-export async function configureApiMartForCodex(activate = false): Promise<CodexApiResult> {
+function failedResults(sponsors: readonly SponsorGateway[], error: unknown): CodexSponsorResult[] {
+  return sponsors.map((sponsor) => ({
+    id: sponsor.id,
+    success: false,
+    status: 'failed',
+    message: `Failed to update ${sponsor.name} Codex provider: ${error}`,
+  }))
+}
+
+async function configureSponsors(
+  sponsors: readonly SponsorGateway[],
+  activateId?: string
+): Promise<{ batch: CodexSponsorsResult; activated: boolean; activeProvider?: string }> {
+  const codexHome = join(homedir(), '.codex')
+  const configPath = join(codexHome, 'config.toml')
+
   try {
-    const codexHome = join(homedir(), '.codex')
-    const configPath = join(codexHome, 'config.toml')
     await fs.ensureDir(codexHome)
-
-    let config: Record<string, unknown> = {}
-    if (await fs.pathExists(configPath)) {
-      const content = await fs.readFile(configPath, 'utf-8')
-      config = asRecord(parseToml(content)) ?? {}
-    }
-
-    const modelProviders = asRecord(config.model_providers) ?? {}
-    const existingProvider = asRecord(modelProviders[APIMART_CODEX_PROVIDER_ID])
+    const { config } = await readCodexConfig(configPath)
+    const providers = getModelProviders(config, true)!
+    const results: CodexSponsorResult[] = []
     let changed = false
-    if (!existingProvider) {
-      modelProviders[APIMART_CODEX_PROVIDER_ID] = { ...APIMART_CODEX_PROVIDER }
-      config.model_providers = modelProviders
+
+    for (const sponsor of sponsors) {
+      if (hasOwn(providers, sponsor.id)) {
+        results.push({
+          id: sponsor.id,
+          success: true,
+          status: 'preserved',
+          message: `Existing ${sponsor.name} provider left unchanged`,
+        })
+        continue
+      }
+
+      providers[sponsor.id] = { ...sponsor.codex }
       changed = true
+      results.push({
+        id: sponsor.id,
+        success: true,
+        status: 'added',
+        message: `${sponsor.name} registered as a Codex model provider`,
+      })
     }
 
-    const activated = activate && config.model_provider !== APIMART_CODEX_PROVIDER_ID
+    const activated = Boolean(activateId && config.model_provider !== activateId)
     if (activated) {
-      config.model_provider = APIMART_CODEX_PROVIDER_ID
+      config.model_provider = activateId
       changed = true
     }
 
     if (changed) await writeTomlAtomic(configPath, config)
 
     return {
-      success: true,
       activated,
-      configPath,
-      message: activated
-        ? existingProvider
-          ? 'Existing APIMart provider left unchanged and set as the active Codex model provider'
-          : 'APIMart registered and set as the active Codex model provider'
-        : existingProvider
-          ? 'Existing APIMart provider left unchanged (not activated)'
-          : 'APIMart registered as a Codex model provider (not activated)',
+      activeProvider: typeof config.model_provider === 'string' ? config.model_provider : undefined,
+      batch: {
+        success: true,
+        results,
+        configPath,
+        message: results.map((result) => result.message).join('; '),
+      },
     }
   } catch (error) {
-    return { success: false, activated: false, message: `Failed to configure APIMart for Codex: ${error}` }
+    const results = failedResults(sponsors, error)
+    return {
+      activated: false,
+      batch: {
+        success: false,
+        results,
+        message: results.map((result) => result.message).join('; '),
+      },
+    }
   }
 }
 
-/**
- * Remove the exact APIMart table CCG creates from ~/.codex/config.toml.
- *
- * A pre-existing or subsequently customized table is user-owned and remains in
- * place. Its `model_provider` selection remains in place as well.
- */
-export async function removeApiMartFromCodex(): Promise<CodexApiResult> {
+async function removeSponsors(sponsors: readonly SponsorGateway[]): Promise<CodexSponsorsResult> {
+  const configPath = join(homedir(), '.codex', 'config.toml')
+
   try {
-    const configPath = join(homedir(), '.codex', 'config.toml')
-    if (!(await fs.pathExists(configPath))) {
-      return { success: true, activated: false, message: 'No Codex config to clean' }
+    const { config, exists } = await readCodexConfig(configPath)
+    if (!exists) {
+      const results = sponsors.map((sponsor) => ({
+        id: sponsor.id,
+        success: true,
+        status: 'absent' as const,
+        message: `${sponsor.name} not present in Codex config`,
+      }))
+      return { success: true, results, message: 'No Codex config to clean' }
     }
 
-    const config = asRecord(parseToml(await fs.readFile(configPath, 'utf-8'))) ?? {}
+    const providers = getModelProviders(config, false)
+    const results: CodexSponsorResult[] = []
     let changed = false
 
-    const modelProviders = asRecord(config.model_providers)
-    const isCcgProvider = modelProviders !== null && isCcgApiMartProvider(modelProviders[APIMART_CODEX_PROVIDER_ID])
-    if (modelProviders && isCcgProvider) {
-      delete modelProviders[APIMART_CODEX_PROVIDER_ID]
-      // Drop the parent table once it is empty — an orphaned [model_providers]
-      // is valid TOML but pure litter in a file the user reads and edits.
-      if (Object.keys(modelProviders).length === 0) delete config.model_providers
-      changed = true
-    }
-    if (isCcgProvider && config.model_provider === APIMART_CODEX_PROVIDER_ID) {
-      delete config.model_provider
-      changed = true
-    }
-
-    if (!changed) {
-      return {
-        success: true,
-        activated: false,
-        message: 'APIMart provider is user-managed or not present in Codex config',
+    for (const sponsor of sponsors) {
+      if (!providers || !hasOwn(providers, sponsor.id)) {
+        results.push({
+          id: sponsor.id,
+          success: true,
+          status: 'absent',
+          message: `${sponsor.name} not present in Codex config`,
+        })
+        continue
       }
+      if (!isCcgProvider(providers[sponsor.id], sponsor.codex)) {
+        results.push({
+          id: sponsor.id,
+          success: true,
+          status: 'preserved',
+          message: `${sponsor.name} provider is user-managed and was left unchanged`,
+        })
+        continue
+      }
+
+      delete providers[sponsor.id]
+      if (config.model_provider === sponsor.id) delete config.model_provider
+      changed = true
+      results.push({
+        id: sponsor.id,
+        success: true,
+        status: 'removed',
+        message: `CCG-managed ${sponsor.name} provider removed from Codex config`,
+      })
     }
 
-    await writeTomlAtomic(configPath, config)
+    if (providers && Object.keys(providers).length === 0) delete config.model_providers
+    if (changed) await writeTomlAtomic(configPath, config)
 
     return {
       success: true,
-      activated: false,
-      configPath,
-      message: 'CCG-managed APIMart provider removed from Codex config',
+      results,
+      ...(changed ? { configPath } : {}),
+      message: results.map((result) => result.message).join('; '),
     }
   } catch (error) {
-    return { success: false, activated: false, message: `Failed to remove APIMart from Codex: ${error}` }
+    const results = failedResults(sponsors, error)
+    return {
+      success: false,
+      results,
+      message: results.map((result) => result.message).join('; '),
+    }
   }
+}
+
+export async function configureSponsorForCodex(id: string, activate = false): Promise<CodexApiResult> {
+  const sponsor = getSponsor(id)
+  if (!sponsor) {
+    return {
+      success: false,
+      activated: false,
+      status: 'failed',
+      message: `Unknown sponsor: ${id}`,
+    }
+  }
+
+  const { batch, activated, activeProvider } = await configureSponsors([sponsor], activate ? sponsor.id : undefined)
+  const result = batch.results[0]
+  return {
+    success: batch.success,
+    activated,
+    active: activeProvider === sponsor.id,
+    status: result.status,
+    configPath: batch.configPath,
+    message: !batch.success
+      ? result.message
+      : activate
+        ? `${result.message} and is the active Codex model provider`
+        : `${result.message} (not activated)`,
+  }
+}
+
+export async function removeSponsorFromCodex(id: string): Promise<CodexApiResult> {
+  const sponsor = getSponsor(id)
+  if (!sponsor) {
+    return {
+      success: false,
+      activated: false,
+      status: 'failed',
+      message: `Unknown sponsor: ${id}`,
+    }
+  }
+
+  const batch = await removeSponsors([sponsor])
+  const result = batch.results[0]
+  return {
+    success: batch.success,
+    activated: false,
+    status: result.status,
+    configPath: batch.configPath,
+    message: result.message,
+  }
+}
+
+export async function configureAllSponsorsForCodex(): Promise<CodexSponsorsResult> {
+  return (await configureSponsors(SPONSORS)).batch
+}
+
+export async function removeSponsorsFromCodex(ids: readonly string[]): Promise<CodexSponsorsResult> {
+  const sponsors: SponsorGateway[] = []
+  for (const id of ids) {
+    const sponsor = getSponsor(id)
+    if (!sponsor) {
+      return {
+        success: false,
+        results: [],
+        message: `Unknown sponsor: ${id}`,
+      }
+    }
+    sponsors.push(sponsor)
+  }
+  if (sponsors.length === 0) return { success: true, results: [], message: 'No managed Codex sponsors to remove' }
+  return removeSponsors(sponsors)
+}
+
+export async function removeAllSponsorsFromCodex(): Promise<CodexSponsorsResult> {
+  return removeSponsors(SPONSORS)
+}
+
+export function configureApiMartForCodex(activate = false): Promise<CodexApiResult> {
+  return configureSponsorForCodex(APIMART_CODEX_PROVIDER_ID, activate)
+}
+
+export function removeApiMartFromCodex(): Promise<CodexApiResult> {
+  return removeSponsorFromCodex(APIMART_CODEX_PROVIDER_ID)
+}
+
+export function configurePackyCodeForCodex(activate = false): Promise<CodexApiResult> {
+  return configureSponsorForCodex(PACKYCODE_CODEX_PROVIDER_ID, activate)
+}
+
+export function removePackyCodeFromCodex(): Promise<CodexApiResult> {
+  return removeSponsorFromCodex(PACKYCODE_CODEX_PROVIDER_ID)
 }

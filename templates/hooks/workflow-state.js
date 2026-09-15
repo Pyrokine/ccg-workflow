@@ -6,6 +6,7 @@
 const {
   findProjectRoot,
   readHookInput,
+  deriveSessionKey,
   buildTaskSnapshot,
   renderTaskSnapshot,
   outputHook,
@@ -78,30 +79,25 @@ function main() {
   const root = findProjectRoot(cwd);
   if (!root) return;
 
-  const snapshot = buildTaskSnapshot(root, { mode: 'authority', role: 'all' });
+  const sessionKey = deriveSessionKey('claude', input.session_id);
+  const snapshot = buildTaskSnapshot(root, { mode: 'authority', role: 'all', sessionKey });
   if (snapshot.resolution.kind === 'none') return;
 
   let context = renderTaskSnapshot(snapshot, 'authority', 'all', AUTHORITY_CONTEXT_LIMIT);
   if (outputEventName === 'UserPromptSubmit' && snapshot.resolution.kind === 'active' && snapshot.kind !== 'invalid') {
     const additions = [];
-    if (typeof input.session_id !== 'string' || !input.session_id.trim()) {
-      additions.push('Diagnostic: SESSION_ID_MISSING: loop detection disabled');
+    const tracked = trackTurn(
+      snapshot.task.dir,
+      sessionKey,
+      snapshot.task.currentPhase,
+      snapshot.task.nextAction
+    );
+    if (!tracked.ok) {
+      additions.push(`Diagnostic: ${escapeXml(tracked.code)}: loop detection disabled`);
     } else {
-      const tracked = trackTurn(
-        snapshot.task.dir,
-        input.session_id,
-        snapshot.task.currentPhase,
-        snapshot.task.nextAction
-      );
-      if (!tracked.ok) {
-        additions.push(`Diagnostic: ${escapeXml(tracked.code)}: loop detection disabled`);
-      } else {
-        const loop = detectLoop(tracked.turns, 3);
-        if (loop) {
-          additions.push(
-            `Loop: phase and next action repeated ${loop.count} turns; change approach or report the blocker.`
-          );
-        }
+      const loop = detectLoop(tracked.turns, 3);
+      if (loop) {
+        additions.push(`Loop: phase and next action repeated ${loop.count} turns; change approach or report the blocker.`);
       }
     }
     context = appendSignal(context, additions);

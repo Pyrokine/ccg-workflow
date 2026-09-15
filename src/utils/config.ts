@@ -88,7 +88,7 @@ export function createDefaultRouting(): ModelRouting {
     review: {
       profiles: [
         { id: 'gpt', model: 'gpt-5.6-sol', effort: 'xhigh' },
-        { id: 'grok', model: 'grok-4.5', effort: 'high' },
+        { id: 'grok', model: 'grok-4.6', effort: 'high' },
       ],
       strategy: 'parallel',
     },
@@ -130,7 +130,7 @@ const reviewProfileIds = new Set<ReviewProfileId>(['gpt', 'grok'])
 const reviewEfforts = new Set(['low', 'medium', 'high', 'xhigh', 'max'])
 const defaultReviewProfiles: ReviewProfile[] = [
   { id: 'gpt', model: 'gpt-5.6-sol', effort: 'xhigh' },
-  { id: 'grok', model: 'grok-4.5', effort: 'high' },
+  { id: 'grok', model: 'grok-4.6', effort: 'high' },
 ]
 
 function cloneReviewProfiles(profiles: ReviewProfile[]): ReviewProfile[] {
@@ -229,7 +229,8 @@ function normalizeReviewProfiles(value: unknown, fallback: ReviewProfile[]): Rev
 
     const normalized: ReviewProfile = { id: profile.id as ReviewProfileId }
     if (typeof profile.model === 'string' && profile.model.trim()) {
-      normalized.model = profile.model.trim()
+      const model = profile.model.trim()
+      normalized.model = normalized.id === 'grok' && model === 'grok-4.5' ? 'grok-4.6' : model
     }
     if (typeof profile.effort === 'string' && reviewEfforts.has(profile.effort)) {
       normalized.effort = profile.effort as ReviewProfile['effort']
@@ -296,7 +297,8 @@ export function normalizeRoutingForInstall(routing?: unknown): ModelRouting {
     opencodeModel: source?.opencodeModel,
   }) as Array<[keyof Pick<ModelRouting, 'grokModel' | 'kimiModel' | 'opencodeModel'>, unknown]>) {
     if (typeof value === 'string' && value.trim()) {
-      normalized[key] = value.trim()
+      const model = value.trim()
+      normalized[key] = key === 'grokModel' && model === 'grok-4.5' ? 'grok-4.6' : model
     }
   }
   const proxy = normalizeRoutingProxy(source?.proxy)

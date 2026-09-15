@@ -13,7 +13,10 @@ import type { ModelRouting, ModelType } from '../types'
 import { createDefaultConfig, normalizeRoutingForInstall, readCcgConfig, writeCcgConfig } from '../utils/config'
 import {
   getAllCommandIds,
+  getSponsor,
   installCodexMode,
+  promptSponsorMenuKey,
+  sponsorInquirerChoices,
   syncRoutingTemplates,
   uninstallCodexMode,
   uninstallWorkflows,
@@ -343,39 +346,23 @@ async function configApi(): Promise<void> {
       choices: [
         { name: `${ansis.green('●')} ${i18n.t('menu:api.officialOption')}`, value: 'official' },
         { name: `${ansis.cyan('●')} ${i18n.t('menu:api.thirdPartyOption')}`, value: 'thirdparty' },
-        {
-          name: `${ansis.yellow('★')} ${i18n.t('menu:api.sponsorAPIMart')} ${ansis.gray('— https://go.apimart.ai/gh-ccg-workflow')}`,
-          value: 'apimart',
-        },
+        ...sponsorInquirerChoices('menu'),
       ],
     },
   ])
 
+  const sponsor = getSponsor(apiProvider)
   if (apiProvider === 'official') {
     // Clear third-party config, let Claude Code use official auth
     if (!settings.env) settings.env = {}
     delete settings.env.ANTHROPIC_BASE_URL
     delete settings.env.ANTHROPIC_AUTH_TOKEN
     delete settings.env.ANTHROPIC_API_KEY
-  } else if (apiProvider === 'apimart') {
-    console.log()
-    console.log(
-      `    ${ansis.yellow('★')} ${i18n.t('menu:api.sponsorAPIMartGetKey')}: ${ansis.cyan.underline('https://go.apimart.ai/gh-ccg-workflow')}`
-    )
-    console.log()
-    const { key } = await inquirer.prompt([
-      {
-        type: 'password',
-        name: 'key',
-        message: `APIMart API Key ${ansis.gray(`(${i18n.t('menu:api.keyRequired')})`)}`,
-        mask: '*',
-        validate: (v: string) => v.trim() !== '' || i18n.t('menu:api.enterKey'),
-      },
-    ])
-
+  } else if (sponsor) {
+    const key = await promptSponsorMenuKey(sponsor)
     if (!settings.env) settings.env = {}
-    settings.env.ANTHROPIC_BASE_URL = 'https://api.apimart.ai'
-    settings.env.ANTHROPIC_AUTH_TOKEN = key.trim()
+    settings.env.ANTHROPIC_BASE_URL = sponsor.anthropicBaseUrl
+    settings.env.ANTHROPIC_AUTH_TOKEN = key
     delete settings.env.ANTHROPIC_API_KEY
   } else {
     const answers = await inquirer.prompt([
@@ -537,7 +524,7 @@ async function configModelRouting(): Promise<void> {
         type: 'input',
         name: 'model',
         message: i18n.t('init:model.grokModel'),
-        default: grokModel || 'grok-4.5',
+        default: grokModel || 'grok-4.6',
         validate: (value: string) => value.trim() !== '' || i18n.t('init:model.modelRequired'),
       },
     ])
@@ -871,6 +858,12 @@ async function handleCodexMode(): Promise<void> {
       }
     } else {
       spinner.fail(isZh ? '卸载失败' : 'Uninstall failed')
+      if (result.skipped.length > 0) {
+        console.log()
+        for (const detail of result.skipped) {
+          console.log(`  ${ansis.yellow('!')} ${detail}`)
+        }
+      }
     }
     return
   }
@@ -883,10 +876,10 @@ async function handleCodexMode(): Promise<void> {
   )
   console.log()
   console.log(isZh ? '  将安装:' : '  Will install:')
-  console.log('    ~/.codex/AGENTS.md              — orchestration instructions')
-  console.log('    ~/.codex/config.toml             — multi-agent + timeout config')
-  console.log('    ~/.codex/hooks.json + hooks/     — adaptive guardrail hook')
-  console.log('    ~/.codex/agents/ccg-*.toml       — sub-agent definitions')
+  console.log('    ~/.codex/AGENTS.md              — merged CCG orchestration block')
+  console.log('    ~/.codex/config.toml             — preserved; sponsor providers registered only')
+  console.log('    ~/.codex/hooks.json + hooks/     — merged session-aware task Hook')
+  console.log('    ~/.codex/agents/ccg-*.toml       — leaf Agent definitions')
   console.log()
 
   const { confirm } = await inquirer.prompt([

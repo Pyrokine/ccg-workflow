@@ -50,6 +50,4 @@ Include the task ID and revision consumed, plus any authoritative-source conflic
 
 [features]
 multi_agent = false
-
-[features.multi_agent_v2]
-enabled = false
+multi_agent_v2 = false

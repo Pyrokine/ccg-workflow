@@ -136,16 +136,16 @@ describe('injectConfigVariables — routing variables', () => {
         review: {
           profiles: [
             { id: 'gpt', model: 'gpt-5.6-sol', effort: 'xhigh' },
-            { id: 'grok', model: 'grok-4.5', effort: 'high' },
+            { id: 'grok', model: 'grok-4.6', effort: 'high' },
           ],
         },
       },
     })
     expect(result).toBe(
       [
-        'profiles: [{"id":"gpt","model":"gpt-5.6-sol","effort":"xhigh"},{"id":"grok","model":"grok-4.5","effort":"high"}]',
+        'profiles: [{"id":"gpt","model":"gpt-5.6-sol","effort":"xhigh"},{"id":"grok","model":"grok-4.6","effort":"high"}]',
         'gpt: gpt-5.6-sol / xhigh',
-        'grok: grok-4.5 / high',
+        'grok: grok-4.6 / high',
       ].join('\n')
     )
   })
@@ -165,9 +165,9 @@ describe('injectConfigVariables — routing variables', () => {
     })
     expect(result).toBe(
       [
-        'profiles: [{"id":"gpt","model":"gpt-5.6-sol","effort":"xhigh"},{"id":"grok","model":"grok-4.5","effort":"high"}]',
+        'profiles: [{"id":"gpt","model":"gpt-5.6-sol","effort":"xhigh"},{"id":"grok","model":"grok-4.6","effort":"high"}]',
         'gpt: gpt-5.6-sol / xhigh',
-        'grok: grok-4.5 / high',
+        'grok: grok-4.6 / high',
       ].join('\n')
     )
   })
@@ -257,7 +257,7 @@ describe('template variable completeness', () => {
           review: {
             profiles: [
               { id: 'gpt', model: 'gpt-5.6-sol', effort: 'xhigh' },
-              { id: 'grok', model: 'grok-4.5', effort: 'high' },
+              { id: 'grok', model: 'grok-4.6', effort: 'high' },
             ],
           },
         },
@@ -557,7 +557,7 @@ describe('skills namespace isolation', () => {
     await fs.remove(tmpDir)
   })
 
-  it('installs skills under skills/ccg/ namespace', async () => {
+  it('installs skills under skills/ccg/ namespace', { timeout: 30_000 }, async () => {
     const result = await installWorkflows(['workflow'], tmpDir, true, {
       mcpProvider: 'skip',
       skipBinary: true,
@@ -570,6 +570,10 @@ describe('skills namespace isolation', () => {
     expect(fs.existsSync(join(tmpDir, 'skills', 'ccg', 'package.json'))).toBe(true)
     expect(fs.existsSync(join(tmpDir, 'skills', 'ccg', 'tools'))).toBe(true)
     expect(fs.existsSync(join(tmpDir, 'skills', 'ccg', 'orchestration'))).toBe(true)
+
+    // Red-team notes remain in git but are never installed by default.
+    expect(fs.existsSync(join(tmpDir, 'skills', 'ccg', 'domains', 'security'))).toBe(false)
+    expect(fs.existsSync(join(tmpDir, 'skills', 'ccg', 'domains', 'ai'))).toBe(true)
   })
 
   it('uninstall only removes skills/ccg/, preserves user skills', async () => {

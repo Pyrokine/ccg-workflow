@@ -49,21 +49,23 @@ description: '需求 → 约束集（并行探索 + OPSX 提案）'
    - Resolve task state before codebase exploration:
      ```bash
      WORKDIR=$(pwd)
-     node ~/.claude/hooks/ccg/task-state.js resolve --root "$WORKDIR"
+     node ~/.claude/hooks/ccg/task-state.js resolve --root "$WORKDIR" --session-key "$CCG_SESSION_KEY"
      ```
+   - `CCG_SESSION_KEY` comes from the current Claude Code `SessionStart` Hook. Stop on a missing or invalid key; never fall back to a worktree-global task pointer.
    - Use only the controller result. Do not select a task by directory name, mtime, branch, or conversation summary.
    - Reuse an active task only when both `task.scope` and `requirements.md` identify the exact OpenSpec change and
-     `openspec/changes/<change_id>/`. If another task is active, ask the user to choose `interrupt`, `replace`, or another
-     worktree. Stop on `selection-required`, `migration-required`, `recovery-required`, or `invalid` until the controller
-     state is resolved.
+     `openspec/changes/<change_id>/`. If another task is active in this session, ask the user to choose `interrupt`, `replace`, or another
+     worktree. On `selection-required`, activate only an unclaimed matching task; a claimed task requires explicit user-approved `takeover`.
+     Stop on `migration-required`, `recovery-required`, or `invalid` until the controller state is resolved.
    - When no matching task exists, create one with `start`. Derive complexity and risk from the enhanced requirement;
      include the exact change ID in both `scope` and `requirements`:
      ```bash
-     node ~/.claude/hooks/ccg/task-state.js start --root "$WORKDIR" <<'CCG_TASK_JSON'
+     node ~/.claude/hooks/ccg/task-state.js start --root "$WORKDIR" --session-key "$CCG_SESSION_KEY" <<'CCG_TASK_JSON'
      {
        "expected": {
          "stateId": null,
          "stateRevision": 0,
+         "bindingRevision": 0,
          "activeTaskId": null
        },
        "mode": "activate",
@@ -85,8 +87,9 @@ description: '需求 → 约束集（并行探索 + OPSX 提案）'
      CCG_TASK_JSON
      ```
    - Derive the task ID from the change ID as strict kebab-case and keep the complete ID within 80 characters.
-   - Replace every placeholder and every `expected` value with current data. Save the returned state revision and task
-     revision; every later controller mutation must use the latest successful response.
+   - Replace every placeholder and every `expected` value with current data. Save the returned state revision, binding
+     revision, active task ID, and task revision; every later controller mutation must use the latest successful response.
+     The durable task status remains `open`; the current session sees effective status `in_progress`.
 
 3. **Initial Codebase Assessment**
    - Use `{{MCP_SEARCH_TOOL}}` to scan codebase.
@@ -181,7 +184,7 @@ description: '需求 → 约束集（并行探索 + OPSX 提案）'
      - `Stage listed artifacts` — tell the user to run `git add -- <exact-files>` and rerun `/ccg:spec-research`
      - `Keep untracked and stop` — leave the task open and stop
        The command must never run `git add` automatically.
-   - For every selected heading, call `link-spec` with the latest state/task revision. Use the literal project-relative
+   - For every selected heading, call `link-spec` with the latest state/binding/task revision and current session key. Use the literal project-relative
      path, exact heading text, a specific purpose, and roles `research`, `implement`, `review`, and `debug`. After each
      response, use its new task revision for the next link. Do not scan a directory or copy the section into `.ccg`.
    - After all links succeed, call `checkpoint` with gate `null`, phase `2-research-complete`, and next action

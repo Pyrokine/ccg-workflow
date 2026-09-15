@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 import fs from 'fs-extra'
 import { join } from 'pathe'
 import { describe, expect, it } from 'vitest'
@@ -39,10 +40,50 @@ describe('plugin manifests — native marketplace install', () => {
     expect(plugin.agents).toBeUndefined()
   })
 
-  it('manifest versions track package.json (bump all three together)', () => {
+  it('keeps the private package and plugin versions in sync', () => {
+    expect(pkg.version).toBe('3.6.7-aug.1')
+    expect(pkg.private).toBe(true)
     expect(plugin.version).toBe(pkg.version)
     expect(marketplace.metadata.version).toBe(pkg.version)
     expect(marketplace.plugins[0].version).toBe(pkg.version)
+  })
+
+  it('does not ship npm or standalone DSH publish workflows', () => {
+    expect(fs.existsSync(join(ROOT, '.github/workflows/publish.yml'))).toBe(false)
+    expect(fs.existsSync(join(ROOT, '.github/workflows/publish-dsh-ccg.yml'))).toBe(false)
+  })
+})
+
+describe('package tarball excludes red-team notes', () => {
+  it('uses an explicit skills whitelist without domains/security', () => {
+    const files: string[] = pkg.files
+    expect(
+      files.some(
+        (file) =>
+          file === 'templates/skills/' || file.endsWith('domains/security') || file.includes('domains/security/')
+      )
+    ).toBe(false)
+    expect(files).toContain('templates/skills/domains/ai/')
+    expect(files).toContain('templates/skills/tools/')
+    expect(files).toContain('templates/skills/package.json')
+  })
+
+  it('npm pack omits security-domain reference files', { timeout: 60_000 }, () => {
+    const output = execFileSync('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], {
+      cwd: ROOT,
+      encoding: 'utf8',
+      maxBuffer: 20 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    const packed: string[] = JSON.parse(output)[0].files.map((file: { path: string }) => file.path)
+    expect(packed.some((file) => file.includes('templates/skills/domains/security'))).toBe(false)
+    expect(
+      packed.some(
+        (file) => file.endsWith('red-team.md') || file.endsWith('pentest.md') || file.endsWith('vuln-research.md')
+      )
+    ).toBe(false)
+    expect(packed).toContain('templates/skills/domains/ai/SKILL.md')
+    expect(packed).toContain('templates/skills/tools/verify-security/SKILL.md')
   })
 })
 

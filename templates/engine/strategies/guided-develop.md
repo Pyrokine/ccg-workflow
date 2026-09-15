@@ -166,7 +166,7 @@ Bash({
 })
 ```
 
-**也可以用 Codex 原生 spawn 模式**（如果项目 `.codex/` 已配置 multi_agent_v2）：
+**也可以用 Codex 原生 spawn 模式**（显式启用 Codex 主导模式时使用已安装的 `ccg-*` Agent 角色）：
 
 - 发送编排指令让 Codex 读 AGENTS.md 的 §5 "Parallel Spawn" 模式
 - Codex 自行 spawn ccg-implement 子代理并行写
