@@ -10,6 +10,7 @@ permissions:
 
 jobs:
   contributors:
+    if: ${{ !github.event.repository.private }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
