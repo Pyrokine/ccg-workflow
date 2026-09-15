@@ -2,9 +2,14 @@ name: Build codeagent-wrapper binaries
 
 on:
   push:
+    branches: [main]
     paths:
       - 'codeagent-wrapper/**'
   workflow_dispatch:
+
+concurrency:
+  group: preset-release
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -54,10 +59,10 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: preset
-          name: "Pre-built Binaries (codeagent-wrapper)"
+          name: 'Pre-built Binaries (codeagent-wrapper)'
           body: |
             Pre-compiled `codeagent-wrapper` binaries for all supported platforms.
-            Automatically downloaded during `npx ccg-workflow` installation.
+            Automatically downloaded by the repository installer.
 
             | File | Platform | Architecture |
             |------|----------|-------------|

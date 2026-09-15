@@ -16,22 +16,19 @@
     "agent"
   ],
   "license": "MIT",
+  "private": true,
   "author": {
-    "name": "fengshao1227",
-    "url": "https://github.com/fengshao1227"
+    "name": "CCG Contributors",
+    "url": "https://github.com/Pyrokine/ccg-workflow"
   },
-  "homepage": "https://github.com/fengshao1227/ccg-workflow#readme",
+  "homepage": "https://github.com/Pyrokine/ccg-workflow#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/fengshao1227/ccg-workflow.git",
+    "url": "git+https://github.com/Pyrokine/ccg-workflow.git",
     "directory": "dsh-ccg"
   },
   "bugs": {
-    "url": "https://github.com/fengshao1227/ccg-workflow/issues"
-  },
-  "publishConfig": {
-    "access": "public",
-    "provenance": true
+    "url": "https://github.com/Pyrokine/ccg-workflow/issues"
   },
   "exports": {
     ".": "./src/index.js",

@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added PackyCode Claude Code and Codex endpoint metadata, environment-variable guidance, sponsor artwork, and bilingual installer copy.
 - Added opaque per-session task bindings, exclusive task claims with explicit takeover, separate binding revisions, and effective `in_progress` status while durable task status remains `open`.
 - Added explicit state-v1 migration, evidence-limited status repair, resumable byte-preserving legacy-task migration, and reversible orphan-directory quarantine.
+- Added validation and GitHub Release automation for annotated `vX.Y.Z-aug.N` tags.
 
 ### Changed
 
@@ -23,11 +24,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `package.json` now lists skill subdirectories explicitly instead of packaging the complete `templates/skills/` tree. `domains/security/` remains in Git but is excluded from tarballs and default installation.
 - `.ccg/state.json` schema v2 now stores only worktree state identity and revision. Claude and Codex Hooks derive namespaced SHA-256 session keys, and Agent or wrapper authority refreshes use only the parent session binding.
 - Status and doctor output no longer guess a worktree-global active task. With `CCG_SESSION_KEY`, status resolves the current session; without it, status reports schema, open-task count, and binding count.
+- Repository documentation now uses source-install commands for this fork and keeps maintainer-local Agent instructions outside tracked product files.
 
 ### Fixed
 
 - Sponsor Codex registration preserves existing provider tables, authentication files, active provider selection, and restrictive config permissions. Activation remains explicit, and Codex-mode uninstall removes only provider tables recorded as added by that installation.
-- Corrected `dsh-ccg` documentation that referenced a standalone publish workflow which is not present in this private repository.
+- Replaced machine-specific path examples and repository fixtures with portable placeholders.
+- Corrected `dsh-ccg` documentation that referenced a standalone publish workflow which is not present in this repository.
 - Prevented different Claude Code sessions in one worktree from replacing or receiving each other's active task contract. SessionStart now exports the current opaque binding key through `CLAUDE_ENV_FILE`, and controller examples carry the binding CAS revision.
 - Corrected canonical tasks that persisted `in_progress` through a constrained repair path, and corrected legacy `superseded` migrations only when the byte-preserved backup proves the original status.
 - Legacy tasks now remain migration-required after state v2 exists and when only terminal legacy tasks remain. Non-Git project roots can quarantine local orphan artifacts without requiring a Git exclude file.
@@ -36,7 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Orphan migration now validates manifest names, exact paths, statuses, and timestamps before rename, supports quarantine after restore, and requires matching task IDs for provenance-backed status repair. Legacy metadata truncation now respects UTF-8 byte limits.
 - Codex runtime guidance now uses internal Codex or Claude Code review for automatic quality checks and reserves GPT or Grok for explicit external-review requests. Doctor and status only report Codex mode installed when its managed instructions, agents, task runtime, and single Hook registration are complete.
 - Codex mode install and uninstall now merge only CCG-managed AGENTS and Hook content, reject noncanonical or duplicate markers, malformed JSON, symlink targets, and explicit required-feature conflicts, preserve user file permissions, create reversible backups, and restore every target after a failed write. An ownership manifest restores pre-existing same-name runtime files, preserves runtime files edited after installation, and prevents uninstall from claiming pre-existing sponsor tables. Leaf detection uses Codex Hook `agent_id` and `agent_type`; role files use current boolean feature syntax instead of nested `multi_agent_v2` tables.
-- Doctor and status tests now strip terminal control sequences before matching output, so CI behaves consistently with and without forced color. The public contributor updater is skipped in private forks where its collaborator API request returns `Not Found`.
+- Doctor and status tests now strip terminal control sequences before matching output, so CI behaves consistently with and without forced color. The contributor updater is skipped when the repository visibility prevents collaborator lookup. CI uses current Node 24-based action releases and disables the unused Go module cache for the standard-library-only wrapper.
 
 ## [3.6.4-aug.1] - 2026-09-05
 
@@ -1286,7 +1289,7 @@ Critical findings block delivery.
 
 - **问题**: Windows 用户使用会话复用时报错：
   ```
-  Failed to read ROLE_FILE 'C:/Users/XXX/.claude/.ccg/prompts/gemini/architect.md':
+  Failed to read ROLE_FILE 'C:/Users/USER/.claude/.ccg/prompts/gemini/architect.md':
   The system cannot find the file specified.
   ```
 - **根本原因**: `templates/prompts/gemini/` 目录下缺失 `architect.md` 文件，但命令模板 (`plan.md`, `execute.md` 等)
@@ -2016,7 +2019,7 @@ Windows 用户在使用 CCG 工作流时遇到两个关键问题：
 
 1. **路径问题**：后台命令执行失败（exit code 127）
    - 原因：Windows 路径中的反斜杠 `\` 在 Git Bash heredoc 中被转义
-   - 错误：`C:\Users\USER\.claude\bin\codeagent-wrapper` → `C:UsersLin.claudebincodeagent-wrapper`
+   - 错误：`C:\Users\USER\.claude\bin\codeagent-wrapper` → `C:UsersUSER.claudebincodeagent-wrapper`
 
 2. **输出截断问题**：codeagent-wrapper 不返回完整结果
    - 原因 1：日志行长度限制（1000 字符）截断长 JSON 事件
@@ -2074,7 +2077,7 @@ if isWindows() {
 **修复前（Windows）**：
 
 ```
-❌ 路径：C:UsersLin.claudebincodeagent-wrapper (错误)
+❌ 路径：C:UsersUSER.claudebincodeagent-wrapper (错误)
 ❌ 输出：只获取到约 600 字符（12,917 字符被截断）
 ❌ 状态：后台命令 exit code 127
 ```

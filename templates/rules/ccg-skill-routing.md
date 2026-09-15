@@ -10,7 +10,7 @@ skill file exists.
 
 > Security domain files contain red team/pentest reference content that may trigger antivirus false positives.
 > They are NOT installed by default and are excluded from package tarballs. To enable them, copy from the GitHub repository:
-> `git clone --depth 1 https://github.com/fengshao1227/ccg-workflow.git /tmp/ccg && cp -r /tmp/ccg/templates/skills/domains/security ~/.claude/skills/ccg/domains/security`
+> `git clone --depth 1 https://github.com/Pyrokine/ccg-workflow.git /tmp/ccg && cp -r /tmp/ccg/templates/skills/domains/security ~/.claude/skills/ccg/domains/security`
 
 | Trigger Keywords                                                                             | Skill File                                               | Description                           |
 | -------------------------------------------------------------------------------------------- | -------------------------------------------------------- | ------------------------------------- |

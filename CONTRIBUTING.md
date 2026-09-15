@@ -1,136 +1,76 @@
 # Contributing to CCG
 
-Thanks for your interest in contributing to CCG! This guide will help you get started.
-
-## Development Setup
+## Development setup
 
 ### Prerequisites
 
-- Node.js 22.13+ or 24.19.0+ (see `.node-version`)
-- pnpm 11 (Node 24 bundles Corepack; run `corepack enable`)
-- Go 1.26+ (only for `codeagent-wrapper` changes)
+- Node.js 22.13+ or 24.19.0+; see `.node-version`
+- pnpm 11 through Corepack
+- Go 1.26+ when changing `codeagent-wrapper`
 
-### Getting Started
+### Build and test
 
 ```bash
-# Clone the repository
-git clone https://github.com/fengshao1227/ccg-workflow.git
-cd ccg-workflow/skills-v2
-
-# Install dependencies
-pnpm install
-
-# Build
+git clone https://github.com/Pyrokine/ccg-workflow.git
+cd ccg-workflow
+corepack enable
+pnpm install --frozen-lockfile
 pnpm build
-
-# Run tests
 pnpm test
 ```
 
-### Project Structure
+The main source areas are:
 
-```
-skills-v2/
-├── src/                    # TypeScript source
-│   ├── cli.ts              # CLI entry point
-│   ├── commands/           # CLI commands (init, update, menu, etc.)
-│   └── utils/              # Shared utilities
-├── templates/              # Installed to ~/.claude/
-│   ├── commands/           # 26 slash command templates (.md)
-│   ├── prompts/            # Expert prompts (antigravity/, claude/, codex/, grok/, kimi/, opencode/)
-│   └── skills/             # Quality gates + orchestration
-├── codeagent-wrapper/      # Go binary source
-├── tests/                  # Vitest test files
-└── bin/                    # Build output + pre-compiled binaries
+```text
+src/                    TypeScript CLI and installers
+templates/              Commands, runtime hooks, prompts, skills, and rules
+codeagent-wrapper/      Go wrapper source
+dsh-ccg/                DeepSeek Harness plugin
+.github/workflows/      CI and GitHub Release automation
 ```
 
-### Key Files
+## Development workflow
 
-| File                      | Purpose                                     |
-|---------------------------|---------------------------------------------|
-| `src/utils/installer.ts`  | Core installation logic                     |
-| `src/utils/config.ts`     | Configuration management                    |
-| `src/utils/mcp.ts`        | MCP tool integration                        |
-| `templates/commands/*.md` | Slash command templates                     |
-| `templates/prompts/`      | Expert prompts for Antigravity, Claude, Codex, Grok, Kimi Code, and OpenCode |
+1. Open or claim an issue that describes the change
+2. Create a focused branch with `git switch -c <name>`
+3. Follow the existing code and test style in the affected module
+4. Update user-facing documentation when behavior changes
+5. Run the checks listed below
+6. Commit with a Conventional Commits subject
+7. Push the branch and open a pull request
 
-## How to Contribute
+Use these commit prefixes: `feat`, `fix`, `docs`, `test`, `refactor`, and `chore`.
 
-### Find an Issue
+A pull request should address one concern, include tests for changed behavior, and explain any user-visible compatibility effect.
 
-- Check [`good first issue`](https://github.com/fengshao1227/ccg-workflow/labels/good%20first%20issue) for
-  beginner-friendly tasks
-- Check [`help wanted`](https://github.com/fengshao1227/ccg-workflow/labels/help%20wanted) for tasks needing assistance
-- Or open a new issue to propose your idea
+## Required checks
 
-### Development Workflow
+```bash
+git diff --check
+pnpm typecheck
+pnpm lint
+pnpm format:check
+pnpm test
+pnpm build
+go -C codeagent-wrapper test ./...
+go -C codeagent-wrapper build -o /dev/null .
+node bin/ccg.mjs --help
+```
 
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feat/your-feature`
-3. Make your changes
-4. Run tests: `pnpm test`
-5. Build: `pnpm build`
-6. Commit with conventional format: `git commit -m "feat: add something"`
-7. Push and create a Pull Request
+Go checks are required for wrapper changes. The other checks apply to every pull request.
 
-### Commit Convention
+## Public-content hygiene
 
-We use [Conventional Commits](https://www.conventionalcommits.org/):
+Tracked code, tests, fixtures, documentation, workflows, examples, commit metadata, and release material must be suitable for a public repository. Do not include organization-only names, private service addresses, real local home-directory paths, company email addresses, access tokens, cookies, authorization headers, or credential fragments.
 
-| Prefix      | Usage                                 |
-|-------------|---------------------------------------|
-| `feat:`     | New feature                           |
-| `fix:`      | Bug fix                               |
-| `docs:`     | Documentation changes                 |
-| `test:`     | Adding or updating tests              |
-| `refactor:` | Code refactoring (no behavior change) |
-| `chore:`    | Build, CI, dependency updates         |
+Use neutral fixtures such as `module-alpha`, `/home/user/`, and `USER`. Keep clone-local untracked paths in `.git/info/exclude`; `skip-worktree` and `assume-unchanged` are not ignore mechanisms.
 
-### Code Standards
+Repository maintenance instructions and local task state do not belong in commits. Do not commit project-maintainer `CLAUDE.md` files, `.ccg/`, local `.claude/` state, task contracts, plans, review artifacts, transcripts, migration data, or history-rewrite backups. Runtime templates that are intentionally shipped by the product remain part of the source tree.
 
-- **TypeScript**: Follow existing patterns in `src/`
-- **Templates**: Markdown files in `templates/commands/` — use `{{VARIABLE}}` for template variables
-- **Tests**: Use Vitest, place tests in `tests/` mirroring `src/` structure
-- **Metrics**: Function complexity < 10, single function < 50 lines, single file < 500 lines
+## Releases
 
-### What Makes a Good PR
+Maintainers must follow [RELEASING.md](./RELEASING.md). Committing, pushing, tagging, and changing GitHub Releases require explicit approval for that release operation.
 
-- **Focused**: One concern per PR
-- **Tested**: Include tests for new functionality
-- **Documented**: Update README if adding user-facing features
-- **Small**: Prefer multiple small PRs over one large one
+## Reporting issues
 
-## Good First Issues
-
-Good first issues are designed to be completable in ~2 hours. They typically involve:
-
-- **Documentation**: Fix typos, improve examples, add missing descriptions
-- **i18n**: Add missing translations in command templates
-- **Tests**: Write tests for untested utility functions
-- **Templates**: Improve slash command templates with better examples
-- **Small fixes**: Single-file bug fixes in `src/utils/`
-
-Each good first issue includes:
-
-- Clear problem description
-- Specific files to modify
-- Acceptance criteria
-- Verification commands
-
-## Review Process
-
-| Event                 | Timeline                                 |
-|-----------------------|------------------------------------------|
-| Issue claimed         | Assigned within 1 day                    |
-| PR submitted          | First review within 3 days               |
-| After review feedback | Contributor has 5 days to respond        |
-| No response           | Issue unassigned (you can reclaim later) |
-
-## Questions?
-
-- Open a [Discussion](https://github.com/fengshao1227/ccg-workflow/discussions)
-- Check existing [Issues](https://github.com/fengshao1227/ccg-workflow/issues)
-
----
-
-Thank you for contributing!
+Use the [issue tracker](https://github.com/Pyrokine/ccg-workflow/issues) for reproducible defects and feature proposals. Include the affected version, platform, command, expected behavior, and the smallest safe reproduction

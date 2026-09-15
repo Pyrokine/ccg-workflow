@@ -2,7 +2,7 @@
 
 **把 CCG 的多模型角色矩阵搬进 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) —— 七个角色委派工具，各自跑在自己的模型上，不依赖任何外部 CLI。任一角色都能挂多个模型同时作答，也能被雇成有自己文件的常驻队友。所有权与项目决策都是持久的。**
 
-[English](./README.md) · MIT · 跟随 dsh `0.1.x` · 隶属 [CCG](https://github.com/fengshao1227/ccg-workflow) —— ⭐ 请点仓库，不是这个目录
+[English](./README.md) · MIT · 跟随 dsh `0.1.x` · 隶属 [CCG](https://github.com/Pyrokine/ccg-workflow) —— ⭐ 请点仓库，不是这个目录
 
 ---
 
@@ -41,7 +41,7 @@ Agent 读你说的话，判断这活值多大阵仗，说出选了哪档、花�
 
 ## 它做什么
 
-一个模型很难同时胜任所有环节：审查要细，实现要快，设计要能推理。[CCG](https://github.com/fengshao1227/ccg-workflow) 在 Claude Code 上已经把这套「**不同角色用不同模型**」的纪律跑了一年，代价是每个后端都得驱动一个厂商 CLI —— 要装、要登录，每次调用还要付启动开销。
+一个模型很难同时胜任所有环节：审查要细，实现要快，设计要能推理。[CCG](https://github.com/Pyrokine/ccg-workflow) 在 Claude Code 上已经把这套「**不同角色用不同模型**」的纪律跑了一年，代价是每个后端都得驱动一个厂商 CLI —— 要装、要登录，每次调用还要付启动开销。
 
 在 dsh 上这一层直接消失。本插件给主代理七个委派工具：
 
@@ -309,8 +309,8 @@ node --test test/*.test.mjs
 
 ## 它是 CCG 的一部分
 
-这个插件就住在 [**CCG**](https://github.com/fengshao1227/ccg-workflow) 仓库的 `dsh-ccg/` 目录下。CCG 是同一套纪律在 Claude Code 上的形态（`npx ccg-workflow`），同一套角色提示词在那里驱动 Claude、Codex、Gemini、Grok、Kimi 与 OpenCode。一个仓库、两个包：issue、star 和 PR 都归 CCG。
+这个插件位于 [**CCG**](https://github.com/Pyrokine/ccg-workflow) 仓库的 `dsh-ccg/` 目录。仓库安装器把同一套角色提示词用于 Claude Code、Codex、Antigravity、Grok、Kimi 与 OpenCode。`dsh-ccg` 随根项目分发，issue、star 和 PR 都归 CCG。
 
-如果它对你有用，star 请点[仓库](https://github.com/fengshao1227/ccg-workflow)。
+如果它对你有用，star 请点[仓库](https://github.com/Pyrokine/ccg-workflow)。
 
 MIT。

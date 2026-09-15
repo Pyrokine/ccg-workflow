@@ -4,17 +4,14 @@
 
 <img src="assets/logo/ccg-logo-cropped.png" alt="CCG Workflow" width="400">
 
-[![GitHub stars](https://img.shields.io/github/stars/fengshao1227/ccg-workflow?style=social)](https://github.com/fengshao1227/ccg-workflow)
-[![NPM Downloads](https://img.shields.io/npm/dt/ccg-workflow?style=flat-square&color=blue)](https://www.npmjs.com/package/ccg-workflow)
-[![npm version](https://img.shields.io/npm/v/ccg-workflow.svg)](https://www.npmjs.com/package/ccg-workflow)
+[![GitHub stars](https://img.shields.io/github/stars/Pyrokine/ccg-workflow?style=social)](https://github.com/Pyrokine/ccg-workflow)
+[![CI](https://github.com/Pyrokine/ccg-workflow/actions/workflows/ci.yml/badge.svg)](https://github.com/Pyrokine/ccg-workflow/actions/workflows/ci.yml)
+[![GitHub Release](https://img.shields.io/github/v/release/Pyrokine/ccg-workflow?include_prereleases)](https://github.com/Pyrokine/ccg-workflow/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-Compatible-green.svg)](https://claude.ai/code)
 [![Tests](https://img.shields.io/badge/Tests-340%20passed-brightgreen.svg)](#)
-[![Follow on X](https://img.shields.io/badge/X-@CCG__Workflow-black?logo=x&logoColor=white)](https://x.com/CCG_Workflow)
-![star](https://atomgit.com/fengshao1227/ccg-workflow/star/badge.svg)
-[![Docs](https://img.shields.io/badge/文档站-ccg.fengshao1227.com-blue?style=for-the-badge&logo=readthedocs&logoColor=white)](https://github.com/Pyrokine/ccg-workflow/)
 
-简体中文 | [English](./README.md) | [**完整文档**](https://github.com/Pyrokine/ccg-workflow/)
+简体中文 | [English](./README.md)
 
 </div>
 
@@ -46,10 +43,10 @@ Anthropic 兼容端点配置为 Claude Code API 提供方，也可单独注册 C
 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)。安装器使用当前 `DSH_HOME`，把插件复制到长期保留的本地路径，并且只修改用户选定的 profile manifest。
 
 ```bash
-npx ccg-workflow dsh install                # 安装到所有已发现的 profile
-npx ccg-workflow dsh install --profile web  # 只安装到一个 profile
-npx ccg-workflow dsh list
-npx ccg-workflow dsh uninstall
+node bin/ccg.mjs dsh install                # 安装到所有已发现的 profile
+node bin/ccg.mjs dsh install --profile web  # 只安装到一个 profile
+node bin/ccg.mjs dsh list
+node bin/ccg.mjs dsh uninstall
 ```
 
 角色工具、模型面板和常驻队友说明见 [`dsh-ccg/README.zh-CN.md`](./dsh-ccg/README.zh-CN.md)。
@@ -92,7 +89,12 @@ v3.0 从底层重写。一个命令替代 29 个。
 ## 快速开始
 
 ```bash
-npx ccg-workflow
+git clone https://github.com/Pyrokine/ccg-workflow.git
+cd ccg-workflow
+corepack enable
+pnpm install --frozen-lockfile
+pnpm build
+node bin/ccg.mjs
 ```
 
 需要 Node.js 22.13+ 或 24.19.0+ 和 Claude Code CLI。Codex CLI、Antigravity CLI、Grok CLI、Kimi Code CLI 和 OpenCode CLI 仅在前端或后端路由时可选使用。
@@ -236,7 +238,7 @@ Schema v1 state、legacy task、有证据的无效状态和 orphan directory 分
 {
   "path": "docs/integration-version-map.md",
   "section": "Merge and dependency rules",
-  "purpose": "定义哪些仓库合入，哪些只由 build system 引用",
+  "purpose": "定义哪些仓库合入，哪些由构建系统引用",
   "roles": ["research", "implement", "review", "debug"]
 }
 ```
@@ -265,7 +267,7 @@ Hook 验证项目相对路径、普通文件、literal Git 跟踪状态、fenced
 | `/ccg:seo-page-builder`     | 创建和审计 SEO 工具页，附可执行的 on-page audit 脚本 |
 | `/ccg:adsense-site-auditor` | 检查 AdSense 申请准备情况和政策要求                  |
 
-只从 private fork 安装技能包：
+只从当前仓库安装技能包：
 
 ```bash
 claude plugin marketplace add Pyrokine/ccg-workflow
@@ -277,14 +279,14 @@ claude plugin install ccg@ccg
 ## CLI 命令
 
 ```bash
-npx ccg-workflow doctor                   # 环境健康检查
-npx ccg-workflow status                   # 安装状态和当前 session task 概览
-npx ccg-workflow codex-mode install       # 安装 Codex 主导模式
-npx ccg-workflow codex-mode uninstall     # 卸载 Codex 主导模式
-npx ccg-workflow dsh install              # 安装 dsh-ccg
-npx ccg-workflow dsh list                 # 查看 DSH profile 状态
-npx ccg-workflow dsh uninstall            # 卸载 dsh-ccg
-npx ccg-workflow uninstall                # 卸载 CCG
+node bin/ccg.mjs doctor                   # 环境健康检查
+node bin/ccg.mjs status                   # 安装状态和当前 session task 概览
+node bin/ccg.mjs codex-mode install       # 安装 Codex 主导模式
+node bin/ccg.mjs codex-mode uninstall     # 卸载 Codex 主导模式
+node bin/ccg.mjs dsh install              # 安装 dsh-ccg
+node bin/ccg.mjs dsh list                 # 查看 DSH profile 状态
+node bin/ccg.mjs dsh uninstall            # 卸载 dsh-ccg
+node bin/ccg.mjs uninstall                # 卸载 CCG
 ```
 
 ## 配置
@@ -317,12 +319,15 @@ npx ccg-workflow uninstall                # 卸载 CCG
 ## 更新 / 卸载
 
 ```bash
-npx ccg-workflow@latest     # 更新
-npx ccg-workflow            # 菜单中选"卸载"
+git pull --ff-only
+pnpm install --frozen-lockfile
+pnpm build
+node bin/ccg.mjs            # 需要卸载时在菜单中选择“卸载”
 ```
 
 ## 致谢
 
+- [fengshao1227/ccg-workflow](https://github.com/fengshao1227/ccg-workflow) — 上游项目
 - [cexll/myclaude](https://github.com/cexll/myclaude) — codeagent-wrapper 灵感
 - [UfoMiao/zcf](https://github.com/UfoMiao/zcf) — Git 工具参考
 - [mindfold-ai/Trellis](https://github.com/mindfold-ai/Trellis) — Hook 工作流状态模式
@@ -347,12 +352,11 @@ npx ccg-workflow            # 菜单中选"卸载"
 </table>
 <!-- readme: contributors -end -->
 
-## 联系
+## 项目链接
 
-- **X (Twitter)**: [@CCG_Workflow](https://x.com/CCG_Workflow)
-- **Email**: [noreply@github.com](mailto:noreply@github.com)
-- **Issues**: [GitHub Issues](https://github.com/fengshao1227/ccg-workflow/issues)
-- **社区**: [Linux.do](https://linux.do)
+- [Issues](https://github.com/Pyrokine/ccg-workflow/issues)
+- [Releases](https://github.com/Pyrokine/ccg-workflow/releases)
+- [上游项目](https://github.com/fengshao1227/ccg-workflow)
 
 ## License
 
@@ -360,4 +364,4 @@ MIT
 
 ---
 
-v3.6.7-aug.1 | [Issues](https://github.com/fengshao1227/ccg-workflow/issues) | [Contributing](./CONTRIBUTING.md)
+v3.6.7-aug.1 | [Issues](https://github.com/Pyrokine/ccg-workflow/issues) | [Contributing](./CONTRIBUTING.md) | [Releasing](./RELEASING.md)

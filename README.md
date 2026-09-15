@@ -4,17 +4,14 @@
 
 <img src="assets/logo/ccg-logo-cropped.png" alt="CCG Workflow" width="400">
 
-[![GitHub stars](https://img.shields.io/github/stars/fengshao1227/ccg-workflow?style=social)](https://github.com/fengshao1227/ccg-workflow)
-[![NPM Downloads](https://img.shields.io/npm/dt/ccg-workflow?style=flat-square&color=blue)](https://www.npmjs.com/package/ccg-workflow)
-[![npm version](https://img.shields.io/npm/v/ccg-workflow.svg)](https://www.npmjs.com/package/ccg-workflow)
+[![GitHub stars](https://img.shields.io/github/stars/Pyrokine/ccg-workflow?style=social)](https://github.com/Pyrokine/ccg-workflow)
+[![CI](https://github.com/Pyrokine/ccg-workflow/actions/workflows/ci.yml/badge.svg)](https://github.com/Pyrokine/ccg-workflow/actions/workflows/ci.yml)
+[![GitHub Release](https://img.shields.io/github/v/release/Pyrokine/ccg-workflow?include_prereleases)](https://github.com/Pyrokine/ccg-workflow/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-Compatible-green.svg)](https://claude.ai/code)
 [![Tests](https://img.shields.io/badge/Tests-340%20passed-brightgreen.svg)](#)
-[![Follow on X](https://img.shields.io/badge/X-@CCG__Workflow-black?logo=x&logoColor=white)](https://x.com/CCG_Workflow)
-![star](https://atomgit.com/fengshao1227/ccg-workflow/star/badge.svg)
-[![Docs](https://img.shields.io/badge/Docs-ccg.fengshao1227.com-blue?style=for-the-badge&logo=readthedocs&logoColor=white)](https://github.com/Pyrokine/ccg-workflow/)
 
-[简体中文](./README.zh-CN.md) | English | [**Documentation**](https://github.com/Pyrokine/ccg-workflow/)
+[简体中文](./README.zh-CN.md) | English
 
 </div>
 
@@ -49,10 +46,10 @@ The bundled `dsh-ccg` plugin brings the same role matrix to
 to a durable local path, and updates only the selected profile manifests.
 
 ```bash
-npx ccg-workflow dsh install                # Install into every discovered profile
-npx ccg-workflow dsh install --profile web  # Install into one profile
-npx ccg-workflow dsh list
-npx ccg-workflow dsh uninstall
+node bin/ccg.mjs dsh install                # Install into every discovered profile
+node bin/ccg.mjs dsh install --profile web  # Install into one profile
+node bin/ccg.mjs dsh list
+node bin/ccg.mjs dsh uninstall
 ```
 
 See [`dsh-ccg/README.md`](./dsh-ccg/README.md) for its role tools, model panels, and persistent teammates.
@@ -107,7 +104,12 @@ v3.0 is a ground-up rewrite. One command replaces 29.
 ## Quick Start
 
 ```bash
-npx ccg-workflow
+git clone https://github.com/Pyrokine/ccg-workflow.git
+cd ccg-workflow
+corepack enable
+pnpm install --frozen-lockfile
+pnpm build
+node bin/ccg.mjs
 ```
 
 Requires Node.js 22.13+ or 24.19.0+ and Claude Code CLI. Codex CLI, Antigravity CLI, Grok CLI, Kimi Code CLI, and OpenCode CLI are optional for frontend and backend routing.
@@ -282,7 +284,7 @@ The installer and native Claude Code plugin both include these direct skill entr
 | `/ccg:seo-page-builder`     | Create and audit SEO tool pages with a runnable on-page audit script |
 | `/ccg:adsense-site-auditor` | Check AdSense application readiness and policy requirements          |
 
-Install only the skills bundle from the private fork:
+Install only the skills bundle from this repository:
 
 ```bash
 claude plugin marketplace add Pyrokine/ccg-workflow
@@ -294,14 +296,14 @@ The native plugin does not install wrapper binaries or placeholder-based workflo
 ## CLI commands
 
 ```bash
-npx ccg-workflow doctor                   # Environment health check
-npx ccg-workflow status                   # Installation and active-task overview
-npx ccg-workflow codex-mode install       # Install Codex-led mode
-npx ccg-workflow codex-mode uninstall     # Remove Codex-led mode
-npx ccg-workflow dsh install              # Install dsh-ccg
-npx ccg-workflow dsh list                 # List DSH profile status
-npx ccg-workflow dsh uninstall            # Remove dsh-ccg
-npx ccg-workflow uninstall                # Uninstall CCG
+node bin/ccg.mjs doctor                   # Environment health check
+node bin/ccg.mjs status                   # Installation and active-task overview
+node bin/ccg.mjs codex-mode install       # Install Codex-led mode
+node bin/ccg.mjs codex-mode uninstall     # Remove Codex-led mode
+node bin/ccg.mjs dsh install              # Install dsh-ccg
+node bin/ccg.mjs dsh list                 # List DSH profile status
+node bin/ccg.mjs dsh uninstall            # Remove dsh-ccg
+node bin/ccg.mjs uninstall                # Uninstall CCG
 ```
 
 ## Configuration
@@ -334,12 +336,15 @@ Set in `~/.claude/settings.json` under `"env"`:
 ## Update / Uninstall
 
 ```bash
-npx ccg-workflow@latest     # Update
-npx ccg-workflow            # Select "Uninstall" from menu
+git pull --ff-only
+pnpm install --frozen-lockfile
+pnpm build
+node bin/ccg.mjs            # Select "Uninstall" from menu when needed
 ```
 
 ## Credits
 
+- [fengshao1227/ccg-workflow](https://github.com/fengshao1227/ccg-workflow) — upstream project
 - [cexll/myclaude](https://github.com/cexll/myclaude) — codeagent-wrapper inspiration
 - [UfoMiao/zcf](https://github.com/UfoMiao/zcf) — Git tools reference
 - [mindfold-ai/Trellis](https://github.com/mindfold-ai/Trellis) — Hook-based workflow state patterns
@@ -364,16 +369,15 @@ npx ccg-workflow            # Select "Uninstall" from menu
 </table>
 <!-- readme: contributors -end -->
 
-## Contact
+## Project links
 
-- **X (Twitter)**: [@CCG_Workflow](https://x.com/CCG_Workflow)
-- **Email**: [noreply@github.com](mailto:noreply@github.com)
-- **Issues**: [GitHub Issues](https://github.com/fengshao1227/ccg-workflow/issues)
-- **Community**: [Linux.do](https://linux.do)
+- [Issues](https://github.com/Pyrokine/ccg-workflow/issues)
+- [Releases](https://github.com/Pyrokine/ccg-workflow/releases)
+- [Upstream](https://github.com/fengshao1227/ccg-workflow)
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=fengshao1227/ccg-workflow&type=timeline&legend=top-left)](https://www.star-history.com/#fengshao1227/ccg-workflow&type=timeline&legend=top-left)
+[![Star History Chart](https://api.star-history.com/svg?repos=Pyrokine/ccg-workflow&type=timeline&legend=top-left)](https://www.star-history.com/#Pyrokine/ccg-workflow&type=timeline&legend=top-left)
 
 ## License
 
@@ -381,4 +385,4 @@ MIT
 
 ---
 
-v3.6.7-aug.1 | [Issues](https://github.com/fengshao1227/ccg-workflow/issues) | [Contributing](./CONTRIBUTING.md)
+v3.6.7-aug.1 | [Issues](https://github.com/Pyrokine/ccg-workflow/issues) | [Contributing](./CONTRIBUTING.md) | [Releasing](./RELEASING.md)

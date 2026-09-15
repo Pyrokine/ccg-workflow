@@ -2,7 +2,7 @@
 
 **CCG's multi-model role matrix for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) — seven role-pinned delegation tools, each on its own model, with no external CLI. Any role can answer as a panel of models, or be hired as a live teammate with files of its own. Ownership and project decisions are durable.**
 
-[中文](./README.zh-CN.md) · MIT · tracks dsh `0.1.x` · part of [CCG](https://github.com/fengshao1227/ccg-workflow) — ⭐ the repo, not this folder
+[中文](./README.zh-CN.md) · MIT · tracks dsh `0.1.x` · part of [CCG](https://github.com/Pyrokine/ccg-workflow) — ⭐ the repo, not this folder
 
 ---
 
@@ -41,7 +41,7 @@ Four things you can then do without learning any commands:
 
 ## What it does
 
-One model rarely fits every turn. Review wants care; implementation wants speed; design wants reasoning depth. [CCG](https://github.com/fengshao1227/ccg-workflow) has run that discipline on Claude Code for a year — **different roles, different models** — at the cost of driving one vendor CLI per backend: an install, a login, and a startup tax on every call.
+One model rarely fits every turn. Review wants care; implementation wants speed; design wants reasoning depth. [CCG](https://github.com/Pyrokine/ccg-workflow) has run that discipline on Claude Code for a year — **different roles, different models** — at the cost of driving one vendor CLI per backend: an install, a login, and a startup tax on every call.
 
 On dsh that layer disappears. This plugin gives the agent seven delegation tools:
 
@@ -309,8 +309,8 @@ The role matrix resolves through one pure function (`resolveRoles`), so which mo
 
 ## Part of CCG
 
-This plugin lives in the [**CCG**](https://github.com/fengshao1227/ccg-workflow) repository, under `dsh-ccg/`. CCG is the same discipline for Claude Code (`npx ccg-workflow`), where the same role prompts drive Claude, Codex, Gemini, Grok, Kimi and OpenCode. One repo, two packages: issues, stars and pull requests all belong to CCG.
+This plugin lives in the [**CCG**](https://github.com/Pyrokine/ccg-workflow) repository under `dsh-ccg/`. The repository installer brings the same role prompts to Claude Code, Codex, Antigravity, Grok, Kimi and OpenCode. `dsh-ccg` ships with the root project, so issues, stars and pull requests all belong to CCG.
 
-If this was useful, the star goes on [the repository](https://github.com/fengshao1227/ccg-workflow).
+If this was useful, the star goes on [the repository](https://github.com/Pyrokine/ccg-workflow).
 
 MIT.

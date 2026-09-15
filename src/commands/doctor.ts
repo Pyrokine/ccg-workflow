@@ -391,9 +391,7 @@ export async function doctor(): Promise<void> {
   if (failures.length === 0) {
     console.log(ansis.green('  All required checks passed.'))
   } else {
-    console.log(
-      ansis.red(`  ${failures.length} issue(s) found. Re-run the private repository installer to repair them.`)
-    )
+    console.log(ansis.red(`  ${failures.length} issue(s) found. Re-run the repository installer to repair them.`))
   }
   console.log()
 }

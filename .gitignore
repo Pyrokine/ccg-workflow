@@ -62,5 +62,3 @@ FINAL_VERIFICATION.md
 
 # Old package tarballs
 *.tgz
-
-.local-tool/

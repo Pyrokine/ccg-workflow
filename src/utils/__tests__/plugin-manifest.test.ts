@@ -9,10 +9,11 @@ const SKILLS_DIR = join(ROOT, 'templates/skills')
 const pkg = fs.readJsonSync(join(ROOT, 'package.json'))
 const marketplace = fs.readJsonSync(join(ROOT, '.claude-plugin/marketplace.json'))
 const plugin = fs.readJsonSync(join(ROOT, '.claude-plugin/plugin.json'))
+const dshPackage = fs.readJsonSync(join(ROOT, 'dsh-ccg/package.json'))
 
 /**
  * The .claude-plugin manifests let Claude Code install CCG's skills natively via
- * `claude plugin marketplace add fengshao1227/ccg-workflow`. They live outside the
+ * `claude plugin marketplace add Pyrokine/ccg-workflow`. They live outside the
  * npm tarball and outside the installer, so nothing else catches a stale version
  * or a broken skills path — these assertions do.
  */
@@ -48,9 +49,30 @@ describe('plugin manifests — native marketplace install', () => {
     expect(marketplace.plugins[0].version).toBe(pkg.version)
   })
 
-  it('does not ship npm or standalone DSH publish workflows', () => {
+  it('does not ship npm or standalone DSH publishing', () => {
+    expect(pkg.private).toBe(true)
+    expect(dshPackage.private).toBe(true)
+    expect(dshPackage.publishConfig).toBeUndefined()
     expect(fs.existsSync(join(ROOT, '.github/workflows/publish.yml'))).toBe(false)
     expect(fs.existsSync(join(ROOT, '.github/workflows/publish-dsh-ccg.yml'))).toBe(false)
+  })
+})
+
+describe('repository hygiene', () => {
+  it('keeps maintainer instructions and local runtime state out of tracked files', () => {
+    const tracked = execFileSync('git', ['ls-files', '-z'], {
+      cwd: ROOT,
+      encoding: 'utf8',
+    })
+      .split('\0')
+      .filter(Boolean)
+
+    expect(
+      tracked.filter((file) => fs.existsSync(join(ROOT, file)) && (file === 'CLAUDE.md' || file.endsWith('/CLAUDE.md')))
+    ).toEqual([])
+    expect(
+      tracked.filter((file) => fs.existsSync(join(ROOT, file)) && /^(?:\.ccg|\.magi|\.claude)\//.test(file))
+    ).toEqual([])
   })
 })
 

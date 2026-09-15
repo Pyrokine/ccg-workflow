@@ -88,11 +88,11 @@ async function createProject(): Promise<string> {
       '',
       '## Implementation rules',
       '',
-      'module-beta is referenced by Planning build system and does not merge.',
+      'module-beta is referenced by the build system and does not merge.',
       '',
       '## Review rules',
       '',
-      'Reject any plan that merges Planning, module-beta, or module-gamma.',
+      'Reject any plan that merges module-alpha, module-beta, or module-gamma.',
       '',
     ].join('\n')
   )
@@ -1381,7 +1381,7 @@ describe('session and sub-agent Hooks', () => {
     expect(contexts[0]).toContain('Default (frontend=claude, backend=claude)')
     expect(contexts[0]).toContain('Complete restore-task')
     expect(contexts[0]).toContain('Do not merge module-beta')
-    expect(contexts[0]).toContain('module-beta is referenced by Planning build system and does not merge')
+    expect(contexts[0]).toContain('module-beta is referenced by the build system and does not merge')
 
     const fork = hookOutput(
       runHook(root, 'session-start.js', { cwd: root, source: 'fork', session_id: 'forked-session' })
@@ -1445,7 +1445,7 @@ describe('session and sub-agent Hooks', () => {
     const context = output.additionalContext as string
     expect(output.hookEventName).toBe('UserPromptSubmit')
     expect(context).toContain('<ccg-authority>')
-    expect(context).toContain('module-beta is referenced by Planning build system and does not merge')
+    expect(context).toContain('module-beta is referenced by the build system and does not merge')
     expect(context).toContain('Complete prompt-authority-task')
     expect(context).toContain('allowed actions, prohibited actions, exclusions, stop conditions')
     expect(context).not.toContain('STALE_PLAN_SENTINEL')
@@ -1528,7 +1528,9 @@ describe('session and sub-agent Hooks', () => {
       )
       expect(output.hookEventName).toBe(testCase.event)
       expect(output.additionalContext).toContain('LATEST_REQUIREMENTS_SENTINEL')
-      expect(output.additionalContext).toContain('Reject any plan that merges Planning, module-beta, or module-gamma')
+      expect(output.additionalContext).toContain(
+        'Reject any plan that merges module-alpha, module-beta, or module-gamma'
+      )
     }
   })
 
@@ -2529,8 +2531,8 @@ describe('Codex shared task Hook', () => {
     const context = output.additionalContext as string
     expect(context).toContain(`<ccg-session-key>${CODEX_SESSION_KEY}</ccg-session-key>`)
     expect(context).not.toContain(CODEX_SESSION_ID)
-    expect(context).toContain('module-beta is referenced by Planning build system and does not merge')
-    expect(context).toContain('Reject any plan that merges Planning, module-beta, or module-gamma')
+    expect(context).toContain('module-beta is referenced by the build system and does not merge')
+    expect(context).toContain('Reject any plan that merges module-alpha, module-beta, or module-gamma')
     expect(context.indexOf('AUTHORITATIVE LINKED SPEC SECTIONS')).toBeLessThan(
       context.indexOf('AUTHORITATIVE TASK CONTRACT')
     )
@@ -2573,8 +2575,8 @@ describe('Codex shared task Hook', () => {
     expect(context).toContain('SUB-AGENT NOTICE')
     expect(context).not.toContain('<ccg-session-key>')
     expect(context).toContain('codex-leaf-task')
-    expect(context).toContain('Reject any plan that merges Planning, module-beta, or module-gamma')
-    expect(context).not.toContain('module-beta is referenced by Planning build system and does not merge')
+    expect(context).toContain('Reject any plan that merges module-alpha, module-beta, or module-gamma')
+    expect(context).not.toContain('module-beta is referenced by the build system and does not merge')
   })
 
   it('includes research artifacts and omits oversized optional blocks without truncating XML', async () => {
