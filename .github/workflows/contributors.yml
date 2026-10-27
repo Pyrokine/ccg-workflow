@@ -10,7 +10,8 @@ permissions:
 
 jobs:
   contributors:
-    if: ${{ !github.event.repository.private }}
+    # Fork-only history omits upstream contributor credits.
+    if: ${{ !github.event.repository.private && !github.event.repository.fork }}
     runs-on: ubuntu-latest
     strategy:
       max-parallel: 1
