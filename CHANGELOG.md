@@ -37,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Vitest `describe` and `suite` callbacks are identified by their imported bindings. Only their own function-length diagnostics are exempt; nested functions, shadowed calls, complexity and parameter limits remain checked.
 - Skills install, update and remove commands report non-JSON results without referencing an undefined selection variable.
 - DSH peer ranges explicitly include the tested 0.2.1 prereleases. The compatibility test installs the matching official slot library separately when the host supplies it only in browser assets.
+- Contributor updates process the English and Chinese READMEs one at a time. The action accepts one file path, not a comma-separated list.
 
 ## [3.6.7-aug.1] - 2026-09-16
 
