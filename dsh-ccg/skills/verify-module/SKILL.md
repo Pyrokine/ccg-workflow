@@ -30,6 +30,18 @@ node scripts/module_scanner.js <模块路径> -v      # 详细模式
 node scripts/module_scanner.js <模块路径> --json  # JSON 输出
 ```
 
+支持一个或多个模块目录，路径相对当前工作目录解析，省略目标时检查当前目录；`--help` 只显示用法
+
+```bash
+node scripts/module_scanner.js packages/core packages/cli --json
+```
+
+单目标 JSON 保留 `module_path`、`passed`、问题和计数字段，增加 `complete`；多目标使用 `results` 数组及顶层 `passed`、`complete`
+
+缺少必需文档属于完整检查中发现的问题，返回 `complete: true`、`passed: false`，退出码为 `1`；目标缺失、目标不是目录或读取失败返回 `complete: false`、`passed: false` 和错误信息，退出码为 `2`；完成检查且没有 error 时退出码为 `0`，warning/info 保持非阻断
+
+脚本检查目录结构、文档存在性、大小和关键词，文档内容与代码行为是否一致仍需阅读源码复核
+
 ## 校验标准
 
 一个完整的模块必须包含：

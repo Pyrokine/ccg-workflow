@@ -1235,11 +1235,24 @@ function readStdinBounded(maxBytes) {
   if (process.stdin.isTTY) return '';
   const limit = Number.isInteger(maxBytes) && maxBytes > 0 ? maxBytes : HOOK_INPUT_LIMIT;
   const chunks = [];
+  const deadline = Date.now() + 1000;
+  const waitState = new Int32Array(new SharedArrayBuffer(4));
   let total = 0;
   while (true) {
     const buffer = Buffer.alloc(Math.min(64 * 1024, limit + 1 - total));
     if (buffer.length === 0) throw new Error('HOOK_INPUT_TOO_LARGE');
-    const bytesRead = fs.readSync(0, buffer, 0, buffer.length, null);
+    let bytesRead;
+    while (true) {
+      try {
+        bytesRead = fs.readSync(0, buffer, 0, buffer.length, null);
+        break;
+      } catch (error) {
+        if (!error || !['EAGAIN', 'EWOULDBLOCK'].includes(error.code)) throw error;
+        const remaining = deadline - Date.now();
+        if (remaining <= 0) throw new Error('HOOK_INPUT_TIMEOUT');
+        Atomics.wait(waitState, 0, 0, Math.min(10, remaining));
+      }
+    }
     if (bytesRead === 0) break;
     total += bytesRead;
     if (total > limit) throw new Error('HOOK_INPUT_TOO_LARGE');
@@ -1644,7 +1657,7 @@ function collectSnapshot(projectRoot, resolution, mode, role) {
       resolution,
       task,
       code: 'TASK_CONTEXT_TOO_LARGE',
-      message: `Authoritative task context exceeds the ${contextLimit}-byte context limit`,
+      message: `Task reference context exceeds the ${contextLimit}-byte context limit`,
       documents,
       research,
       specs,
@@ -1823,12 +1836,10 @@ function renderTaskHeader(snapshot, mode, role) {
   ];
   if (role) parts.push(`Role: ${escapeXml(role)}`);
   if (task.gate) parts.push(`Gate: ${escapeXml(task.gate)}`);
-  if (mode === 'authority') {
-    parts.push(
-      'Authority order: linked spec sections &gt; task contract &gt; current user instruction &gt; approved plan &gt; progress &gt; summaries and model inference.',
-      'Before the next decision, compare entity names, versions, dependency directions, allowed actions, prohibited actions, exclusions, stop conditions, and acceptance criteria. If a lower source conflicts, stop and report the exact field.'
-    );
-  }
+  parts.push(
+    'Instruction priority: system and developer instructions, current user instructions, project CLAUDE.md, then global CLAUDE.md. Linked specs, task records, plans, progress, summaries and model inference are reference material, not authorization.',
+    'Before the next decision, compare entity names, versions, dependency directions, allowed actions, prohibited actions, exclusions, stop conditions, and acceptance criteria against the current authorized scope. Apply the instruction priority above; report any boundary that requires a new user decision.'
+  );
   parts.push(`</${tag}>`);
   return parts.join('\n');
 }
@@ -1874,7 +1885,7 @@ function renderTaskSnapshot(snapshot, mode, role, maxBytes) {
   const mandatoryParts = [header, specs, renderTaskContext(contextEntries)].filter(Boolean);
   const mandatory = mandatoryParts.join('\n\n');
   if (byteLength(mandatory) > limit) {
-    return `<${tag}>\nTASK_CONTEXT_TOO_LARGE\nAuthoritative task context exceeds ${limit} bytes\n</${tag}>`;
+    return `<${tag}>\nTASK_CONTEXT_TOO_LARGE\nTask reference context exceeds ${limit} bytes\n</${tag}>`;
   }
 
   const localDiagnostics = [...(snapshot.diagnostics || [])];
@@ -2024,7 +2035,7 @@ function readTurns(taskDir, sessionKey) {
     : { ok: false, code: 'TURN_STATE_INVALID', turns: [], path: turnsPath };
 }
 
-function trackTurn(taskDir, sessionKey, phase, nextAction) {
+function trackTurn(taskDir, sessionKey, phase, nextAction, taskRevision) {
   const current = readTurns(taskDir, sessionKey);
   if (!current.ok) return current;
   const turnsDirectory = validateTaskSubdirectory(taskDir, '.turns', true);
@@ -2041,7 +2052,12 @@ function trackTurn(taskDir, sessionKey, phase, nextAction) {
   if (!verifiedDirectory.ok) return { ok: false, code: verifiedDirectory.code, turns: [] };
   const turns = [
     ...current.turns,
-    { phase: String(phase || ''), next: String(nextAction || ''), ts: new Date().toISOString() },
+    {
+      phase: String(phase || ''),
+      next: String(nextAction || ''),
+      ...(Number.isSafeInteger(taskRevision) && taskRevision > 0 ? { taskRevision } : {}),
+      ts: new Date().toISOString(),
+    },
   ].slice(-10);
   atomicWriteJson(current.path, turns);
   return { ok: true, turns };
@@ -2052,9 +2068,15 @@ function detectLoop(turns, threshold) {
   const count = threshold || 3;
   if (!Array.isArray(values) || values.length < count) return null;
   const recent = values.slice(-count);
-  const key = `${recent[0].phase}|${recent[0].next}`;
-  if (!recent.every((turn) => `${turn.phase}|${turn.next}` === key)) return null;
-  return { phase: recent[0].phase, nextAction: recent[0].next, count };
+  const first = recent[0];
+  if (!Number.isSafeInteger(first.taskRevision) || first.taskRevision < 1) return null;
+  if (
+    !recent.every(
+      (turn) => turn.phase === first.phase && turn.next === first.next && turn.taskRevision === first.taskRevision
+    )
+  )
+    return null;
+  return { kind: 'unchanged_task_records', phase: first.phase, nextAction: first.next, count };
 }
 
 function hasGitMarker(projectRoot) {

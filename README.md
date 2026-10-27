@@ -32,6 +32,12 @@ activation remains an explicit choice.
 
 ---
 
+[![x6.ai](assets/sponsors/x6ai.png)](https://x6.ai)
+
+[x6.ai](https://x6.ai) provides Claude-compatible and Codex Responses endpoints. The installer registers its Codex provider without changing the active provider; activation requires an explicit choice.
+
+---
+
 [![NotebookLM Remover](assets/sponsors/notebooklm-remover.png)](https://notebooklmremover.org)
 
 [NotebookLM Remover](https://notebooklmremover.org) — Free browser-local AI watermark remover. Remove NotebookLM
@@ -61,7 +67,15 @@ Codex, Antigravity, Grok, Kimi Code, OpenCode, and GPT/Grok external review run 
 
 Gemini CLI is disabled because consumer OAuth requests stopped being processed after 2026-06-18. Legacy Gemini routes migrate to Grok; `agy` remains an Antigravity alias.
 
-## What's new in v3.6.7-aug.1
+## What's new in v3.7.3-aug.1
+
+- Native Skills support per-host selection, updates, and removal. Empty selections survive reinstallation and routing changes; explicit legacy mode retains the bundled layout.
+- `doctor --json` reports mode, primary CLIs, native Skills, six Hook scripts and five events, Codex runtime completeness, and current-session tasks. Version comparison stays local.
+- OpenCode setup validates `provider/model`. Core install failures stop init with a nonzero status; optional wrapper and command-generation warnings remain non-fatal.
+- x6.ai joins the sponsor registry. `dsh-ccg` 0.5.0 supports DeepSeek Harness `>=0.2.0-rc.2 <0.2.1-0 || >=0.2.1-alpha.2 <0.2.2-0`, with profile settings, activation, persistent subagents, and Windows launcher handling.
+- Quality scanners cover files and directories and report missing or unreadable targets. Hooks handle delayed stdin and treat task documents as references under the current explicit user request.
+
+### Retained fork behavior
 
 - Package tarballs use an explicit skills whitelist and exclude `templates/skills/domains/security/`; the red-team and pentest reference notes remain available in Git and are still omitted from default installation.
 - PackyCode joins APIMart in a shared sponsor registry used by init, the API menu, Codex mode, and uninstall.
@@ -114,8 +128,7 @@ node bin/ccg.mjs
 
 Requires Node.js 22.13+ or 24.19.0+ and Claude Code CLI. Codex CLI, Antigravity CLI, Grok CLI, Kimi Code CLI, and OpenCode CLI are optional for frontend and backend routing.
 
-The installer walks through 4 steps: API config, model routing, MCP tools, performance mode. New users get a streamlined
-2-step flow with sensible defaults.
+The installer walks through API configuration, model routing, MCP tools, and performance/Skills selection.
 
 ## How it works
 
@@ -262,7 +275,7 @@ A task links tracked or staged Markdown sections through structured `specRefs`:
 
 The Hook validates the project-relative path, regular-file status, literal Git tracking, unique exact heading outside fenced code blocks, complete bounded section, aggregate context budget, role, and project-root containment. Exact spec sections and `requirements.md` are rendered before optional task artifacts, so the final 32 KiB bound cannot discard the authoritative sources. Broad directory scans and implicit `.ccg/spec/` templates are not used.
 
-Execution authority is: exact linked spec sections, `requirements.md`, the user's current explicit instruction, approved `plan.md`, `progress.md`, then compact summaries or model inference. After compact/resume and external-model returns, the lead must re-resolve state and compare entities, versions, dependency direction, exclusions, and acceptance criteria before acting.
+The current explicit user request determines execution scope. Linked spec sections and `requirements.md` preserve the task constraints; plans, progress notes, compact summaries, and external-model output are references. When a new request conflicts with those records, update the task scope before continuing. After compact/resume and external-model returns, the lead re-resolves state and checks entities, versions, dependency direction, exclusions, and acceptance criteria.
 
 ## Local and shared context
 
@@ -275,7 +288,32 @@ Execution authority is: exact linked spec sections, `requirements.md`, the user'
 
 ## Skills bundle
 
-The installer and native Claude Code plugin both include these direct skill entries:
+Select native entries independently for Claude Code and Codex after building this checkout:
+
+```bash
+node bin/ccg.mjs skills catalog --json
+node bin/ccg.mjs skills install verify-quality verify-change
+node bin/ccg.mjs skills install verify-quality --target codex
+node bin/ccg.mjs skills list --installed --json
+node bin/ccg.mjs skills update
+node bin/ccg.mjs skills remove verify-quality
+node bin/ccg.mjs init --skills none --skip-prompt --skip-mcp
+node bin/ccg.mjs doctor --json
+```
+
+Menu `S` offers host selection and checkboxes. Claude entries live in `~/.claude/skills/ccg-*`; Codex entries live in `~/.agents/skills/ccg-*`. Each host owns a manifest and versioned resource snapshots outside discovery directories. Updates replace managed links; removals retain snapshots and unrelated user skills. Modified links or snapshots produce an error instead of being overwritten.
+
+Native mode loads selected `/ccg-<name>` skills on demand and disables legacy keyword knowledge injection. `--skills none` selects none, `--skills all` selects the catalog, and a comma-separated list selects named entries. With no native selection configured, init keeps the legacy bundle; explicit legacy mode takes precedence over an old native manifest. The repository plugin keeps its `/ccg:<name>` namespace and bundled catalog.
+
+### Quality checks
+
+`verify-quality` entries request `--language-checks`: project-local ESLint and TypeScript, installed Ruff, or clang-tidy with an existing compilation database. Reports list the tools and files actually checked; missing tools, excluded inputs, configuration failures and timeouts remain incomplete. Direct script calls without that flag retain text-only checks.
+
+Function limits are 10 for complexity, 50 code lines and 5 parameters. Vitest `describe` and `suite` containers are recognized through their imported bindings and scope; individual tests, production functions and shadowed calls keep the same limits.
+
+Quality and security reports compare built-in findings with Git `HEAD`, or an explicit `--base` revision. They separate new and existing findings, leave external diagnostics unclassified when no matching baseline was measured, and keep existing blocking issues in the result. Change analysis uses the nearest module's existing documentation and excludes test-only changes from implementation-document reminders.
+
+The legacy installer and Claude Code plugin provide these direct entries:
 
 | Skill                       | Purpose                                                              |
 | --------------------------- | -------------------------------------------------------------------- |
@@ -330,6 +368,7 @@ Set in `~/.claude/settings.json` under `"env"`:
 | `CODEAGENT_POST_MESSAGE_DELAY`         | `5`      | Post-completion delay (seconds)                            |
 | `APIMART_API_KEY`                      | unset    | API key used when the APIMart Codex provider is selected   |
 | `PACKYCODE_API_KEY`                    | unset    | API key used when the PackyCode Codex provider is selected |
+| `X6AI_API_KEY`                         | unset    | API key used when the x6.ai Codex provider is selected     |
 | `DSH_HOME`                             | `~/.dsh` | DeepSeek Harness home used by `dsh-ccg`                    |
 | `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` | unset    | Set to `1` to enable Agent Teams parallel execution        |
 
@@ -339,8 +378,11 @@ Set in `~/.claude/settings.json` under `"env"`:
 git pull --ff-only
 pnpm install --frozen-lockfile
 pnpm build
-node bin/ccg.mjs            # Select "Uninstall" from menu when needed
+node bin/ccg.mjs init --force --skip-prompt --skip-mcp
+node bin/ccg.mjs uninstall  # Remove this fork's installed workflows when needed
 ```
+
+Menu Update refreshes workflows from the current build. Use this checkout to update the fork; the npm `ccg-workflow@latest` package is the upstream distribution.
 
 ## Credits
 
@@ -385,4 +427,4 @@ MIT
 
 ---
 
-v3.6.7-aug.1 | [Issues](https://github.com/Pyrokine/ccg-workflow/issues) | [Contributing](./CONTRIBUTING.md) | [Releasing](./RELEASING.md)
+v3.7.3-aug.1 | [Issues](https://github.com/Pyrokine/ccg-workflow/issues) | [Contributing](./CONTRIBUTING.md) | [Releasing](./RELEASING.md)

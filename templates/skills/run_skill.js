@@ -10,140 +10,161 @@
  *     node run_skill.js verify-module ./my-project -v
  *     node run_skill.js verify-security ./src --json
  *     node run_skill.js verify-change --mode staged
- *     node run_skill.js verify-quality ./src
+ *     node run_skill.js verify-quality ./src --language-checks
  *     node run_skill.js gen-docs ./new-module --force
  */
 
 const { spawn } = require('child_process');
-const { readdirSync, statSync, writeFileSync, unlinkSync, closeSync, openSync } = require('fs');
-const { join, resolve } = require('path');
+const { readdirSync, realpathSync, unlinkSync, closeSync, openSync } = require('fs');
+const { join, resolve, basename } = require('path');
 const { createHash } = require('crypto');
-const { tmpdir } = require('os');
-
-const IS_WIN = process.platform === 'win32';
+const { tmpdir, constants } = require('os');
+const { setTimeout: sleepMs } = require('timers/promises');
 
 function getSkillsDir() {
   const override = process.env.SAGE_SKILLS_DIR;
-  if (override) return resolve(override);
-  return __dirname;
+  return override ? resolve(override) : __dirname;
 }
 
 function discoverSkills(skillsDir) {
   const found = {};
   const toolsDir = join(skillsDir, 'tools');
-  let entries;
-  try {
-    entries = readdirSync(toolsDir).sort();
-  } catch {
-    return found;
-  }
-
-  for (const name of entries) {
-    const scriptsDir = join(toolsDir, name, 'scripts');
+  for (const name of readdirSync(toolsDir).sort()) {
     let scripts;
     try {
-      scripts = readdirSync(scriptsDir);
-    } catch {
-      continue;
+      scripts = readdirSync(join(toolsDir, name, 'scripts')).sort();
+    } catch (error) {
+      if (error.code === 'ENOENT' || error.code === 'ENOTDIR') continue;
+      throw error;
     }
-    const jsFile = scripts.find((f) => f.endsWith('.js'));
-    if (jsFile) found[name] = join(scriptsDir, jsFile);
+    const jsFile = scripts.find((file) => file.endsWith('.js'));
+    if (jsFile) found[name] = join(toolsDir, name, 'scripts', jsFile);
   }
   return found;
 }
 
 function getScriptPath(skillName) {
   const available = discoverSkills(getSkillsDir());
-  if (!(skillName in available)) {
-    const names = Object.keys(available).join(', ') || '(无)';
-    console.error(`错误: 未知的 skill '${skillName}'`);
-    console.error(`可用的 skills: ${names}`);
-    process.exit(1);
+  if (!Object.hasOwn(available, skillName)) {
+    throw new Error(`未知的 skill '${skillName}'，可用的 skills: ${Object.keys(available).join(', ') || '(无)'}`);
   }
   return available[skillName];
 }
 
-function sleepMs(ms) {
-  const end = Date.now() + ms;
-  while (Date.now() < end) {
-    /* busy wait */
+async function acquireTargetLock(args, signal) {
+  const separator = args.indexOf('--');
+  let target = (separator < 0 ? args : args.slice(0, separator)).find((arg) => !arg.startsWith('-'));
+  if (!target && separator >= 0) target = args[separator + 1];
+  target = resolve(target || process.cwd());
+  try {
+    target = realpathSync(target);
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
   }
-}
-
-function acquireTargetLock(args) {
-  const target = args.find((a) => !a.startsWith('-')) || process.cwd();
-  const hash = createHash('md5').update(resolve(target)).digest('hex').slice(0, 12);
+  const hash = createHash('md5').update(target).digest('hex').slice(0, 12);
   const lockPath = join(tmpdir(), `sage_skill_${hash}.lock`);
-
   const deadline = Date.now() + 30000;
-  let first = true;
+  let waiting = false;
   while (true) {
+    signal.throwIfAborted();
     try {
-      const fd = openSync(lockPath, 'wx');
-      return { fd, lockPath };
-    } catch (e) {
-      if (e.code !== 'EEXIST') return { fd: null, lockPath: null };
-      if (first) {
-        console.log(`⏳ 等待锁释放: ${target}`);
-        first = false;
-      }
-      if (Date.now() >= deadline) {
-        console.error(`⏳ 等待锁超时: ${target}`);
-        process.exit(1);
-      }
-      sleepMs(200);
+      return { fd: openSync(lockPath, 'wx', 0o600), lockPath };
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+      if (!waiting) console.error(`等待锁释放: ${target}`);
+      waiting = true;
+      if (Date.now() >= deadline) throw new Error(`等待锁超时: ${target}`);
+      await sleepMs(200, undefined, { signal });
     }
   }
 }
 
-function releaseLock({ fd, lockPath }) {
-  if (fd !== null) {
-    try {
-      closeSync(fd);
-    } catch {}
-  }
-  if (lockPath) {
-    try {
-      unlinkSync(lockPath);
-    } catch {}
+function releaseLock(lock) {
+  if (!lock) return;
+  try {
+    closeSync(lock.fd);
+  } finally {
+    unlinkSync(lock.lockPath);
   }
 }
 
-function main() {
+async function main() {
   const args = process.argv.slice(2);
-
-  if (args.length === 0 || args[0] === '-h' || args[0] === '--help') {
-    console.log(__filename.split('/').pop() + ' <skill_name> [args...]');
-    process.exit(args.length === 0 ? 1 : 0);
+  if (!args.length || args[0] === '-h' || args[0] === '--help') {
+    console.log(basename(__filename) + ' <skill_name> [args...]');
+    process.exitCode = args.length ? 0 : 1;
+    return;
   }
 
-  const skillName = args[0];
-  const scriptPath = getScriptPath(skillName);
-  const scriptArgs = args.slice(1);
+  const abort = new AbortController();
+  let child;
+  let lock;
+  let requestedSignal;
+  let escalation;
+  const terminate = (signal) => {
+    if (!child?.pid) return;
+    try {
+      if (process.platform === 'win32') child.kill(signal);
+      else process.kill(-child.pid, signal);
+    } catch (error) {
+      if (error.code !== 'ESRCH') console.error(`停止子进程失败: ${error.code || 'UNKNOWN'}`);
+    }
+  };
+  const interrupt = (signal) => {
+    if (requestedSignal) {
+      terminate('SIGKILL');
+      return;
+    }
+    requestedSignal = signal;
+    abort.abort();
+    terminate(signal);
+    escalation = setTimeout(() => terminate('SIGKILL'), 5000);
+    escalation.unref();
+  };
+  const onInt = () => interrupt('SIGINT');
+  const onTerm = () => interrupt('SIGTERM');
+  process.on('SIGINT', onInt);
+  process.on('SIGTERM', onTerm);
 
-  const lock = acquireTargetLock(scriptArgs);
-
-  const child = spawn(process.execPath, [scriptPath, ...scriptArgs], {
-    stdio: 'inherit',
-  });
-
-  child.on('close', (code) => {
-    releaseLock(lock);
-    process.exit(code || 0);
-  });
-
-  child.on('error', (err) => {
-    console.error(`执行错误: ${err.message}`);
-    releaseLock(lock);
-    process.exit(1);
-  });
-
-  process.on('SIGINT', () => {
-    console.log('\n已取消');
-    child.kill('SIGINT');
-    releaseLock(lock);
-    process.exit(130);
-  });
+  try {
+    const skillName = args[0];
+    const scriptPath = getScriptPath(skillName);
+    const scriptArgs = args.slice(1);
+    if (!skillName.startsWith('verify-')) lock = await acquireTargetLock(scriptArgs, abort.signal);
+    abort.signal.throwIfAborted();
+    child = spawn(process.execPath, [scriptPath, ...scriptArgs], {
+      stdio: 'inherit',
+      detached: process.platform !== 'win32',
+    });
+    let spawnFailed = false;
+    const exit = await new Promise((done) => {
+      child.once('error', (error) => {
+        spawnFailed = true;
+        console.error(`执行错误: ${error.code || 'UNKNOWN'}`);
+      });
+      child.once('close', (code, signal) => done({ code, signal }));
+    });
+    const signal = requestedSignal || exit.signal;
+    process.exitCode = signal ? 128 + (constants.signals[signal] || 1) : spawnFailed ? 1 : (exit.code ?? 1);
+  } catch (error) {
+    if (requestedSignal) process.exitCode = 128 + (constants.signals[requestedSignal] || 1);
+    else {
+      const result = { passed: false, complete: false, error: error.message };
+      if (args.includes('--json')) console.log(JSON.stringify(result));
+      else console.error(result.error);
+      process.exitCode = 2;
+    }
+  } finally {
+    clearTimeout(escalation);
+    process.removeListener('SIGINT', onInt);
+    process.removeListener('SIGTERM', onTerm);
+    try {
+      releaseLock(lock);
+    } catch (error) {
+      console.error(`释放写入锁失败: ${error.code || 'UNKNOWN'}`);
+      if (!process.exitCode) process.exitCode = 1;
+    }
+  }
 }
 
 main();

@@ -11,8 +11,12 @@ import { readCcgConfig } from '../utils/config'
 import { showBinaryDownloadWarning, verifyBinary } from '../utils/installer'
 import { migrateToV1_4_0, needsMigration } from '../utils/migration'
 import { checkForUpdates, compareVersions } from '../utils/version'
+import packageJson from '../../package.json'
+import { init } from './init'
 
 const execAsync = promisify(exec)
+const BACKUP_SUFFIX = '.ccg-update-bak'
+const { private: privatePackage, version: packageVersion } = packageJson
 
 /**
  * Main update command - checks for updates and installs if available
@@ -22,66 +26,18 @@ export async function update(): Promise<void> {
   console.log(ansis.cyan.bold(`🔄 ${i18n.t('update:checking')}`))
   console.log()
 
-  const spinner = ora(i18n.t('update:checkingLatest')).start()
+  const spinner = ora(i18n.t(privatePackage ? 'update:workflowOnly' : 'update:checkingLatest')).start()
 
   try {
-    const { hasUpdate, currentVersion, latestVersion } = await checkForUpdates()
-
-    // Check if local workflow version differs from running version
-    const config = await readCcgConfig()
-    const localVersion = config?.general?.version || '0.0.0'
-    const needsWorkflowUpdate = compareVersions(currentVersion, localVersion) > 0
-
-    spinner.stop()
-
-    if (!latestVersion) {
-      console.log(ansis.red(`❌ ${i18n.t('update:cannotConnect')}`))
+    if (privatePackage) {
+      await updateCurrentCheckout(spinner)
       return
     }
-
-    console.log(`${i18n.t('update:currentVersion')}: ${ansis.yellow(`v${currentVersion}`)}`)
-    console.log(`${i18n.t('update:latestVersion')}: ${ansis.green(`v${latestVersion}`)}`)
-    if (localVersion !== '0.0.0') {
-      console.log(`${i18n.t('update:localWorkflow')}: ${ansis.gray(`v${localVersion}`)}`)
-    }
-    console.log()
-
-    // Determine effective update status
-    const effectiveNeedsUpdate = hasUpdate || needsWorkflowUpdate
-    let defaultConfirm = effectiveNeedsUpdate
-
-    let message: string
-    if (hasUpdate) {
-      message = i18n.t('update:newVersionFound', { latest: latestVersion, current: currentVersion })
-      defaultConfirm = true
-    } else if (needsWorkflowUpdate) {
-      message = i18n.t('update:localOutdated', { local: localVersion, current: currentVersion })
-      defaultConfirm = true
-    } else {
-      message = i18n.t('update:alreadyLatest', { current: currentVersion })
-      defaultConfirm = false
-    }
-
-    const { confirmUpdate } = await inquirer.prompt([
-      {
-        type: 'confirm',
-        name: 'confirmUpdate',
-        message,
-        default: defaultConfirm,
-      },
-    ])
-
-    if (!confirmUpdate) {
-      console.log(ansis.gray(i18n.t('update:cancelled')))
-      return
-    }
-
-    // Pass localVersion as fromVersion for accurate display
-    const fromVersion = needsWorkflowUpdate ? localVersion : currentVersion
-    await performUpdate(fromVersion, latestVersion || currentVersion, hasUpdate)
+    await checkPublishedUpdate(spinner)
   } catch (error) {
     spinner.stop()
     console.log(ansis.red(`❌ ${i18n.t('update:error', { error: String(error) })}`))
+    process.exitCode = 1
   }
 }
 
@@ -104,7 +60,132 @@ async function performUpdate(fromVersion: string, toVersion: string, isNewVersio
   console.log()
   console.log(ansis.yellow.bold(`⚙️  ${i18n.t('update:starting')}`))
   console.log()
+  if (!(await offerNpmUpdate(toVersion, isNewVersion))) return
+  if (!(await downloadLatestPackage())) return
+  await migrateUpdate()
 
+  // ── Atomic update: backup → install → verify → cleanup / rollback ──
+  // Old approach deleted everything BEFORE installing, so if install failed
+  // the user was left with nothing. New approach backs up first, installs new,
+  // verifies, then cleans up backups. On failure, restores from backup.
+
+  const installDir = join(homedir(), '.claude')
+  const backedUp = await backupInstallation(installDir)
+  if (!backedUp) return
+  const installSuccess = await installLatestWorkflows(installDir)
+  if (!installSuccess) {
+    await restoreInstallation(backedUp)
+    return
+  }
+  await cleanupUpdateBackups(backedUp)
+  await verifyUpdatedBinary(installDir)
+  showUpdateComplete(fromVersion, toVersion, isNewVersion)
+}
+
+async function updateCurrentCheckout(spinner: ReturnType<typeof ora>): Promise<void> {
+  const config = await readCcgConfig()
+  spinner.stop()
+  console.log(`${i18n.t('update:currentVersion')}: v${packageVersion}`)
+  console.log(`${i18n.t('update:localWorkflow')}: v${config?.general?.version || 'unknown'}`)
+  console.log(
+    i18n.language === 'en'
+      ? 'Refresh workflows from this checkout. Use git pull --ff-only and pnpm build to update the CLI first.'
+      : '使用当前源码刷新工作流；更新 CLI 时先执行 git pull --ff-only 和 pnpm build'
+  )
+  const { confirmUpdate } = await inquirer.prompt([
+    {
+      type: 'confirm',
+      name: 'confirmUpdate',
+      message: i18n.t('update:workflowOnly'),
+      default: false,
+    },
+  ])
+  if (!confirmUpdate) {
+    console.log(i18n.t('update:cancelled'))
+    return
+  }
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  await init({ force: true, skipPrompt: true, skipMcp: true })
+  if (process.exitCode) return
+  process.exitCode = previousExitCode
+  console.log(i18n.t('update:updateDone'))
+  return
+}
+
+async function checkPublishedUpdate(spinner: ReturnType<typeof ora>): Promise<void> {
+  const { hasUpdate, currentVersion, latestVersion } = await checkForUpdates()
+
+  // Check if local workflow version differs from running version
+  const config = await readCcgConfig()
+  const localVersion = config?.general?.version || '0.0.0'
+  const needsWorkflowUpdate = compareVersions(currentVersion, localVersion) > 0
+
+  spinner.stop()
+
+  if (!latestVersion) {
+    console.log(ansis.red(`❌ ${i18n.t('update:cannotConnect')}`))
+    return
+  }
+
+  console.log(`${i18n.t('update:currentVersion')}: ${ansis.yellow(`v${currentVersion}`)}`)
+  console.log(`${i18n.t('update:latestVersion')}: ${ansis.green(`v${latestVersion}`)}`)
+  if (localVersion !== '0.0.0') {
+    console.log(`${i18n.t('update:localWorkflow')}: ${ansis.gray(`v${localVersion}`)}`)
+  }
+  console.log()
+  const { message, defaultConfirm } = publishedUpdatePrompt(
+    hasUpdate,
+    needsWorkflowUpdate,
+    currentVersion,
+    localVersion,
+    latestVersion
+  )
+
+  const { confirmUpdate } = await inquirer.prompt([
+    {
+      type: 'confirm',
+      name: 'confirmUpdate',
+      message,
+      default: defaultConfirm,
+    },
+  ])
+
+  if (!confirmUpdate) {
+    console.log(ansis.gray(i18n.t('update:cancelled')))
+    return
+  }
+
+  // Pass localVersion as fromVersion for accurate display
+  const fromVersion = needsWorkflowUpdate ? localVersion : currentVersion
+  await performUpdate(fromVersion, latestVersion || currentVersion, hasUpdate)
+}
+
+function publishedUpdatePrompt(
+  hasUpdate: boolean,
+  needsWorkflowUpdate: boolean,
+  currentVersion: string,
+  localVersion: string,
+  latestVersion: string
+): { message: string; defaultConfirm: boolean } {
+  // Determine effective update status
+  let defaultConfirm: boolean
+
+  let message: string
+  if (hasUpdate) {
+    message = i18n.t('update:newVersionFound', { latest: latestVersion, current: currentVersion })
+    defaultConfirm = true
+  } else if (needsWorkflowUpdate) {
+    message = i18n.t('update:localOutdated', { local: localVersion, current: currentVersion })
+    defaultConfirm = true
+  } else {
+    message = i18n.t('update:alreadyLatest', { current: currentVersion })
+    defaultConfirm = false
+  }
+  return { message, defaultConfirm }
+}
+
+async function offerNpmUpdate(toVersion: string, isNewVersion: boolean): Promise<boolean> {
   // Check if installed globally via npm
   const isGlobalInstall = await checkIfGlobalInstall()
 
@@ -142,7 +223,7 @@ async function performUpdate(fromVersion: string, toVersion: string, isNewVersio
       console.log()
       console.log(ansis.gray(`(${i18n.t('update:autoUpdateAfter')})`))
       console.log()
-      return
+      return false
     }
 
     console.log()
@@ -150,9 +231,12 @@ async function performUpdate(fromVersion: string, toVersion: string, isNewVersio
     console.log(ansis.gray(i18n.t('update:willNotUpdateCli')))
     console.log()
   }
+  return true
+}
 
+async function downloadLatestPackage(): Promise<boolean> {
   // Step 1: Download latest package
-  let spinner = ora(i18n.t('update:downloading')).start()
+  const spinner = ora(i18n.t('update:downloading')).start()
 
   try {
     if (process.platform === 'win32') {
@@ -175,12 +259,15 @@ async function performUpdate(fromVersion: string, toVersion: string, isNewVersio
   } catch (error) {
     spinner.fail(i18n.t('update:downloadFailed'))
     console.log(ansis.red(`${i18n.t('common:error')}: ${error}`))
-    return
+    return false
   }
+  return true
+}
 
+async function migrateUpdate(): Promise<void> {
   // Step 2: Auto-migrate from old directory structure (if needed)
   if (await needsMigration()) {
-    spinner = ora(i18n.t('update:migrating')).start()
+    const spinner = ora(i18n.t('update:migrating')).start()
     const migrationResult = await migrateToV1_4_0()
 
     if (migrationResult.migratedFiles.length > 0) {
@@ -207,15 +294,9 @@ async function performUpdate(fromVersion: string, toVersion: string, isNewVersio
       console.log()
     }
   }
+}
 
-  // ── Atomic update: backup → install → verify → cleanup / rollback ──
-  // Old approach deleted everything BEFORE installing, so if install failed
-  // the user was left with nothing. New approach backs up first, installs new,
-  // verifies, then cleans up backups. On failure, restores from backup.
-
-  const installDir = join(homedir(), '.claude')
-  const BACKUP_SUFFIX = '.ccg-update-bak'
-
+async function backupInstallation(installDir: string): Promise<string[] | null> {
   // Directories to back up before installing new version
   const backupTargets = [
     join(installDir, 'commands', 'ccg'),
@@ -226,7 +307,7 @@ async function performUpdate(fromVersion: string, toVersion: string, isNewVersio
   ]
 
   // Step 3: Back up existing files (move to *.ccg-update-bak)
-  spinner = ora(i18n.t('update:removingOld')).start()
+  const spinner = ora(i18n.t('update:removingOld')).start()
 
   const backedUp: string[] = []
   try {
@@ -256,11 +337,14 @@ async function performUpdate(fromVersion: string, toVersion: string, isNewVersio
       }
     }
     console.log(ansis.yellow('  旧版本文件已保留 / Old files preserved'))
-    return
+    return null
   }
+  return backedUp
+}
 
+async function installLatestWorkflows(installDir: string): Promise<boolean> {
   // Step 4: Install new workflows using the latest version via npx
-  spinner = ora(i18n.t('update:installingNew')).start()
+  const spinner = ora(i18n.t('update:installingNew')).start()
 
   let installSuccess = false
   try {
@@ -299,60 +383,66 @@ async function performUpdate(fromVersion: string, toVersion: string, isNewVersio
     spinner.fail(i18n.t('update:installFailed'))
     console.log(ansis.red(`${i18n.t('common:error')}: ${error}`))
   }
+  return installSuccess
+}
 
-  // Step 6: Cleanup or rollback
-  if (installSuccess) {
-    // Success: remove backups
-    for (const dir of backedUp) {
-      try {
-        await fs.remove(dir + BACKUP_SUFFIX)
-      } catch {
-        /* non-critical: stale backup files */
-      }
+async function cleanupUpdateBackups(backedUp: string[]): Promise<void> {
+  // Success: remove backups
+  for (const dir of backedUp) {
+    try {
+      await fs.remove(dir + BACKUP_SUFFIX)
+    } catch {
+      /* non-critical: stale backup files */
     }
+  }
+}
 
-    // Verify binary exists, is functional, AND version matches
-    if (!(await verifyBinary(installDir))) {
-      showBinaryDownloadWarning(join(installDir, 'bin'))
-    } else {
-      // Binary exists and runs, but check version
-      const { verifyBinaryVersion } = await import('../utils/installer')
-      const versionOk = await verifyBinaryVersion(installDir)
-      if (!versionOk) {
-        showBinaryDownloadWarning(join(installDir, 'bin'))
-      }
-    }
+async function verifyUpdatedBinary(installDir: string): Promise<void> {
+  // Verify binary exists, is functional, AND version matches
+  if (!(await verifyBinary(installDir))) {
+    showBinaryDownloadWarning(join(installDir, 'bin'))
   } else {
-    // Failure: restore from backups so user still has a working installation
-    console.log()
-    console.log(ansis.yellow.bold('  ⚠ 正在恢复旧版本文件 / Restoring old version files...'))
-    let restored = 0
-    for (const dir of backedUp) {
-      const backupPath = dir + BACKUP_SUFFIX
-      try {
-        // Remove any partial install artifacts
-        if (await fs.pathExists(dir)) {
-          await fs.remove(dir)
-        }
-        if (await fs.pathExists(backupPath)) {
-          await fs.move(backupPath, dir)
-          restored++
-        }
-      } catch (restoreErr) {
-        console.log(ansis.red(`  Failed to restore ${dir}: ${restoreErr}`))
-      }
+    // Binary exists and runs, but check version
+    const { verifyBinaryVersion } = await import('../utils/installer')
+    const versionOk = await verifyBinaryVersion(installDir)
+    if (!versionOk) {
+      showBinaryDownloadWarning(join(installDir, 'bin'))
     }
+  }
+}
 
-    if (restored > 0) {
-      console.log(ansis.green(`  ✓ 已恢复 ${restored} 个目录 / Restored ${restored} directories`))
-      console.log(ansis.gray('    旧版命令仍可正常使用 / Old commands still work'))
+async function restoreInstallation(backedUp: string[]): Promise<void> {
+  // Failure: restore from backups so user still has a working installation
+  console.log()
+  console.log(ansis.yellow.bold('  ⚠ 正在恢复旧版本文件 / Restoring old version files...'))
+  let restored = 0
+  for (const dir of backedUp) {
+    const backupPath = dir + BACKUP_SUFFIX
+    try {
+      // Remove any partial install artifacts
+      if (await fs.pathExists(dir)) {
+        await fs.remove(dir)
+      }
+      if (await fs.pathExists(backupPath)) {
+        await fs.move(backupPath, dir)
+        restored++
+      }
+    } catch (restoreErr) {
+      console.log(ansis.red(`  Failed to restore ${dir}: ${restoreErr}`))
     }
-    console.log()
-    console.log(ansis.yellow(i18n.t('update:manualRetry')))
-    console.log(ansis.cyan('  npx ccg-workflow@latest'))
-    return
   }
 
+  if (restored > 0) {
+    console.log(ansis.green(`  ✓ 已恢复 ${restored} 个目录 / Restored ${restored} directories`))
+    console.log(ansis.gray('    旧版命令仍可正常使用 / Old commands still work'))
+  }
+  console.log()
+  console.log(ansis.yellow(i18n.t('update:manualRetry')))
+  console.log(ansis.cyan('  npx ccg-workflow@latest'))
+  return
+}
+
+function showUpdateComplete(fromVersion: string, toVersion: string, isNewVersion: boolean): void {
   console.log()
   console.log(ansis.green.bold(`✅ ${i18n.t('update:updateDone')}`))
   console.log()

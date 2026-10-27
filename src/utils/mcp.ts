@@ -266,6 +266,13 @@ export async function backupClaudeCodeConfig(): Promise<string | null> {
   }
 }
 
+function diagnoseWindowsMcpServers(servers: Record<string, McpServerConfig>): string[] {
+  if (!isWindows()) return []
+  return Object.entries(servers)
+    .filter(([, server]) => server.command && ['npx', 'uvx', 'node'].includes(server.command))
+    .map(([name]) => `❌ ${name}: Command not properly wrapped for Windows (should use cmd /c)`)
+}
+
 /**
  * Diagnose MCP configuration issues
  * @returns Array of diagnostic messages
@@ -294,15 +301,7 @@ export async function diagnoseMcpConfig(): Promise<string[]> {
   }
 
   // Check Windows-specific issues
-  if (isWindows()) {
-    for (const [name, server] of Object.entries(config.mcpServers)) {
-      if (server.command && ['npx', 'uvx', 'node'].includes(server.command)) {
-        if (server.command !== 'cmd') {
-          issues.push(`❌ ${name}: Command not properly wrapped for Windows (should use cmd /c)`)
-        }
-      }
-    }
-  }
+  issues.push(...diagnoseWindowsMcpServers(config.mcpServers))
 
   if (issues.length === 0) {
     issues.push('✅ MCP configuration looks good')

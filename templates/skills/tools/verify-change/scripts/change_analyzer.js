@@ -1,14 +1,21 @@
 #!/usr/bin/env node
 'use strict';
 
-const { execFileSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
-const { parseCliArgs, buildReport, hasFatal, DASH } = require(path.join(__dirname, '..', '..', 'lib', 'shared.js'));
+const { parseCliArgs, runCli, buildReport, DASH } = require(path.join(__dirname, '..', '..', 'lib', 'shared.js'));
+const { git, targetRepositories, readNameStatus } = require(path.join(__dirname, '..', '..', 'lib', 'git-baseline.js'));
 
-const CODE_EXT = new Set(['.py', '.go', '.rs', '.ts', '.js', '.jsx', '.tsx', '.java', '.c', '.cpp', '.h', '.hpp']);
+const CODE_EXT = new Set([
+  '.py', '.go', '.rs', '.ts', '.mts', '.cts', '.js', '.mjs', '.cjs', '.jsx', '.tsx', '.java',
+  '.c', '.cc', '.cpp', '.cxx', '.h', '.hh', '.hpp', '.hxx',
+]);
 const DOC_EXT = new Set(['.md', '.rst', '.txt', '.adoc']);
-const TEST_PATTERNS = ['test_', '_test.', '.test.', 'spec_', '_spec.', '/tests/', '/test/', '/__tests__/'];
+const TEST_PATTERNS = [
+  /(?:^|\/)(?:tests?|__tests__|specs?)(?:\/|$)/,
+  /(?:^|\/)(?:test|spec)[_.][^/]+$/,
+  /[._](?:test|spec)\.[^/]+$/,
+];
 const CONFIG_FILES = new Set([
   'package.json',
   'pyproject.toml',
@@ -32,7 +39,7 @@ function normalizePath(p) {
 function classifyFile(filePath) {
   const ext = path.extname(filePath).toLowerCase();
   const name = path.basename(filePath).toLowerCase();
-  const lower = filePath.toLowerCase();
+  const lower = '/' + filePath.toLowerCase();
   return {
     path: filePath,
     type: 'modified',
@@ -40,16 +47,16 @@ function classifyFile(filePath) {
     deletions: 0,
     is_code: CODE_EXT.has(ext),
     is_doc: DOC_EXT.has(ext),
-    is_test: TEST_PATTERNS.some((p) => lower.includes(p)),
+    is_test: TEST_PATTERNS.some((pattern) => pattern.test(lower)),
     is_config: CONFIG_FILES.has(name) || CONFIG_EXT.has(ext),
   };
 }
 
 function parseNameStatusLine(line) {
-  const parts = line.split('\t');
+  const parts = Array.isArray(line) ? line : line.split('\t');
   if (parts.length < 2) return null;
   const status = parts[0][0];
-  const p = normalizePath(parts[parts.length - 1]);
+  const p = Array.isArray(line) ? parts[parts.length - 1] : normalizePath(parts[parts.length - 1]);
   if (!p) return null;
   const c = classifyFile(p);
   const map = { A: 'added', M: 'modified', D: 'deleted', R: 'renamed' };
@@ -58,12 +65,12 @@ function parseNameStatusLine(line) {
 }
 
 function parsePorcelainLine(line) {
-  if (line.length < 3) return null;
-  const status = line.slice(0, 2);
-  let raw = line.slice(3);
+  if (!Array.isArray(line) && line.length < 3) return null;
+  const status = Array.isArray(line) ? line[0] : line.slice(0, 2);
+  let raw = Array.isArray(line) ? line[1] : line.slice(3);
   if (!raw) return null;
-  if (raw.includes(' -> ')) raw = raw.split(' -> ')[1];
-  const p = normalizePath(raw);
+  if (!Array.isArray(line) && raw.includes(' -> ')) raw = raw.split(' -> ')[1];
+  const p = Array.isArray(line) ? raw : normalizePath(raw);
   if (!p) return null;
   const c = classifyFile(p);
   if (status.includes('?') || status.includes('A')) c.type = 'added';
@@ -73,181 +80,169 @@ function parsePorcelainLine(line) {
   return c;
 }
 
-function git(...args) {
-  try {
-    return execFileSync('git', args, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
-  } catch {
-    return '';
-  }
-}
-
-function getGitChanges(base = 'HEAD~1', target = 'HEAD') {
-  const changes = [];
-  for (const line of git('diff', '--name-status', base, target).split('\n')) {
-    if (!line) continue;
-    const c = parseNameStatusLine(line);
-    if (c) changes.push(c);
-  }
-  const statMap = {};
-  for (const line of git('diff', '--numstat', base, target).split('\n')) {
-    if (!line) continue;
-    const parts = line.split('\t');
-    if (parts.length >= 3) {
-      statMap[normalizePath(parts[2])] = [
-        parts[0] === '-' ? 0 : parseInt(parts[0], 10),
-        parts[1] === '-' ? 0 : parseInt(parts[1], 10),
-      ];
-    }
-  }
-  for (const c of changes) {
-    if (statMap[c.path]) {
-      [c.additions, c.deletions] = statMap[c.path];
-    }
-  }
+function readGitChanges(root, args, pathspecs) {
+  const changes = readNameStatus(root, args, pathspecs).map((entry) => {
+    const change = parseNameStatusLine([entry.status, entry.path]);
+    if (!change) throw new Error('Invalid git name-status output');
+    if (entry.old_path) change.old_path = entry.old_path;
+    return change;
+  });
+  applyNumstat(changes, args, root, pathspecs);
   return changes;
 }
 
-function applyNumstat(changes, args) {
-  const statMap = {};
-  for (const line of git('diff', '--numstat', ...args).split('\n')) {
-    if (!line) continue;
-    const parts = line.split('\t');
-    if (parts.length < 3) continue;
-    statMap[normalizePath(parts[2])] = [
-      parts[0] === '-' ? 0 : parseInt(parts[0], 10),
-      parts[1] === '-' ? 0 : parseInt(parts[1], 10),
-    ];
-  }
+function getGitChanges(base = 'HEAD~1', target = 'HEAD', root = process.cwd(), pathspecs = []) {
+  return readGitChanges(root, [base, target], pathspecs);
+}
 
-  for (const change of changes) {
-    if (statMap[change.path]) {
-      [change.additions, change.deletions] = statMap[change.path];
+function applyNumstat(changes, args, root = process.cwd(), pathspecs = []) {
+  const parts = git(root, 'diff', '--no-ext-diff', '--numstat', '-z', ...args, '--', ...pathspecs).split('\0');
+  const stats = new Map();
+  for (let i = 0; i < parts.length && parts[i];) {
+    const entry = parts[i++];
+    const first = entry.indexOf('\t');
+    const second = entry.indexOf('\t', first + 1);
+    if (first < 0 || second < 0) throw new Error('Invalid git numstat output');
+    let name = entry.slice(second + 1);
+    if (!name) {
+      i++;
+      name = parts[i++];
     }
+    stats.set(name, [Number(entry.slice(0, first)) || 0, Number(entry.slice(first + 1, second)) || 0]);
+  }
+  for (const change of changes) {
+    if (stats.has(change.path)) [change.additions, change.deletions] = stats.get(change.path);
   }
 }
 
 function countFileLines(filePath) {
-  try {
-    const content = fs.readFileSync(filePath, 'utf8');
-    if (!content) return 0;
-    const newlines = (content.match(/\n/g) || []).length;
-    return content.endsWith('\n') ? newlines : newlines + 1;
-  } catch {
-    return 0;
-  }
+  const stat = fs.lstatSync(filePath);
+  if (stat.isDirectory()) return 0;
+  const content = stat.isSymbolicLink() ? fs.readlinkSync(filePath) : fs.readFileSync(filePath, 'utf8');
+  if (!content) return 0;
+  const newlines = (content.match(/\n/g) || []).length;
+  return content.endsWith('\n') ? newlines : newlines + 1;
 }
 
-function collectUntrackedChanges(filePath) {
-  let stat;
-  try {
-    stat = fs.statSync(filePath);
-  } catch {
-    return [];
-  }
-
-  if (stat.isFile()) {
-    const change = classifyFile(filePath);
-    change.type = 'added';
-    change.additions = countFileLines(filePath);
-    return [change];
-  }
-  if (!stat.isDirectory()) return [];
-
-  const changes = [];
-  for (const entry of fs.readdirSync(filePath, { withFileTypes: true })) {
-    changes.push(...collectUntrackedChanges(path.join(filePath, entry.name)));
-  }
-  return changes;
+function getStagedChanges(root = process.cwd(), pathspecs = []) {
+  return readGitChanges(root, ['--cached'], pathspecs);
 }
 
-function getStagedChanges() {
+function getWorkingChanges(root = process.cwd(), pathspecs = []) {
+  const parts = git(root, 'status', '--porcelain=v1', '-z', '--untracked-files=all', '--', ...pathspecs).split('\0');
   const changes = [];
-  for (const line of git('diff', '--cached', '--name-status').split('\n')) {
-    if (!line) continue;
-    const c = parseNameStatusLine(line);
-    if (c) changes.push(c);
+  const untracked = new Set();
+  for (let i = 0; i < parts.length && parts[i];) {
+    const entry = parts[i++];
+    const status = entry.slice(0, 2);
+    const change = parsePorcelainLine([status, entry.slice(3)]);
+    if (!change) throw new Error('Invalid git status output');
+    if (/[RC]/.test(status)) change.old_path = parts[i++];
+    if (status === '??') untracked.add(change.path);
+    changes.push(change);
   }
-  applyNumstat(changes, ['--cached']);
-  return changes;
-}
-
-function getWorkingChanges() {
-  const changes = [];
-  for (const line of git('status', '--porcelain').split('\n')) {
-    if (!line) continue;
-    const c = parsePorcelainLine(line);
-    if (!c) continue;
-    if (c.type === 'added') {
-      changes.push(...collectUntrackedChanges(c.path));
-    } else {
-      changes.push(c);
+  const staged = changes.map((change) => ({ ...change, additions: 0, deletions: 0 }));
+  const unstaged = changes.map((change) => ({ ...change, additions: 0, deletions: 0 }));
+  applyNumstat(staged, ['--cached'], root, pathspecs);
+  applyNumstat(unstaged, [], root, pathspecs);
+  for (let i = 0; i < changes.length; i++) {
+    const change = changes[i];
+    change.additions = staged[i].additions + unstaged[i].additions;
+    change.deletions = staged[i].deletions + unstaged[i].deletions;
+    if (untracked.has(change.path)) {
+      change.additions = countFileLines(path.join(root, change.path));
     }
   }
-  applyNumstat(changes, []);
   return changes;
 }
 
-function isPathInModule(filePath, mod) {
-  const np = normalizePath(filePath);
-  if (mod === '.') return !np.includes('/');
-  return np === mod || np.startsWith(mod + '/');
+const MODULE_DOC = /^(?:README|DESIGN)(?:[._-][\w-]+)?\.(?:md|rst|txt|adoc)$/i;
+
+function directoryEntries(directory) {
+  try {
+    if (!fs.lstatSync(directory).isDirectory()) return [];
+    return fs.readdirSync(directory, { withFileTypes: true });
+  } catch (error) {
+    if (error.code === 'ENOENT' || error.code === 'ENOTDIR') return [];
+    throw error;
+  }
 }
 
-function identifyModules(changes) {
-  const modules = new Set();
-  for (const c of changes) {
-    const np = normalizePath(c.path);
-    const parts = np.split('/').filter(Boolean);
-    if (parts.length === 1) {
-      modules.add('.');
-      continue;
+function moduleForPath(filePath, root) {
+  let directory = path.posix.dirname(filePath);
+  while (true) {
+    if (directoryEntries(path.join(root, directory)).some((entry) => entry.isFile() && MODULE_DOC.test(entry.name))) {
+      return directory;
     }
-    let found = false;
-    for (let i = 0; i < parts.length; i++) {
-      const mp = parts.slice(0, i + 1).join('/');
-      if (fs.existsSync(path.join(mp, 'README.md')) || fs.existsSync(path.join(mp, 'DESIGN.md'))) {
-        modules.add(mp);
-        found = true;
-        break;
+    if (directory === '.') break;
+    directory = path.posix.dirname(directory);
+  }
+  return filePath.includes('/') ? filePath.split('/')[0] : '.';
+}
+
+function identifyModules(changes, root = process.cwd()) {
+  return new Set(changes.map((change) => moduleForPath(change.path, root)));
+}
+
+function relatedDocuments(root, mod, changes) {
+  const directory = path.join(root, mod);
+  const docs = new Set();
+  const add = (candidate) => {
+    const relative = path.relative(root, candidate);
+    if (relative === '..' || relative.startsWith('..' + path.sep) || path.isAbsolute(relative)) return;
+    try {
+      if (fs.lstatSync(candidate).isFile()) docs.add(relative.split(path.sep).join('/'));
+    } catch (error) {
+      if (error.code !== 'ENOENT' && error.code !== 'ENOTDIR') throw error;
+    }
+  };
+  for (const entry of directoryEntries(directory)) {
+    if (!entry.isFile() || !MODULE_DOC.test(entry.name)) continue;
+    const file = path.join(directory, entry.name);
+    add(file);
+    const content = fs.readFileSync(file, 'utf8');
+    for (const match of content.matchAll(/\[[^\]\n]*\]\(([^\s)#?]+)(?:#[^\s)]*)?\)/g)) {
+      if (!/^[\w+.-]+:|^\/\//.test(match[1]) && DOC_EXT.has(path.extname(match[1]).toLowerCase())) {
+        add(path.resolve(directory, match[1]));
       }
     }
-    if (!found && parts.length > 1) modules.add(parts[0]);
   }
-  return modules;
+  const names = new Set(['readme', 'design', 'index', path.basename(directory).toLowerCase()]);
+  for (const change of changes) names.add(path.basename(change.path, path.extname(change.path)).toLowerCase());
+  for (const entry of directoryEntries(path.join(directory, 'docs'))) {
+    if (entry.isFile() && DOC_EXT.has(path.extname(entry.name).toLowerCase()) &&
+        names.has(path.basename(entry.name, path.extname(entry.name)).toLowerCase())) {
+      add(path.join(directory, 'docs', entry.name));
+    }
+  }
+  return [...docs].sort();
 }
 
-function checkDocSync(changes, modules) {
+function checkDocSync(changes, modules, root = process.cwd()) {
   const docStatus = {};
+  const docSync = {};
   const issues = [];
-  const codeChanges = changes.filter((c) => c.is_code && c.type !== 'deleted');
-  const docPaths = new Set(changes.filter((c) => c.is_doc).map((c) => normalizePath(c.path)));
-
+  const codeChanges = changes.filter((change) => change.is_code && !change.is_test);
+  const docPaths = new Set(changes.filter((change) => change.is_doc && change.type !== 'deleted').map((change) => change.path));
   for (const mod of modules) {
-    const readme = normalizePath(mod === '.' ? 'README.md' : `${mod}/README.md`);
-    const design = normalizePath(mod === '.' ? 'DESIGN.md' : `${mod}/DESIGN.md`);
-    const modCode = codeChanges.filter((c) => isPathInModule(c.path, mod));
+    const modCode = codeChanges.filter((change) => moduleForPath(change.path, root) === mod);
     if (!modCode.length) continue;
-    const total = modCode.reduce((s, c) => s + c.additions + c.deletions, 0);
-    if (total > 50 && !docPaths.has(design)) {
-      issues.push({
-        severity: 'warning',
-        message: `模块 ${mod} 有较大代码变更 (${total} 行)，但 DESIGN.md 未更新`,
-        related_files: modCode.map((c) => c.path),
-      });
-      docStatus[`${mod}/DESIGN.md`] = false;
-    } else {
-      docStatus[`${mod}/DESIGN.md`] = true;
+    const docs = relatedDocuments(root, mod, modCode);
+    for (const doc of docs) {
+      docStatus[doc] = docPaths.has(doc);
+      docSync[doc] = { exists: true, updated: docPaths.has(doc) };
     }
-    const newFiles = modCode.filter((c) => c.type === 'added');
-    if (newFiles.length && !docPaths.has(readme)) {
-      issues.push({
-        severity: 'info',
-        message: `模块 ${mod} 新增了文件，建议更新 README.md`,
-        related_files: newFiles.map((c) => c.path),
-      });
-    }
+    const total = modCode.reduce((sum, change) => sum + change.additions + change.deletions, 0);
+    if (total <= 50 || docs.some((doc) => docPaths.has(doc))) continue;
+    issues.push({
+      severity: docs.length ? 'warning' : 'info',
+      message: docs.length
+        ? `模块 ${mod} 变更 ${total} 行，相关文档未更新，请确认说明是否需要调整`
+        : `模块 ${mod} 变更 ${total} 行，未找到关联文档，请人工判断说明需求`,
+      related_files: [...modCode.map((change) => change.path), ...docs],
+    });
   }
-  return { docStatus, issues };
+  return { docStatus, docSync, issues };
 }
 
 function analyzeImpact(changes) {
@@ -283,25 +278,27 @@ function analyzeImpact(changes) {
   return issues;
 }
 
-function analyzeChanges(mode = 'working') {
+function analyzeChanges(mode, root, pathspecs) {
   let changes;
-  if (mode === 'staged') changes = getStagedChanges();
-  else if (mode === 'committed') changes = getGitChanges();
-  else changes = getWorkingChanges();
+  if (mode === 'staged') changes = getStagedChanges(root, pathspecs);
+  else if (mode === 'committed') changes = getGitChanges('HEAD~1', 'HEAD', root, pathspecs);
+  else changes = getWorkingChanges(root, pathspecs);
 
   const issues = [];
   let modules = new Set(),
-    docStatus = {};
+    docStatus = {},
+    docSync = {};
   if (changes.length) {
-    modules = identifyModules(changes);
-    const ds = checkDocSync(changes, modules);
+    modules = identifyModules(changes, root);
+    const ds = checkDocSync(changes, modules, root);
     docStatus = ds.docStatus;
+    docSync = ds.docSync;
     issues.push(...ds.issues, ...analyzeImpact(changes));
   }
   const passed = !issues.some((i) => i.severity === 'error');
   const totalAdd = changes.reduce((s, c) => s + c.additions, 0);
   const totalDel = changes.reduce((s, c) => s + c.deletions, 0);
-  return { changes, issues, modules, docStatus, passed, totalAdd, totalDel };
+  return { changes, issues, modules, docStatus, docSync, passed, totalAdd, totalDel };
 }
 
 function formatReport(r, verbose) {
@@ -329,10 +326,10 @@ function formatReport(r, verbose) {
     report += '\n' + lines.join('\n');
   }
 
-  if (Object.keys(r.docStatus).length) {
-    const lines = ['\n' + DASH, '文档同步状态:', DASH];
-    for (const [doc, synced] of Object.entries(r.docStatus)) {
-      lines.push(`  ${synced ? '✓' : '✗'} ${doc}`);
+  if (verbose && Object.keys(r.docStatus).length) {
+    const lines = ['\n' + DASH, '文档变更状态:', DASH];
+    for (const [doc, updated] of Object.entries(r.docStatus)) {
+      lines.push(`  ${updated ? '本次已修改' : '本次未修改'} ${doc}`);
     }
     report += '\n' + lines.join('\n');
   }
@@ -341,50 +338,66 @@ function formatReport(r, verbose) {
 }
 
 // CLI
-if (require.main === module) {
+function main() {
   const opts = parseCliArgs(process.argv);
-  const result = analyzeChanges(opts.mode || 'working');
-
+  if (opts.help) {
+    console.log('Usage: change_analyzer.js [paths...] [--mode working|staged|committed] [-v] [--json]');
+    return;
+  }
+  const mode = opts.mode || 'working';
+  if (!['working', 'staged', 'committed'].includes(mode)) throw new Error('Unknown change mode: ' + mode);
+  if (opts.exclude) throw new Error('verify-change uses target path scopes, not --exclude');
+  const results = targetRepositories(opts.targets).map((group) => {
+    const result = analyzeChanges(mode, group.root, group.pathspecs);
+    for (const requested of group.requested) {
+      if (fs.existsSync(requested)) continue;
+      const relative = path.relative(group.root, requested).split(path.sep).join('/');
+      const hasChange = result.changes.some((change) =>
+        [change.path, change.old_path].some((name) => name && (name === relative || name.startsWith(relative + '/')))
+      );
+      if (!hasChange && !git(group.root, 'ls-files', '-z', '--', relative)) {
+        throw new Error('Target does not exist in the repository or selected changes: ' + requested);
+      }
+    }
+    return {
+      repository_root: group.root,
+      requested_paths: group.requested,
+      complete: true,
+      passed: result.passed,
+      total_additions: result.totalAdd,
+      total_deletions: result.totalDel,
+      affected_modules: [...result.modules],
+      changes: result.changes,
+      issues: result.issues,
+      doc_sync_status: result.docStatus,
+      doc_sync: result.docSync,
+      report: result,
+    };
+  });
+  const passed = results.every((result) => result.passed);
   if (opts.json) {
+    const clean = results.map(({ report, ...result }) => result);
     console.log(
-      JSON.stringify(
-        {
-          passed: result.passed,
-          total_additions: result.totalAdd,
-          total_deletions: result.totalDel,
-          affected_modules: [...result.modules],
-          changes: result.changes.map((c) => ({
-            path: c.path,
-            type: c.type,
-            additions: c.additions,
-            deletions: c.deletions,
-            is_code: c.is_code,
-            is_doc: c.is_doc,
-            is_test: c.is_test,
-          })),
-          issues: result.issues.map((i) => ({
-            severity: i.severity,
-            message: i.message,
-            related_files: i.related_files,
-          })),
-          doc_sync_status: result.docStatus,
-        },
-        null,
-        2
-      )
+      JSON.stringify(clean.length === 1 ? clean[0] : { passed, complete: true, repositories: clean }, null, 2)
     );
   } else {
-    console.log(formatReport(result, opts.verbose));
+    console.log(
+      results
+        .map((result) => 'Repository: ' + result.repository_root + '\n' + formatReport(result.report, opts.verbose))
+        .join('\n\n')
+    );
   }
-
-  process.exit(result.passed ? 0 : 1);
+  process.exitCode = passed ? 0 : 1;
 }
+
+if (require.main === module) runCli(main);
 
 module.exports = {
   normalizePath,
   classifyFile,
   parsePorcelainLine,
   parseNameStatusLine,
+  getGitChanges,
   getStagedChanges,
   getWorkingChanges,
   identifyModules,

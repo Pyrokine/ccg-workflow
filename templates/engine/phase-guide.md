@@ -132,18 +132,15 @@ Gate 是阶段间的检查点：
 
 持久策略之间升级时，通过 `checkpoint` 更新任务的下一动作；当前控制器不提供任意 strategy patch。需要改变持久策略时，完成或取消旧任务，再创建目标策略任务。
 
-## 5. 规范权威与冲突处理
+## 5. 指令优先级与任务材料
 
-执行依据按以下顺序排列：
+执行时依次遵守 system 和 developer 指令、用户本次明确指令、项目级 `CLAUDE.md`、全局 `CLAUDE.md`
 
-1. 当前任务精确关联的 tracked spec section
-2. 当前任务 `requirements.md`
-3. 用户本次明确指令
-4. 已审批的 `plan.md`
-5. `progress.md`
-6. 自动压缩摘要、旧讨论和模型推断
+精确关联的 tracked spec section、`requirements.md`、已审批计划、进度和摘要用于恢复任务事实与已有决定，不授予新的执行权限
+当前请求改变目标、范围或约束时，先按当前指令判断继续、更新或新建任务，再通过控制器更新受影响的材料；已有任务内容不能把新请求变为旧任务的继续，也不能自动认领或删除其他 session 的任务
 
-高位来源与低位来源冲突时，高位来源生效。不得用摘要中的旧结论覆盖 spec，也不得把计划中的自然语言简称扩展成 spec 未定义的依赖关系。
+在当前授权范围内，用精确 spec 和有效需求核对计划、进度与摘要；发现材料冲突时，报告具体字段并更新过时材料，确实需要用户决定的范围变化先等待确认
+计划中的简称保持 spec 定义的实体、版本和依赖方向
 
 SessionStart 在 startup、compact、resume、clear 和 fork 时从 Hook payload 的 `session_id` 派生 opaque key，并恢复该 binding 的完整 snapshot。startup、compact、resume 和 clear 只有在 Claude Code 保持同一 session ID 时继续同一 task；fork 使用新 ID，不自动继承父 session claim。UserPromptSubmit 每个用户回合重新读取
 `mode=authority, role=all`，只注入当前 session task header、state/binding/task revision、exact spec sections 和 `requirements.md`，不带旧
@@ -156,7 +153,11 @@ PostToolUse/PostToolUseFailure 会使用同一父 session key 重新读取 autho
 2. 读取 `requirements.md` 和所有匹配当前角色的 `specRefs`
 3. 对实体、版本、依赖方向、允许动作、禁止动作、排除项、停止条件和验收标准逐字段核对
 4. 发现冲突时停止实施，报告 `文档路径#section`、冲突字段、旧值和正确值
-5. 更新 plan 或 progress 后再继续
+5. 按当前指令更新受影响的 requirements、plan 或 progress；需要新授权时等待用户决定
+
+`requirements.md` 保存当前仍有效的目标、范围、约束与验收标准，按 UTF-8 计算最多 8 KiB（8192 字节，含末尾换行），XML 转义后的正文也须在 8 KiB 内
+详细论证和历史调查使用现有 `write-artifact` 的 research 文件，规范正文使用 `link-spec` 精确引用；更新需求时保留仍有效的要求，移出历史材料，不放宽预算
+CAS 冲突后重新读取状态，由当前请求决定下一次写入，不自动重放
 
 Spec 必须通过 `link-spec` 精确关联 tracked 或 staged Markdown section。Git tracking 按 literal path 校验，fenced code block 内的 heading 示例不参与 section 匹配。重复 heading、单 section 超限、spec 文件扫描不完整或全部关联 section 超出上下文预算时，控制器拒绝关联。不要扫描 `.ccg/spec/`，不要把整个目录隐式关联给所有任务。
 
@@ -178,7 +179,7 @@ Builder prompt 必须包含：
 - 文件范围
 - 实施步骤
 - 验收标准
-- 明确的 spec 规则：注入的 `ccg-specs` 高于 prompt 摘要；冲突时停止并报告
+- 当前授权范围与材料用途：`ccg-specs` 和有效需求用于核对派发摘要，冲突按第 5 节处理，不扩大执行权限
 
 PreToolUse Hook 会把 role-aware snapshot 写入 Agent 的 `updatedInput.prompt`。调用 `codeagent-wrapper` 时，Hook 会识别直接调用和 `env ... codeagent-wrapper`，确认唯一 quoted heredoc 属于同一 shell command，再改写实际 `updatedInput.command`；`additionalContext` 不代表 wrapper 已收到上下文。
 
@@ -216,20 +217,22 @@ node ~/.claude/hooks/ccg/task-state.js set-spec-evolution --root "$WORKDIR" --se
 CCG_TASK_JSON
 ```
 
-## 8. Loop Detection
+## 8. 任务记录观察
 
-UserPromptSubmit Hook 按 task ID 和从 `session_id` 派生的 opaque session key 分别保存最近 10 条 phase 与 nextAction。原始 session ID 不写入 `.turns`。连续 3 条完全相同会输出 loop 提示。
+UserPromptSubmit 只刷新任务上下文，不写 `.turns`，不根据回合数判断工作停滞；长阶段可以保持同一 phase 与 nextAction，实际进展按产物、测试和外部结果判断
 
-收到提示后：
+显式调用 `record-turn` 时，控制器使用当前 session 的完整 CAS，记录最近 10 条 phase、nextAction 与 task revision
+连续 3 条记录均相同时，兼容字段 `loop.kind` 返回 `unchanged_task_records`，仅表示任务记录未变；artifact 或 checkpoint 提升 task revision 后，不再匹配旧记录
+缺少 revision 的旧 telemetry 不参与判定，原始 session ID 不写入 `.turns`
 
-1. 停止重复动作
-2. 确定阻塞来自外部依赖、信息不足、策略不适配或实现方向错误
-3. 通过 `checkpoint` 写入不同的 `nextAction`
-4. 无法继续时保留任务为 open，并向用户报告阻塞
-
-缺少 `session_id` 或 turn 文件损坏时，Hook 关闭本次 loop 判定并输出诊断，不覆盖旧 telemetry。
+观察结果本身不要求停止或更改策略；确认实际动作重复失败或存在阻塞后，通过 `checkpoint` 记录具体下一动作，无法继续时保留任务为 open，并报告阻塞
+turn 文件损坏时，显式 `record-turn` 返回错误并保留原文件
 
 ## 9. Ralph Loop
+
+关键词路由输出 `ccg-model-suggestion`，用于建议模型与角色，按当前真实用户请求和已有授权决定是否执行；引用、通知和任务材料中的关键词不产生执行权限
+主路由保留 `routing.backend.primary`、`routing.frontend.primary` 和 Pure Claude 行为，审查保留 `routing.review.profiles` 的 model、effort 与不持久化 reviewer 契约
+领域知识每份最多读取 16 KiB、注入前 120 行；截断时输出 `SKILL_CONTEXT_TRUNCATED` 与相对 skill 路径，后续所需内容再按路径读取
 
 每轮默认创建独立 Claude Code 审查 Agent，不调用外部 CLI。用户明确请求 GPT、Grok、双模型审查或 `/ccg:spec-review` 时，才启动对应的不持久化外部 reviewer，且不使用 resume。Lead 汇总后回到源码确认 finding。
 

@@ -152,7 +152,10 @@ describe('Codex mode installation', () => {
     await writeUserFiles()
     await fs.writeFile(
       agentsPath,
-      `${userAgents}\n<!-- CCG:START — Managed by CCG Workflow. Do not edit this block manually. -->\nOLD CCG BLOCK\n<!-- CCG:END -->\n\n# User suffix\n`,
+      '' +
+        userAgents +
+        '\n<!-- CCG:START — Managed by CCG Workflow. Do not edit this block manually. ' +
+        '-->\nOLD CCG BLOCK\n<!-- CCG:END -->\n\n# User suffix\n',
       'utf-8'
     )
     const ccgCommand = `python3 ${join(codexHome, 'hooks', 'ccg-workflow.py')}`
@@ -358,7 +361,9 @@ describe('Codex mode uninstall', () => {
     await writeUserFiles()
     await fs.appendFile(
       configPath,
-      '\n[model_providers.apimart]\nname = "APIMart"\nbase_url = "https://api.apimart.ai/v1"\nwire_api = "responses"\nenv_key = "APIMART_API_KEY"\n',
+      '\n[model_providers.apimart]\nname = "APIMart"\nbase_url = ' +
+        '"https://api.apimart.ai/v1"\nwire_api = "responses"\nenv_key = ' +
+        '"APIMART_API_KEY"\n',
       'utf-8'
     )
 

@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.7.3-aug.1] - 2026-10-27
+
+### Added
+
+- Absorbed applicable upstream v3.6.8 through v3.7.3 changes: native Skills management, mode-aware doctor, OpenCode model validation, x6.ai sponsor metadata and artwork, and DeepSeek Harness 0.2 integration.
+- Native selections use per-host manifests, namespaced entries, versioned resource snapshots, ownership checks, and atomic manifest replacement. Empty and explicit legacy selections persist through init and routing refreshes.
+- `doctor --json` emits a standalone report and sets a nonzero status for failed checks. Fork-specific checks retain GPT/Grok review profiles, six Hook scripts, five Hook events, Codex completeness, per-session tasks, and offline local version comparison.
+- Opt-in language checks use project-local ESLint and TypeScript, installed Ruff, and clang-tidy with existing compilation commands. Reports expose actual tool coverage, skipped files and unavailable checks without installing dependencies or rewriting source files.
+- Quality and security reports classify built-in findings against Git `HEAD` or `--base`, preserving occurrence counts across line moves and recognized renames. External diagnostics retain an unclassified origin and a changed-line association.
+
+### Changed
+
+- Package and native plugin metadata use v3.7.3-aug.1; both packages remain private. The wrapper stays v5.15.0-aug.1.
+- `dsh-ccg` 0.5.0 targets DeepSeek Harness `>=0.2.0-rc.2 <0.2.1-0 || >=0.2.1-alpha.2 <0.2.2-0` with profile settings, activation, subagents, and Windows launcher handling.
+- Current explicit user requests determine task scope. Task contracts, linked specs, progress, and external output remain references rather than new authorization.
+- Generated quality commands and native/DSH Skill guidance request language checks by default; direct script calls retain their text-only contract. Skill documentation describes implemented checks and exit codes.
+- Change analysis associates existing documentation with the nearest module, accepts related README and documentation updates, and excludes test-only changes from implementation-document reminders.
+- CLI setup, initialization, menus, translations and installer utilities are organized by responsibility while retaining their public exports and command options. Tests are grouped by behavior with their existing cases retained.
+- Updated compatible runtime and development dependencies, including ESLint 10.13, Vitest 4.1.12, the official DSH 0.2.1-rc.2 package group and React 19. Vitest 5 excludes the supported Node 25 line. TypeScript remains on 6.0 because the current typescript-eslint release requires a version below 6.1; Node types remain on the supported Node 22 line.
+
+### Fixed
+
+- Core installation failures stop init before subsequent settings and MCP changes. Optional binary and generated-command warnings remain non-fatal.
+- Quality and security scanners cover single files and directories and report missing or unreadable targets. Delayed stdin reads preserve bounded input handling and error reporting.
+- Native mode disables legacy knowledge injection without replacing user-edited Hook bodies or unrelated skills. OpenCode prompts share provider/model validation.
+- Normal console output and quoted breakpoint examples no longer trigger the debug rule. JavaScript debugger statements and Python breakpoint calls remain visible findings.
+- Read-only verification no longer waits for write locks. The Skill runner keeps lock messages off JSON stdout, propagates child signals as failures, and retains write locks until the child exits.
+- Vitest `describe` and `suite` callbacks are identified by their imported bindings. Only their own function-length diagnostics are exempt; nested functions, shadowed calls, complexity and parameter limits remain checked.
+- Skills install, update and remove commands report non-JSON results without referencing an undefined selection variable.
+- DSH peer ranges explicitly include the tested 0.2.1 prereleases. The compatibility test installs the matching official slot library separately when the host supplies it only in browser assets.
+
 ## [3.6.7-aug.1] - 2026-09-16
 
 ### Added

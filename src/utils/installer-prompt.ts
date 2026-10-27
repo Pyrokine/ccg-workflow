@@ -12,11 +12,15 @@ const FAST_CONTEXT_PROMPT_PRIMARY = `# fast-context MCP 工具使用指南
 
 **任何需要理解代码上下文、探索性搜索、或自然语言定位代码的场景，优先使用 \`mcp__fast-context__fast_context_search\`**`
 
-const FAST_CONTEXT_PROMPT_AUXILIARY = `# fast-context MCP 工具使用指南（辅助模式）
+const FAST_CONTEXT_PROMPT_AUXILIARY =
+  `# fast-context MCP 工具使用指南（辅助模式）
 
 ## 核心原则
 
-**主检索工具为 ace-tool（\`mcp__ace-tool__search_context\`）。当 ace-tool 无法满足语义搜索需求时，使用 \`mcp__fast-context__fast_context_search\` 作为补充。**
+` +
+  '**主检索工具为 ace-tool（`mcp__ace-tool__search_context`）。当 ace-tool 无法满足语义搜索需求时，' +
+  '使用 `mcp__fast-context__fast_context_search` 作为补充。**' +
+  `
 
 适合使用 fast-context 的场景：
 - 用自然语言描述要找的逻辑（如"部署流程"、"事件处理"）
@@ -37,7 +41,8 @@ export async function writeFastContextPrompt(auxiliaryMode = false): Promise<voi
   const markerEnd = FC_MARKER_END
   const markedBlock = `\n${markerStart}\n${promptContent}\n${markerEnd}\n`
   const markerRegex = new RegExp(
-    `\\n?${markerStart.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[\\s\\S]*?${markerEnd.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\n?`
+    `\\n?${markerStart.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[\\s\\S]*?` +
+      `${markerEnd.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\n?`
   )
 
   // Helper: append or replace marked block in a file
@@ -71,7 +76,8 @@ export async function writeFastContextPrompt(auxiliaryMode = false): Promise<voi
  */
 export async function removeFastContextPrompt(): Promise<void> {
   const markerRegex = new RegExp(
-    `\\n?${FC_MARKER_START.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[\\s\\S]*?${FC_MARKER_END.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\n?`
+    `\\n?${FC_MARKER_START.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[\\s\\S]*?` +
+      `${FC_MARKER_END.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\n?`
   )
 
   // Helper: remove marked block from a file

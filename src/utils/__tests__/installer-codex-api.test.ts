@@ -68,7 +68,7 @@ afterEach(async () => {
 
 describe('sponsor registry', () => {
   it('defines unique HTTPS gateways with separate Claude and Codex base URLs', () => {
-    expect(SPONSORS.map((sponsor) => sponsor.id)).toEqual(['apimart', 'packycode'])
+    expect(SPONSORS.map((sponsor) => sponsor.id)).toEqual(['apimart', 'packycode', 'x6ai'])
     expect(new Set(SPONSORS.map((sponsor) => sponsor.id)).size).toBe(SPONSORS.length)
 
     for (const sponsor of SPONSORS) {
@@ -107,6 +107,7 @@ describe('configure sponsor providers for Codex', () => {
     expect(result.results.map(({ id, status }) => ({ id, status }))).toEqual([
       { id: 'apimart', status: 'added' },
       { id: 'packycode', status: 'added' },
+      { id: 'x6ai', status: 'added' },
     ])
     const config = await readConfig()
     expect(config.model_providers?.apimart).toEqual({ ...APIMART_CODEX_PROVIDER })
@@ -308,6 +309,7 @@ describe('remove sponsor providers from Codex', () => {
     expect(result.results.map(({ id, status }) => ({ id, status }))).toEqual([
       { id: 'apimart', status: 'removed' },
       { id: 'packycode', status: 'removed' },
+      { id: 'x6ai', status: 'removed' },
     ])
     expect(await readConfig()).toEqual(before)
   })
@@ -321,6 +323,9 @@ describe('remove sponsor providers from Codex', () => {
     expect(config.model_providers?.apimart).toEqual({ ...APIMART_CODEX_PROVIDER })
 
     await removeApiMartFromCodex()
+    config = await readConfig()
+    expect(config.model_providers?.x6ai).toEqual(SPONSORS.find((sponsor) => sponsor.id === 'x6ai')!.codex)
+    await removeSponsorFromCodex('x6ai')
     config = await readConfig()
     expect(config.model_providers).toBeUndefined()
   })

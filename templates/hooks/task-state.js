@@ -533,8 +533,9 @@ function validateTextContent(value, key, maxBytes, required) {
     return null;
   }
   if (required && !value.trim()) fail('INVALID_REQUEST', `${key} must not be empty`);
-  if (Buffer.byteLength(value, 'utf-8') > maxBytes) fail('INVALID_REQUEST', `${key} exceeds ${maxBytes} bytes`);
-  return value.endsWith('\n') ? value : `${value}\n`;
+  const content = value.endsWith('\n') ? value : `${value}\n`;
+  if (Buffer.byteLength(content, 'utf-8') > maxBytes) fail('INVALID_REQUEST', `${key} exceeds ${maxBytes} bytes`);
+  return content;
 }
 
 function truncateUtf8ToBytes(value, maxBytes) {
@@ -1874,13 +1875,20 @@ function operationRecordTurn(projectRoot, sessionKey, request) {
     fail('REVISION_CONFLICT', 'Task state or session binding changed before recording the turn');
   }
   assertTaskRevision(resolution.task, expected.taskRevision);
-  const tracked = trackTurn(resolution.task.dir, sessionKey, resolution.task.currentPhase, resolution.task.nextAction);
+  const tracked = trackTurn(
+    resolution.task.dir,
+    sessionKey,
+    resolution.task.currentPhase,
+    resolution.task.nextAction,
+    resolution.task.revision
+  );
   if (!tracked.ok) fail(tracked.code, 'Cannot record session turn', null, 3);
   return {
     state: resolution.state,
     binding: resolution.binding,
     task: resolution.task,
     loop: detectLoop(tracked.turns, 3),
+    observation: 'Recorded task state only; unchanged records do not prove that work has stalled',
   };
 }
 

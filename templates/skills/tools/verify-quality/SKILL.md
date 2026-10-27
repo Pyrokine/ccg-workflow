@@ -1,159 +1,89 @@
 ---
 name: verify-quality
-description: 代码质量校验关卡。检测复杂度、重复代码、命名规范、函数长度等质量指标。当用户提到代码质量、复杂度检查、代码异味、重构建议、lint检查、代码规范时使用。在复杂模块、重构完成时自动触发。
+description: 代码质量校验关卡，使用项目语言工具检查类型、复杂度和 lint，报告检查覆盖与未完成项，当用户提到代码质量、复杂度检查、代码异味、重构建议、lint 检查或代码规范时使用，在复杂模块、重构完成时自动触发
 license: MIT
 compatibility: node>=18
 user-invocable: true
 disable-model-invocation: false
 allowed-tools: Bash, Read, Glob
-argument-hint: <扫描路径>
+argument-hint: <扫描路径> [--base ref]
 ---
 
-# ⚖ 校验关卡 · 代码质量
+# 代码质量校验
 
-## 核心原则
+## 执行检查
 
-```
-代码质量 = 可读性 + 可维护性 + 可测试性
-劣质代码是技术债，技术债是道基裂痕
-复杂度是 bug 的温床
-```
-
-## 自动检查
-
-运行质量检查脚本（跨平台）：
+默认使用语言检查模式，从项目工作目录调用脚本，脚本路径以本 Skill 的资源目录为准：
 
 ```bash
-# 在 skill 目录下运行
-node scripts/quality_checker.js <扫描路径>
-node scripts/quality_checker.js <扫描路径> -v      # 详细模式
-node scripts/quality_checker.js <扫描路径> --json  # JSON 输出
+node /path/to/verify-quality/scripts/quality_checker.js src --language-checks
+node /path/to/verify-quality/scripts/quality_checker.js src/main.ts src/components --language-checks --json
+node /path/to/verify-quality/scripts/quality_checker.js src --language-checks --base HEAD~1 -v
 ```
 
-## 检测指标
+支持单文件、目录和多个目标，目标相对当前工作目录解析，省略目标时扫描当前目录，重叠文件只分析一次
 
-### 复杂度指标
+`--exclude vendor generated` 追加排除目录名称，默认排除 Git 元数据、依赖、虚拟环境和构建目录；显式指定的文件仍会检查，`--` 后的参数全部作为路径处理，`--help` 只显示用法
 
-| 指标       | 阈值      | 超标后果       |
-|----------|---------|------------|
-| **圈复杂度** | ≤ 10    | 🟠 警告，建议拆分 |
-| **函数长度** | ≤ 50 行  | 🟠 警告，建议拆分 |
-| **文件长度** | ≤ 500 行 | 🟡 提示，考虑拆分 |
-| **参数数量** | ≤ 5     | 🟠 警告，考虑封装 |
-| **嵌套深度** | ≤ 4     | 🟠 警告，建议重构 |
-| **行长度**  | ≤ 120   | 🔵 提示      |
+已有直接调用保持文本规则模式：
 
-### 命名规范
-
-| 类型      | 规范          | 示例                             |
-|---------|-------------|--------------------------------|
-| **类名**  | PascalCase  | `UserService`, `HttpClient`    |
-| **函数名** | snake_case  | `get_user`, `process_data`     |
-| **常量**  | UPPER_SNAKE | `MAX_RETRY`, `DEFAULT_TIMEOUT` |
-| **变量**  | snake_case  | `user_id`, `total_count`       |
-
-### 代码异味
-
-| 异味     | 说明           | 严重度       |
-|--------|--------------|-----------|
-| 重复代码   | 相似代码块 > 10 行 | 🟠 High   |
-| 过长参数列表 | 参数 > 5 个     | 🟡 Medium |
-| 魔法数字   | 未命名的常量       | 🟡 Medium |
-| 死代码    | 未使用的函数/变量    | 🔵 Low    |
-| 注释代码   | 被注释的代码块      | 🔵 Low    |
-
-## 自动触发时机
-
-| 场景   | 触发条件       |
-|------|------------|
-| 复杂模块 | 代码行数 > 200 |
-| 重构完成 | 重构任务完成时    |
-| 代码审查 | PR/MR 审查时  |
-| 提交前  | 代码提交前检查    |
-
-## 校验流程
-
-```
-1. 扫描代码文件
-2. 计算复杂度指标
-3. 检测代码异味
-4. 验证命名规范
-5. 输出质量校验报告
+```bash
+node /path/to/verify-quality/scripts/quality_checker.js src --json
 ```
 
-## 校验报告格式
+文本规则模式标记为 `analysis_mode: text`，只对本次请求的文本规则给出完成状态；使用该模式交付时注明语言工具未执行，语言工具失败时保留增强模式的未完成结果
 
-```
-## 代码质量校验报告
+## 语言工具与覆盖
 
-✓ 通过 | ✗ 未通过
+| 源码 | 执行检查 | 要求与范围 |
+|---|---|---|
+| JS／TS | ESLint 项目规则与 AST 阈值 | 使用目标项目或工作区的本地依赖及配置，保持源码和缓存不变 |
+| TypeScript 项目 | 类型、语法与项目诊断 | 使用项目本地 TypeScript compiler API，按实际 program 和 references 检查，不调用 emit |
+| Python | Ruff 项目规则 | 使用已安装的 Ruff，禁用修复和缓存，报告排除文件 |
+| C／C++ | clang-tidy 诊断 | 使用已安装工具和现有 compilation database，保留真实编译参数，仅分析有记录的输入 |
+| 其他受支持源码 | 文本规则 | 语言分析未覆盖，增强模式报告未完成 |
 
-### 复杂度指标
-- 平均函数复杂度: N
-- 超标函数数: N
-- 最大文件行数: N
+Node 工具按项目及工作区边界查找，使用各工具要求的运行环境；工具缺失时报告未完成，由用户管理安装和项目配置
 
-### 代码异味
-- 🟠 High: N
-- 🟡 Medium: N
-- 🔵 Low: N
+`checks[].files` 列出实际覆盖的请求文件，`requested_files`、`skipped_files` 和 `uncovered` 说明覆盖差异，类型检查也会报告同一项目中其他文件的诊断
 
-### 问题清单
+子工具使用明确参数、超时和输出上限执行，诊断只保留工具、规则、位置和严重度，消息和源码内容脱敏
 
-| 文件 | 行号 | 类型 | 严重度 | 描述 |
-|------|------|------|--------|------|
-| ... | ... | ... | ... | ... |
+## 文本指标与阈值
 
-### 结论
-可交付 / 需重构后交付
-```
+| 指标 | 默认阈值 | 检查方式 |
+|---|---|---|
+| 行长度 | 120 字符 | 文本规则，info |
+| 文件代码行数 | 500 行 | 文本规则，warning |
+| 函数长度 | 50 行 | JS／TS 使用 ESLint AST，Python 文本规则为正则估算 |
+| 圈复杂度 | 10 | JS／TS 使用 ESLint AST，Python 文本规则为启发式估算 |
+| 参数数量 | 5 | JS／TS 使用 ESLint AST，Python 文本规则为正则估算 |
+| Python 命名 | 函数 snake_case、类 PascalCase | 文本规则 |
 
-## 重构建议
+函数长度、复杂度和参数数量的默认阈值在 ESLint 中作为 warning 执行，项目其他 lint 错误保留原有严重度
 
-### 降低复杂度
+通过 Vitest import 绑定识别的 `describe`／`suite` 注册容器不计入函数长度，别名、namespace 和注册修饰链按作用域判断；单个测试函数、生产函数及被参数遮蔽的同名调用继续使用原阈值
 
-```python
-# 🔴 高复杂度 - 道基不稳
-def process(data):
-    if condition1:
-        if condition2:
-            if condition3:
-                # 深层嵌套
-                pass
+重复代码、死代码、变量命名和完整数据流检查取决于项目另行启用的工具或规则，当前脚本不提供统一检测
 
-# ✅ 低复杂度 - 道基稳固
-def process(data):
-    if not condition1:
-        return
-    if not condition2:
-        return
-    if not condition3:
-        return
-    # 主逻辑
-```
+## 比较新增与既有问题
 
-### 消除重复
+默认使用各目标仓库的 `HEAD`，`--base <ref>` 指定其他比较点；内置规则对历史 Git blob 使用相同检查逻辑，按规则、上下文和出现次数比较，支持行号移动和 Git 识别的 rename
 
-```python
-# 🔴 重复代码 - 异端
-def func1():
-    # 10行相同逻辑
-    pass
+`origin` 为 `new`、`existing` 或 `unclassified`，`origin_counts` 给出数量；外部工具诊断缺少同工具基线时保留 `unclassified`，`change_scope` 只说明是否关联变更行
 
-def func2():
-    # 10行相同逻辑
-    pass
+没有 Git 或 HEAD 时继续扫描，并报告基线不可用；显式指定无法使用的基线时报告未完成
 
-# ✅ 提取公共函数 - 正道
-def common_logic():
-    # 公共逻辑
-    pass
+文本报告优先展示新增问题，既有问题汇总，`-v` 展开全部位置；JSON 保留全部发现和基线状态，既有 error 仍参与阻断
 
-def func1():
-    common_logic()
+## 结果与退出码
 
-def func2():
-    common_logic()
-```
+| 退出码 | 结果 | 判定 |
+|---|---|---|
+| 0 | 当前请求的检查完成且没有 error | warning 和 info 保持非阻断 |
+| 1 | 检查完成且发现 error | 检查失败，保留完整诊断位置 |
+| 2 | 检查未完成 | 缺失路径、读取失败、零覆盖、缺工具、配置错误、超时、异常终止、输出无效或请求文件未覆盖 |
 
----
+JSON 保留 `passed`、`files_scanned`、行数、问题和计数字段，增加检查方式、工具、未覆盖和基线信息；`coverage[].eligible_files` 是候选文件数，`files_scanned` 只统计成功读取并完成文本分析的文件
+
+只有 `complete: true` 时才按所请求模式说明检查完成，类型检查和 lint 的通过不能替代功能测试

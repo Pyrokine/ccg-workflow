@@ -1,143 +1,68 @@
 ---
 name: verify-security
-description: 安全校验关卡。自动扫描代码安全漏洞，检测危险模式，确保安全决策有文档记录。当用户提到安全扫描、漏洞检测、安全审计、代码安全、OWASP、注入检测、敏感信息泄露时使用。在新建模块、安全相关变更、攻防任务、重构完成时自动触发。
+description: 安全校验关卡，扫描代码中的危险模式，报告覆盖、严重度和待复核发现，当用户提到安全扫描、漏洞检测、安全审计、代码安全、OWASP、注入检测或敏感信息泄露时使用，在新建模块、安全相关变更和重构完成时自动触发
 license: MIT
 compatibility: node>=18
 user-invocable: true
 disable-model-invocation: false
 allowed-tools: Bash, Read, Grep
-argument-hint: <扫描路径>
+argument-hint: <扫描路径> [--base ref]
 ---
 
-# ⚖ 校验关卡 · 安全校验
+# 代码安全校验
 
+## 执行扫描
 
-## 核心原则
-
-```
-安全即道基，破则劫败
-安全决策必须可追溯
-Critical/High 问题必须修复后才能交付
-```
-
-## 自动扫描
-
-运行安全扫描脚本（跨平台）：
+从项目工作目录调用脚本，脚本路径以本 Skill 的资源目录为准：
 
 ```bash
-# 在 skill 目录下运行
-node scripts/security_scanner.js <扫描路径>
-node scripts/security_scanner.js <扫描路径> -v           # 详细模式
-node scripts/security_scanner.js <扫描路径> --json       # JSON 输出
-node scripts/security_scanner.js <扫描路径> --exclude vendor  # 排除目录
+node /path/to/verify-security/scripts/security_scanner.js src --json
+node /path/to/verify-security/scripts/security_scanner.js src/main.ts src/components -v
+node /path/to/verify-security/scripts/security_scanner.js src --base HEAD~1 --exclude vendor
 ```
 
-## 检测范围
+支持单文件、目录和多个目标，目标相对当前工作目录解析，省略目标时扫描当前目录，重叠文件只扫描一次
 
-### 自动检测的漏洞类型
+默认排除 Git 元数据、依赖、虚拟环境、构建和测试目录，`--exclude` 追加目录名称；显式指定的文件仍会检查，`--` 后的参数全部作为路径处理，`--help` 只显示用法
 
-| 类别 | 检测项 | 严重度 |
-|------|--------|--------|
-| **注入** | SQL 注入、命令注入、代码注入 | 🔴 Critical |
-| **敏感信息** | 硬编码密钥、AWS Key、私钥 | 🔴 Critical |
-| **XSS** | innerHTML、dangerouslySetInnerHTML | 🟠 High |
-| **反序列化** | pickle.loads、yaml.load | 🟠 High |
-| **路径遍历** | 未验证的文件路径操作 | 🟠 High |
-| **SSRF** | 未验证的 URL 请求 | 🟠 High |
-| **XXE** | 不安全的 XML 解析 | 🟠 High |
-| **弱加密** | MD5、SHA1 用于安全场景 | 🟡 Medium |
-| **不安全随机** | random 模块用于安全场景 | 🟡 Medium |
-| **调试代码** | console.log、print、debugger | 🔵 Low |
+## 检查范围
 
-### 文档层面检查
+规则按源码后缀匹配，发现属于待复核的代码模式，结合调用链判断输入来源、已有校验和最终效果
 
-安全相关代码必须在 DESIGN.md 中记录：
+| 类别 | 检查模式 | 严重度 |
+|---|---|---|
+| 注入 | 动态 SQL、shell 调用、执行用户输入 | Critical |
+| 敏感信息 | 硬编码密码或 token、AWS Key、私钥 | High／Critical |
+| XSS | innerHTML、outerHTML、document.write、dangerouslySetInnerHTML | High／Medium |
+| 反序列化 | pickle、未限制 Loader 的 yaml.load | High |
+| 路径与请求 | 来自输入的文件路径和 URL | High |
+| XML | XML 解析模式 | High |
+| 弱加密 | MD5、SHA1 | Medium／Low |
+| 随机数 | 安全场景中的普通 random 调用 | Medium |
+| 断点 | JavaScript debugger、Python breakpoint 和 pdb.set_trace | Low |
 
-- [ ] **威胁模型** — 防御哪些攻击
-- [ ] **安全决策** — 为何选择此方案
-- [ ] **安全边界** — 信任边界在哪里
-- [ ] **已知风险** — 接受了哪些风险
+普通 `console.log()` 不作为安全问题，控制台输出策略由项目 lint 配置决定；断点规则过滤普通字符串和注释示例，整体扫描仍是模式检查，不执行数据流或语义证明
 
-## 危险模式速查
+复核安全发现时，沿调用链确认真实行为，并在项目已有设计或安全文档中记录威胁、决策、信任边界和接受的限制
 
-### Python
-```python
-# 🔴 危险 - 触犯道基
-eval(), exec(), os.system()
-subprocess(..., shell=True)
-pickle.loads(), yaml.load()
-cursor.execute(f"SELECT * FROM t WHERE id = {id}")
+## 新增与既有问题
 
-# ✅ 安全替代 - 道基稳固
-ast.literal_eval()
-subprocess([...], shell=False)
-yaml.safe_load()
-cursor.execute("SELECT * FROM t WHERE id = %s", (id,))
-```
+默认对照各目标仓库的 `HEAD`，`--base <ref>` 指定其他比较点；使用相同规则扫描基线 Git blob，按规则、上下文和出现次数比较，支持行号移动与 Git 识别的 rename
 
-### JavaScript
-```javascript
-// 🔴 危险 - 触犯道基
-eval(), innerHTML, document.write()
-new Function(userInput)
+发现的 `origin` 为 `new`、`existing` 或 `unclassified`，`origin_counts` 保留各类数量；无 Git 或 HEAD 时继续扫描，报告基线不可用和来源未判定，显式无效基线返回未完成
 
-// ✅ 安全替代 - 道基稳固
-JSON.parse(), textContent
-模板引擎自动转义
-```
+文本报告优先显示新增发现，既有发现汇总，`-v` 展开全部位置；JSON 保留全量发现，分类不改变严重度，既有 Critical／High 仍然阻断
 
-### Go
-```go
-// 🔴 危险 - 触犯道基
-exec.Command("sh", "-c", userInput)
-template.HTML(userInput)
+## 报告与退出码
 
-// ✅ 安全替代 - 道基稳固
-exec.Command("cmd", args...)
-html/template 自动转义
-```
+| 退出码 | 结果 | 处理 |
+|---|---|---|
+| 0 | 扫描完成，未命中 Critical／High | 继续复核 Medium／Low／Info |
+| 1 | 扫描完成，命中 Critical／High | 验证发现，修复范围内的真实问题 |
+| 2 | 扫描未完成 | 处理缺失路径、读取失败、不支持的源码、零覆盖或显式基线错误，保留部分结果 |
 
-## 校验流程
+JSON 保留 `passed`、`files_scanned`、`counts`、`findings`，并提供 `complete`、`requested_paths`、`coverage`、`scan_errors`、`baseline` 和 `origin_counts`
 
-```
-1. 运行 security_scanner.js 自动扫描
-2. 分析扫描结果，按严重度排序
-3. 检查安全决策是否有文档记录
-4. 输出安全校验报告
-5. Critical/High 问题必须修复后才能交付
-```
+`coverage[].eligible_files` 是候选文件数，`files_scanned` 只统计成功读取并分析的文件；每个目标都必须覆盖受支持源码，未完成时 `complete` 和 `passed` 均为 `false`
 
-## 自动触发时机
-
-| 场景 | 触发条件 |
-|------|----------|
-| 新建模块 | 模块创建完成时 |
-| 安全相关变更 | 涉及认证、授权、加密、输入处理 |
-| 攻防任务 | 红队/蓝队任务完成时 |
-| 重构完成 | 重构任务完成时 |
-| 提交前 | 代码提交前检查 |
-
-## 校验报告格式
-
-```
-## 安全校验报告
-
-✓ 通过 | ✗ 未通过
-
-- 🔴 Critical: N
-- 🟠 High: N
-- 🟡 Medium: N
-- 🔵 Low: N
-
-### 发现问题
-
-| 文件 | 行号 | 类型 | 严重度 | 描述 |
-|------|------|------|--------|------|
-| ... | ... | ... | ... | ... |
-
-### 结论
-
-可交付 / 需修复后交付
-```
-
----
+报告保留规则、严重度、文件、行号和处理建议，`line_content` 固定为 `[redacted]`，基线比较上下文仅留在本次进程内，不输出源码或凭证内容

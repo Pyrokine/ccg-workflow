@@ -51,7 +51,8 @@ const DEFAULT_ALLOWED_TOOLS = ['Read']
 const NAME_SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const TOOL_NAME_RE = /^[A-Z][A-Za-z0-9]*$/
 const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
-const SKIP_NAMES = new Set(['__pycache__', '.DS_Store', 'Thumbs.db', '.git', 'node_modules'])
+const SKIP_NAMES = new Set(['__pycache__', '.DS_Store', 'Thumbs.db', '.git', 'node_modules', 'scripts', 'agents'])
+const NATIVE_SKIP_NAMES = new Set([...SKIP_NAMES, 'references', 'refs'])
 
 // ═══════════════════════════════════════════════════════
 // Frontmatter parsing
@@ -107,47 +108,54 @@ function listScriptEntries(skillDir: string): string[] {
   }
 }
 
-function normalizeAllowedTools(value: string | undefined): string[] {
-  if (!value || value.trim() === '') return [...DEFAULT_ALLOWED_TOOLS]
+function commaSeparated(value: string | undefined): string[] {
+  return value
+    ? value
+        .split(',')
+        .map((entry) => entry.trim())
+        .filter(Boolean)
+    : []
+}
 
-  const tools = value
-    .split(',')
-    .map((t) => t.trim())
-    .filter(Boolean)
+function normalizeAllowedTools(value: string | undefined): string[] {
+  const tools = commaSeparated(value)
   if (tools.length === 0) return [...DEFAULT_ALLOWED_TOOLS]
 
   // Validate tool names but don't throw — just filter invalid ones
   return tools.filter((t) => TOOL_NAME_RE.test(t))
 }
 
-function normalizeSkillRecord(skillsDir: string, skillDir: string, meta: Record<string, string>): SkillMeta | null {
+function skillIdentity(meta: Record<string, string>) {
+  const name = meta.name?.trim()
+  if (!name || !NAME_SLUG_RE.test(name)) return null
+  const description = meta.description?.trim()
+  return description ? { name, description } : null
+}
+
+function normalizeSkillRecord(
+  skillsDir: string,
+  skillDir: string,
+  meta: Record<string, string>,
+  native = false
+): SkillMeta | null {
   const relPath = relative(skillsDir, skillDir)
   const scriptEntries = listScriptEntries(skillDir)
 
   // Skip if more than 1 script (ambiguous)
-  if (scriptEntries.length > 1) return null
+  if (scriptEntries.length > 1 && !native) return null
 
-  const name = meta.name?.trim()
-  if (!name || !NAME_SLUG_RE.test(name)) return null
-
-  const description = meta.description?.trim()
-  if (!description) return null
+  const identity = skillIdentity(meta)
+  if (!identity) return null
 
   // user-invocable defaults to false if missing
   const userInvocable = String(meta['user-invocable'] || 'false').toLowerCase() === 'true'
 
   return {
-    name,
-    description,
+    ...identity,
     userInvocable,
     allowedTools: normalizeAllowedTools(meta['allowed-tools']),
     argumentHint: meta['argument-hint'] || '',
-    aliases: meta.aliases
-      ? meta.aliases
-          .split(',')
-          .map((a) => a.trim())
-          .filter(Boolean)
-      : [],
+    aliases: commaSeparated(meta.aliases),
     category: inferCategory(relPath),
     runtimeType: scriptEntries.length === 1 ? 'scripted' : 'knowledge',
     relPath,
@@ -156,9 +164,57 @@ function normalizeSkillRecord(skillsDir: string, skillDir: string, meta: Record<
   }
 }
 
+function readNativeSkill(skillsDir: string, dir: string): SkillMeta | null {
+  const path = join(dir, 'SKILL.md')
+  if (!relative(skillsDir, dir) || !fs.existsSync(path)) return null
+  if (fs.lstatSync(path).isSymbolicLink()) throw new Error(`Template symlink is not supported: ${path}`)
+  const meta = parseFrontmatter(fs.readFileSync(path, 'utf8'))
+  const skill = meta && normalizeSkillRecord(skillsDir, dir, meta, true)
+  if (!skill) throw new Error(`Invalid skill metadata: ${path}`)
+  return skill
+}
+
+/** Native catalog excludes the aggregate root and optional security notes. */
+export function collectNativeSkills(skillsDir: string): SkillMeta[] {
+  const skills: SkillMeta[] = []
+  const names = new Set<string>()
+  function walk(dir: string): void {
+    const rel = relative(skillsDir, dir).split(sep).join('/')
+    if (rel === 'domains/security' || rel.startsWith('domains/security/')) return
+    const stat = fs.lstatSync(dir)
+    if (stat.isSymbolicLink()) throw new Error(`Template symlink is not supported: ${dir}`)
+    const skill = readNativeSkill(skillsDir, dir)
+    if (skill) {
+      if (names.has(skill.name)) throw new Error(`Duplicate skill slug: ${skill.name}`)
+      names.add(skill.name)
+      skills.push(skill)
+    }
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+      if (NATIVE_SKIP_NAMES.has(entry.name)) continue
+      if (entry.isSymbolicLink()) throw new Error(`Template symlink is not supported: ${join(dir, entry.name)}`)
+      if (entry.isDirectory()) walk(join(dir, entry.name))
+    }
+  }
+  walk(skillsDir)
+  return skills.sort((a, b) => a.name.localeCompare(b.name))
+}
+
 // ═══════════════════════════════════════════════════════
 // Skill collection
 // ═══════════════════════════════════════════════════════
+
+function readLegacySkill(skillsDir: string, dir: string): SkillMeta | null {
+  const skillMd = join(dir, 'SKILL.md')
+  if (!fs.existsSync(skillMd)) return null
+  try {
+    const content = fs.readFileSync(skillMd, 'utf8')
+    const meta = parseFrontmatter(content)
+    return meta ? normalizeSkillRecord(skillsDir, dir, meta) : null
+  } catch {
+    // Skip unparseable skills
+    return null
+  }
+}
 
 /**
  * Recursively scan a skills directory and collect all valid skill definitions.
@@ -168,21 +224,10 @@ export function collectSkills(skillsDir: string): SkillMeta[] {
   const seenNames = new Set<string>()
 
   function scan(dir: string): void {
-    const skillMd = join(dir, 'SKILL.md')
-    if (fs.existsSync(skillMd)) {
-      try {
-        const content = fs.readFileSync(skillMd, 'utf8')
-        const meta = parseFrontmatter(content)
-        if (meta) {
-          const skill = normalizeSkillRecord(skillsDir, dir, meta)
-          if (skill && !seenNames.has(skill.name)) {
-            seenNames.add(skill.name)
-            results.push(skill)
-          }
-        }
-      } catch {
-        // Skip unparseable skills
-      }
+    const skill = readLegacySkill(skillsDir, dir)
+    if (skill && !seenNames.has(skill.name)) {
+      seenNames.add(skill.name)
+      results.push(skill)
     }
 
     let entries: fs.Dirent[]
@@ -194,7 +239,7 @@ export function collectSkills(skillsDir: string): SkillMeta[] {
 
     for (const entry of entries) {
       if (!entry.isDirectory()) continue
-      if (entry.name === 'scripts' || entry.name === 'agents' || SKIP_NAMES.has(entry.name)) continue
+      if (SKIP_NAMES.has(entry.name)) continue
       scan(join(dir, entry.name))
     }
   }
@@ -241,7 +286,7 @@ export function generateCommandContent(skill: SkillMeta, skillsInstallDir: strin
       '执行以下命令：',
       '',
       '```bash',
-      `node "${runSkillPath}" ${skill.name} $ARGUMENTS`,
+      `node "${runSkillPath}" ${skill.name}${skill.name === 'verify-quality' ? ' --language-checks' : ''} $ARGUMENTS`,
       '```',
       '',
       `如需了解此技能的详细说明，请读取: ${skillMdPath}`,

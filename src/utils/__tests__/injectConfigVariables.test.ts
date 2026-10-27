@@ -375,7 +375,8 @@ describe('additional backend model flags', () => {
     })
 
     expect(result).toBe(
-      'codeagent-wrapper --backend <opencode --opencode-model anthropic/claude-opus-5|grok --grok-model grok-4.6> - "/w"'
+      'codeagent-wrapper --backend <opencode --opencode-model ' +
+        'anthropic/claude-opus-5|grok --grok-model grok-4.6> - "/w"'
     )
   })
 

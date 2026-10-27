@@ -10,8 +10,6 @@ const {
   buildTaskSnapshot,
   renderTaskSnapshot,
   outputHook,
-  trackTurn,
-  detectLoop,
   findCodeagentWrapperCalls,
   truncateUtf8,
   escapeXml,
@@ -62,13 +60,6 @@ function shouldRefresh(input, eventName) {
   return !isBackgroundLaunch(input);
 }
 
-function appendSignal(context, lines) {
-  if (lines.length === 0) return context;
-  const signal = `<ccg-authority-signal>\n${lines.join('\n')}\n</ccg-authority-signal>`;
-  const candidate = `${context}\n\n${signal}`;
-  return Buffer.byteLength(candidate, 'utf-8') <= AUTHORITY_CONTEXT_LIMIT ? candidate : context;
-}
-
 function main() {
   const input = readHookInput();
   const requestedEvent = typeof input.hook_event_name === 'string' ? input.hook_event_name : 'UserPromptSubmit';
@@ -83,25 +74,7 @@ function main() {
   const snapshot = buildTaskSnapshot(root, { mode: 'authority', role: 'all', sessionKey });
   if (snapshot.resolution.kind === 'none') return;
 
-  let context = renderTaskSnapshot(snapshot, 'authority', 'all', AUTHORITY_CONTEXT_LIMIT);
-  if (outputEventName === 'UserPromptSubmit' && snapshot.resolution.kind === 'active' && snapshot.kind !== 'invalid') {
-    const additions = [];
-    const tracked = trackTurn(
-      snapshot.task.dir,
-      sessionKey,
-      snapshot.task.currentPhase,
-      snapshot.task.nextAction
-    );
-    if (!tracked.ok) {
-      additions.push(`Diagnostic: ${escapeXml(tracked.code)}: loop detection disabled`);
-    } else {
-      const loop = detectLoop(tracked.turns, 3);
-      if (loop) {
-        additions.push(`Loop: phase and next action repeated ${loop.count} turns; change approach or report the blocker.`);
-      }
-    }
-    context = appendSignal(context, additions);
-  }
+  const context = renderTaskSnapshot(snapshot, 'authority', 'all', AUTHORITY_CONTEXT_LIMIT);
 
   outputHook(outputEventName, context);
 }

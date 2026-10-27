@@ -2,17 +2,24 @@
 
 **把 CCG 的多模型角色矩阵搬进 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) —— 七个角色委派工具，各自跑在自己的模型上，不依赖任何外部 CLI。任一角色都能挂多个模型同时作答，也能被雇成有自己文件的常驻队友。所有权与项目决策都是持久的。**
 
-[English](./README.md) · MIT · 跟随 dsh `0.1.x` · 隶属 [CCG](https://github.com/Pyrokine/ccg-workflow) —— ⭐ 请点仓库，不是这个目录
+[English](./README.md) · MIT · 支持 dsh `0.2.0-rc.2` / `0.2.1-alpha.2` / `0.2.1-rc.2` · 隶属 [CCG](https://github.com/Pyrokine/ccg-workflow)
 
 ---
 
 ## 快速上手
 
+在仓库根目录构建 CCG，安装到已有的 dsh profile：
+
 ```sh
-dsh plugin --profile web add dsh-ccg
+pnpm install --frozen-lockfile
+pnpm build
+node bin/ccg.mjs dsh install --profile web
 ```
 
-照常启动，然后打开 **设置 › 插件 › CCG 角色矩阵**，把两个档位设好 —— 一个推理模型、一个快速模型，都从 harness 已经能连上的路由里挑。
+升级 CCG 后，重新执行安装命令并重启 dsh
+本 fork 从源码安装，`dsh-ccg` 随根项目分发；0.1.x 环境先升级到支持的 0.2 版本
+
+打开 **设置 › 内置插件 › CCG 角色矩阵**，选择推理模型和快速模型，使用 harness 已配置的路由
 
 配置就这些。**没有任何命令要记。** 用自己的话说需求就行：
 
@@ -90,13 +97,14 @@ Agent 读你说的话，判断这活值多大阵仗，说出选了哪档、花�
 给某个角色挂上多个模型，它就变成一个**模型群**：它们拿到同一份任务、戴着同一套专家人设、各自独立作答，答案并排返回。这才是 CCG 的另一半 —— 它的 `analyze` / `review` / `debug` 一直在做的事：两个模型分别回答，你真正要处理的是**它们分歧的地方**。
 
 ```yaml
-ccg:
-  roles:
-    analyzer:
-      models:                       # 想挂几个挂几个
-        - { provider: gateway-a, model: a-reasoning-model }
-        - { provider: gateway-b, model: a-rival-model }
-        - { provider: gateway-c, model: a-third-opinion }
+- id: ccg
+  config:
+    roles:
+      analyzer:
+        models:                       # 每个条目对应一个模型
+          - { provider: gateway-a, model: a-reasoning-model }
+          - { provider: gateway-b, model: a-rival-model }
+          - { provider: gateway-c, model: a-third-opinion }
 ```
 
 挂一个模型就是普通委派，走官方子代理工具；挂两个及以上才成为模型群。这里**不投票也不合并**：多数模型可以一起错，而把两个答案取平均通常会毁掉各自对的那部分 —— 所以每个答案都原样返回，裁决权留给手里握着上下文的那个模型。
@@ -126,9 +134,12 @@ ccg_team(role: "builder", description: "parser rewrite",
 
 等待是免费的：报告会自己把编排者唤醒，所以**结束当前轮次就是等待的正确姿势** —— 不要 sleep，不要轮询，也不要去审查一个还没人写出来的文件凑数。发现某个队友明显在做错东西时，`interrupt_agent` 只停掉它当前那一轮、队友照样活着等你纠正。实测：被打断的队友转录里是 `turn 1 aborted (parent)`，然后 turn 2 干的是改正后的活。
 
-**队友没法自己再雇一支队伍。** 在子代理里压掉约定只是拿走了邀请、没拿走能力，所以本插件启动的每个子代理都会被摘掉本插件的全部工具 —— 从一个真实队友的工具表里验证过：11 个 `ccg_*` 全部消失，它的 `report` 回传通道完好。它仍有 harness 自带的 `subagent`，那个跑在部署默认模型上，不会冒出按模型计价的意外。
+本插件启动的子代理会过滤全部 `ccg_*` 工具，保留原生父级交付通道和 harness 自带的 `subagent`
+子代理无法使用本插件继续雇队友或打开模型群
 
-这就是 CCG 的 Agent Teams，在 dsh 上不需要任何桥接：`startContinuable`、`send_message`、`report`、`interrupt_agent`、`list_agents` 全是原生的。本插件补的是每个队友背后的那个 CCG 角色 —— 它的人设、它的模型、它的文件所有权。设 `team: false` 则不注册 `ccg_team`。
+rc 运行时使用原生 `startContinuable`，alpha 使用 `startActivation` 自动交付完成通知，`send_message`、`interrupt_agent`、`list_agents` 仍是原生工具
+alpha 子代理用 `send_message` 向直接父级发送提前进度，最终答复自动交付
+CCG 提供角色人设、模型选择和文件所有权，设 `team: false` 则不注册 `ccg_team`
 
 ### 雇人之前会先问你
 
@@ -162,9 +173,15 @@ send_message. To take the files back first, call ccg_roster with action "release
 
 刻意做窄。它不是流水账 —— transcript 已经是了，而一份塞满流水账的记忆就不值得再加载。
 
-## 是实测，不是宣称
+## 兼容性测试
 
-在真实 dsh 环境（`0.1.0-rc.6`，pi-ai 网关）读 session 存储验证 —— 哪个模型服务了哪一轮，那里是唯一真相：
+测试覆盖官方 dsh `0.2.0-rc.2`、`0.2.1-alpha.2` 与 React 18，以及 `0.2.1-rc.2` 与 React 19；每组 138 项通过，覆盖 profile 版本冲突、volatile 配置、子代理交付与清理，以及官方浏览器插槽注册
+Node 测试环境单独安装同版本的官方插槽库，宿主浏览器资源中已包含该库
+
+### 0.1 历史验证
+
+以下记录来自上游早期 `0.1.0-rc.6` 与 pi-ai 网关的验证，当前 0.2 的测试范围见上文
+当时通过 session 存储识别各轮使用的模型：
 
 ```
 父 session          model: glm-5.2            ← 编排者
@@ -186,26 +203,27 @@ ccg_build   子代理  model: deepseek-v4-flash  ← worker 档
 
 本包还通过官方 filesystem provider 发布六个 skill，用的是独立的 provider 名，你原有的 skill 根不受影响：
 
-| Skill | 是什么 |
-|-------|--------|
-| `ccg-workflow` | 编排 playbook：哪个阶段派哪个角色、怎么给「看不到上下文的子代理」写清任务简报、哪些决策必须留在主模型手里、何时可以并行、以及怎么带一支团队 |
-| `verify-change` | 分析 diff，标出没跟上改动的文档 |
-| `verify-quality` | 复杂度、重复代码、命名、函数与文件长度 |
-| `verify-security` | 危险模式、注入面、密钥泄漏 |
-| `verify-module` | 新模块的结构完整性与必备文档 |
-| `gen-docs` | 生成模块的 README 与 DESIGN 骨架 |
+| Skill | 用途 | 执行方式 |
+|-------|------|----------|
+| `ccg-workflow` | 阶段、角色和任务分配指引 | 规划与协作 |
+| `verify-change` | diff、关联文档和测试变更检查 | 只读 Git 分析 |
+| `verify-quality` | 项目 lint、类型、AST 阈值和文本指标 | 通过 `--language-checks` 调用适用的项目工具 |
+| `verify-security` | 危险代码模式和脱敏发现 | 只读模式扫描 |
+| `verify-module` | 模块结构与必备文档 | 只读结构检查 |
+| `gen-docs` | 模块 README 与 DESIGN 骨架 | 写入请求的文档 |
 
-五个关卡是 CCG 自己的扫描器，原样打包。它们是确定性的量具 —— 在 `ccg_review` 之前先跑，让审查模型把这一轮花在判断上，而不是花在脚本已经知道的事实上。
+扫描器和共享库与根 CCG 分发保持一致，质量 Skill 的执行指引默认使用语言检查；缺工具、配置错误和输入未覆盖时报告未完成，直接调用脚本且省略 `--language-checks` 时保留文本规则检查
+
+质量与安全扫描对照 Git `HEAD` 或 `--base` 区分新增和既有的内置规则发现；外部诊断没有实测基线时保留来源未判定，既有阻断问题仍参与结果，在 `ccg_review` 前执行检查，并将覆盖情况和发现交给审查模型
 
 `skills: false` 可以一个都不发布；`skillDirs` 可以再加入你自己的 skill 根目录。
 
 ## 安装
 
-```sh
-dsh plugin --profile web add ./dsh-ccg     # 从本地检出安装
-```
+快速上手中的命令将插件复制到 `$DSH_HOME/ccg/dsh-ccg`，为所选 profile 写入 `link:` 依赖和 bundle 条目，再调用 `dsh plugin --profile web install` 安装依赖
+默认 home 为 `~/.dsh`
 
-装完照常启动。**不配置也能用**：七个角色照常注册，子代理跑在部署默认模型上，人设立刻生效；配上档位才开启模型分流。
+未配置时七个角色使用部署默认模型，配置档位后按角色选择模型
 
 想先试再装：
 
@@ -219,7 +237,7 @@ dsh --profile headless --patch ./cordis.dev.yml "你的任务"
 
 插件自带的浏览器半边有三个界面。
 
-矩阵在 **设置 › 插件 › 插件配置** 里有一张卡片：两个档位可直接编辑、被用户层覆盖的档位带「已覆盖」标记、每个角色一行可以从 harness 真正能连上的路由里挂任意多个模型，还有一个「是否允许雇队友」的开关。编辑是暂存的，点保存才落盘 —— 写设置是一次持久的文档变更，不该由某个控件在失焦时替你完成。给某个角色加上第二个模型之后，它的调用从下一次起就按模型群渲染，不用刷新页面。
+矩阵在 **设置 › 内置插件 › CCG 角色矩阵** 里有一张卡片：两个档位可直接编辑、被用户层覆盖的档位带「已覆盖」标记、每个角色一行可以从 harness 真正能连上的路由里挂任意多个模型，还有一个「是否允许雇队友」的开关。编辑是暂存的，点保存才落盘 —— 写设置是一次持久的文档变更，不该由某个控件在失焦时替你完成。给某个角色加上第二个模型之后，它的调用从下一次起就按模型群渲染，不用刷新页面。
 
 第二个就是上面说的模型群并排视图，注册在对话流的 `tool.call.toolview` 插槽上，以每个模型群工具自己的名字为 key。
 
@@ -245,17 +263,12 @@ dsh --profile headless --patch ./cordis.dev.yml "你的任务"
       model: a-fast-model
 ```
 
-`provider` 指向你在 `$DSH_HOME/settings.yaml` 的 `llm-pi-ai.providers` 里声明的路由。任何厂商 API 或 OpenAI 兼容网关都可以。
+`provider` 指向同一 profile 的 `cordis.patch.yml` 中由 `llm-pi-ai` 声明的路由，使用已配置的厂商 API 或 OpenAI 兼容网关
 
-……或者写进 harness 的设置文档（`$DSH_HOME/settings.yaml`）——设置面板里「打开配置文件」打开的就是它，而且**改完实时生效、无需重启**：
-
-```yaml
-ccg:
-  strong: { provider: my-gateway, model: a-reasoning-model }
-  worker: { provider: my-gateway, model: a-fast-model }
-```
-
-插件把 `ccg` 注册成了 settings namespace：profile patch 是合成基座，这一段是压在它上面的用户层。改动会先退掉当前这批角色工具，再原地注册新的一批。
+CCG 卡片通过官方 settings 表单写入该 profile 的 patch
+模型档位、角色覆盖和雇人开关使用 Loader 管理的 volatile 引用，改完实时生效，其他配置变化可触发重新挂载
+发生版本冲突时，卡片保留编辑内容并刷新配置，检查修改后再次保存
+配置写入所选 profile，替代旧的 home 全局 `settings.yaml` 位置
 
 单个角色的覆盖写在 `roles` 下：
 
@@ -295,17 +308,24 @@ ccg:
 
 ## 依赖要求
 
-- DeepSeek Harness `0.1.0-rc.6` 或更新（开发者预览版，插件 API 仍在变动）
+- DeepSeek Harness `>=0.2.0-rc.2 <0.2.1-0 || >=0.2.1-alpha.2 <0.2.2-0`，兼容矩阵覆盖 `0.2.0-rc.2`、`0.2.1-alpha.2` 与 `0.2.1-rc.2`
 - 至少配置一个 provider 路由，且凭据已存进 harness（网页 **设置 › 模型** 页会写入）—— `apiKeyEnv` 没设的路由会在第一次请求时失败，而不是启动时
 - 人设需要 subagent provider 具备 `persona` 能力（默认的 `spawn` 具备）
 
 ## 开发
 
+在 `dsh-ccg/` 下执行：
+
 ```sh
-node --test test/*.test.mjs
+npm install --ignore-scripts
+npm test
+npm run lint
 ```
 
-角色矩阵的解析收敛在一个纯函数（`resolveRoles`）里，所以「哪个角色用哪个模型」可以脱离 harness、不花一个 token 就完成单测。
+验证另一代运行时时，将 `DSH_CLIENT_TEST_RUNTIME` 指向隔离的 dsh npm 安装根，客户端契约测试会加载该版本的官方 browser bundle 和插槽运行时
+CI 矩阵对两个目标运行时分别执行测试
+
+角色矩阵由纯函数 `resolveRoles` 解析，模型选择的单测无需启动 harness 或调用模型 provider
 
 ## 它是 CCG 的一部分
 

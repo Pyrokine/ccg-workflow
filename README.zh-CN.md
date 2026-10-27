@@ -30,6 +30,12 @@ Anthropic 兼容端点配置为 Claude Code API 提供方，也可单独注册 C
 
 ---
 
+[![x6.ai](assets/sponsors/x6ai.png)](https://x6.ai)
+
+[x6.ai](https://x6.ai) 提供 Claude 兼容端点和 Codex Responses 端点；安装器注册 Codex provider 时保留当前 active provider，激活需明确选择
+
+---
+
 [![NotebookLM Remover](assets/sponsors/notebooklm-remover.png)](https://notebooklmremover.org)
 
 [NotebookLM Remover](https://notebooklmremover.org) — 免费浏览器本地 AI 水印去除工具。支持视频、PDF、PPTX、信息图、播客等全格式，100%
@@ -57,7 +63,15 @@ CCG 是 Claude Code 的工作流引擎。默认前端、后端和审查都使用
 
 Gemini CLI 已禁用：2026-06-18 后 consumer OAuth 请求不再处理。旧 Gemini 路由迁移为 Grok，`agy` 保留为 Antigravity 别名。
 
-## v3.6.7-aug.1 更新
+## v3.7.3-aug.1 更新
+
+- 原生 Skills 支持按使用端选择、更新与移除，重装及路由刷新保留空选，显式兼容模式继续使用原有目录
+- `doctor --json` 报告安装模式、主路由 CLI、原生 Skills、6 个 Hook 脚本和 5 类事件、Codex runtime 完整性及当前 session 任务，版本比较仅使用本地文件
+- OpenCode 校验 `provider/model`；核心安装失败时 init 返回非零状态并终止后续配置，可选 wrapper 与命令生成警告仍单独报告
+- sponsor registry 新增 x6.ai；`dsh-ccg` 0.5.0 支持 DeepSeek Harness `>=0.2.0-rc.2 <0.2.1-0 || >=0.2.1-alpha.2 <0.2.2-0`，包含 profile settings、activation、常驻 subagent 和 Windows launcher 处理
+- 质量扫描覆盖单文件与目录，并报告缺失或不可读目标；Hook 处理延迟 stdin，任务文档作为当前明确用户请求下的参考材料
+
+### 保留的 fork 行为
 
 - package tarball 改用明确的 skill 子目录白名单并排除 `templates/skills/domains/security/`；红队和渗透参考笔记仍保留在 Git 中，默认安装也继续排除该目录
 - PackyCode 与 APIMart 进入共享 sponsor registry，init、API 菜单、Codex mode 和卸载使用同一配置来源
@@ -99,7 +113,7 @@ node bin/ccg.mjs
 
 需要 Node.js 22.13+ 或 24.19.0+ 和 Claude Code CLI。Codex CLI、Antigravity CLI、Grok CLI、Kimi Code CLI 和 OpenCode CLI 仅在前端或后端路由时可选使用。
 
-安装器 4 步：API 配置 → 模型路由 → MCP 工具 → 性能模式。新用户有精简流程，默认值开箱即用。
+安装器依次配置 API、模型路由、MCP 工具、性能模式与 Skills 选择
 
 ## 工作原理
 
@@ -245,7 +259,7 @@ Schema v1 state、legacy task、有证据的无效状态和 orphan directory 分
 
 Hook 验证项目相对路径、普通文件、literal Git 跟踪状态、fenced code block 之外的唯一精确 heading、完整且限长的 section、全部关联内容的上下文预算、角色和项目根边界。精确 spec section 与 `requirements.md` 先于可选任务 artifact 渲染，最终 32 KiB 限制不会删掉权威来源。系统不再扫描整个规范目录，也不再使用隐式 `.ccg/spec/` 模板。
 
-执行依据从高到低为：精确关联的 spec section、`requirements.md`、用户当前明确指令、已审批的 `plan.md`、`progress.md`、compact 摘要或模型推断。compact/resume 和外部模型返回后，Lead 必须重新 resolve，并逐字段核对实体、版本、依赖方向、排除项和验收标准。
+当前明确用户请求决定执行范围；精确关联的 spec section 与 `requirements.md` 保存任务约束，计划、进度、compact 摘要和外部模型输出作为参考材料；新请求与任务记录冲突时，先更新任务范围再继续；compact/resume 和外部模型返回后，Lead 重新 resolve，并核对实体、版本、依赖方向、排除项和验收标准
 
 ## 本地与共享上下文
 
@@ -258,7 +272,32 @@ Hook 验证项目相对路径、普通文件、literal Git 跟踪状态、fenced
 
 ## 技能包
 
-安装器和 Claude Code 原生 plugin 都提供以下直接入口：
+构建当前仓库后，可分别管理 Claude Code 和 Codex 的原生入口：
+
+```bash
+node bin/ccg.mjs skills catalog --json
+node bin/ccg.mjs skills install verify-quality verify-change
+node bin/ccg.mjs skills install verify-quality --target codex
+node bin/ccg.mjs skills list --installed --json
+node bin/ccg.mjs skills update
+node bin/ccg.mjs skills remove verify-quality
+node bin/ccg.mjs init --skills none --skip-prompt --skip-mcp
+node bin/ccg.mjs doctor --json
+```
+
+菜单 `S` 提供使用端选择和复选框；Claude 入口位于 `~/.claude/skills/ccg-*`，Codex 入口位于 `~/.agents/skills/ccg-*`；每个使用端维护独立 manifest 和发现目录之外的资源快照；更新只替换受管链接，移除入口后保留快照及其他用户技能；链接或快照被修改时报告错误并保留现有内容
+
+原生模式按需加载选定的 `/ccg-<name>`，停用旧关键词知识注入；`--skills none` 选择零项，`--skills all` 选择全部目录项，逗号分隔列表选择指定技能；未配置原生选择时保留兼容安装，显式兼容模式优先于旧原生 manifest；仓库 plugin 继续使用 `/ccg:<name>` 命名空间和完整技能目录
+
+### 质量检查
+
+`verify-quality` 入口默认传递 `--language-checks`，调用项目本地 ESLint 和 TypeScript、已安装的 Ruff，或使用现有 compilation database 的 clang-tidy；报告列出实际执行的工具与文件，缺工具、文件未覆盖、配置错误和超时保留为未完成，直接调用脚本且省略该参数时保留文本规则检查
+
+函数复杂度、代码行数和参数数量阈值分别为 10、50 和 5；Vitest `describe`／`suite` 注册容器通过 import 绑定与作用域识别，单个测试、生产函数和被遮蔽的同名调用继续使用原阈值
+
+质量与安全报告默认对照 Git `HEAD`，可用 `--base` 指定其他比较点；内置规则区分新增和既有问题，外部诊断没有同工具基线时保留来源未判定，既有阻断问题仍参与结果；变更分析使用最近模块已有的文档，纯测试变更不触发实现文档提醒
+
+兼容安装和 Claude Code plugin 提供以下直接入口：
 
 | 技能                        | 用途                                                 |
 | --------------------------- | ---------------------------------------------------- |
@@ -313,6 +352,7 @@ node bin/ccg.mjs uninstall                # 卸载 CCG
 | `CODEAGENT_POST_MESSAGE_DELAY`         | `5`      | 后端完成后的等待时间（秒）                     |
 | `APIMART_API_KEY`                      | 未设置   | 选择 APIMart Codex provider 时使用的 API key   |
 | `PACKYCODE_API_KEY`                    | 未设置   | 选择 PackyCode Codex provider 时使用的 API key |
+| `X6AI_API_KEY`                         | 未设置   | 选择 x6.ai Codex provider 时使用的 API key     |
 | `DSH_HOME`                             | `~/.dsh` | `dsh-ccg` 使用的 DeepSeek Harness home         |
 | `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` | 未设置   | 设为 `1` 启用 Agent Teams 并行                 |
 
@@ -322,8 +362,11 @@ node bin/ccg.mjs uninstall                # 卸载 CCG
 git pull --ff-only
 pnpm install --frozen-lockfile
 pnpm build
-node bin/ccg.mjs            # 需要卸载时在菜单中选择“卸载”
+node bin/ccg.mjs init --force --skip-prompt --skip-mcp
+node bin/ccg.mjs uninstall  # 需要时移除当前 fork 的已安装工作流
 ```
+
+菜单“更新”使用当前构建刷新工作流；当前 fork 通过这份源码更新，npm 的 `ccg-workflow@latest` 属于上游发行版
 
 ## 致谢
 
@@ -364,4 +407,4 @@ MIT
 
 ---
 
-v3.6.7-aug.1 | [Issues](https://github.com/Pyrokine/ccg-workflow/issues) | [Contributing](./CONTRIBUTING.md) | [Releasing](./RELEASING.md)
+v3.7.3-aug.1 | [Issues](https://github.com/Pyrokine/ccg-workflow/issues) | [Contributing](./CONTRIBUTING.md) | [Releasing](./RELEASING.md)

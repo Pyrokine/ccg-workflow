@@ -30,6 +30,24 @@ function shippedTextFiles(): string[] {
   return out
 }
 
+function isExampleOrPrivateAddress(match: RegExpMatchArray): boolean {
+  const octets = match.slice(1).map(Number)
+  const [a, b] = octets
+  const prefixes = [
+    [10],
+    [127],
+    [0],
+    [192, 168],
+    [169, 254], // link-local, including the cloud-metadata SSRF example
+    [1, 2], // 1.2.3.4 — the docs' stand-in address
+  ]
+  return (
+    a >= 224 ||
+    prefixes.some((prefix) => prefix.every((octet, index) => octet === octets[index])) ||
+    (a === 172 && b >= 16 && b <= 31)
+  )
+}
+
 describe('skills hygiene — nothing personal ships to npm', () => {
   const files = shippedTextFiles()
 
@@ -70,13 +88,7 @@ describe('skills hygiene — nothing personal ships to npm', () => {
     const offenders: string[] = []
     for (const f of files) {
       for (const m of fs.readFileSync(f, 'utf-8').matchAll(/\b(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\b/g)) {
-        const [a, b] = [Number(m[1]), Number(m[2])]
-        if (a === 10 || a === 127 || a === 0 || a >= 224) continue
-        if (a === 192 && b === 168) continue
-        if (a === 172 && b >= 16 && b <= 31) continue
-        if (a === 169 && b === 254) continue // link-local, incl. the 169.254.169.254 cloud-metadata SSRF target the pentest docs teach
-        if (a === 1 && b === 2) continue // 1.2.3.4 — the docs' stand-in address
-        if (m[0] === '0.0.0.0') continue
+        if (isExampleOrPrivateAddress(m)) continue
         offenders.push(`${f}: ${m[0]}`)
       }
     }

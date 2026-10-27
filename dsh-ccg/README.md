@@ -2,17 +2,23 @@
 
 **CCG's multi-model role matrix for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) — seven role-pinned delegation tools, each on its own model, with no external CLI. Any role can answer as a panel of models, or be hired as a live teammate with files of its own. Ownership and project decisions are durable.**
 
-[中文](./README.zh-CN.md) · MIT · tracks dsh `0.1.x` · part of [CCG](https://github.com/Pyrokine/ccg-workflow) — ⭐ the repo, not this folder
+[中文](./README.zh-CN.md) · MIT · supports dsh `0.2.0-rc.2` / `0.2.1-alpha.2` / `0.2.1-rc.2` · part of [CCG](https://github.com/Pyrokine/ccg-workflow)
 
 ---
 
 ## Quick start
 
+From the repository root, build CCG and install it into an existing dsh profile:
+
 ```sh
-dsh plugin --profile web add dsh-ccg
+pnpm install --frozen-lockfile
+pnpm build
+node bin/ccg.mjs dsh install --profile web
 ```
 
-Boot as usual, then open **Settings › Plugins › CCG role matrix** and set the two tiers — a reasoning model and a fast one, picked from routes the harness can already reach.
+After upgrading CCG, repeat the install command and restart dsh. This fork ships from source; `dsh-ccg` is bundled with it. Upgrade a 0.1.x harness to a supported 0.2 version before installing.
+
+Open **Settings › Built-in plugins › CCG role matrix** and set the two tiers, a reasoning model and a fast one, picked from routes the harness can already reach.
 
 That is the whole setup. **There is nothing to invoke.** Say what you want in your own words:
 
@@ -90,13 +96,14 @@ So each role chooses:
 Give one role several models and it becomes a **panel**: they all receive the same brief, wearing the same expert persona, answering independently — and the answers come back side by side. That is the other half of CCG, the part its `analyze` / `review` / `debug` commands have always done: two models answer, and what you act on is **where they disagree**.
 
 ```yaml
-ccg:
-  roles:
-    analyzer:
-      models:                       # as many as you like
-        - { provider: gateway-a, model: a-reasoning-model }
-        - { provider: gateway-b, model: a-rival-model }
-        - { provider: gateway-c, model: a-third-opinion }
+- id: ccg
+  config:
+    roles:
+      analyzer:
+        models:                       # as many as you like
+          - { provider: gateway-a, model: a-reasoning-model }
+          - { provider: gateway-b, model: a-rival-model }
+          - { provider: gateway-c, model: a-third-opinion }
 ```
 
 One model is a plain delegation and uses the official subagent tool. Two or more make the role a panel. Nothing votes and nothing is averaged: a majority can be wrong together, and averaging two answers usually destroys what was right in each — so every answer arrives verbatim and the verdict stays with the model holding the context.
@@ -126,9 +133,9 @@ Hire several and they work at once. Two rules decide whether that helps or corru
 
 Waiting is free: a report wakes the coordinator by itself, so ending the turn *is* how you wait — no sleeping, no polling, and no inventing filler work over files nobody has written yet. When one is visibly building the wrong thing, `interrupt_agent` stops that turn and only that turn; the teammate stays alive for the correction. Verified: an interrupted teammate's transcript shows `turn 1 aborted (parent)`, then turn 2 doing the corrected work.
 
-A teammate cannot hire a team of its own. Suppressing the convention in a child removed the invitation but not the capability, so every child this plugin starts also has this plugin's tools filtered out of it — verified from a hired teammate's own tool table, where all eleven `ccg_*` entries are gone and its `report` channel is untouched. It keeps the harness's own `subagent`, which runs on the deployment default and springs no per-model surprise.
+Every child started by this plugin has its `ccg_*` tools filtered out, so it cannot use them to hire another team or open a panel. Its native parent delivery channel and the harness's own `subagent` remain available.
 
-This is CCG's Agent Teams, and on dsh it needs no bridge: `startContinuable`, `send_message`, `report`, `interrupt_agent` and `list_agents` are all native. What this plugin adds is the CCG role behind each teammate — its persona, its model, and its file ownership. Set `team: false` to leave `ccg_team` unregistered.
+The rc runtime uses native `startContinuable`; alpha uses `startActivation` with automatic completion delivery. `send_message`, `interrupt_agent` and `list_agents` remain native. On alpha, a child sends early progress to its direct parent with `send_message`, and its final answer arrives automatically. CCG supplies the role persona, model selection and file ownership. Set `team: false` to leave `ccg_team` unregistered.
 
 ### Hiring asks you first
 
@@ -162,9 +169,13 @@ The file is then loaded into the coordinator's prompt automatically, capped, new
 
 Deliberately narrow. It is not a log of what happened — the transcript is that already, and a memory that fills up with narration stops being worth loading.
 
-## Verified, not asserted
+## Compatibility tests
 
-Checked on a real dsh install (`0.1.0-rc.6`, pi-ai gateway) by reading the session store — the ground truth of which model served which turn:
+The test suite covers official dsh `0.2.0-rc.2` and `0.2.1-alpha.2` with React 18, plus `0.2.1-rc.2` with React 19. Each runtime passes 138 tests for profile revision conflicts, volatile configuration, subagent delivery and teardown, and official browser slot registration. The Node test runtime installs the matching official slot library separately; the harness browser assets already include it.
+
+### Historical 0.1 validation
+
+The following records describe upstream's earlier `0.1.0-rc.6` validation with a pi-ai gateway, rather than current 0.2 test results. That validation read the session store to identify the model serving each turn:
 
 ```
 parent session      model: glm-5.2            ← the orchestrator
@@ -186,26 +197,26 @@ Teams were checked the same way, on a job with three independent parsers behind 
 
 The package also publishes six skills through the official filesystem provider, under its own provider name so your existing skill roots keep theirs:
 
-| Skill | What it is |
-|-------|-----------|
-| `ccg-workflow` | The playbook: which role for which phase, how to write a brief a context-free child can act on, what stays with the main model, when to parallelise, and how to run a team |
-| `verify-change` | Analyses the diff and flags documentation that drifted |
-| `verify-quality` | Complexity, duplication, naming, function and file length |
-| `verify-security` | Dangerous patterns, injection surfaces, leaked secrets |
-| `verify-module` | Structure and required docs for a new module |
-| `gen-docs` | Scaffolds a module's README and DESIGN |
+| Skill | Purpose | Execution |
+|-------|---------|-----------|
+| `ccg-workflow` | Phase, role and delegation guidance | Planning and coordination |
+| `verify-change` | Diff, related documentation and test-change checks | Read-only Git analysis |
+| `verify-quality` | Project lint, types, AST thresholds and text metrics | `--language-checks` with available project tools |
+| `verify-security` | Dangerous code patterns and redacted findings | Read-only pattern scan |
+| `verify-module` | Module structure and required documentation | Read-only structure scan |
+| `gen-docs` | Module README and DESIGN scaffolding | Writes requested documentation |
 
-The five gates are CCG's own scanners, shipped byte-identical. They are deterministic — run them before `ccg_review` so the reviewer spends its turn on judgement instead of on what a script already knows.
+Scanner and shared-library files match the root CCG distribution. Quality Skill guidance requests language checks; missing tools, configuration failures and uncovered inputs are reported as incomplete. Direct script calls without `--language-checks` retain text-only behavior.
+
+Quality and security scans distinguish new and existing built-in findings against Git `HEAD` or `--base`. External diagnostics without a measured baseline remain unclassified, and existing blocking issues still count. Run the checks before `ccg_review` and pass their coverage and findings to the reviewer.
 
 Set `skills: false` to publish none of them, or add your own roots with `skillDirs`.
 
 ## Install
 
-```sh
-dsh plugin --profile web add ./dsh-ccg     # from a local checkout
-```
+The quick-start command copies the plugin to `$DSH_HOME/ccg/dsh-ccg`, adds a `link:` dependency and bundle entry to the chosen profile, then asks `dsh plugin --profile web install` to link it. The default home is `~/.dsh`.
 
-Then boot as usual. With no configuration every role registers and runs on your deployment's default model — you get the personas immediately. Add tiers to get the model split.
+With no configuration every role registers and runs on your deployment's default model. Add tiers to select models by role.
 
 To try it before installing:
 
@@ -219,7 +230,7 @@ dsh --profile headless --patch ./cordis.dev.yml "your task"
 
 The plugin ships a browser half with three surfaces.
 
-The matrix has a card in **Settings › Plugins › Plugin configuration**: both tiers as editable fields, a badge on each tier the user layer overrides, a row per role where you add as many models as you like from the routes the harness can actually reach, and a switch for hiring. Edits are staged and written only on save — a settings write is a durable document mutation, not something a control should perform as it settles. Adding a second model to a role also makes that role's calls render as a panel from the next call on, without a reload.
+The matrix has a card in **Settings › Built-in plugins › CCG role matrix**: both tiers as editable fields, a badge on each tier the user layer overrides, a row per role where you add as many models as you like from the routes the harness can actually reach, and a switch for hiring. Edits are staged and written only on save — a settings write is a durable document mutation, not something a control should perform as it settles. Adding a second model to a role also makes that role's calls render as a panel from the next call on, without a reload.
 
 The second is the panel view described above, registered into the conversation's `tool.call.toolview` slot under each panel tool's own name.
 
@@ -245,17 +256,9 @@ In your profile's `cordis.patch.yml`:
       model: a-fast-model
 ```
 
-`provider` names a route you declared in `$DSH_HOME/settings.yaml` under `llm-pi-ai.providers`. Any vendor API or OpenAI-compatible gateway works.
+`provider` names a route declared by `llm-pi-ai` in the same profile's `cordis.patch.yml`. Use a configured vendor API or OpenAI-compatible gateway route.
 
-…or in the harness settings document (`$DSH_HOME/settings.yaml`), which the Settings dialog opens for you and which re-applies **live, without a restart**:
-
-```yaml
-ccg:
-  strong: { provider: my-gateway, model: a-reasoning-model }
-  worker: { provider: my-gateway, model: a-fast-model }
-```
-
-The plugin registers `ccg` as a settings namespace, so the profile patch is the composition base and this section is the user layer above it. Editing it retires the current role tools and registers the next set in place.
+The CCG card writes that profile patch through the official settings forms. Tier choices, role overrides and the hiring switch use Loader-owned volatile references and apply live; other configuration changes can remount the plugin. A revision conflict preserves the edits in the card and refreshes the configuration. Review those edits and save again. Configuration belongs to the selected profile, replacing the old home-wide `settings.yaml` destination.
 
 Per-role overrides sit under `roles`:
 
@@ -295,17 +298,23 @@ The conventions published to the system prompt are generated from the resolved m
 
 ## Requirements
 
-- DeepSeek Harness `0.1.0-rc.6` or newer (developer preview — its plugin API is still moving)
+- DeepSeek Harness `>=0.2.0-rc.2 <0.2.1-0 || >=0.2.1-alpha.2 <0.2.2-0`; the compatibility matrix covers `0.2.0-rc.2`, `0.2.1-alpha.2` and `0.2.1-rc.2`
 - At least one configured provider route, with its credential stored through the harness (the web **Settings › Models** page writes it) — a route whose `apiKeyEnv` is unset fails at the first request, not at boot
 - A subagent provider with the `persona` capability for personas to apply (`spawn`, the default, has it)
 
 ## Development
 
+From `dsh-ccg/`:
+
 ```sh
-node --test test/*.test.mjs
+npm install --ignore-scripts
+npm test
+npm run lint
 ```
 
-The role matrix resolves through one pure function (`resolveRoles`), so which model serves which role is unit-tested without booting a harness or spending a token.
+Set `DSH_CLIENT_TEST_RUNTIME` to an isolated dsh npm installation root to load that version's official browser bundles and slot runtime. The CI matrix runs the suite against both supported runtime versions.
+
+The role matrix resolves through one pure function (`resolveRoles`), so model selection is unit-tested without booting a harness or calling a model provider.
 
 ## Part of CCG
 

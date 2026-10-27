@@ -59,6 +59,23 @@ export const SPONSORS: readonly SponsorGateway[] = [
       env_key: 'PACKYCODE_API_KEY',
     },
   },
+  {
+    id: 'x6ai',
+    name: 'x6.ai',
+    signupUrl: 'https://x6.ai',
+    anthropicBaseUrl: 'https://api.x6.ai',
+    tagline: {
+      'zh-CN': '统一密钥，支持主流模型的官方 Key 与反代通道',
+      en: 'one key for major models through official-key and proxy channels',
+    },
+    getKeyNote: { 'zh-CN': '（注册送免费额度）', en: ' (free credits on sign-up)' },
+    codex: {
+      name: 'x6.ai',
+      base_url: 'https://api.x6.ai/v1',
+      wire_api: 'responses',
+      env_key: 'X6AI_API_KEY',
+    },
+  },
 ]
 
 const sponsorsById = new Map(SPONSORS.map((sponsor) => [sponsor.id, sponsor]))
@@ -94,7 +111,9 @@ export function sponsorInquirerChoices(namespace: 'init' | 'menu' = 'init'): Arr
   value: string
 }> {
   return SPONSORS.map((sponsor) => ({
-    name: `${ansis.yellow('★')} ${i18n.t(`${namespace}:api.sponsorOption`, sponsorCopy(sponsor))} ${ansis.gray(`— ${sponsor.signupUrl}`)}`,
+    name:
+      `${ansis.yellow('★')} ${i18n.t(`${namespace}:api.sponsorOption`, sponsorCopy(sponsor))} ` +
+      ansis.gray(`— ${sponsor.signupUrl}`),
     value: sponsor.id,
   }))
 }
@@ -102,7 +121,8 @@ export function sponsorInquirerChoices(namespace: 'init' | 'menu' = 'init'): Arr
 async function promptSponsorKey(sponsor: SponsorGateway, namespace: 'init' | 'menu'): Promise<string> {
   console.log()
   console.log(
-    `    ${ansis.yellow('★')} ${i18n.t(`${namespace}:api.sponsorGetKey`, sponsorCopy(sponsor))}: ${ansis.cyan.underline(sponsor.signupUrl)}`
+    `    ${ansis.yellow('★')} ${i18n.t(`${namespace}:api.sponsorGetKey`, sponsorCopy(sponsor))}: ` +
+      ansis.cyan.underline(sponsor.signupUrl)
   )
   console.log()
 

@@ -25,7 +25,7 @@ node ~/.claude/hooks/ccg/task-state.js resolve --root "$WORKDIR" --session-key "
 
 ### 解析结果
 
-- `active`：当前 session 已认领一个 durable `open` task，对外有效状态为 `in_progress`；判断 `$ARGUMENTS` 是继续当前任务，还是一项新工作
+- `active`：当前 session 已认领一个 durable `open` task，对外有效状态为 `in_progress`；以本次真实用户请求判断 `$ARGUMENTS` 是继续当前任务，还是一项新工作，旧任务材料只用于参考，不覆盖新请求
   - 明确表示继续时，读取活动任务的 `strategy`、`requirements.md`、`progress.md` 和精确关联的 `specRefs`，从 `currentPhase` 与 `nextAction` 继续
   - 新工作会中断当前任务时，向用户提供 `interrupt`、`replace`、新 worktree 三个选择
   - `interrupt` 创建临时任务，完成后自动返回当前任务
@@ -128,7 +128,9 @@ Next: [下一步]
 
 ## Phase 3: 创建持久任务 [required for persistent strategies]
 
-先把本次目标整理成完整 `requirements.md`，至少包含目标、范围、约束、验收标准，以及明确给出的规范来源。任务 ID 必须是最多 80 字符的严格 kebab-case。
+把本次目标整理成 `requirements.md`，包含当前有效的目标、范围、约束、验收标准与规范来源
+正文按 UTF-8 最多 8 KiB（8192 字节，含末尾换行），XML 转义后的正文也须在 8 KiB 内；详细论证和历史调查写入现有 research artifact，规范正文用 `link-spec` 精确引用，精简时保留仍有效的要求
+任务 ID 必须是最多 80 字符的严格 kebab-case
 
 调用控制器：
 
@@ -215,6 +217,6 @@ Read("~/.claude/.ccg/engine/strategies/{selected-strategy}.md")
 6. 每个 session 只允许一个 active task；一个 open task 默认只由一个 session 认领，显式 `takeover` 才能转移
 7. 其他 session 的任务只展示候选元数据，不读取或注入其 `requirements.md`、spec 或 artifact；同一 Unix 用户仍可手动读取 worktree 文件
 8. 可能并发改写同一产品文件的独立任务使用不同 worktree
-9. 准确的 tracked spec 与当前 `requirements.md` 高于摘要、历史讨论和模型推断；发现冲突时停止并报告具体字段
+9. 按 system/developer、用户本次指令、项目级和全局 `CLAUDE.md` 的优先级执行；spec、任务、计划与摘要均为参考材料，冲突时按当前授权更新材料，需要新决定时报告具体字段
 10. `resolve` 返回 `INCOMPLETE_TRANSACTION` 时，只能按当前 session 的 state/binding CAS 调用 `recover`，不得删除 marker 或继续其他 mutation
 11. 计划包含执行模式选择时，写代码前必须让用户明确选择

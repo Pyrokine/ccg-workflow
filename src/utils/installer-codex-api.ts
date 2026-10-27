@@ -123,6 +123,55 @@ function failedResults(sponsors: readonly SponsorGateway[], error: unknown): Cod
   }))
 }
 
+function registerSponsorProvider(providers: Record<string, unknown>, sponsor: SponsorGateway): CodexSponsorResult {
+  if (hasOwn(providers, sponsor.id)) {
+    return {
+      id: sponsor.id,
+      success: true,
+      status: 'preserved',
+      message: `Existing ${sponsor.name} provider left unchanged`,
+    }
+  }
+  providers[sponsor.id] = { ...sponsor.codex }
+  return {
+    id: sponsor.id,
+    success: true,
+    status: 'added',
+    message: `${sponsor.name} registered as a Codex model provider`,
+  }
+}
+
+function removeSponsorProvider(
+  config: Record<string, unknown>,
+  providers: Record<string, unknown> | null,
+  sponsor: SponsorGateway
+): CodexSponsorResult {
+  if (!providers || !hasOwn(providers, sponsor.id)) {
+    return {
+      id: sponsor.id,
+      success: true,
+      status: 'absent',
+      message: `${sponsor.name} not present in Codex config`,
+    }
+  }
+  if (!isCcgProvider(providers[sponsor.id], sponsor.codex)) {
+    return {
+      id: sponsor.id,
+      success: true,
+      status: 'preserved',
+      message: `${sponsor.name} provider is user-managed and was left unchanged`,
+    }
+  }
+  delete providers[sponsor.id]
+  if (config.model_provider === sponsor.id) delete config.model_provider
+  return {
+    id: sponsor.id,
+    success: true,
+    status: 'removed',
+    message: `CCG-managed ${sponsor.name} provider removed from Codex config`,
+  }
+}
+
 async function configureSponsors(
   sponsors: readonly SponsorGateway[],
   activateId?: string
@@ -138,24 +187,9 @@ async function configureSponsors(
     let changed = false
 
     for (const sponsor of sponsors) {
-      if (hasOwn(providers, sponsor.id)) {
-        results.push({
-          id: sponsor.id,
-          success: true,
-          status: 'preserved',
-          message: `Existing ${sponsor.name} provider left unchanged`,
-        })
-        continue
-      }
-
-      providers[sponsor.id] = { ...sponsor.codex }
-      changed = true
-      results.push({
-        id: sponsor.id,
-        success: true,
-        status: 'added',
-        message: `${sponsor.name} registered as a Codex model provider`,
-      })
+      const result = registerSponsorProvider(providers, sponsor)
+      if (result.status === 'added') changed = true
+      results.push(result)
     }
 
     const activated = Boolean(activateId && config.model_provider !== activateId)
@@ -209,34 +243,9 @@ async function removeSponsors(sponsors: readonly SponsorGateway[]): Promise<Code
     let changed = false
 
     for (const sponsor of sponsors) {
-      if (!providers || !hasOwn(providers, sponsor.id)) {
-        results.push({
-          id: sponsor.id,
-          success: true,
-          status: 'absent',
-          message: `${sponsor.name} not present in Codex config`,
-        })
-        continue
-      }
-      if (!isCcgProvider(providers[sponsor.id], sponsor.codex)) {
-        results.push({
-          id: sponsor.id,
-          success: true,
-          status: 'preserved',
-          message: `${sponsor.name} provider is user-managed and was left unchanged`,
-        })
-        continue
-      }
-
-      delete providers[sponsor.id]
-      if (config.model_provider === sponsor.id) delete config.model_provider
-      changed = true
-      results.push({
-        id: sponsor.id,
-        success: true,
-        status: 'removed',
-        message: `CCG-managed ${sponsor.name} provider removed from Codex config`,
-      })
+      const result = removeSponsorProvider(config, providers, sponsor)
+      if (result.status === 'removed') changed = true
+      results.push(result)
     }
 
     if (providers && Object.keys(providers).length === 0) delete config.model_providers

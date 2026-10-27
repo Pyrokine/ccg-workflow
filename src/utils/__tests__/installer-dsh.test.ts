@@ -18,7 +18,10 @@ import fs from 'fs-extra'
 import { dirname, join } from 'pathe'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('node:child_process', () => ({ execFileSync: vi.fn() }))
+vi.mock('node:child_process', async (original) => ({
+  ...(await original<typeof import('node:child_process')>()),
+  execFileSync: vi.fn(),
+}))
 
 const execFileSyncMock = vi.mocked(execFileSync)
 import {
@@ -28,6 +31,7 @@ import {
   findDshProfiles,
   hasDshHome,
   installDshPlugin,
+  profileLinkCommand,
   uninstallDshPlugin,
 } from '../installer-dsh'
 
@@ -140,7 +144,123 @@ describe('findDshProfiles', () => {
   })
 })
 
+describe('profile package-manager invocation', () => {
+  it('executes Unix programs with separate arguments', () => {
+    expect(profileLinkCommand('dsh', ['plugin', '--profile', 'my profile', 'install'], 'darwin')).toEqual({
+      file: 'dsh',
+      args: ['plugin', '--profile', 'my profile', 'install'],
+      windowsVerbatimArguments: false,
+    })
+  })
+
+  it('keeps a Windows launcher bare, quotes arguments and rejects shell expansion', () => {
+    const command = profileLinkCommand('dsh', ['plugin', '--profile', '中文 profile', 'install'], 'win32')
+    expect(command.args).toEqual(['/d', '/s', '/c', '"dsh "plugin" "--profile" "中文 profile" "install""'])
+    expect(command.windowsVerbatimArguments).toBe(true)
+    for (const name of ['a&echo invalid', '%PATH%', 'a"b', 'a|b', '!TEMP!']) {
+      expect(() => profileLinkCommand('dsh', ['plugin', '--profile', name, 'install'], 'win32')).toThrow(
+        /metacharacters/
+      )
+    }
+    for (const bin of ['"dsh"', 'my dsh', 'dsh&x']) {
+      expect(() => profileLinkCommand(bin, ['install'], 'win32')).toThrow(/launcher name/)
+    }
+  })
+
+  it.runIf(process.platform === 'win32')('lets a shim found through PATH see its own directory', async () => {
+    const { execFileSync: run } = await vi.importActual<typeof import('node:child_process')>('node:child_process')
+    const shimDir = join(dshHome, 'shim')
+    const cwd = join(dshHome, 'profiles', 'web')
+    const out = join(dshHome, 'dp0.txt')
+    await fs.ensureDir(shimDir)
+    await fs.ensureDir(cwd)
+    await fs.writeFile(join(shimDir, 'ccgshim.cmd'), '@echo %~dp0>"%CCG_DP0_OUT%"\r\n')
+
+    const command = profileLinkCommand('ccgshim', ['install'])
+    const options = {
+      cwd,
+      env: { ...process.env, PATH: `${shimDir.replace(/\//g, '\\')};${process.env.PATH}`, CCG_DP0_OUT: out },
+      windowsVerbatimArguments: command.windowsVerbatimArguments,
+    }
+    run(command.file, command.args, options)
+    const seen = (await fs.readFile(out, 'utf8')).trim().replace(/\\/g, '/').replace(/\/$/, '')
+    expect(seen.toLowerCase().endsWith('/shim')).toBe(true)
+  })
+})
+
 describe('installDshPlugin', () => {
+  it('links the managed copy through the launcher in the target home', async () => {
+    await makeProfile('web', profileManifest())
+    const result = await installDshPlugin({ dshHome })
+    expect(result.success).toBe(true)
+    const command = profileLinkCommand('dsh', ['plugin', '--profile', 'web', 'install'])
+    expect(execFileSyncMock).toHaveBeenCalledWith(
+      command.file,
+      command.args,
+      expect.objectContaining({ env: expect.objectContaining({ DSH_HOME: dshHome }) })
+    )
+  })
+
+  it('preserves launcher compatibility refusals without invoking another package manager', async () => {
+    await makeProfile('web', profileManifest())
+    execFileSyncMock.mockImplementation(() => {
+      throw Object.assign(new Error('incompatible-version'), {
+        status: 1,
+        stderr: Buffer.from('incompatible-version'),
+      })
+    })
+    const result = await installDshPlugin({ dshHome })
+    expect(result.success).toBe(false)
+    expect(result.profiles).toEqual([])
+    expect(execFileSyncMock).toHaveBeenCalledTimes(1)
+    expect(result.warnings.join('\n')).toContain('incompatible-version')
+  })
+
+  it.each(['', 'link failed on stdout'])('reports a nonzero launcher exit with empty stderr: %j', async (output) => {
+    await makeProfile('web', profileManifest())
+    const { execFileSync: run } = await vi.importActual<typeof import('node:child_process')>('node:child_process')
+    let failure: unknown
+    try {
+      run(process.execPath, ['-e', `process.stdout.write(${JSON.stringify(output)}); process.exit(1)`], {
+        stdio: 'pipe',
+      })
+    } catch (error) {
+      failure = error
+    }
+    expect(failure).toMatchObject({ status: 1, stderr: Buffer.alloc(0) })
+    execFileSyncMock.mockImplementation(() => {
+      throw failure
+    })
+
+    const result = await installDshPlugin({ dshHome })
+    expect(result.success).toBe(false)
+    expect(result.profiles).toEqual([])
+    expect(result.warnings.join('\n')).toContain('Command failed')
+    expect(execFileSyncMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('treats an empty linker error as a failure', async () => {
+    await makeProfile('web', profileManifest())
+    const result = await installDshPlugin({ dshHome, link: () => '' })
+    expect(result.success).toBe(false)
+    expect(result.profiles).toEqual([])
+    expect(result.warnings.join('\n')).toContain('linking failed')
+  })
+
+  it.each([{ code: 'ENOENT' }, { status: 9009 }])('uses pnpm when the launcher is missing: %j', async (failure) => {
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    await makeProfile('web', profileManifest())
+    execFileSyncMock.mockImplementationOnce(() => {
+      throw Object.assign(new Error('launcher not found'), failure)
+    })
+    const result = await installDshPlugin({ dshHome })
+    expect(result.success).toBe(true)
+    expect(execFileSyncMock).toHaveBeenCalledTimes(2)
+    expect(warning).toHaveBeenCalledWith(expect.stringContaining('pnpm'))
+    const command = profileLinkCommand('pnpm', ['install'])
+    expect(execFileSyncMock).toHaveBeenLastCalledWith(command.file, command.args, expect.anything())
+  })
+
   it('writes both halves a profile needs, and copies the plugin somewhere stable', async () => {
     const dir = await makeProfile('web', profileManifest())
     const { calls, link } = recordingLinker()
@@ -154,7 +274,7 @@ describe('installDshPlugin', () => {
     const pkg = await fs.readJson(join(dir, 'package.json'))
     // A dependency alone does not load a plugin, and a bundle entry alone does
     // not resolve one. Both, or the profile silently does nothing.
-    expect(pkg.dependencies[DSH_PLUGIN_NAME]).toBe(`file:${dshPluginDir(dshHome)}`)
+    expect(pkg.dependencies[DSH_PLUGIN_NAME]).toBe(`link:${dshPluginDir(dshHome)}`)
     expect(pkg.dsh.profile.bundles).toContain(DSH_PLUGIN_NAME)
 
     // Pointing at PACKAGE_ROOT would break the moment npx evicts its cache, so
@@ -199,7 +319,7 @@ describe('installDshPlugin', () => {
     expect(web.dsh.profile.bundles).not.toContain(DSH_PLUGIN_NAME)
   })
 
-  it('passes profile names as argv without shell interpretation', async () => {
+  it.runIf(process.platform !== 'win32')('passes profile names as argv without shell interpretation', async () => {
     const name = 'web; touch should-not-exist'
     const dir = await makeProfile(name, profileManifest())
 
@@ -295,15 +415,28 @@ describe('installDshPlugin', () => {
     expect(result.message).toMatch(/dsh web/)
   })
 
-  it('reports a failed link as a warning, because the manifest is already right', async () => {
+  it('reports a failed link without claiming the staged plugin was installed', async () => {
     await makeProfile('web', profileManifest())
     const result = await installDshPlugin({ dshHome, link: () => 'ENOENT: pnpm not found' })
 
-    // Half-done is not failed: everything durable was written, and the one
-    // remaining step is a command the user can run.
-    expect(result.success).toBe(true)
+    expect(result.success).toBe(false)
+    expect(result.profiles).toEqual([])
     expect(result.warnings.join('\n')).toMatch(/linking failed/)
     expect(result.warnings.join('\n')).toMatch(/dsh plugin --profile web install/)
+  })
+
+  it('reports only successfully linked profiles when another profile fails', async () => {
+    await makeProfile('web', profileManifest())
+    await makeProfile('headless', profileManifest())
+    const result = await installDshPlugin({
+      dshHome,
+      link: (_dir, name) => (name === 'web' ? 'link failed' : undefined),
+    })
+
+    expect(result.success).toBe(true)
+    expect(result.profiles).toEqual(['headless'])
+    expect(result.warnings).toHaveLength(1)
+    expect(result.warnings[0]).toContain('web: declared, but linking failed')
   })
 })
 
@@ -322,6 +455,17 @@ describe('uninstallDshPlugin', () => {
     expect(pkg.dependencies['some-other-plugin']).toBe('^1.0.0')
     expect(pkg.dsh.profile.bundles).toEqual(['@deepseek-ai/dsh-base', 'their-plugin'])
     expect(await fs.pathExists(dshPluginDir(dshHome))).toBe(false)
+  })
+
+  it('reports an empty linker error after removing the manifest entry', async () => {
+    const dir = await makeProfile('web', profileManifest())
+    await installDshPlugin({ dshHome, link: recordingLinker().link })
+
+    const result = await uninstallDshPlugin({ dshHome, link: () => '' })
+    expect(result.success).toBe(true)
+    expect(result.profiles).toEqual(['web'])
+    expect(result.warnings.join('\n')).toContain('install` failed')
+    expect((await fs.readJson(join(dir, 'package.json'))).dependencies[DSH_PLUGIN_NAME]).toBeUndefined()
   })
 
   it('touches no manifest that never carried it', async () => {

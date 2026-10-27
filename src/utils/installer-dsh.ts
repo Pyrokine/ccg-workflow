@@ -1,32 +1,27 @@
 /**
- * dsh-ccg — installing CCG's role matrix into a DeepSeek Harness profile.
+ * 将根项目附带的 dsh-ccg 安装到 DeepSeek Harness profile
  *
- * The plugin ships inside this package (`dsh-ccg/`) rather than as a package of
- * its own, so a DSH user gets it from the same `npx ccg-workflow` everyone else
- * runs and there is only one version number to reason about.
- *
- * That choice is what forces the copy below. A harness profile declares its
- * plugins as ordinary dependencies, and pointing one at PACKAGE_ROOT would work
- * exactly until the next `npx` run: npx unpacks into a cache directory it is
- * free to evict, and the profile would then fail to resolve a plugin that used
- * to be there. So the plugin is copied to a stable path this installer owns,
- * and the profile depends on that.
- *
- * A profile needs BOTH halves to load a plugin — the dependency and an entry in
- * `dsh.profile.bundles` — and `pnpm add` only writes the first. Both are
- * written here, then the profile's own package manager is asked to link it.
+ * 插件复制到固定目录，避免源码目录移动或临时包缓存清理导致 profile 引用失效
+ * profile 同时需要依赖和 dsh.profile.bundles 条目，再由自己的包管理器安装依赖
  */
 
-import { execFileSync } from 'node:child_process'
-import { randomUUID } from 'node:crypto'
-import { isAbsolute, relative } from 'node:path'
+import { execFileSync, type SpawnSyncOptions } from 'node:child_process'
 import { homedir } from 'node:os'
 import fs from 'fs-extra'
-import { basename, dirname, join } from 'pathe'
+import { join } from 'pathe'
 import { PACKAGE_ROOT } from './installer-template'
+import {
+  DSH_PLUGIN_NAME,
+  errorMessage,
+  lstatIfExists,
+  requirePlainDirectory,
+  requirePlainFile,
+  requireContainedPath,
+  writeJsonAtomic,
+  stagePlugin,
+} from './installer-dsh-files'
 
-/** Package name the profile depends on and lists in its bundles. */
-export const DSH_PLUGIN_NAME = 'dsh-ccg'
+export { DSH_PLUGIN_NAME } from './installer-dsh-files'
 
 /**
  * The harness home to install into.
@@ -69,57 +64,12 @@ export type ProfileLinker = (dir: string, name: string) => string | undefined
 
 export type DshInstallResult = {
   success: boolean
-  /** Profiles the plugin was wired into. */
+  /** Profiles whose plugin dependency was declared and linked. */
   profiles: string[]
   /** What went wrong, when nothing could be done. */
   message?: string
   /** Non-fatal notes worth showing (a profile whose linker failed, say). */
   warnings: string[]
-}
-
-function errorMessage(error: unknown): string {
-  if (error && typeof error === 'object') {
-    const details = error as { stderr?: unknown; message?: unknown }
-    if (details.stderr !== undefined) return String(details.stderr)
-    if (details.message !== undefined) return String(details.message)
-  }
-  return String(error)
-}
-
-async function lstatIfExists(path: string) {
-  try {
-    return await fs.lstat(path)
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
-    throw error
-  }
-}
-
-async function requirePlainDirectory(path: string, label: string): Promise<void> {
-  const stat = await fs.lstat(path)
-  if (!stat.isDirectory() || stat.isSymbolicLink()) {
-    throw new Error(`${label} must be a non-symlink directory: ${path}`)
-  }
-}
-
-async function requirePlainFile(path: string, label: string): Promise<void> {
-  const stat = await fs.lstat(path)
-  if (!stat.isFile() || stat.isSymbolicLink()) {
-    throw new Error(`${label} must be a non-symlink regular file: ${path}`)
-  }
-}
-
-async function requireContainedPath(root: string, candidate: string, label: string): Promise<void> {
-  const [realRoot, realCandidate] = await Promise.all([fs.realpath(root), fs.realpath(candidate)])
-  const relativePath = relative(realRoot, realCandidate)
-  if (
-    relativePath === '..' ||
-    relativePath.startsWith('../') ||
-    relativePath.startsWith('..\\') ||
-    isAbsolute(relativePath)
-  ) {
-    throw new Error(`${label} resolves outside DSH_HOME: ${candidate}`)
-  }
 }
 
 /**
@@ -161,146 +111,37 @@ export async function findDshProfiles(dshHome = defaultDshHome()): Promise<DshPr
 
   const profiles: DshProfile[] = []
   for (const name of (await fs.readdir(profilesDir)).sort()) {
-    if (name === 'node_modules' || name.startsWith('.')) continue
-    const dir = join(profilesDir, name)
-    const directoryStat = await lstatIfExists(dir)
-    if (!directoryStat || !directoryStat.isDirectory() || directoryStat.isSymbolicLink()) continue
-    await requireContainedPath(profilesDir, dir, 'DSH profile')
-
-    const manifest = join(dir, 'package.json')
-    const manifestStat = await lstatIfExists(manifest)
-    if (!manifestStat || !manifestStat.isFile() || manifestStat.isSymbolicLink()) continue
-
-    try {
-      const pkg = await fs.readJson(manifest)
-      const bundles = pkg?.dsh?.profile?.bundles
-      if (!Array.isArray(bundles)) continue
-      profiles.push({ name, dir, installed: bundles.includes(DSH_PLUGIN_NAME) })
-    } catch {
-      // A profile whose manifest does not parse is one this installer must not
-      // rewrite — it would turn a hand-edit into a lost file.
-    }
+    const profile = await readDshProfile(profilesDir, name)
+    if (profile) profiles.push(profile)
   }
   return profiles
 }
 
-async function writeJsonAtomic(path: string, value: unknown): Promise<void> {
-  await requirePlainFile(path, 'DSH profile manifest')
-  const current = await fs.lstat(path)
-  const tempPath = join(dirname(path), `.${basename(path)}.${process.pid}.${randomUUID()}.tmp`)
-  try {
-    await fs.writeJson(tempPath, value, { spaces: 2 })
-    await fs.chmod(tempPath, current.mode & 0o777)
-    await fs.rename(tempPath, path)
-  } catch (error) {
-    try {
-      await fs.remove(tempPath)
-    } catch (cleanupError) {
-      throw new Error(`Failed to write ${path}: ${errorMessage(error)}; temporary file cleanup also failed`, {
-        cause: cleanupError,
-      })
-    }
-    throw error
-  }
+async function readDshProfile(profilesDir: string, name: string): Promise<DshProfile | null> {
+  if (name === 'node_modules' || name.startsWith('.')) return null
+  const dir = join(profilesDir, name)
+  const directoryStat = await lstatIfExists(dir)
+  if (!directoryStat || !directoryStat.isDirectory() || directoryStat.isSymbolicLink()) return null
+  await requireContainedPath(profilesDir, dir, 'DSH profile')
+
+  return readProfileManifest(name, dir)
 }
 
-/**
- * Copy the plugin to its stable home, replacing any earlier copy.
- *
- * Replaced rather than merged: a file dropped from a later version would
- * otherwise linger and keep being loaded.
- *
- * @param target - destination directory.
- * @returns a cleanup warning, or undefined on success.
- * @throws if this package does not carry the plugin.
- */
-async function stagePlugin(target: string, dshHome: string): Promise<string | undefined> {
-  await requirePlainDirectory(dshHome, 'DSH_HOME')
-  const parent = dirname(target)
-  const parentStat = await lstatIfExists(parent)
-  if (!parentStat) {
-    await fs.mkdir(parent)
-  } else if (!parentStat.isDirectory() || parentStat.isSymbolicLink()) {
-    throw new Error(`DSH plugin parent must be a non-symlink directory: ${parent}`)
-  }
-  await requirePlainDirectory(parent, 'DSH plugin parent')
-  await requireContainedPath(dshHome, parent, 'DSH plugin parent')
+async function readProfileManifest(name: string, dir: string): Promise<DshProfile | null> {
+  const manifest = join(dir, 'package.json')
+  const manifestStat = await lstatIfExists(manifest)
+  if (!manifestStat || !manifestStat.isFile() || manifestStat.isSymbolicLink()) return null
 
-  const targetStat = await lstatIfExists(target)
-  if (targetStat && (!targetStat.isDirectory() || targetStat.isSymbolicLink())) {
-    throw new Error(`DSH plugin target must be a non-symlink directory: ${target}`)
-  }
-  if (targetStat) await requireContainedPath(dshHome, target, 'DSH plugin target')
-
-  const source = bundledPluginDir()
-  if (!(await fs.pathExists(join(source, 'package.json')))) {
-    throw new Error(
-      `dsh-ccg was not found inside this package (looked in ${source}). ` + 'Reinstall with `npx ccg-workflow@latest`.'
-    )
-  }
-
-  const staged = join(parent, `.${basename(target)}.stage-${randomUUID()}`)
-  const backup = join(parent, `.${basename(target)}.backup-${randomUUID()}`)
-
-  let originalMoved = false
   try {
-    await fs.ensureDir(staged)
-    // Only what the harness loads. `test/` and a local node_modules symlink exist
-    // in the repo checkout and have no business in a user's dsh home.
-    for (const entry of [
-      'src',
-      'skills',
-      'package.json',
-      'cordis.patch.yml',
-      'README.md',
-      'README.zh-CN.md',
-      'LICENSE',
-    ]) {
-      const from = join(source, entry)
-      if (await fs.pathExists(from)) await fs.copy(from, join(staged, entry))
-    }
-
-    const currentTarget = await lstatIfExists(target)
-    if (currentTarget) {
-      if (!currentTarget.isDirectory() || currentTarget.isSymbolicLink()) {
-        throw new Error(`DSH plugin target must be a non-symlink directory: ${target}`)
-      }
-      await requireContainedPath(dshHome, target, 'DSH plugin target')
-      await fs.rename(target, backup)
-      originalMoved = true
-    }
-
-    try {
-      await fs.rename(staged, target)
-    } catch (error) {
-      if (originalMoved) await fs.rename(backup, target)
-      throw error
-    }
-
-    if (originalMoved) {
-      try {
-        await fs.remove(backup)
-      } catch (error) {
-        return `Updated ${DSH_PLUGIN_NAME}, but could not remove backup ${backup}: ${error}`
-      }
-    }
-    return undefined
-  } catch (error) {
-    await fs.remove(staged).catch(() => undefined)
-    if (originalMoved && !(await fs.pathExists(target)) && (await fs.pathExists(backup))) {
-      try {
-        await fs.rename(backup, target)
-      } catch (restoreError) {
-        throw new Error(
-          `Failed to update ${target}: ${errorMessage(error)}; restoring the previous plugin also failed`,
-          {
-            cause: restoreError,
-          }
-        )
-      }
-    }
-    throw error
+    const pkg = await fs.readJson(manifest)
+    const bundles = pkg?.dsh?.profile?.bundles
+    if (!Array.isArray(bundles)) return null
+    return { name, dir, installed: bundles.includes(DSH_PLUGIN_NAME) }
+  } catch {
+    // A profile whose manifest does not parse is one this installer must not
+    // rewrite — it would turn a hand-edit into a lost file.
   }
+  return null
 }
 
 /**
@@ -315,7 +156,8 @@ async function wireProfile(dir: string, pluginDir: string): Promise<boolean> {
   const manifest = join(dir, 'package.json')
   await requirePlainFile(manifest, 'DSH profile manifest')
   const pkg = await fs.readJson(manifest)
-  const spec = `file:${pluginDir}`
+  // A live link uses the managed copy without retaining an old package snapshot.
+  const spec = `link:${pluginDir}`
   let changed = false
 
   pkg.dependencies ??= {}
@@ -340,12 +182,26 @@ async function wireProfile(dir: string, pluginDir: string): Promise<boolean> {
 }
 
 /**
- * Ask the profile's own package manager to link what was just declared.
- *
- * `dsh --profile <name> plugin <args>` forwards to pnpm inside the profile
- * directory, which is how the harness itself does this — so it is used first
- * and pnpm/npm are only fallbacks for a machine where the launcher is not on
- * PATH.
+ * Build a launcher invocation without letting cmd.exe expand profile names.
+ * A Windows shim's name stays bare so `%~dp0` resolves to its own directory.
+ */
+export function profileLinkCommand(bin: string, args: string[], platform = process.platform) {
+  if (platform !== 'win32') return { file: bin, args, windowsVerbatimArguments: false }
+  if (!/^[\w.-]+$/.test(bin)) throw new Error(`Unsupported launcher name: ${bin}`)
+  if (!args.every((value) => /^[\p{L}\p{N}_. -]+$/u.test(value))) {
+    throw new Error('Unsupported Windows profile name: shell metacharacters are not allowed')
+  }
+  const command = [bin, ...args.map((value) => `"${value}"`)].join(' ')
+  return {
+    file: process.env.ComSpec || 'cmd.exe',
+    args: ['/d', '/s', '/c', `"${command}"`],
+    windowsVerbatimArguments: true,
+  }
+}
+
+/**
+ * Ask the profile's launcher to link its declared dependencies.
+ * pnpm is used only when the launcher is absent, preserving compatibility refusals.
  *
  * @param dir - the profile directory.
  * @param name - the profile name.
@@ -355,18 +211,61 @@ function linkProfile(dir: string, name: string): string | undefined {
   const attempts: Array<[string, string[]]> = [
     ['dsh', ['plugin', '--profile', name, 'install']],
     ['pnpm', ['install']],
-    ['npm', ['install']],
   ]
   let last = 'no package manager found'
   for (const [bin, args] of attempts) {
     try {
-      execFileSync(bin, args, { cwd: dir, stdio: 'pipe', timeout: 180_000 })
+      const command = profileLinkCommand(bin, args)
+      const options = {
+        cwd: dir,
+        env: { ...process.env, DSH_HOME: join(dir, '..', '..') },
+        stdio: 'pipe',
+        timeout: 180_000,
+        windowsVerbatimArguments: command.windowsVerbatimArguments,
+      } satisfies SpawnSyncOptions
+      execFileSync(command.file, command.args, options)
       return undefined
     } catch (error: unknown) {
       last = errorMessage(error).trim().split('\n').slice(-3).join('\n')
+      const failure = error as { code?: string; status?: number } | null
+      const missing = failure?.code === 'ENOENT' || failure?.status === 9009
+      if (bin === 'dsh') {
+        if (!missing) return last
+        console.warn('未找到 dsh，改用 pnpm 安装 profile 依赖')
+      }
     }
   }
   return last
+}
+
+async function installProfiles(
+  profiles: DshProfile[],
+  pluginDir: string,
+  link: ProfileLinker,
+  warnings: string[]
+): Promise<string[]> {
+  const wired: string[] = []
+  for (const profile of profiles) {
+    try {
+      await wireProfile(profile.dir, pluginDir)
+      const failure = link(profile.dir, profile.name)
+      if (failure !== undefined) {
+        warnings.push(
+          `${profile.name}: declared, but linking failed — ` +
+            `run \`dsh plugin --profile ${profile.name} install\`\n${failure}`
+        )
+        continue
+      }
+      wired.push(profile.name)
+    } catch (error: unknown) {
+      warnings.push(`${profile.name}: ${errorMessage(error)}`)
+    }
+  }
+  return wired
+}
+
+function selectDshProfiles(found: DshProfile[], requested?: string[]): DshProfile[] {
+  return requested?.length ? found.filter((profile) => requested.includes(profile.name)) : found
 }
 
 /**
@@ -399,39 +298,53 @@ export async function installDshPlugin(
       }
     }
 
-    const wanted = options.profiles?.length
-      ? found.filter((profile) => options.profiles!.includes(profile.name))
-      : found
+    const wanted = selectDshProfiles(found, options.profiles)
     if (wanted.length === 0) {
-      return { success: false, profiles: [], warnings, message: `No profile matched: ${options.profiles?.join(', ')}` }
+      return { success: false, profiles: [], warnings, message: `No profile matched: ${options.profiles!.join(', ')}` }
     }
 
     const pluginDir = dshPluginDir(dshHome)
-    const stageWarning = await stagePlugin(pluginDir, dshHome)
+    const stageWarning = await stagePlugin(pluginDir, dshHome, bundledPluginDir())
     if (stageWarning) warnings.push(stageWarning)
 
-    const wired: string[] = []
-    for (const profile of wanted) {
-      try {
-        await wireProfile(profile.dir, pluginDir)
-        const failure = link(profile.dir, profile.name)
-        // The manifest is correct either way; only the link is missing, and the
-        // user can finish it with one command. Reporting it as a total failure
-        // would be worse than telling them exactly what is left.
-        if (failure) {
-          warnings.push(
-            `${profile.name}: declared, but linking failed — run \`dsh plugin --profile ${profile.name} install\`\n${failure}`
-          )
-        }
-        wired.push(profile.name)
-      } catch (error: unknown) {
-        warnings.push(`${profile.name}: ${errorMessage(error)}`)
-      }
-    }
+    const wired = await installProfiles(wanted, pluginDir, link, warnings)
 
     return { success: wired.length > 0, profiles: wired, warnings }
   } catch (error: unknown) {
     return { success: false, profiles: [], warnings, message: errorMessage(error) }
+  }
+}
+
+async function unwireProfile(dir: string): Promise<boolean> {
+  const manifest = join(dir, 'package.json')
+  const pkg = await fs.readJson(manifest)
+  let changed = false
+
+  if (pkg?.dependencies?.[DSH_PLUGIN_NAME] !== undefined) {
+    delete pkg.dependencies[DSH_PLUGIN_NAME]
+    changed = true
+  }
+  const bundles: unknown = pkg?.dsh?.profile?.bundles
+  if (Array.isArray(bundles) && bundles.includes(DSH_PLUGIN_NAME)) {
+    pkg.dsh.profile.bundles = bundles.filter((entry) => entry !== DSH_PLUGIN_NAME)
+    changed = true
+  }
+  if (!changed) return false
+
+  await writeJsonAtomic(manifest, pkg)
+  return true
+}
+
+async function removePluginDirectory(dshHome: string): Promise<void> {
+  const pluginDir = dshPluginDir(dshHome)
+  const pluginStat = await lstatIfExists(pluginDir)
+  if (pluginStat) {
+    if (!pluginStat.isDirectory() || pluginStat.isSymbolicLink()) {
+      throw new Error(`DSH plugin target must be a non-symlink directory: ${pluginDir}`)
+    }
+    await requirePlainDirectory(dshHome, 'DSH_HOME')
+    await requireContainedPath(dshHome, pluginDir, 'DSH plugin target')
+    await fs.remove(pluginDir)
   }
 }
 
@@ -454,38 +367,14 @@ export async function uninstallDshPlugin(
   try {
     const changedProfiles: string[] = []
     for (const profile of await findDshProfiles(dshHome)) {
-      const manifest = join(profile.dir, 'package.json')
-      const pkg = await fs.readJson(manifest)
-      let changed = false
-
-      if (pkg?.dependencies?.[DSH_PLUGIN_NAME] !== undefined) {
-        delete pkg.dependencies[DSH_PLUGIN_NAME]
-        changed = true
-      }
-      const bundles: unknown = pkg?.dsh?.profile?.bundles
-      if (Array.isArray(bundles) && bundles.includes(DSH_PLUGIN_NAME)) {
-        pkg.dsh.profile.bundles = bundles.filter((entry) => entry !== DSH_PLUGIN_NAME)
-        changed = true
-      }
-      if (!changed) continue
-
-      await writeJsonAtomic(manifest, pkg)
+      if (!(await unwireProfile(profile.dir))) continue
       const failure = link(profile.dir, profile.name)
-      if (failure)
+      if (failure !== undefined)
         warnings.push(`${profile.name}: removed from the manifest, but \`install\` failed — run it yourself to prune`)
       changedProfiles.push(profile.name)
     }
 
-    const pluginDir = dshPluginDir(dshHome)
-    const pluginStat = await lstatIfExists(pluginDir)
-    if (pluginStat) {
-      if (!pluginStat.isDirectory() || pluginStat.isSymbolicLink()) {
-        throw new Error(`DSH plugin target must be a non-symlink directory: ${pluginDir}`)
-      }
-      await requirePlainDirectory(dshHome, 'DSH_HOME')
-      await requireContainedPath(dshHome, pluginDir, 'DSH plugin target')
-      await fs.remove(pluginDir)
-    }
+    await removePluginDirectory(dshHome)
     return { success: true, profiles: changedProfiles, warnings }
   } catch (error: unknown) {
     return { success: false, profiles: [], warnings, message: errorMessage(error) }

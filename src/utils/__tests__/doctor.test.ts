@@ -12,7 +12,10 @@ vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof import('node:os')>('node:os')
   return { ...actual, homedir: () => testHome }
 })
-vi.mock('node:child_process', () => ({ execFileSync: vi.fn() }))
+vi.mock('node:child_process', async () => ({
+  ...(await vi.importActual<typeof import('node:child_process')>('node:child_process')),
+  execFileSync: vi.fn(),
+}))
 
 import { doctor, status } from '../../commands/doctor'
 
@@ -29,7 +32,7 @@ const hookScripts = [
   'workflow-state.js',
 ]
 
-async function captureConsole(callback: () => Promise<void>): Promise<string> {
+async function captureConsole(callback: () => Promise<unknown>): Promise<string> {
   const lines: string[] = []
   const spy = vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
     lines.push(args.map(String).join(' '))
@@ -49,15 +52,17 @@ async function createInstalledFixture(): Promise<void> {
   await fs.ensureDir(join(installDir, 'hooks', 'ccg'))
   await Promise.all(hookScripts.map((name) => fs.writeFile(join(installDir, 'hooks', 'ccg', name), '// hook\n')))
 
-  const hookCommand = `node ${join(installDir, 'hooks', 'ccg', 'workflow-state.js')}`
-  const hookEntry = { matcher: '', hooks: [{ type: 'command', command: hookCommand }] }
+  const hookEntry = (names: string[]) => ({
+    matcher: '',
+    hooks: names.map((name) => ({ type: 'command', command: `node "${join(installDir, 'hooks', 'ccg', name)}"` })),
+  })
   await fs.writeJson(join(installDir, 'settings.json'), {
     hooks: {
-      UserPromptSubmit: [hookEntry],
-      SessionStart: [hookEntry],
-      PreToolUse: [hookEntry],
-      PostToolUse: [hookEntry],
-      PostToolUseFailure: [hookEntry],
+      UserPromptSubmit: [hookEntry(['workflow-state.js', 'skill-router.js'])],
+      SessionStart: [hookEntry(['session-start.js'])],
+      PreToolUse: [hookEntry(['subagent-context.js'])],
+      PostToolUse: [hookEntry(['workflow-state.js'])],
+      PostToolUseFailure: [hookEntry(['workflow-state.js'])],
     },
   })
 
@@ -66,7 +71,7 @@ async function createInstalledFixture(): Promise<void> {
     join(installDir, '.ccg', 'config.toml'),
     [
       '[general]',
-      'version = "3.6.7-aug.1"',
+      'version = "3.7.3-aug.1"',
       'language = "zh-CN"',
       '',
       '[routing.frontend]',
@@ -96,6 +101,7 @@ async function createCodexModeFixture(): Promise<void> {
   await fs.ensureDir(join(codexHome, 'agents'))
   await fs.ensureDir(join(codexHome, 'hooks', 'ccg'))
   await fs.ensureDir(join(codexHome, '.ccg'))
+  await fs.writeFile(join(codexHome, 'config.toml'), '[features]\nhooks = true\nmulti_agent = true\n')
   await Promise.all([
     fs.writeJson(join(codexHome, '.ccg', 'codex-mode.json'), { schemaVersion: 1, files: [], sponsorProviderIds: [] }),
     fs.writeFile(
@@ -131,6 +137,7 @@ beforeEach(async () => {
 })
 
 afterEach(() => {
+  process.exitCode = undefined
   process.chdir(originalCwd)
   delete process.env.CCG_SESSION_KEY
   vi.restoreAllMocks()
@@ -146,10 +153,10 @@ describe('doctor', () => {
 
     const output = await captureConsole(doctor)
 
-    expect(output).toContain('CCG Doctor v3.6.7-aug.1')
-    expect(output).toContain('6 scripts')
+    expect(output).toContain('CCG Doctor v3.7.3-aug.1')
+    expect(output).toContain('6/6 scripts')
     expect(output).toContain('5/5 events')
-    expect(output).toContain('All required checks passed.')
+    expect(output).toContain('No failures;')
   })
 
   it('reports invalid settings instead of counting Hook registration as absent', async () => {
@@ -292,7 +299,7 @@ describe('status', () => {
 
     const output = await captureConsole(status)
 
-    expect(output).toContain('3.6.7-aug.1')
+    expect(output).toContain('3.7.3-aug.1')
     expect(output).toContain('(matches)')
     expect(output).toContain('v5.15.0-aug.1')
     expect(output).toContain('schema=v2, open=1, bindings=1')

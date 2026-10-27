@@ -46,6 +46,8 @@ export function createDefaultConfig(options: {
   mcpProvider?: string
   liteMode?: boolean
   skipImpeccable?: boolean
+  skillsProfile?: string[]
+  skillsMode?: 'legacy' | 'native'
 }): CcgConfig {
   return {
     general: {
@@ -69,6 +71,8 @@ export function createDefaultConfig(options: {
     performance: {
       liteMode: options.liteMode ?? true,
       skipImpeccable: options.skipImpeccable || false,
+      ...(options.skillsProfile !== undefined ? { skillsProfile: [...options.skillsProfile] } : {}),
+      ...(options.skillsMode !== undefined ? { skillsMode: options.skillsMode } : {}),
     },
   }
 }
@@ -208,36 +212,34 @@ function normalizeRoutingProxy(proxy: RoutingProxyInput | undefined): ModelRouti
   return { models, http, https }
 }
 
-function normalizeReviewProfiles(value: unknown, fallback: ReviewProfile[]): ReviewProfile[] {
-  if (!Array.isArray(value)) {
-    return cloneReviewProfiles(fallback)
+function normalizeGrokModel(model: string): string {
+  return model === 'grok-4.5' ? 'grok-4.6' : model
+}
+
+function normalizeReviewProfile(value: unknown): ReviewProfile | null {
+  if (typeof value !== 'object' || value === null) return null
+  const profile = value as { id?: unknown; model?: unknown; effort?: unknown }
+  if (typeof profile.id !== 'string' || !reviewProfileIds.has(profile.id as ReviewProfileId)) return null
+
+  const normalized: ReviewProfile = { id: profile.id as ReviewProfileId }
+  if (typeof profile.model === 'string' && profile.model.trim()) {
+    const model = profile.model.trim()
+    normalized.model = normalized.id === 'grok' ? normalizeGrokModel(model) : model
   }
+  if (typeof profile.effort === 'string' && reviewEfforts.has(profile.effort)) {
+    normalized.effort = profile.effort as ReviewProfile['effort']
+  }
+  return normalized
+}
+
+function normalizeReviewProfiles(value: unknown, fallback: ReviewProfile[]): ReviewProfile[] {
+  if (!Array.isArray(value)) return cloneReviewProfiles(fallback)
 
   const configured = new Map<ReviewProfileId, ReviewProfile>()
   for (const rawProfile of value) {
-    if (typeof rawProfile !== 'object' || rawProfile === null) {
-      continue
-    }
-    const profile = rawProfile as { id?: unknown; model?: unknown; effort?: unknown }
-    if (
-      typeof profile.id !== 'string' ||
-      !reviewProfileIds.has(profile.id as ReviewProfileId) ||
-      configured.has(profile.id as ReviewProfileId)
-    ) {
-      continue
-    }
-
-    const normalized: ReviewProfile = { id: profile.id as ReviewProfileId }
-    if (typeof profile.model === 'string' && profile.model.trim()) {
-      const model = profile.model.trim()
-      normalized.model = normalized.id === 'grok' && model === 'grok-4.5' ? 'grok-4.6' : model
-    }
-    if (typeof profile.effort === 'string' && reviewEfforts.has(profile.effort)) {
-      normalized.effort = profile.effort as ReviewProfile['effort']
-    }
-    configured.set(normalized.id, normalized)
+    const profile = normalizeReviewProfile(rawProfile)
+    if (profile && !configured.has(profile.id)) configured.set(profile.id, profile)
   }
-
   return fallback.map((defaultProfile) => ({ ...defaultProfile, ...configured.get(defaultProfile.id) }))
 }
 
@@ -264,46 +266,53 @@ function normalizeModelRoute(
   }
 }
 
-export function normalizeRoutingForInstall(routing?: unknown): ModelRouting {
-  const defaults = createDefaultRouting()
-  const source = routing as RoutingInput | undefined
-  const frontend = normalizeModelRoute(source?.frontend, defaults.frontend)
-  const backend = normalizeModelRoute(source?.backend, defaults.backend)
-  const legacyProfiles = normalizeLegacyReviewModels(source?.review?.models)
-  const reviewProfiles = normalizeReviewProfiles(
-    source?.review?.profiles,
-    legacyProfiles.length > 0 ? legacyProfiles : defaultReviewProfiles
-  )
-  const reviewStrategy: ModelRouting['review']['strategy'] =
-    typeof source?.review?.strategy === 'string' && reviewStrategies.has(source.review.strategy)
-      ? (source.review.strategy as ModelRouting['review']['strategy'])
-      : defaults.review.strategy
-  const mode: ModelRouting['mode'] =
-    typeof source?.mode === 'string' && collaborationModes.has(source.mode)
-      ? (source.mode as ModelRouting['mode'])
-      : defaults.mode
-  const normalized: ModelRouting = {
-    frontend,
-    backend,
-    review: {
-      profiles: reviewProfiles,
-      strategy: reviewStrategy,
-    },
-    mode,
+function normalizeReviewRoute(
+  source: ReviewRouteInput | undefined,
+  fallback: ModelRouting['review']
+): ModelRouting['review'] {
+  const legacyProfiles = normalizeLegacyReviewModels(source?.models)
+  return {
+    profiles: normalizeReviewProfiles(
+      source?.profiles,
+      legacyProfiles.length > 0 ? legacyProfiles : defaultReviewProfiles
+    ),
+    strategy:
+      typeof source?.strategy === 'string' && reviewStrategies.has(source.strategy)
+        ? (source.strategy as ModelRouting['review']['strategy'])
+        : fallback.strategy,
   }
+}
+
+function normalizeCollaborationMode(value: unknown, fallback: ModelRouting['mode']): ModelRouting['mode'] {
+  return typeof value === 'string' && collaborationModes.has(value) ? (value as ModelRouting['mode']) : fallback
+}
+
+function normalizeModelOverrides(source: RoutingInput | undefined) {
+  const overrides: Pick<ModelRouting, 'grokModel' | 'kimiModel' | 'opencodeModel'> = {}
   for (const [key, value] of Object.entries({
     grokModel: source?.grokModel,
     kimiModel: source?.kimiModel,
     opencodeModel: source?.opencodeModel,
-  }) as Array<[keyof Pick<ModelRouting, 'grokModel' | 'kimiModel' | 'opencodeModel'>, unknown]>) {
+  }) as Array<[keyof typeof overrides, unknown]>) {
     if (typeof value === 'string' && value.trim()) {
       const model = value.trim()
-      normalized[key] = key === 'grokModel' && model === 'grok-4.5' ? 'grok-4.6' : model
+      overrides[key] = key === 'grokModel' ? normalizeGrokModel(model) : model
     }
   }
-  const proxy = normalizeRoutingProxy(source?.proxy)
-  if (proxy) {
-    normalized.proxy = proxy
+  return overrides
+}
+
+export function normalizeRoutingForInstall(routing?: unknown): ModelRouting {
+  const defaults = createDefaultRouting()
+  const source = routing as RoutingInput | undefined
+  const normalized: ModelRouting = {
+    frontend: normalizeModelRoute(source?.frontend, defaults.frontend),
+    backend: normalizeModelRoute(source?.backend, defaults.backend),
+    review: normalizeReviewRoute(source?.review, defaults.review),
+    mode: normalizeCollaborationMode(source?.mode, defaults.mode),
+    ...normalizeModelOverrides(source),
   }
+  const proxy = normalizeRoutingProxy(source?.proxy)
+  if (proxy) normalized.proxy = proxy
   return normalized
 }

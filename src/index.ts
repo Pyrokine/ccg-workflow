@@ -54,3 +54,16 @@ export {
 } from './utils/installer-dsh'
 export { migrateToV1_4_0, needsMigration } from './utils/migration'
 export { getCurrentVersion, getLatestVersion, checkForUpdates, compareVersions } from './utils/version'
+export { collectDoctorReport } from './utils/doctor-checks'
+export type { DoctorReport, DoctorDependencies, DoctorCheck } from './utils/doctor-checks'
+export {
+  getSkillCatalog,
+  listSkills,
+  installedNames,
+  installSkills,
+  updateSkills,
+  removeSkills,
+  syncSkills,
+  resolveSkillPaths,
+} from './utils/skill-manager'
+export type { SkillManagerOptions, SkillTarget, SkillListEntry } from './utils/skill-manager'

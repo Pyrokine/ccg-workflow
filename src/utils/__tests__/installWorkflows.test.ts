@@ -22,6 +22,28 @@ function collectMdFiles(dir: string): string[] {
 // ─────────────────────────────────────────────────────────────
 // E2E: installWorkflows with additional backend prompts
 // ─────────────────────────────────────────────────────────────
+async function prepareRoutingRuntime(root: string) {
+  const settingsPath = join(root, 'settings.json')
+  const binaryPath = join(root, 'bin', 'codeagent-wrapper')
+  const oldHookPath = join(root, 'hooks', 'ccg', 'workflow-state.js')
+  await fs.ensureDir(join(root, 'bin'))
+  await fs.ensureDir(join(root, 'hooks', 'ccg'))
+  await fs.writeJson(settingsPath, {
+    preserved: true,
+    hooks: {
+      PostToolUse: [
+        {
+          matcher: 'Write',
+          hooks: [{ type: 'command', command: 'node /tmp/user-post-tool.js' }],
+        },
+      ],
+    },
+  })
+  await fs.writeFile(oldHookPath, '// old CCG Hook\n', 'utf-8')
+  await fs.writeFile(binaryPath, 'preserve binary', 'utf-8')
+  return { settingsPath, binaryPath, oldHookPath }
+}
+
 describe('installWorkflows E2E — additional backend prompts', () => {
   const tmpDir = join(tmpdir(), `ccg-test-prompts-${Date.now()}`)
 
@@ -111,24 +133,7 @@ describe('syncRoutingTemplates', () => {
   })
 
   it('updates routing artifacts and Hook runtime without touching the binary', async () => {
-    const settingsPath = join(tmpDir, 'settings.json')
-    const binaryPath = join(tmpDir, 'bin', 'codeagent-wrapper')
-    const oldHookPath = join(tmpDir, 'hooks', 'ccg', 'workflow-state.js')
-    await fs.ensureDir(join(tmpDir, 'bin'))
-    await fs.ensureDir(join(tmpDir, 'hooks', 'ccg'))
-    await fs.writeJson(settingsPath, {
-      preserved: true,
-      hooks: {
-        PostToolUse: [
-          {
-            matcher: 'Write',
-            hooks: [{ type: 'command', command: 'node /tmp/user-post-tool.js' }],
-          },
-        ],
-      },
-    })
-    await fs.writeFile(oldHookPath, '// old CCG Hook\n', 'utf-8')
-    await fs.writeFile(binaryPath, 'preserve binary', 'utf-8')
+    const { settingsPath, binaryPath, oldHookPath } = await prepareRoutingRuntime(tmpDir)
 
     const result = await syncRoutingTemplates(['go'], tmpDir, {
       routing: {

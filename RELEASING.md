@@ -12,7 +12,7 @@ The package version has the form `X.Y.Z-aug.N`:
 
 The package version must match in `package.json`, the README footers, the current `CHANGELOG.md` heading, the root plugin manifests, and other user-visible version metadata.
 
-`codeagent-wrapper` has its own version. A Go wrapper change must update both `codeagent-wrapper/main.go` and `EXPECTED_BINARY_VERSION` in `src/utils/installer.ts`. Its `X.Y.Z` follows the absorbed upstream wrapper version, while fork changes increase only the `aug.N` suffix.
+`codeagent-wrapper` has its own version. A Go wrapper change must update both `codeagent-wrapper/main.go` and `EXPECTED_BINARY_VERSION` in `src/utils/installer-binary.ts`. Its `X.Y.Z` follows the absorbed upstream wrapper version, while fork changes increase only the `aug.N` suffix.
 
 ## Tags and releases
 

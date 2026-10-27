@@ -14,6 +14,76 @@ export interface MigrationResult {
   skipped: string[]
 }
 
+async function removeEmptyCcgDirectory(path: string, result: MigrationResult): Promise<void> {
+  // Remove old directory (only if migration succeeded and it's empty)
+  try {
+    const remaining = await fs.readdir(path)
+    if (remaining.length === 0) {
+      await fs.remove(path)
+      result.migratedFiles.push('Removed old ~/.ccg/ directory')
+    } else {
+      result.skipped.push('~/.ccg/ (not empty, keeping for safety)')
+    }
+  } catch (error) {
+    // It's okay if we can't remove the old directory
+    result.skipped.push(`~/.ccg/ (could not remove: ${error})`)
+  }
+}
+
+async function migrateCcgDirectory(oldDir: string, newDir: string, result: MigrationResult): Promise<void> {
+  if (!(await fs.pathExists(oldDir))) {
+    result.skipped.push('~/.ccg/ (does not exist, nothing to migrate)')
+    return
+  }
+  for (const file of await fs.readdir(oldDir)) {
+    const srcFile = join(oldDir, file)
+    const destFile = join(newDir, file)
+    try {
+      // Skip if destination already exists (don't overwrite)
+      if (await fs.pathExists(destFile)) {
+        result.skipped.push(`~/.ccg/${file} (already exists in new location)`)
+        continue
+      }
+      // Copy file or directory
+      await fs.copy(srcFile, destFile)
+      result.migratedFiles.push(`~/.ccg/${file} → ~/.claude/.ccg/${file}`)
+    } catch (error) {
+      result.errors.push(`Failed to migrate ${file}: ${error}`)
+      result.success = false
+    }
+  }
+  await removeEmptyCcgDirectory(oldDir, result)
+}
+
+async function migratePrompts(oldDir: string, newDir: string, result: MigrationResult): Promise<void> {
+  if (!(await fs.pathExists(oldDir))) {
+    result.skipped.push('~/.claude/prompts/ccg/ (does not exist, nothing to migrate)')
+    return
+  }
+  try {
+    // Skip if destination already exists
+    if (await fs.pathExists(newDir)) {
+      result.skipped.push('~/.claude/prompts/ccg/ (already exists in new location)')
+      return
+    }
+    await fs.copy(oldDir, newDir)
+    result.migratedFiles.push('~/.claude/prompts/ccg/ → ~/.claude/.ccg/prompts/')
+    // Remove old directory
+    await fs.remove(oldDir)
+    result.migratedFiles.push('Removed old ~/.claude/prompts/ccg/ directory')
+
+    // Try to remove parent directory if empty
+    const promptsParentDir = join(homedir(), '.claude', 'prompts')
+    if ((await fs.readdir(promptsParentDir)).length === 0) {
+      await fs.remove(promptsParentDir)
+      result.migratedFiles.push('Removed empty ~/.claude/prompts/ directory')
+    }
+  } catch (error) {
+    result.errors.push(`Failed to migrate prompts: ${error}`)
+    result.success = false
+  }
+}
+
 /**
  * Migrate from v1.3.x to v1.4.0
  *
@@ -22,96 +92,22 @@ export interface MigrationResult {
  * 2. ~/.claude/prompts/ccg/ → ~/.claude/.ccg/prompts/
  */
 export async function migrateToV1_4_0(): Promise<MigrationResult> {
-  const result: MigrationResult = {
-    success: true,
-    migratedFiles: [],
-    errors: [],
-    skipped: [],
-  }
-
+  const result: MigrationResult = { success: true, migratedFiles: [], errors: [], skipped: [] }
   const oldCcgDir = join(homedir(), '.ccg')
   const newCcgDir = join(homedir(), '.claude', '.ccg')
   const oldPromptsDir = join(homedir(), '.claude', 'prompts', 'ccg')
   const newPromptsDir = join(newCcgDir, 'prompts')
-
   try {
     // Ensure new config directory exists
     await fs.ensureDir(newCcgDir)
-
     // 1. Migrate ~/.ccg/ → ~/.claude/.ccg/
-    if (await fs.pathExists(oldCcgDir)) {
-      const files = await fs.readdir(oldCcgDir)
-      for (const file of files) {
-        const srcFile = join(oldCcgDir, file)
-        const destFile = join(newCcgDir, file)
-
-        try {
-          // Skip if destination already exists (don't overwrite)
-          if (await fs.pathExists(destFile)) {
-            result.skipped.push(`~/.ccg/${file} (already exists in new location)`)
-            continue
-          }
-
-          // Copy file or directory
-          await fs.copy(srcFile, destFile)
-          result.migratedFiles.push(`~/.ccg/${file} → ~/.claude/.ccg/${file}`)
-        } catch (error) {
-          result.errors.push(`Failed to migrate ${file}: ${error}`)
-          result.success = false
-        }
-      }
-
-      // Remove old directory (only if migration succeeded and it's empty)
-      try {
-        const remaining = await fs.readdir(oldCcgDir)
-        if (remaining.length === 0) {
-          await fs.remove(oldCcgDir)
-          result.migratedFiles.push('Removed old ~/.ccg/ directory')
-        } else {
-          result.skipped.push(`~/.ccg/ (not empty, keeping for safety)`)
-        }
-      } catch (error) {
-        // It's okay if we can't remove the old directory
-        result.skipped.push(`~/.ccg/ (could not remove: ${error})`)
-      }
-    } else {
-      result.skipped.push('~/.ccg/ (does not exist, nothing to migrate)')
-    }
-
+    await migrateCcgDirectory(oldCcgDir, newCcgDir, result)
     // 2. Migrate ~/.claude/prompts/ccg/ → ~/.claude/.ccg/prompts/
-    if (await fs.pathExists(oldPromptsDir)) {
-      try {
-        // Skip if destination already exists
-        if (await fs.pathExists(newPromptsDir)) {
-          result.skipped.push('~/.claude/prompts/ccg/ (already exists in new location)')
-        } else {
-          await fs.copy(oldPromptsDir, newPromptsDir)
-          result.migratedFiles.push('~/.claude/prompts/ccg/ → ~/.claude/.ccg/prompts/')
-
-          // Remove old directory
-          await fs.remove(oldPromptsDir)
-          result.migratedFiles.push('Removed old ~/.claude/prompts/ccg/ directory')
-
-          // Try to remove parent directory if empty
-          const promptsParentDir = join(homedir(), '.claude', 'prompts')
-          const remaining = await fs.readdir(promptsParentDir)
-          if (remaining.length === 0) {
-            await fs.remove(promptsParentDir)
-            result.migratedFiles.push('Removed empty ~/.claude/prompts/ directory')
-          }
-        }
-      } catch (error) {
-        result.errors.push(`Failed to migrate prompts: ${error}`)
-        result.success = false
-      }
-    } else {
-      result.skipped.push('~/.claude/prompts/ccg/ (does not exist, nothing to migrate)')
-    }
+    await migratePrompts(oldPromptsDir, newPromptsDir, result)
   } catch (error) {
     result.errors.push(`Migration failed: ${error}`)
     result.success = false
   }
-
   return result
 }
 

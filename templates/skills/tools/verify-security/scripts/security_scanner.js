@@ -131,10 +131,19 @@ const SECURITY_RULES = [
   },
   {
     id: 'DEBUG_CODE', category: '调试', severity: 'low',
-    pattern: /\b(console\.log|debugger|pdb\.set_trace|breakpoint)\s*\(/i,
-    extensions: ['.py', '.js', '.ts'],
-    message: '发现调试代码',
-    recommendation: '生产环境移除调试代码',
+    pattern: /(?<![\w.$])debugger\b(?=\s*(?:;|}|$))/,
+    extensions: ['.js', '.ts'],
+    codeOnly: true,
+    message: '发现 debugger 语句',
+    recommendation: '移除生产代码中的断点',
+  },
+  {
+    id: 'DEBUG_BREAKPOINT', category: '调试', severity: 'low',
+    pattern: /(?<![\w.])(?:pdb\.set_trace|breakpoint)\s*\(/,
+    extensions: ['.py'],
+    codeOnly: true,
+    message: '发现 Python 断点调用',
+    recommendation: '移除生产代码中的断点',
   },
   {
     id: 'INSECURE_RANDOM', category: '加密',
@@ -156,7 +165,11 @@ const SECURITY_RULES = [
 const CODE_EXTENSIONS = new Set([
   '.py',
   '.js',
+  '.mjs',
+  '.cjs',
   '.ts',
+  '.mts',
+  '.cts',
   '.jsx',
   '.tsx',
   '.go',
@@ -182,16 +195,31 @@ const DEFAULT_EXCLUDES = [
   'spec',
 ];
 
-function scanFile(filePath, rules) {
-  const findings = [];
-  const ext = path.extname(filePath).toLowerCase();
-  let content;
-  try {
-    content = fs.readFileSync(filePath, 'utf-8');
-  } catch {
-    return findings;
+function executableLines(content, python) {
+  const blank = (text) => text.replace(/[^\r\n]/g, ' ');
+  if (python) {
+    const literals = /#[^\n]*|'''[\s\S]*?(?:'''|$)|"""[\s\S]*?(?:"""|$)|"(?:\\[\s\S]|[^"\\])*"|'(?:\\[\s\S]|[^'\\])*'/g;
+    return content.replace(literals, blank).split('\n');
   }
+  // 保留表达式前缀，区分作为值的正则与除法后的可执行语句
+  const prefix = String.raw`(^|[=(:,;!?&|^~%*<>{\[]|(?<!\+)\+(?!\+)|(?<!-)-(?!-)|(?<![\w.$])\b(?:return|throw|yield|case|else|do)\b)`;
+  const spacing = String.raw`(?:\s|/\*[\s\S]*?\*/|//[^\n]*(?:\n|$))*`;
+  const expression = String.raw`/(?![/*])(?:\\[^\r\n]|\[(?:\\[^\r\n]|[^\]\\\r\n])*\]|[^/\\[\r\n])+/[dgimsuvy]*`;
+  const other = /\/\/[^\n]*|\/\*[\s\S]*?(?:\*\/|$)|"(?:\\[\s\S]|[^"\\])*"|'(?:\\[\s\S]|[^'\\])*'|`(?:\\[\s\S]|[^`\\])*`/;
+  const tokens = new RegExp(prefix + spacing + expression + '|' + other.source, 'g');
+  return content.replace(tokens, (text, before) => {
+    const kept = before || '';
+    return kept + blank(text.slice(kept.length));
+  }).split('\n');
+}
+
+function scanFile(filePath, rules, content = fs.readFileSync(filePath, 'utf-8')) {
+  const findings = [];
+  let ext = path.extname(filePath).toLowerCase();
+  if (['.mjs', '.cjs', '.jsx'].includes(ext)) ext = '.js';
+  if (['.mts', '.cts', '.tsx'].includes(ext)) ext = '.ts';
   const lines = content.split('\n');
+  const executable = executableLines(content, ext === '.py');
 
   for (const rule of rules) {
     const exts = rule.extensions;
@@ -206,19 +234,20 @@ function scanFile(filePath, rules) {
       const ruleDefRe = /^\s*(id|pattern|severity|message|recommendation|extensions|excludePattern|category)\s*:/;
       if (ruleDefRe.test(stripped)) continue;
 
-      if (rule.pattern.test(line)) {
+      if (rule.pattern.test(rule.codeOnly ? executable[i] : line)) {
         rule.pattern.lastIndex = 0;
         if (rule.excludePattern && rule.excludePattern.test(line)) {
           rule.excludePattern.lastIndex = 0;
           continue;
         }
         findings.push({
+          rule_id: rule.id,
           severity: rule.severity,
           category: rule.category,
           message: rule.message,
           file_path: filePath,
           line_number: i + 1,
-          line_content: stripped.slice(0, 100),
+          line_content: '[redacted]',
           recommendation: rule.recommendation,
         });
       }
@@ -227,46 +256,55 @@ function scanFile(filePath, rules) {
   return findings;
 }
 
-function walkDir(dir, excludeDirs) {
-  const results = [];
-  let entries;
-  try {
-    entries = fs.readdirSync(dir, { withFileTypes: true });
-  } catch {
-    return results;
-  }
-  for (const entry of entries) {
-    if (excludeDirs.includes(entry.name)) continue;
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      results.push(...walkDir(full, excludeDirs));
-    } else if (entry.isFile()) {
-      if (CODE_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) {
-        results.push(full);
-      }
+const { buildReport, countBySeverity, parseCliArgs, runCli, collectSourceFiles } = require(
+  path.join(__dirname, '..', '..', 'lib', 'shared.js')
+);
+const { compareBaseline } = require(path.join(__dirname, '..', '..', 'lib', 'git-baseline.js'));
+
+function scanDirectory(targets, excludeDirs, base) {
+  const selected = collectSourceFiles(targets, CODE_EXTENSIONS, excludeDirs);
+  const findings = [];
+  const contents = new Map();
+  let filesScanned = 0;
+  for (const target of selected.files) {
+    try {
+      const content = fs.readFileSync(target, 'utf8');
+      findings.push(...scanFile(target, SECURITY_RULES, content));
+      contents.set(target, content);
+      filesScanned++;
+    } catch (error) {
+      selected.errors.push({ path: target, code: error.code || 'READ_FAILED', message: error.message });
     }
   }
-  return results;
-}
-
-function scanDirectory(scanPath, excludeDirs) {
-  const resolved = path.resolve(scanPath);
-  const findings = [];
-  const files = walkDir(resolved, excludeDirs);
-  for (const f of files) findings.push(...scanFile(f, SECURITY_RULES));
   findings.sort((a, b) => (SEVERITY_ORDER[a.severity] ?? 9) - (SEVERITY_ORDER[b.severity] ?? 9));
-  const passed = !findings.some((f) => f.severity === 'critical' || f.severity === 'high');
-  return { scan_path: resolved, files_scanned: files.length, passed, findings };
+  const compared = compareBaseline([...contents.keys()], findings,
+    (file, content) => scanFile(file, SECURITY_RULES, content), base, contents);
+  selected.errors.push(...compared.errors);
+  const complete = filesScanned > 0 && selected.errors.length === 0;
+  const passed = complete && !findings.some((f) => f.severity === 'critical' || f.severity === 'high');
+  return {
+    scan_path: selected.requested_paths.join(', '),
+    requested_paths: selected.requested_paths,
+    coverage: selected.coverage,
+    scan_errors: selected.errors,
+    complete,
+    files_scanned: filesScanned,
+    baseline: compared.baseline,
+    origin_counts: compared.origin_counts,
+    passed,
+    findings,
+  };
 }
-
-const { buildReport, countBySeverity, parseCliArgs } = require(path.join(__dirname, '..', '..', 'lib', 'shared.js'));
 
 function formatReport(result, verbose) {
   const counts = countBySeverity(result.findings);
   const fields = {
     扫描路径: result.scan_path,
     扫描文件: result.files_scanned,
-    扫描结果: result.passed ? '\u2713 通过' : '\u2717 发现高危问题',
+    比较基线: result.baseline.map((entry) => `${entry.ref}: ${entry.status}${entry.reason ? ' (' + entry.reason + ')' : ''}`).join('\n'),
+    分析完整性: result.complete ? '完整' : '未完成',
+    未分析: result.scan_errors.map((error) => error.path + ': ' + error.message).join('\n') || '无',
+    扫描结果: !result.complete ? '未完成' : result.passed ? '\u2713 通过' : '\u2717 发现高危问题',
     统计:
       `严重: ${counts.critical || 0} | 高危: ${counts.high || 0}` +
       ` | 中危: ${counts.medium || 0} | 低危: ${counts.low || 0}`,
@@ -275,25 +313,31 @@ function formatReport(result, verbose) {
 }
 
 function main() {
-  const opts = parseCliArgs(process.argv, { exclude: [] });
+  const opts = parseCliArgs(process.argv, { exclude: [], base: undefined });
   if (opts.help) {
-    console.log('Usage: security_scanner.js [path] [-v] [--json] [--exclude dir1 dir2]');
-    process.exit(0);
+    console.log('Usage: security_scanner.js [paths...] [--base ref] [-v] [--json] [--exclude dirs...]');
+    return;
   }
-  const scanPath = opts.target;
+  if (opts.mode) throw new Error('--mode is only supported by verify-change');
   const verbose = opts.verbose;
   const jsonOut = opts.json;
   const excludeDirs = [...DEFAULT_EXCLUDES, ...opts.exclude];
-  const result = scanDirectory(scanPath, excludeDirs);
+  const result = scanDirectory(opts.targets, excludeDirs, opts.base);
 
   if (jsonOut) {
     console.log(
       JSON.stringify(
         {
           scan_path: result.scan_path,
+          requested_paths: result.requested_paths,
+          coverage: result.coverage,
+          scan_errors: result.scan_errors,
+          complete: result.complete,
           files_scanned: result.files_scanned,
           passed: result.passed,
           counts: countBySeverity(result.findings),
+          baseline: result.baseline,
+          origin_counts: result.origin_counts,
           findings: result.findings,
         },
         null,
@@ -303,11 +347,9 @@ function main() {
   } else {
     console.log(formatReport(result, verbose));
   }
-  process.exit(result.passed ? 0 : 1);
+  process.exitCode = !result.complete ? 2 : result.passed ? 0 : 1;
 }
 
-if (require.main === module) {
-  main();
-}
+if (require.main === module) runCli(main);
 
 module.exports = { scanFile, SECURITY_RULES };

@@ -1,8 +1,6 @@
 import ansis from 'ansis'
-import fs from 'fs-extra'
 import inquirer from 'inquirer'
-import { homedir } from 'node:os'
-import { join } from 'pathe'
+import { writeGrokPromptToRules } from './grok-search'
 import {
   installAceTool,
   installAceToolRs,
@@ -119,7 +117,8 @@ async function handleInstallAceTool(isRs: boolean): Promise<void> {
   console.log(ansis.cyan(`📖 获取 ${toolName} 访问方式：`))
   console.log(`   ${ansis.gray('•')} ${ansis.cyan('官方服务')}: ${ansis.underline('https://augmentcode.com/')}`)
   console.log(
-    `   ${ansis.gray('•')} ${ansis.cyan('第三方中转')} ${ansis.green('(推荐)')}: ${ansis.underline('https://acemcp.heroman.wtf/')}`
+    `   ${ansis.gray('•')} ${ansis.cyan('第三方中转')} ${ansis.green('(推荐)')}: ` +
+      ansis.underline('https://acemcp.heroman.wtf/')
   )
   console.log(`   ${ansis.gray('⚠')} ${ansis.yellow('注意')}: enhance_prompt 已不可用，search_context 代码检索正常`)
   console.log()
@@ -229,63 +228,6 @@ async function handleInstallFastContext(): Promise<void> {
 // Grok Search MCP (web search)
 // ═══════════════════════════════════════════════════════
 
-const GROK_SEARCH_PROMPT = `## 0. Language and Format Standards
-
-- **Interaction Language**: Tools and models must interact exclusively in **English**; user outputs must be in **Chinese**.
-- MUST ULRTA Thinking in ENGLISH!
-- **Formatting Requirements**: Use standard Markdown formatting. Code blocks and specific text results should be marked with backticks. Skilled in applying four or more \`\`\`\`markdown wrappers.
-
-## 1. Search and Evidence Standards
-Typically, the results of web searches only constitute third-party suggestions and are not directly credible; they must be cross-verified with sources to provide users with absolutely authoritative and correct answers.
-
-### Search Trigger Conditions
-Strictly distinguish between internal and external knowledge. Avoid speculation based on general internal knowledge. When uncertain, explicitly inform the user.
-
-For example, when using the \\\`fastapi\\\` library to encapsulate an API endpoint, despite possessing common-sense knowledge internally, you must still rely on the latest search results or official documentation for reliable implementation.
-
-### Search Execution Guidelines
-
-- Use the \\\`mcp__grok-search\\\` tool for web searches
-- Execute independent search requests in parallel; sequential execution applies only when dependencies exist
-- Evaluate search results for quality: analyze relevance, source credibility, cross-source consistency, and completeness. Conduct supplementary searches if gaps exist
-
-### Source Quality Standards
-
-- Key factual claims must be supported by >=2 independent sources. If relying on a single source, explicitly state this limitation
-- Conflicting sources: Present evidence from both sides, assess credibility and timeliness, identify the stronger evidence, or declare unresolved discrepancies
-- Empirical conclusions must include confidence levels (High/Medium/Low)
-- Citation format: [Author/Organization, Year/Date, Section/URL]. Fabricated references are strictly prohibited
-
-## 2. Reasoning and Expression Principles
-
-- Be concise, direct, and information-dense: Use lists for discrete items; paragraphs for arguments
-- Challenge flawed premises: When user logic contains errors, pinpoint specific issues with evidence
-- All conclusions must specify: Applicable conditions, scope boundaries, and known limitations
-- Avoid greetings, pleasantries, filler adjectives, and emotional expressions
-- When uncertain: State unknowns and reasons before presenting confirmed facts
-`
-
-async function writeGrokPromptToRules(): Promise<void> {
-  const rulesDir = join(homedir(), '.claude', 'rules')
-  const rulePath = join(rulesDir, 'ccg-grok-search.md')
-
-  // Clean up legacy CLAUDE.md injection if present
-  const claudeMdPath = join(homedir(), '.claude', 'CLAUDE.md')
-  if (await fs.pathExists(claudeMdPath)) {
-    const content = await fs.readFile(claudeMdPath, 'utf-8')
-    if (content.includes('CCG-GROK-SEARCH-PROMPT')) {
-      const cleaned = content.replace(
-        /\n*<!-- CCG-GROK-SEARCH-PROMPT-START -->[\s\S]*?<!-- CCG-GROK-SEARCH-PROMPT-END -->\n*/g,
-        ''
-      )
-      await fs.writeFile(claudeMdPath, cleaned, 'utf-8')
-    }
-  }
-
-  await fs.ensureDir(rulesDir)
-  await fs.writeFile(rulePath, GROK_SEARCH_PROMPT, 'utf-8')
-}
-
 async function handleGrokSearch(): Promise<void> {
   console.log()
   console.log(ansis.cyan.bold('  🔍 联网搜索 MCP (grok-search)'))
@@ -305,11 +247,7 @@ async function handleGrokSearch(): Promise<void> {
     { type: 'password', name: 'firecrawlKey', message: `FIRECRAWL_API_KEY ${ansis.gray('(可选)')}`, mask: '*' },
   ])
 
-  const env: Record<string, string> = {}
-  if (answers.grokApiUrl?.trim()) env.GROK_API_URL = answers.grokApiUrl.trim()
-  if (answers.grokApiKey?.trim()) env.GROK_API_KEY = answers.grokApiKey.trim()
-  if (answers.tavilyKey?.trim()) env.TAVILY_API_KEY = answers.tavilyKey.trim()
-  if (answers.firecrawlKey?.trim()) env.FIRECRAWL_API_KEY = answers.firecrawlKey.trim()
+  const env = grokSearchEnv(answers)
 
   if (Object.keys(env).length === 0) {
     console.log(ansis.yellow('  未填写任何 Key，已跳过'))
@@ -477,4 +415,13 @@ async function handleUninstall(): Promise<void> {
   // Sync removals to Codex
   await syncMcpMirrors()
   console.log()
+}
+
+function grokSearchEnv(answers: Record<string, string | undefined>): Record<string, string> {
+  const env: Record<string, string> = {}
+  if (answers.grokApiUrl?.trim()) env.GROK_API_URL = answers.grokApiUrl.trim()
+  if (answers.grokApiKey?.trim()) env.GROK_API_KEY = answers.grokApiKey.trim()
+  if (answers.tavilyKey?.trim()) env.TAVILY_API_KEY = answers.tavilyKey.trim()
+  if (answers.firecrawlKey?.trim()) env.FIRECRAWL_API_KEY = answers.firecrawlKey.trim()
+  return env
 }
