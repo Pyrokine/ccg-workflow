@@ -3,7 +3,19 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
+import { spawnSync } from 'node:child_process'
+import { TASK_STATE_RUNTIME_FILES } from '../installer-data'
 import { getAllCommandIds, installWorkflows, uninstallWorkflows } from '../installer'
+
+function expectClaudeController(hookDir: string, root: string): void {
+  const controller = spawnSync(
+    process.execPath,
+    [join(hookDir, 'task-state.js'), 'resolve', '--root', root, '--session-key', `claude-${'a'.repeat(64)}`],
+    { encoding: 'utf8' }
+  )
+  expect(controller.status, controller.stderr).toBe(0)
+  expect(JSON.parse(controller.stdout)).toMatchObject({ ok: true, operation: 'resolve' })
+}
 
 // D. installWorkflows E2E — contextweaver provider
 // ─────────────────────────────────────────────────────────────
@@ -185,9 +197,7 @@ describe('installWorkflows — persistent task Hooks', () => {
 
     const hookDir = join(tmpDir, 'hooks', 'ccg')
     for (const file of [
-      'package.json',
-      'task-utils.js',
-      'task-state.js',
+      ...TASK_STATE_RUNTIME_FILES,
       'workflow-state.js',
       'session-start.js',
       'subagent-context.js',
@@ -196,6 +206,7 @@ describe('installWorkflows — persistent task Hooks', () => {
       expect(fs.existsSync(join(hookDir, file)), `${file} missing`).toBe(true)
     }
     expect(await fs.readJson(join(hookDir, 'package.json'))).toEqual({ type: 'commonjs' })
+    expectClaudeController(hookDir, tmpDir)
 
     const settings = await fs.readJson(join(tmpDir, 'settings.json'))
     expect(settings.hooks.SessionStart).toEqual([

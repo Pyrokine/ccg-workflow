@@ -67,6 +67,14 @@ Codex, Antigravity, Grok, Kimi Code, OpenCode, and GPT/Grok external review run 
 
 Gemini CLI is disabled because consumer OAuth requests stopped being processed after 2026-06-18. Legacy Gemini routes migrate to Grok; `agy` remains an Antigravity alias.
 
+## What's new in v3.7.3-aug.2
+
+- Go and Rust quality checks use native project tools offline and report files excluded by build conditions. TypeScript 7 CLI support and optional Ruff target versions preserve project settings.
+- C/C++ security checks cover credentials, dynamic commands and unbounded input, with comment and string context checks.
+- Document checks recognize related updates outside the selected source paths in working, staged and committed modes.
+- Read-only task queries and help return without waiting for stdin. Runtime updates preserve existing Codex ownership records and user content.
+- CommonJS checks use the Node environment, and repeated tool-availability notices are grouped without hiding incomplete checks. Existing quality limits remain unchanged.
+
 ## What's new in v3.7.3-aug.1
 
 - Native Skills support per-host selection, updates, and removal. Empty selections survive reinstallation and routing changes; explicit legacy mode retains the bundled layout.
@@ -229,6 +237,8 @@ CCG installs a CommonJS Hook runtime and registers four handler scripts across f
 `SessionStart` derives an opaque key from the Claude Code `session_id` and exports it through `CLAUDE_ENV_FILE`. Every controller call and authority refresh uses that key. Agent prompts and wrapper heredocs inherit the parent Claude session binding; raw session IDs are not written to state, binding, or turn files.
 
 `task-state.js` is the only task lifecycle writer. Hook input, task files, and spec sections are size-bounded. Invalid task state, missing or oversized authoritative context, and quoted heredocs that cannot be bound to the wrapper command make the `PreToolUse` Hook return `permissionDecision: "deny"`, so the Agent or wrapper does not start without its task contract.
+
+The controller delegates transaction storage, task lifecycle, migration, recovery, and orphan management to internal `task-state-*.js` modules. Claude and Codex install the complete runtime from one shared file list, and doctor checks each required module. These modules load through the existing controller entry point and add no Hook registrations.
 
 ## Task System
 
@@ -427,4 +437,4 @@ MIT
 
 ---
 
-v3.7.3-aug.1 | [Issues](https://github.com/Pyrokine/ccg-workflow/issues) | [Contributing](./CONTRIBUTING.md) | [Releasing](./RELEASING.md)
+v3.7.3-aug.2 | [Issues](https://github.com/Pyrokine/ccg-workflow/issues) | [Contributing](./CONTRIBUTING.md) | [Releasing](./RELEASING.md)

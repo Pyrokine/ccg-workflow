@@ -5,15 +5,14 @@ import type { InstallContext } from './installer-context'
 import { lstatOptional } from './installer-codex-files'
 import { asRecord, parseJsonRecord } from './installer-codex-content'
 import { injectHookConfig } from './installer-template'
+import { TASK_STATE_RUNTIME_FILES } from './installer-data'
 
 export function isCcgHookCommand(command: unknown): boolean {
   return typeof command === 'string' && command.replace(/\\/g, '/').includes('/hooks/ccg/')
 }
 
 const HOOK_FILES = [
-  'package.json',
-  'task-utils.js',
-  'task-state.js',
+  ...TASK_STATE_RUNTIME_FILES,
   'workflow-state.js',
   'session-start.js',
   'subagent-context.js',

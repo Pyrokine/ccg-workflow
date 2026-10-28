@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import fs from 'fs-extra'
 import { afterEach, expect } from 'vitest'
+import { TASK_STATE_RUNTIME_FILES } from '../installer-data'
 
 export type JsonObject = Record<string, unknown>
 
@@ -243,7 +244,7 @@ export async function installCodexHookRuntime(): Promise<string> {
   const runtimeHooksDir = join(runtimeDir, 'ccg')
   await fs.ensureDir(runtimeHooksDir)
   await fs.copyFile(codexHookSource, hookPath)
-  for (const file of ['package.json', 'task-utils.js', 'task-state.js']) {
+  for (const file of TASK_STATE_RUNTIME_FILES) {
     await fs.copyFile(join(hooksDir, file), join(runtimeHooksDir, file))
   }
   return hookPath

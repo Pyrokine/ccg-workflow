@@ -23,11 +23,17 @@ node /path/to/verify-security/scripts/security_scanner.js src --base HEAD~1 --ex
 
 支持单文件、目录和多个目标，目标相对当前工作目录解析，省略目标时扫描当前目录，重叠文件只扫描一次
 
-默认排除 Git 元数据、依赖、虚拟环境、构建和测试目录，`--exclude` 追加目录名称；显式指定的文件仍会检查，`--` 后的参数全部作为路径处理，`--help` 只显示用法
+默认排除 Git 元数据、依赖、虚拟环境、构建和测试目录，包括 `target`、`vendor`、`third_party` 和 `third-party`；`--exclude` 追加目录名称，显式指定的文件仍会检查，`--` 后的参数全部作为路径处理，`--help` 只显示用法
 
 ## 检查范围
 
-规则按源码后缀匹配，发现属于待复核的代码模式，结合调用链判断输入来源、已有校验和最终效果
+规则按源码后缀匹配，`.mjs`／`.cjs` 使用 JavaScript 规则，`.mts`／`.cts` 使用 TypeScript 规则；无后缀 Shell 文件按 `sh`、`bash`、`dash`、`ksh` 或 `zsh` 的 shebang 识别，也支持 `/usr/bin/env` 和 `env -S`
+
+Rust 当前检查硬编码凭证、AWS Key、私钥及 `Command::new` 调用命令解释器的模式；Shell 当前检查硬编码凭证、AWS Key、私钥及含变量的 `eval`／`sh -c` 类调用，结果只代表这些模式的检查范围
+
+C／C++ 覆盖 `.c`、`.cc`、`.cpp`、`.cxx`、`.h`、`.hh`、`.hpp` 和 `.hxx`，检查硬编码凭证、动态 `system`／`popen` 调用、`gets` 及字面格式中未限宽的 scanf 字符串转换，过滤注释、普通字符串与原始字符串中的调用示例；规则按单行模式识别，缓冲区容量与输入来源通过调用链复核
+
+发现属于待复核的代码模式，结合调用链判断输入来源、已有校验和最终效果
 
 | 类别 | 检查模式 | 严重度 |
 |---|---|---|
@@ -42,6 +48,10 @@ node /path/to/verify-security/scripts/security_scanner.js src --base HEAD~1 --ex
 | 断点 | JavaScript debugger、Python breakpoint 和 pdb.set_trace | Low |
 
 普通 `console.log()` 不作为安全问题，控制台输出策略由项目 lint 配置决定；断点规则过滤普通字符串和注释示例，整体扫描仍是模式检查，不执行数据流或语义证明
+
+`context` 区分 `source`、`literal`、`test_code` 和 `test_fixture`，后两项表示测试路径中的执行代码与字符串样本；`review_required` 标记需要核实用途，固定隐私标记、合成凭证和故意构造的 XSS 样本按实际用途复核，分类保留原严重度和退出码
+
+构造 `Path` 或比较 `readlink` 目标本身不作为文件访问，来自输入的 `open`、`Path(...).read_text()` 等文件操作继续报告
 
 复核安全发现时，沿调用链确认真实行为，并在项目已有设计或安全文档中记录威胁、决策、信任边界和接受的限制
 

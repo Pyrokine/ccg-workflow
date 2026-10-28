@@ -1,7 +1,8 @@
+import { spawnSync } from 'node:child_process'
 import { symlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { packageRoot, distributions, fixture, write, run, lintProject } from './quality-gates-fixtures'
+import { packageRoot, distributions, scripts, fixture, write, run, lintProject } from './quality-gates-fixtures'
 
 describe.each(distributions)('%s quality gates', (distribution) => {
   describe('language mode integration', () => {
@@ -82,6 +83,59 @@ describe.each(distributions)('%s quality gates', (distribution) => {
       },
       20000
     )
+
+    it('overrides Ruff target version through the public CLI only when requested', ({ skip }) => {
+      if (spawnSync('ruff', ['--version']).error) return skip()
+      const root = fixture()
+      write(root, 'ruff.toml', 'target-version = "py311"\nlint.select = ["UP017"]\n')
+      const source = write(
+        root,
+        'source.py',
+        'from datetime import datetime, timezone\nvalue = datetime.now(timezone.utc)\n'
+      )
+      expect(run(distribution, 'quality', [source, '--language-checks'], root).status).toBe(1)
+      for (const args of [['--target-version', 'py38'], ['--target-version=py38']]) {
+        const result = run(distribution, 'quality', [source, '--language-checks', ...args], root)
+        expect(result.status).toBe(0)
+        expect(result.output).toMatchObject({ complete: true, passed: true })
+      }
+      const invalid = run(distribution, 'quality', [source, '--language-checks', '--target-version'], root)
+      expect(invalid.status).toBe(2)
+      expect(invalid.output.error).toContain('--target-version requires')
+    })
+
+    it.each(['quality', 'security'] as const)('groups %s baseline hints only in text output', (gate) => {
+      const root = fixture()
+      for (const name of ['one.js', 'nested/two.js', 'nested/three.js']) write(root, name, 'export const value = 1;\n')
+      const json = run(distribution, gate, [root], root)
+      expect(json.status).toBe(0)
+      expect(json.output.baseline).toHaveLength(3)
+      const text = spawnSync(process.execPath, [join(packageRoot, distribution, scripts[gate]), root], {
+        cwd: root,
+        encoding: 'utf8',
+      })
+      expect(text.status).toBe(json.status)
+      expect(text.stdout.match(/Git repository is unavailable/g)).toHaveLength(1)
+    })
+
+    it('groups missing compilation databases by project and preserves JSON coverage', () => {
+      const root = fixture()
+      const sources = ['one.cpp', 'two.cpp', 'three.cpp'].map((name) => write(root, name, 'int value = 1;\n'))
+      const json = run(distribution, 'quality', [...sources, '--language-checks'], root)
+      expect(json.status).toBe(2)
+      expect(json.output.uncovered).toHaveLength(3)
+      const text = spawnSync(
+        process.execPath,
+        [join(packageRoot, distribution, scripts.quality), ...sources, '--language-checks'],
+        {
+          cwd: root,
+          encoding: 'utf8',
+        }
+      )
+      expect(text.status).toBe(2)
+      expect(text.stdout.match(/No compilation database was found/g)).toHaveLength(1)
+      expect(text.stdout).toContain('(3 个文件)')
+    })
 
     it('retains real JavaScript syntax errors as completed failed analysis', () => {
       const root = lintProject()

@@ -277,7 +277,7 @@ function generateReadme(info) {
       `    // 初始化\n    obj := ${info.name.toLowerCase()}.New()\n` +
       `\n    // 执行操作\n    result := obj.Process()\n    println(result)\n}`,
     Rust:
-      `use ${info.name.toLowerCase()}::*;\n\nfn main() {\n` +
+      `use ${info.name.toLowerCase().replace(/-/g, '_')}::*;\n\nfn main() {\n` +
       `    // 初始化\n    let obj = Object::new();\n\n` +
       `    // 执行操作\n    let result = obj.process();\n` +
       `    println!("{}", result);\n}`,

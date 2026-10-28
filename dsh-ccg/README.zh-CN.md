@@ -214,6 +214,8 @@ ccg_build   子代理  model: deepseek-v4-flash  ← worker 档
 
 扫描器和共享库与根 CCG 分发保持一致，质量 Skill 的执行指引默认使用语言检查；缺工具、配置错误和输入未覆盖时报告未完成，直接调用脚本且省略 `--language-checks` 时保留文本规则检查
 
+语言检查按目标工程调用 ESLint、TypeScript、Ruff、clang-tidy、Go vet 或 Cargo／Clippy，要求已有工具与项目配置，Go 和 Rust 离线执行并使用临时构建目录，通过原生文件清单确认覆盖，排除文件仍报告未完成；C／C++ 安全规则检查凭证、动态命令和不限长输入，变更分析按所选 Git 模式检查关联文档，包含请求源码范围外的相关文档
+
 质量与安全扫描对照 Git `HEAD` 或 `--base` 区分新增和既有的内置规则发现；外部诊断没有实测基线时保留来源未判定，既有阻断问题仍参与结果，在 `ccg_review` 前执行检查，并将覆盖情况和发现交给审查模型
 
 `skills: false` 可以一个都不发布；`skillDirs` 可以再加入你自己的 skill 根目录。

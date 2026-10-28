@@ -36,6 +36,32 @@ describe.each(distributions)('%s language tool execution', (distribution) => {
     expect(runLanguageChecks([source], limits).checks[0].status).toBe('failed')
   })
 
+  it('passes an explicit Ruff target version to inventory and diagnostics', () => {
+    const directory = fixture()
+    const source = write(directory, 'source.py', 'answer = 42\n')
+    const capture = join(directory, 'argv.jsonl')
+    fakeExecutable(
+      directory,
+      'ruff',
+      `
+      require('node:fs').appendFileSync(${JSON.stringify(capture)}, JSON.stringify(process.argv.slice(2)) + '\\n');
+      if (process.argv.includes('--show-files')) console.log(${JSON.stringify(source)});
+      else console.log('[]');
+    `
+    )
+    expect(runLanguageChecks([source], limits, 'py38').checks[0].status).toBe('passed')
+    const calls = readFileSync(capture, 'utf8')
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as string[])
+    expect(calls).toHaveLength(2)
+    for (const args of calls)
+      expect(args.slice(args.indexOf('--target-version'), args.indexOf('--target-version') + 2)).toEqual([
+        '--target-version',
+        'py38',
+      ])
+  })
+
   it('reports Ruff exclusions and configuration failure', ({ skip }) => {
     const available = spawnSync('ruff', ['--version'], { encoding: 'utf8' })
     if (available.error) return skip()

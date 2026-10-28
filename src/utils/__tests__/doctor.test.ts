@@ -18,6 +18,7 @@ vi.mock('node:child_process', async () => ({
 }))
 
 import { doctor, status } from '../../commands/doctor'
+import { TASK_STATE_RUNTIME_FILES } from '../installer-data'
 
 const execFileSyncMock = vi.mocked(execFileSync)
 const installDir = join(testHome, '.claude')
@@ -27,8 +28,7 @@ const hookScripts = [
   'session-start.js',
   'skill-router.js',
   'subagent-context.js',
-  'task-state.js',
-  'task-utils.js',
+  ...TASK_STATE_RUNTIME_FILES,
   'workflow-state.js',
 ]
 
@@ -50,7 +50,11 @@ async function createInstalledFixture(): Promise<void> {
   await fs.writeFile(join(installDir, 'commands', 'ccg', 'go.md'), '# go\n')
 
   await fs.ensureDir(join(installDir, 'hooks', 'ccg'))
-  await Promise.all(hookScripts.map((name) => fs.writeFile(join(installDir, 'hooks', 'ccg', name), '// hook\n')))
+  await Promise.all(
+    hookScripts.map((name) =>
+      fs.copyFile(join(import.meta.dirname, '../../../templates/hooks', name), join(installDir, 'hooks', 'ccg', name))
+    )
+  )
 
   const hookEntry = (names: string[]) => ({
     matcher: '',
@@ -71,7 +75,7 @@ async function createInstalledFixture(): Promise<void> {
     join(installDir, '.ccg', 'config.toml'),
     [
       '[general]',
-      'version = "3.7.3-aug.1"',
+      'version = "3.7.3-aug.2"',
       'language = "zh-CN"',
       '',
       '[routing.frontend]',
@@ -112,9 +116,9 @@ async function createCodexModeFixture(): Promise<void> {
     fs.writeFile(join(codexHome, 'agents', 'ccg-review.toml'), ''),
     fs.writeFile(join(codexHome, 'agents', 'ccg-research.toml'), ''),
     fs.writeFile(join(codexHome, 'hooks', 'ccg-workflow.py'), ''),
-    fs.writeFile(join(codexHome, 'hooks', 'ccg', 'package.json'), '{}\n'),
-    fs.writeFile(join(codexHome, 'hooks', 'ccg', 'task-utils.js'), ''),
-    fs.writeFile(join(codexHome, 'hooks', 'ccg', 'task-state.js'), ''),
+    ...TASK_STATE_RUNTIME_FILES.map((name) =>
+      fs.copyFile(join(import.meta.dirname, '../../../templates/hooks', name), join(codexHome, 'hooks', 'ccg', name))
+    ),
     fs.writeJson(join(codexHome, 'hooks.json'), {
       hooks: {
         UserPromptSubmit: [
@@ -153,8 +157,8 @@ describe('doctor', () => {
 
     const output = await captureConsole(doctor)
 
-    expect(output).toContain('CCG Doctor v3.7.3-aug.1')
-    expect(output).toContain('6/6 scripts')
+    expect(output).toContain('CCG Doctor v3.7.3-aug.2')
+    expect(output).toContain(`${hookScripts.length}/${hookScripts.length} scripts`)
     expect(output).toContain('5/5 events')
     expect(output).toContain('No failures;')
   })
@@ -299,7 +303,7 @@ describe('status', () => {
 
     const output = await captureConsole(status)
 
-    expect(output).toContain('3.7.3-aug.1')
+    expect(output).toContain('3.7.3-aug.2')
     expect(output).toContain('(matches)')
     expect(output).toContain('v5.15.0-aug.1')
     expect(output).toContain('schema=v2, open=1, bindings=1')

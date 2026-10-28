@@ -2,7 +2,9 @@ import { createHash, randomUUID } from 'node:crypto'
 import fs from 'fs-extra'
 import { dirname, join } from 'pathe'
 
-export const TASK_STATE_RUNTIME_FILES = ['package.json', 'task-utils.js', 'task-state.js']
+import { TASK_STATE_RUNTIME_FILES } from './installer-data'
+
+export { TASK_STATE_RUNTIME_FILES } from './installer-data'
 export const CODEX_MANAGED_BLOCK_START_PREFIX = '<!-- CCG:START'
 export const CODEX_MANAGED_BLOCK_START =
   '<!-- CCG:START — Managed by CCG Workflow. Do not edit this block manually. -->'

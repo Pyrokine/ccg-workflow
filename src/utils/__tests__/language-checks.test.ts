@@ -15,6 +15,59 @@ import {
 } from './language-checks-fixtures'
 import type { Analyze } from './language-checks-fixtures'
 
+function fakeTypeScriptCli(directory: string, kind: string): string {
+  const diagnostic = 'console.log("source.ts(1,14): error TS2322: synthetic_private_message"); process.exit(2);'
+  fakeEslint(directory)
+  write(
+    directory,
+    'node_modules/typescript/package.json',
+    JSON.stringify({
+      exports: { '.': './version.cjs' },
+      bin: { tsc: kind === 'outside-package' ? '../../outside.cjs' : './bin/tsc.cjs' },
+    })
+  )
+  write(directory, 'node_modules/typescript/version.cjs', 'module.exports = {version:"7.0.2"};')
+  write(directory, 'outside.cjs', 'throw new Error("must not execute");')
+  return write(
+    directory,
+    'node_modules/typescript/bin/tsc.cjs',
+    `
+        const fs = require('node:fs'), path = require('node:path');
+        const args = process.argv.slice(2);
+        if (!args.includes('--noEmit') || !args.includes('--tsBuildInfoFile')) process.exit(3);
+        const info = args[args.indexOf('--tsBuildInfoFile') + 1];
+        if (info.startsWith(${JSON.stringify(directory)})) process.exit(3);
+        if (args.includes('--showConfig')) {
+          ${kind === 'config' ? 'process.exit(1);' : ''}
+          console.log(JSON.stringify({files:['source.ts']}));
+        } else if (args.includes('--listFilesOnly')) console.log(path.resolve('source.ts'));
+        else {
+          ${kind === 'signal' ? "process.kill(process.pid, 'SIGTERM');" : ''}
+          ${kind === 'malformed' ? 'console.log("invalid output");' : ''}
+          ${kind === 'error' ? diagnostic : ''}
+        }
+      `
+  )
+}
+
+function timeoutTypeScriptCli(cli: string): void {
+  const cp = loadModule('node:child_process') as typeof import('node:child_process')
+  const nativeSpawn = cp.spawnSync
+  vi.spyOn(cp, 'spawnSync').mockImplementation((command, args, options) => {
+    if (args?.[0] === cli)
+      return {
+        error: Object.assign(new Error('private timeout'), { code: 'ETIMEDOUT' }),
+        status: null,
+        signal: 'SIGKILL',
+        pid: 0,
+        output: [],
+        stdout: '',
+        stderr: '',
+      }
+    return nativeSpawn(command, args, options)
+  })
+}
+
 function runTypeScriptCli(directory: string) {
   return spawnSync(
     process.execPath,
@@ -92,6 +145,84 @@ describe.each(distributions)('%s language tool execution', (distribution) => {
     expect(result.checks[0]).toMatchObject({ tool: 'eslint', status: 'passed', files: [source] })
     expect(result.uncovered).toEqual([])
   })
+
+  it.each([false, true])('uses same-repository parent ESLint coverage: ignored=%s', (ignored) => {
+    const directory = fixture()
+    mkdirSync(join(directory, '.git'))
+    write(directory, 'package.json', '{}')
+    dependency(directory, 'eslint')
+    write(
+      directory,
+      'eslint.config.cjs',
+      "module.exports = [{ignores:['extension/ignored.js']}, {files:['extension/**/*.js']}];"
+    )
+    const child = join(directory, 'extension')
+    write(child, 'package.json', '{}')
+    const source = write(child, ignored ? 'ignored.js' : 'source.js', 'export const value = 1;\n')
+    const result = runLanguageChecks([source], limits)
+    expect(result.checks[0]).toMatchObject({
+      tool: 'eslint',
+      project_root: directory,
+      status: ignored ? 'unavailable' : 'passed',
+      files: ignored ? [] : [source],
+    })
+    expect(result.uncovered).toHaveLength(ignored ? 1 : 0)
+  })
+
+  it('keeps missing same-repository parent dependencies unavailable', () => {
+    const directory = fixture()
+    mkdirSync(join(directory, '.git'))
+    write(directory, 'package.json', '{}')
+    write(directory, 'eslint.config.cjs', 'module.exports = [{}];')
+    write(directory, 'extension/package.json', '{}')
+    const source = write(directory, 'extension/source.js', 'export const value = 1;\n')
+    expect(runLanguageChecks([source], limits).checks[0]).toMatchObject({
+      status: 'unavailable',
+      reason: 'Project-local tool dependency was not found',
+    })
+  })
+
+  it('resolves package exports and reports a TypeScript package without the compiler API', () => {
+    const directory = fixture()
+    fakeEslint(directory)
+    write(directory, 'node_modules/typescript/package.json', '{"exports":{".":"./version.cjs"}}')
+    write(directory, 'node_modules/typescript/version.cjs', 'module.exports = {version:"7.0.2"};')
+    write(directory, 'tsconfig.json', '{"files":["source.ts"]}')
+    const source = write(directory, 'source.ts', 'export const value = 1;\n')
+    expect(runLanguageChecks([source], limits).checks).toContainEqual(
+      expect.objectContaining({
+        tool: 'typescript',
+        status: 'unavailable',
+        reason: 'Project-local TypeScript package provides neither the compiler API nor bin.tsc',
+      })
+    )
+  })
+
+  it.each(['clean', 'error', 'config', 'signal', 'malformed', 'timeout', 'outside-package'])(
+    'uses only the selected local TypeScript CLI and preserves %s semantics',
+    (kind) => {
+      const directory = fixture()
+      const cli = fakeTypeScriptCli(directory, kind)
+      if (kind === 'timeout') timeoutTypeScriptCli(cli)
+      write(directory, 'tsconfig.json', '{"files":["source.ts"]}')
+      const source = write(directory, 'source.ts', 'export const value = 1;\n')
+      const outside = write(directory, 'outside.ts', 'export const value = 2;\n')
+      const before = files(directory)
+      const result = runLanguageChecks([source, outside], limits)
+      const check = result.checks.find((entry) => entry.tool === 'typescript')
+      if (!check) throw new Error('TypeScript check is missing')
+      expect(check.status).toBe(kind === 'clean' ? 'passed' : kind === 'error' ? 'failed' : 'unavailable')
+      if (kind === 'clean' || kind === 'error') {
+        expect(check.files).toEqual([source])
+        expect(check.reason).toContain('TypeScript CLI')
+        expect(result.uncovered).toEqual([expect.objectContaining({ path: outside })])
+      }
+      if (kind === 'timeout') expect(check.reason).toBe('Analysis timed out')
+      expect(result.issues).toHaveLength(kind === 'error' ? 1 : 0)
+      expect(JSON.stringify(result)).not.toContain('synthetic_private_message')
+      expect(files(directory)).toEqual(before)
+    }
+  )
 
   it.each(['package', 'repository'])(
     'does not inherit non-workspace ancestor resources across a %s boundary',

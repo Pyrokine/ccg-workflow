@@ -4,6 +4,9 @@ import { join } from 'pathe'
 import { parse as parseToml } from 'smol-toml'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installCodexMode, uninstallCodexMode } from '../installer'
+import { spawnSync } from 'node:child_process'
+import { TASK_STATE_RUNTIME_FILES, type CodexModeManifest } from '../installer-codex-files'
+import { parseCodexModeManifest } from '../installer-codex-manifest'
 
 vi.mock('node:os', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:os')>()
@@ -70,6 +73,23 @@ function countCcgHooks(value: unknown): number {
   return (command.includes('/.codex/hooks/ccg-workflow.py') ? 1 : 0) + countCcgHooks(Object.values(record))
 }
 
+function expectCodexController(): void {
+  const controller = spawnSync(
+    process.execPath,
+    [
+      join(codexHome, 'hooks', 'ccg', 'task-state.js'),
+      'resolve',
+      '--root',
+      tmpHome,
+      '--session-key',
+      `codex-${'a'.repeat(64)}`,
+    ],
+    { encoding: 'utf8' }
+  )
+  expect(controller.status, controller.stderr).toBe(0)
+  expect(JSON.parse(controller.stdout)).toMatchObject({ ok: true, operation: 'resolve' })
+}
+
 async function readConfig(): Promise<CodexConfig> {
   return parseToml(await fs.readFile(configPath, 'utf-8')) as CodexConfig
 }
@@ -133,12 +153,15 @@ describe('Codex mode installation', () => {
       'agents/ccg-review.toml',
       'agents/ccg-research.toml',
       'hooks/ccg-workflow.py',
-      'hooks/ccg/package.json',
-      'hooks/ccg/task-utils.js',
-      'hooks/ccg/task-state.js',
+      ...TASK_STATE_RUNTIME_FILES.map((file) => `hooks/ccg/${file}`),
     ]) {
       expect(await fs.pathExists(join(codexHome, relativePath)), relativePath).toBe(true)
     }
+    expectCodexController()
+    const manifest = await fs.readJson(join(codexHome, '.ccg', 'codex-mode.json'))
+    expect(manifest.files.map((file: JsonRecord) => file.relativePath)).toEqual(
+      expect.arrayContaining(TASK_STATE_RUNTIME_FILES.map((file) => `hooks/ccg/${file}`))
+    )
     const implementAgent = await fs.readFile(join(codexHome, 'agents', 'ccg-implement.toml'), 'utf-8')
     expect(implementAgent).toContain('[features]\nmulti_agent = false\nmulti_agent_v2 = false')
     expect(implementAgent).not.toContain('[features.multi_agent_v2]')
@@ -146,6 +169,47 @@ describe('Codex mode installation', () => {
     const backups = await fs.readdir(join(codexHome, '.ccg', 'backups'))
     expect(backups).toHaveLength(1)
     expect(await fs.pathExists(join(codexHome, '.ccg', 'backups', backups[0], 'manifest.json'))).toBe(true)
+  })
+
+  it.each(['upgrade', 'uninstall'])('accepts the legacy seven-file ownership manifest during %s', async (action) => {
+    await writeUserFiles()
+    expect((await installCodexMode()).success).toBe(true)
+    const manifestPath = join(codexHome, '.ccg', 'codex-mode.json')
+    const manifest = (await fs.readJson(manifestPath)) as CodexModeManifest
+    const added = manifest.files.filter((file) => file.relativePath.startsWith('hooks/ccg/task-state-'))
+    for (const file of added) await fs.remove(join(codexHome, file.relativePath))
+    manifest.files = manifest.files.filter((file) => !added.includes(file))
+    expect(manifest.files).toHaveLength(7)
+    await fs.writeJson(manifestPath, manifest)
+    const result = action === 'upgrade' ? await installCodexMode() : await uninstallCodexMode()
+    expect(result.success).toBe(true)
+    if (action === 'upgrade') {
+      expectCodexController()
+      const updated = (await fs.readJson(manifestPath)) as CodexModeManifest
+      expect(updated.files).toHaveLength(4 + TASK_STATE_RUNTIME_FILES.length)
+      expect(updated.files.slice(0, 7).map((file) => file.original)).toEqual(
+        manifest.files.map((file) => file.original)
+      )
+    } else {
+      expect(await fs.pathExists(manifestPath)).toBe(false)
+      for (const file of manifest.files) expect(await fs.pathExists(join(codexHome, file.relativePath))).toBe(false)
+    }
+    expect(await fs.readFile(authPath, 'utf8')).toBe(userAuth)
+  })
+
+  it('rejects partial current and mixed legacy ownership manifests', async () => {
+    await writeUserFiles()
+    expect((await installCodexMode()).success).toBe(true)
+    const manifest = (await fs.readJson(join(codexHome, '.ccg', 'codex-mode.json'))) as CodexModeManifest
+    const partial = { ...manifest, files: manifest.files.slice(0, -1) }
+    expect(() => parseCodexModeManifest(JSON.stringify(partial))).toThrow('does not cover every managed runtime file')
+    const mixed = {
+      ...manifest,
+      files: manifest.files
+        .filter((file) => !file.relativePath.startsWith('hooks/ccg/task-state-'))
+        .concat(manifest.files.at(-1)!),
+    }
+    expect(() => parseCodexModeManifest(JSON.stringify(mixed))).toThrow('does not cover every managed runtime file')
   })
 
   it('updates one managed block and normalizes duplicate CCG Hooks without removing user Hooks', async () => {
@@ -355,6 +419,9 @@ describe('Codex mode uninstall', () => {
     expect(await fs.pathExists(join(codexHome, 'hooks', 'ccg-workflow.py'))).toBe(false)
     expect(await fs.pathExists(join(codexHome, 'agents', 'ccg-implement.toml'))).toBe(false)
     expect(await fs.pathExists(join(codexHome, '.ccg', 'codex-mode.json'))).toBe(false)
+    for (const file of TASK_STATE_RUNTIME_FILES) {
+      expect(await fs.pathExists(join(codexHome, 'hooks', 'ccg', file)), file).toBe(false)
+    }
   })
 
   it('preserves a pre-existing sponsor provider that already matches the CCG specification', async () => {

@@ -63,6 +63,14 @@ CCG 是 Claude Code 的工作流引擎。默认前端、后端和审查都使用
 
 Gemini CLI 已禁用：2026-06-18 后 consumer OAuth 请求不再处理。旧 Gemini 路由迁移为 Grok，`agy` 保留为 Antigravity 别名。
 
+## v3.7.3-aug.2 更新
+
+- Go／Rust 质量检查离线使用工程原生工具，明确报告构建条件排除的文件；支持 TypeScript 7 CLI，Ruff target version 保持可选，沿用工程配置
+- C／C++ 安全规则覆盖凭证、动态命令与无界输入，检查时区分注释和字符串上下文
+- 文档检查在 working、staged、committed 三种模式下识别所选源码路径之外的关联文档更新
+- 只读任务查询与帮助直接返回，写操作保留有界 stdin 校验；运行时升级保留既有 Codex 所有权记录和用户内容
+- CommonJS 检查使用 Node 环境，同一工具的重复环境提示合并显示，未完成检查仍明确报告，原有质量阈值保留
+
 ## v3.7.3-aug.1 更新
 
 - 原生 Skills 支持按使用端选择、更新与移除，重装及路由刷新保留空选，显式兼容模式继续使用原有目录
@@ -213,6 +221,8 @@ CCG 安装 CommonJS Hook runtime，并在 `~/.claude/settings.json` 的五类 Ho
 `SessionStart` 从 Claude Code `session_id` 派生 opaque key，并通过 `CLAUDE_ENV_FILE` 导出。所有 controller 调用和 authority refresh 都使用该 key。Agent prompt 与 wrapper heredoc 继承父 Claude session binding；原始 session ID 不写入 state、binding 或 turn 文件。
 
 `task-state.js` 是唯一允许修改任务生命周期的入口。Hook 输入、任务文件和 spec section 都有大小限制。任务状态无效、权威上下文缺失或超限、quoted heredoc 无法绑定到 wrapper command 时，`PreToolUse` Hook 返回 `permissionDecision: "deny"`，Agent 或 wrapper 不会在缺少任务契约的情况下启动。
+
+内部 `task-state-*.js` 模块分别处理事务存储、任务生命周期、迁移恢复和孤立数据管理，Claude 与 Codex 从同一文件清单安装完整运行时，doctor 逐项检查依赖，所有模块通过现有控制器入口加载，Hook 注册保持不变
 
 ## Task 系统
 
@@ -407,4 +417,4 @@ MIT
 
 ---
 
-v3.7.3-aug.1 | [Issues](https://github.com/Pyrokine/ccg-workflow/issues) | [Contributing](./CONTRIBUTING.md) | [Releasing](./RELEASING.md)
+v3.7.3-aug.2 | [Issues](https://github.com/Pyrokine/ccg-workflow/issues) | [Contributing](./CONTRIBUTING.md) | [Releasing](./RELEASING.md)

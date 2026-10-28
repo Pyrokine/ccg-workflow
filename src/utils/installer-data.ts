@@ -1,5 +1,22 @@
 import type { WorkflowConfig } from '../types'
 
+export const TASK_STATE_RUNTIME_FILES = [
+  'package.json',
+  'task-utils.js',
+  'task-state.js',
+  'task-state-core.js',
+  'task-state-store.js',
+  'task-state-model.js',
+  'task-state-lifecycle.js',
+  'task-state-artifacts.js',
+  'task-state-recovery.js',
+  'task-state-backup.js',
+  'task-state-manifest.js',
+  'task-state-legacy.js',
+  'task-state-migration.js',
+  'task-state-orphans.js',
+]
+
 // ═══════════════════════════════════════════════════════
 // Command builder — adding a new command = 1 function call
 // ═══════════════════════════════════════════════════════

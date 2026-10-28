@@ -138,7 +138,7 @@ describe('bounded Hook stdin', () => {
       const root = await mkdtemp(join(tmpdir(), 'ccg-stdin-hooks-'))
       cleanupPaths.push(root)
       const args =
-        script === 'task-state.js' ? ['resolve', '--root', root, '--session-key', `claude-${'a'.repeat(64)}`] : []
+        script === 'task-state.js' ? ['start', '--root', root, '--session-key', `claude-${'a'.repeat(64)}`] : []
       const result = spawnSync(
         process.execPath,
         [

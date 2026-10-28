@@ -10,12 +10,12 @@ import { installSkills } from '../../utils/skill-manager'
 import { spawnSync } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { TASK_STATE_RUNTIME_FILES } from '../../utils/installer-data'
 
 let home: string
 let exec: ReturnType<typeof vi.fn<NonNullable<DoctorDependencies['exec']>>>
 const hookFiles = [
-  'task-utils.js',
-  'task-state.js',
+  ...TASK_STATE_RUNTIME_FILES,
   'workflow-state.js',
   'session-start.js',
   'subagent-context.js',
@@ -46,7 +46,12 @@ async function config(frontend = 'claude', backend = 'claude', review = ['gpt', 
 }
 async function claudeInstall() {
   await fs.outputFile(join(home, '.claude', 'commands', 'ccg.md'), '# CCG')
-  for (const name of hookFiles) await fs.outputFile(join(home, '.claude', 'hooks', 'ccg', name), '// hook')
+  await fs.ensureDir(join(home, '.claude', 'hooks', 'ccg'))
+  for (const name of hookFiles)
+    await fs.copyFile(
+      join(import.meta.dirname, '../../../templates/hooks', name),
+      join(home, '.claude', 'hooks', 'ccg', name)
+    )
   const hooks = Object.fromEntries(
     Object.entries(hookEvents).map(([event, names]) => [
       event,
@@ -77,12 +82,15 @@ async function codexInstall() {
     'agents/ccg-review.toml',
     'agents/ccg-research.toml',
     'hooks/ccg-workflow.py',
-    'hooks/ccg/package.json',
-    'hooks/ccg/task-utils.js',
-    'hooks/ccg/task-state.js',
   ]) {
     await fs.outputFile(join(home, '.codex', file), 'managed')
   }
+  await fs.ensureDir(join(home, '.codex', 'hooks', 'ccg'))
+  for (const name of TASK_STATE_RUNTIME_FILES)
+    await fs.copyFile(
+      join(import.meta.dirname, '../../../templates/hooks', name),
+      join(home, '.codex', 'hooks', 'ccg', name)
+    )
   await fs.outputJSON(join(home, '.codex', 'hooks.json'), {
     hooks: {
       UserPromptSubmit: [
@@ -265,7 +273,7 @@ describe('CCG doctor inventory', () => {
     const report = await collectDoctorReport(deps())
     expect(report.checks.find((c) => c.id === 'claude.hooks')).toMatchObject({
       status: 'fail',
-      detail: '5/6 scripts; missing: task-utils.js',
+      detail: `${hookFiles.length - 1}/${hookFiles.length} scripts; missing: task-utils.js`,
     })
     await fs.outputJSON(join(home, '.claude', 'settings.json'), {
       hooks: { UserPromptSubmit: [{ hooks: [{ type: 'command', command: 'node /wrong/hooks/ccg/skill-router.js' }] }] },
@@ -275,6 +283,22 @@ describe('CCG doctor inventory', () => {
       status: 'fail',
       detail: '0/6 handlers across 0/5 events in settings.json',
     })
+  })
+
+  it('reports missing controller dependencies in both host installations', async () => {
+    await config()
+    await claudeInstall()
+    await codexInstall()
+    for (const host of ['.claude', '.codex']) {
+      await fs.remove(join(home, host, 'hooks', 'ccg', 'task-state-store.js'))
+    }
+    const report = await collectDoctorReport(deps())
+    for (const id of ['claude.hooks', 'codex.agents']) {
+      expect(report.checks.find((check) => check.id === id)).toMatchObject({
+        status: 'fail',
+        detail: expect.stringContaining('task-state-store.js'),
+      })
+    }
   })
 
   it('outputs standalone JSON without ANSI or secrets and sets nonzero failure exit code', async () => {

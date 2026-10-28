@@ -46,6 +46,8 @@ skills/
 | `/ccg:verify-quality`  | Complex modules / refactoring               | Code quality metrics checking                 |
 | `/ccg:gen-docs`        | New module created                          | README.md & DESIGN.md skeleton generator      |
 
+Language checks use the target project's ESLint and TypeScript, Ruff, clang-tidy, Go vet, or Cargo/Clippy. Native file inventories determine coverage; platform or cfg exclusions remain incomplete. Go and Rust run offline with temporary build output, and require existing project metadata and cached dependencies. C/C++ security rules cover credentials, dynamic shell commands, and unbounded input. Related documentation is checked in the selected Git mode even when it is outside the requested source paths.
+
 ### Auto-trigger Rules
 
 ```

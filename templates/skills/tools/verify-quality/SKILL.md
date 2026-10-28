@@ -19,11 +19,14 @@ argument-hint: <扫描路径> [--base ref]
 node /path/to/verify-quality/scripts/quality_checker.js src --language-checks
 node /path/to/verify-quality/scripts/quality_checker.js src/main.ts src/components --language-checks --json
 node /path/to/verify-quality/scripts/quality_checker.js src --language-checks --base HEAD~1 -v
+node /path/to/verify-quality/scripts/quality_checker.js src --language-checks --target-version py38
 ```
 
 支持单文件、目录和多个目标，目标相对当前工作目录解析，省略目标时扫描当前目录，重叠文件只分析一次
 
-`--exclude vendor generated` 追加排除目录名称，默认排除 Git 元数据、依赖、虚拟环境和构建目录；显式指定的文件仍会检查，`--` 后的参数全部作为路径处理，`--help` 只显示用法
+`--exclude generated` 追加排除目录名称，默认排除 Git 元数据、依赖、虚拟环境和构建目录，包括 `target`、`vendor`、`third_party` 和 `third-party`；显式指定的文件仍会检查，`--` 后的参数全部作为路径处理，`--help` 只显示用法
+
+未支持的自定义构建配置显式返回 `UNSUPPORTED_TYPE`、零覆盖和退出码 2，使用对应构建工具验证其配置
 
 已有直接调用保持文本规则模式：
 
@@ -38,16 +41,24 @@ node /path/to/verify-quality/scripts/quality_checker.js src --json
 | 源码 | 执行检查 | 要求与范围 |
 |---|---|---|
 | JS／TS | ESLint 项目规则与 AST 阈值 | 使用目标项目或工作区的本地依赖及配置，保持源码和缓存不变 |
-| TypeScript 项目 | 类型、语法与项目诊断 | 使用项目本地 TypeScript compiler API，按实际 program 和 references 检查，不调用 emit |
-| Python | Ruff 项目规则 | 使用已安装的 Ruff，禁用修复和缓存，报告排除文件 |
+| TypeScript 项目 | 类型、语法与项目诊断 | 使用项目本地 compiler API；包仅提供 CLI 时，先枚举项目实际文件再检查诊断，支持 references，禁用 emit，build-info 仅写临时目录 |
+| Python | Ruff 项目规则 | 使用已安装的 Ruff，沿用项目目标版本；`--target-version py38` 显式覆盖，文件枚举与诊断使用相同目标，禁用修复和缓存，报告排除文件 |
 | C／C++ | clang-tidy 诊断 | 使用已安装工具和现有 compilation database，保留真实编译参数，仅分析有记录的输入 |
+| Go | go vet 诊断 | 使用 `go list -json -test` 确认包与测试文件覆盖，沿用平台、构建标签和有效 overlay，离线检查只读模块 |
+| Rust | Cargo／Clippy 诊断 | 使用现有 workspace、锁文件和依赖缓存，JSON 诊断与本次 rustc dep-info 共同确认覆盖，执行 `--frozen --offline --all-targets --no-deps` |
 | 其他受支持源码 | 文本规则 | 语言分析未覆盖，增强模式报告未完成 |
 
-Node 工具按项目及工作区边界查找，使用各工具要求的运行环境；工具缺失时报告未完成，由用户管理安装和项目配置
+Node 工具按项目及工作区边界查找，使用各工具要求的运行环境；嵌套包可使用同一 Git 仓库内父项目的 ESLint 配置和本地依赖，实际覆盖由 ESLint 判断，被忽略或未覆盖的文件仍报告未完成，查找止于仓库边界
+
+本地依赖按 Node package exports 解析，保留所选包的归属；TypeScript 优先使用 compiler API，缺少该 API 时调用同一包声明的 `bin.tsc`，包括 TypeScript 7 的 CLI，报告中的 `reason` 标明实际检查方式，缺少 CLI、配置错误或文件未覆盖时报告未完成，工具缺失时由用户管理安装和项目配置
 
 `checks[].files` 列出实际覆盖的请求文件，`requested_files`、`skipped_files` 和 `uncovered` 说明覆盖差异，类型检查也会报告同一项目中其他文件的诊断
 
-子工具使用明确参数、超时和输出上限执行，诊断只保留工具、规则、位置和严重度，消息和源码内容脱敏
+Go 将构建缓存与工作区临时副本写入私有目录，复用已有模块缓存中的只读资源；Rust 将产物写入私有 target 目录，沿用目标工程已有构建脚本和过程宏，检查结束后清理临时目录
+
+缺少 manifest、锁文件、依赖缓存、工具链或有效 overlay 时报告未完成；平台、构建标签或 cfg 排除的请求文件记录在 `uncovered`，目录归属本身不作为覆盖证据
+
+子工具使用明确参数、超时和输出上限执行，Go／Rust 每组命令共用 30 秒预算，单次输出上限为 8 MiB；POSIX 原生命令结束时清理其进程组，诊断只保留工具、规则、位置和严重度，消息和源码内容脱敏
 
 ## 文本指标与阈值
 
@@ -74,7 +85,7 @@ Node 工具按项目及工作区边界查找，使用各工具要求的运行环
 
 没有 Git 或 HEAD 时继续扫描，并报告基线不可用；显式指定无法使用的基线时报告未完成
 
-文本报告优先展示新增问题，既有问题汇总，`-v` 展开全部位置；JSON 保留全部发现和基线状态，既有 error 仍参与阻断
+文本报告优先展示新增问题，既有问题汇总，`-v` 展开全部位置；同工具、项目和原因的未覆盖提示及重复基线提示合并展示，JSON 保留逐文件覆盖、全部发现和基线状态，退出码不受展示方式影响，既有 error 仍参与阻断
 
 ## 结果与退出码
 

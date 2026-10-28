@@ -31,7 +31,7 @@ interface Result {
   issues: Issue[]
   uncovered: Array<{ path: string; reason: string }>
 }
-export type Analyze = (files: string[], thresholds: typeof limits) => Result
+export type Analyze = (files: string[], thresholds: typeof limits, targetVersion?: string) => Result
 const cleanup = new Set<string>()
 
 export function fixture(): string {

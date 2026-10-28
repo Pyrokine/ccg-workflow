@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 
 const SEVERITY_ORDER = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
+const CPP_EXTENSIONS = ['.c', '.cc', '.cpp', '.cxx', '.h', '.hh', '.hpp', '.hxx'];
 
 // prettier-ignore
 const SECURITY_RULES = [
@@ -46,11 +47,13 @@ const SECURITY_RULES = [
   {
     id: 'HARDCODED_SECRET', category: '敏感信息',
     severity: 'high',
-    pattern: /(?<!\w)(password|passwd|pwd|secret|api_key|apikey|token|auth_token)\s*=\s*["'][^"']{8,}["']/i,
+    pattern: new RegExp(
+      String.raw`(?<!\w)(password|passwd|pwd|secret|api_key|apikey|token|auth_token)` +
+      String.raw`\s*(?:\[\s*\d*\s*\])?\s*(?::\s*&?(?:str|String)\s*)?=\s*["'][^"']{8,}["']`, 'i'),
     excludePattern: /(example|placeholder|changeme|xxx|your[_-]|TODO|FIXME|<.*>|\*{3,})/i,
     extensions: [
       '.py', '.js', '.ts', '.go', '.java', '.php',
-      '.rb', '.yaml', '.yml', '.json', '.env',
+      '.rb', '.rs', '.sh', '.bash', '.yaml', '.yml', '.json', '.env', ...CPP_EXTENSIONS,
     ],
     message: '可能存在硬编码密钥/密码',
     recommendation: '使用环境变量或密钥管理服务',
@@ -114,11 +117,68 @@ const SECURITY_RULES = [
     id: 'PATH_TRAVERSAL', category: '路径遍历',
     severity: 'high',
     pattern: new RegExp(
-      '(open|read|write|Path|os\\.path\\.join)\\s*\\([^\\n]*' +
+      '(open|read|write|os\\.path\\.join)\\s*\\([^\\n]*' +
       '(request|input|argv|args|params|query|form|path_param)\\b', 'i'),
     extensions: ['.py'],
     message: '可能存在路径遍历风险',
     recommendation: '验证并规范化用户输入的路径',
+  },
+  {
+    id: 'PATHLIB_INPUT_IO', category: '路径遍历', severity: 'high',
+    pattern: new RegExp(String.raw`\bPath\s*\([^\n]*(request|input|argv|args|params|query|form|path_param)\b` +
+      String.raw`[^\n]*\)\s*\.(open|read_text|read_bytes|write_text|write_bytes|unlink|rmdir)\s*\(`, 'i'),
+    extensions: ['.py'],
+    message: '来自输入的 Path 被用于文件操作',
+    recommendation: '验证并限制文件访问范围',
+  },
+  {
+    id: 'SHELL_DYNAMIC_EXEC', category: '注入', severity: 'critical',
+    pattern: /(?:^|[;|&]\s*|\s)(?:eval\s+[^\n]*\$|(?:sh|bash|dash|ksh|zsh)\s+-c\s+[^\n]*\$)/,
+    extensions: ['.sh', '.bash'],
+    message: 'Shell 将动态内容作为命令执行',
+    recommendation: '使用固定程序和独立参数，验证动态输入',
+  },
+  {
+    id: 'RUST_SHELL_COMMAND', category: '注入', severity: 'critical',
+    pattern: /Command\s*::\s*new\s*\(\s*"(?:sh|bash|cmd(?:\.exe)?|powershell(?:\.exe)?)"\s*\)/,
+    extensions: ['.rs'],
+    message: 'Rust 通过命令解释器执行命令，需复核参数来源',
+    recommendation: '直接调用目标程序并独立传递参数',
+  },
+  {
+    id: 'C_DYNAMIC_COMMAND', category: '注入', severity: 'critical',
+    pattern: /(?<![\w.])(?:system|_wsystem|popen|_popen)\s*\(\s*[^\s),]/,
+    extensions: CPP_EXTENSIONS,
+    codeOnly: true,
+    message: '命令解释器调用包含动态表达式，需复核输入来源',
+    recommendation: '直接调用固定程序并独立传递参数',
+  },
+  {
+    id: 'C_UNBOUNDED_INPUT', category: '输入', severity: 'high',
+    pattern: /(?<![\w.])(?:gets|_getws)\s*\(/,
+    extensions: CPP_EXTENSIONS,
+    codeOnly: true,
+    message: '输入函数未限制写入长度',
+    recommendation: '使用带缓冲区长度的输入函数并检查返回值',
+  },
+  {
+    id: 'C_UNBOUNDED_SCANF', category: '输入', severity: 'high',
+    pattern: /(?<![\w.])(?:scanf|wscanf)\s*\(\s*L?"((?:\\.|[^"\\])*)"/,
+    extensions: CPP_EXTENSIONS,
+    codePrefix: true,
+    unboundedFormat: true,
+    message: 'scanf 字符串转换未限制字段宽度',
+    recommendation: '按目标缓冲区容量设置字段宽度并检查返回值',
+  },
+  {
+    id: 'C_UNBOUNDED_SCANF_SOURCE', category: '输入', severity: 'high',
+    pattern: new RegExp(String.raw`(?<![\w.])(?:fscanf|sscanf|fwscanf|swscanf)\s*\(\s*` +
+      String.raw`(?:[^,"()]+|L?"(?:\\.|[^"\\])*")\s*,\s*L?"((?:\\.|[^"\\])*)"`),
+    extensions: CPP_EXTENSIONS,
+    codePrefix: true,
+    unboundedFormat: true,
+    message: 'scanf 字符串转换未限制字段宽度',
+    recommendation: '按目标缓冲区容量设置字段宽度并检查返回值',
   },
   {
     id: 'SSRF', category: 'SSRF', severity: 'high',
@@ -163,6 +223,7 @@ const SECURITY_RULES = [
 ];
 
 const CODE_EXTENSIONS = new Set([
+  ...CPP_EXTENSIONS,
   '.py',
   '.js',
   '.mjs',
@@ -176,6 +237,9 @@ const CODE_EXTENSIONS = new Set([
   '.java',
   '.php',
   '.rb',
+  '.rs',
+  '.sh',
+  '.bash',
   '.yaml',
   '.yml',
   '.json',
@@ -188,12 +252,32 @@ const DEFAULT_EXCLUDES = [
   'venv',
   'dist',
   'build',
+  'target',
+  'vendor',
+  'third_party',
+  'third-party',
   '.tox',
   'tests',
   'test',
   '__tests__',
   'spec',
 ];
+
+function ruleLineIgnored(line, cpp) {
+  if (!cpp && /^(?:#|\/\/|\*|\/\*)/u.test(line.trim())) return true;
+  return /^\s*(id|pattern|severity|message|recommendation|extensions|excludePattern|category)\s*:/.test(line);
+}
+
+function ruleExcluded(rule, line) {
+  if (!rule.excludePattern) return false;
+  const excluded = rule.excludePattern.test(line);
+  rule.excludePattern.lastIndex = 0;
+  return excluded;
+}
+
+function codeMatchRequired(rule, cpp) {
+  return rule.codePrefix || (cpp && rule.id === 'HARDCODED_SECRET');
+}
 
 function executableLines(content, python) {
   const blank = (text) => text.replace(/[^\r\n]/g, ' ');
@@ -202,63 +286,111 @@ function executableLines(content, python) {
     return content.replace(literals, blank).split('\n');
   }
   // 保留表达式前缀，区分作为值的正则与除法后的可执行语句
-  const prefix = String.raw`(^|[=(:,;!?&|^~%*<>{\[]|(?<!\+)\+(?!\+)|(?<!-)-(?!-)|(?<![\w.$])\b(?:return|throw|yield|case|else|do)\b)`;
+  const prefix =
+    String.raw`(^|[=(:,;!?&|^~%*<>{\[]|(?<!\+)\+(?!\+)|(?<!-)-(?!-)|` +
+    String.raw`(?<![\w.$])\b(?:return|throw|yield|case|else|do)\b)`;
   const spacing = String.raw`(?:\s|/\*[\s\S]*?\*/|//[^\n]*(?:\n|$))*`;
   const expression = String.raw`/(?![/*])(?:\\[^\r\n]|\[(?:\\[^\r\n]|[^\]\\\r\n])*\]|[^/\\[\r\n])+/[dgimsuvy]*`;
-  const other = /\/\/[^\n]*|\/\*[\s\S]*?(?:\*\/|$)|"(?:\\[\s\S]|[^"\\])*"|'(?:\\[\s\S]|[^'\\])*'|`(?:\\[\s\S]|[^`\\])*`/;
+  const other =
+    /\/\/[^\n]*|\/\*[\s\S]*?(?:\*\/|$)|"(?:\\[\s\S]|[^"\\])*"|'(?:\\[\s\S]|[^'\\])*'|`(?:\\[\s\S]|[^`\\])*`/;
   const tokens = new RegExp(prefix + spacing + expression + '|' + other.source, 'g');
-  return content.replace(tokens, (text, before) => {
-    const kept = before || '';
-    return kept + blank(text.slice(kept.length));
-  }).split('\n');
+  return content
+    .replace(tokens, (text, before) => {
+      const kept = before || '';
+      return kept + blank(text.slice(kept.length));
+    })
+    .split('\n');
+}
+
+function cppSource(content) {
+  const blank = (text) => text.replace(/[^\r\n]/gu, ' ');
+  const tokens = new RegExp(
+    [
+      String.raw`R"([^ ()\\\t\r\n]{0,16})\([\s\S]*?\)\1"`,
+      String.raw`//[^\n]*|/\*[\s\S]*?(?:\*/|$)`,
+      String.raw`"(?:\\[\s\S]|[^"\\])*"|'(?:\\[\s\S]|[^'\\])*'`,
+    ].join('|'),
+    'g'
+  );
+  return {
+    lines: content.replace(tokens, (text) => (/^\/[/*]/u.test(text) ? blank(text) : text)).split('\n'),
+    executable: content.replace(tokens, blank).split('\n'),
+  };
+}
+
+function scanSource(filePath, content) {
+  let ext = sourceExtension(filePath, content);
+  if (['.mjs', '.cjs', '.jsx'].includes(ext)) ext = '.js';
+  if (['.mts', '.cts', '.tsx'].includes(ext)) ext = '.ts';
+  const cpp = CPP_EXTENSIONS.includes(ext);
+  const testPattern =
+    /(?:^|\/)(?:tests?|__tests__|specs?)(?:\/|$)|(?:^|\/)(?:test|spec)[_.][^/]+$|[._](?:test|spec)\.[^/]+$/i;
+  const views = cpp
+    ? cppSource(content)
+    : {
+        lines: content.split('\n'),
+        executable: executableLines(content, ext === '.py'),
+      };
+  return { ...views, ext, cpp, testFile: testPattern.test(filePath.split(path.sep).join('/')) };
+}
+
+function unboundedFormat(format) {
+  const conversions = /%(?:%|(?:\d+\$)?(\*)?(\d+)?(?:hh|ll|[hljztL])?([a-zA-Z]|\[))/gu;
+  return [...format.matchAll(conversions)].some(
+    (match) => !match[1] && (!match[2] || Number(match[2]) === 0) && ['s', '['].includes(match[3])
+  );
+}
+
+function matchRule(rule, line, code, cpp) {
+  if (ruleLineIgnored(line, cpp)) return null;
+  const match = rule.pattern.exec(rule.codeOnly ? code : line);
+  rule.pattern.lastIndex = 0;
+  if (!match || ruleExcluded(rule, line)) return null;
+  if (codeMatchRequired(rule, cpp) && !code.slice(match.index, match.index + match[0].length).trim()) return null;
+  if (rule.unboundedFormat && !unboundedFormat(match[1])) return null;
+  return match;
+}
+
+function securityFinding(rule, location, source, match) {
+  const { filePath, index } = location;
+  const executed = source.executable[index].slice(match.index, match.index + match[0].length).trim();
+  const context = executed ? (source.testFile ? 'test_code' : 'source') : source.testFile ? 'test_fixture' : 'literal';
+  return {
+    rule_id: rule.id,
+    severity: rule.severity,
+    category: rule.category,
+    message: rule.message,
+    file_path: filePath,
+    line_number: index + 1,
+    line_content: '[redacted]',
+    context,
+    review_required: true,
+    recommendation: rule.recommendation,
+  };
 }
 
 function scanFile(filePath, rules, content = fs.readFileSync(filePath, 'utf-8')) {
   const findings = [];
-  let ext = path.extname(filePath).toLowerCase();
-  if (['.mjs', '.cjs', '.jsx'].includes(ext)) ext = '.js';
-  if (['.mts', '.cts', '.tsx'].includes(ext)) ext = '.ts';
-  const lines = content.split('\n');
-  const executable = executableLines(content, ext === '.py');
-
+  const source = scanSource(filePath, content);
   for (const rule of rules) {
-    const exts = rule.extensions;
-    if (!exts.includes('*') && !exts.includes(ext)) continue;
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      const stripped = line.trim();
-      const isComment =
-        stripped.startsWith('#') || stripped.startsWith('//') || stripped.startsWith('*') || stripped.startsWith('/*');
-      if (isComment) continue;
-      const ruleDefRe = /^\s*(id|pattern|severity|message|recommendation|extensions|excludePattern|category)\s*:/;
-      if (ruleDefRe.test(stripped)) continue;
-
-      if (rule.pattern.test(rule.codeOnly ? executable[i] : line)) {
-        rule.pattern.lastIndex = 0;
-        if (rule.excludePattern && rule.excludePattern.test(line)) {
-          rule.excludePattern.lastIndex = 0;
-          continue;
-        }
-        findings.push({
-          rule_id: rule.id,
-          severity: rule.severity,
-          category: rule.category,
-          message: rule.message,
-          file_path: filePath,
-          line_number: i + 1,
-          line_content: '[redacted]',
-          recommendation: rule.recommendation,
-        });
-      }
+    if (!rule.extensions.includes('*') && !rule.extensions.includes(source.ext)) continue;
+    for (const [index, line] of source.lines.entries()) {
+      const match = matchRule(rule, line, source.executable[index], source.cpp);
+      if (match) findings.push(securityFinding(rule, { filePath, index }, source, match));
     }
   }
   return findings;
 }
 
-const { buildReport, countBySeverity, parseCliArgs, runCli, collectSourceFiles } = require(
-  path.join(__dirname, '..', '..', 'lib', 'shared.js')
-);
+const {
+  buildReport,
+  reportBaselines,
+  countBySeverity,
+  parseCliArgs,
+  runCli,
+  collectSourceFiles,
+  sourceExtension,
+} = require(path.join(__dirname, '..', '..', 'lib', 'shared.js'));
 const { compareBaseline } = require(path.join(__dirname, '..', '..', 'lib', 'git-baseline.js'));
 
 function scanDirectory(targets, excludeDirs, base) {
@@ -277,8 +409,13 @@ function scanDirectory(targets, excludeDirs, base) {
     }
   }
   findings.sort((a, b) => (SEVERITY_ORDER[a.severity] ?? 9) - (SEVERITY_ORDER[b.severity] ?? 9));
-  const compared = compareBaseline([...contents.keys()], findings,
-    (file, content) => scanFile(file, SECURITY_RULES, content), base, contents);
+  const compared = compareBaseline(
+    [...contents.keys()],
+    findings,
+    (file, content) => scanFile(file, SECURITY_RULES, content),
+    base,
+    contents
+  );
   selected.errors.push(...compared.errors);
   const complete = filesScanned > 0 && selected.errors.length === 0;
   const passed = complete && !findings.some((f) => f.severity === 'critical' || f.severity === 'high');
@@ -301,7 +438,7 @@ function formatReport(result, verbose) {
   const fields = {
     扫描路径: result.scan_path,
     扫描文件: result.files_scanned,
-    比较基线: result.baseline.map((entry) => `${entry.ref}: ${entry.status}${entry.reason ? ' (' + entry.reason + ')' : ''}`).join('\n'),
+    比较基线: reportBaselines(result.baseline, result.requested_paths),
     分析完整性: result.complete ? '完整' : '未完成',
     未分析: result.scan_errors.map((error) => error.path + ': ' + error.message).join('\n') || '无',
     扫描结果: !result.complete ? '未完成' : result.passed ? '\u2713 通过' : '\u2717 发现高危问题',

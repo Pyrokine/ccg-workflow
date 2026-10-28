@@ -208,6 +208,8 @@ The package also publishes six skills through the official filesystem provider, 
 
 Scanner and shared-library files match the root CCG distribution. Quality Skill guidance requests language checks; missing tools, configuration failures and uncovered inputs are reported as incomplete. Direct script calls without `--language-checks` retain text-only behavior.
 
+Language checks use ESLint, TypeScript, Ruff, clang-tidy, Go vet, and Cargo/Clippy when the target project provides their required tools and metadata. Go and Rust run offline with temporary build output and use native file inventories to verify coverage; excluded files remain incomplete. C/C++ security rules check credentials, dynamic shell commands, and unbounded input. Change analysis checks related documentation in the selected Git mode, including documents outside the requested source paths.
+
 Quality and security scans distinguish new and existing built-in findings against Git `HEAD` or `--base`. External diagnostics without a measured baseline remain unclassified, and existing blocking issues still count. Run the checks before `ccg_review` and pass their coverage and findings to the reviewer.
 
 Set `skills: false` to publish none of them, or add your own roots with `skillDirs`.

@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.7.3-aug.2] - 2026-10-29
+
+### Added
+
+- Go and Rust quality checks use native project tools offline, retain workspace, vendor and overlay settings, and report files excluded by build conditions. Build output uses temporary directories.
+- Basic C/C++ security rules cover embedded credentials, dynamic commands and unbounded input, with comment and string context checks.
+
+### Changed
+
+- Task runtime installation includes every required module while preserving the public controller interface, state schema, locking, transactions and revision checks.
+- CommonJS quality checks use the Node environment. Existing complexity, function-length, file-length and line-length limits remain unchanged.
+
+### Fixed
+
+- Read-only task queries and standalone help return without reading stdin. Write operations retain bounded input validation.
+- TypeScript checks support both the compiler API and the TypeScript 7 CLI. Ruff target-version selection remains optional, and repeated tool-availability notices are grouped without hiding incomplete checks.
+- Change analysis recognizes related document updates outside the selected source paths in working, staged and committed modes.
+- The unified Skill runner selects the change-analysis entry point after helper extraction instead of returning empty success output.
+- Existing seven-file Codex ownership records can upgrade to the complete runtime and uninstall while preserving original file records and user-owned content.
+
 ## [3.7.3-aug.1] - 2026-10-27
 
 ### Added

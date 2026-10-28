@@ -13,6 +13,21 @@ import {
   type CodexBackupEntry,
 } from './installer-codex-files'
 
+const LEGACY_MANAGED_FILES = new Set([
+  'agents/ccg-implement.toml',
+  'agents/ccg-review.toml',
+  'agents/ccg-research.toml',
+  'hooks/ccg-workflow.py',
+  'hooks/ccg/package.json',
+  'hooks/ccg/task-utils.js',
+  'hooks/ccg/task-state.js',
+])
+
+function hasCompleteFileSet(seen: Set<string>, expected: Set<string>): boolean {
+  if (seen.size === expected.size) return true
+  return seen.size === LEGACY_MANAGED_FILES.size && [...seen].every((file) => LEGACY_MANAGED_FILES.has(file))
+}
+
 export function isCodexSponsorProvider(value: unknown, sponsorId: string): boolean {
   const sponsor = SPONSORS.find(({ id }) => id === sponsorId)
   const provider = asRecord(value)
@@ -93,7 +108,7 @@ export function parseCodexModeManifest(content: string): CodexModeManifest {
   const expectedFiles = new Set(CODEX_MANAGED_FILES)
   const seenFiles = new Set<string>()
   const files = root.files.map((value) => parseManagedFile(value, expectedFiles, seenFiles))
-  if (seenFiles.size !== expectedFiles.size) {
+  if (!hasCompleteFileSet(seenFiles, expectedFiles)) {
     throw new Error('Codex mode ownership manifest does not cover every managed runtime file')
   }
   return { schemaVersion: 1, files, sponsorProviderIds: parseSponsorIds(root.sponsorProviderIds) }

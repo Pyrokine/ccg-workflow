@@ -1,10 +1,13 @@
+import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { lstatSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import fs from 'fs-extra'
 import { describe, expect, it } from 'vitest'
 import {
   cleanupPaths,
+  hooksDir,
+  DEFAULT_SESSION_KEY,
   git,
   createProject,
   runController,
@@ -55,6 +58,68 @@ async function createLegacyTask(root: string) {
 }
 
 describe('persistent task state controller', () => {
+  it.each(['resolve', 'snapshot', 'list', 'preflight-legacy', '--help', '-h'])(
+    'returns %s with stdin held open and preserves task metadata',
+    async (operation) => {
+      const root = await createProject()
+      startTask(root, 'read-only-task')
+      const statePath = join(root, '.ccg', 'state.json')
+      const taskPath = join(root, '.ccg', 'tasks', 'read-only-task', 'task.json')
+      const bindingPath = join(root, '.ccg', 'sessions', `${DEFAULT_SESSION_KEY}.json`)
+      const before = await Promise.all([statePath, taskPath, bindingPath].map((file) => fs.readFile(file, 'utf8')))
+      const help = operation.startsWith('-')
+      const args = [
+        join(hooksDir, 'task-state.js'),
+        operation,
+        ...(help ? [] : ['--root', root, '--session-key', DEFAULT_SESSION_KEY]),
+      ]
+      const script =
+        'process.stdin._handle.setBlocking(false); ' +
+        `process.argv = [process.execPath, ...${JSON.stringify(args)}]; require('node:module').runMain();`
+      const child = spawn(process.execPath, ['-e', script], {
+        cwd: help ? dirname(root) : root,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: { ...process.env, CLAUDE_PROJECT_DIR: '' },
+      })
+      let stdout = ''
+      let stderr = ''
+      child.stdout.on('data', (chunk: Buffer) => {
+        stdout += chunk.toString()
+      })
+      child.stderr.on('data', (chunk: Buffer) => {
+        stderr += chunk.toString()
+      })
+      const status = await new Promise<number | null>((resolveChild, reject) => {
+        const timeout = setTimeout(() => {
+          child.kill('SIGKILL')
+          reject(new Error('stdin remained open'))
+        }, 3000)
+        child.on('error', reject)
+        child.on('close', (code) => {
+          clearTimeout(timeout)
+          resolveChild(code)
+        })
+      })
+      expect(status).toBe(0)
+      expect(stderr).toBe('')
+      if (help) expect(stdout).toContain('Usage: task-state.js')
+      else expect(JSON.parse(stdout)).toMatchObject({ ok: true, operation })
+      expect(await Promise.all([statePath, taskPath, bindingPath].map((file) => fs.readFile(file, 'utf8')))).toEqual(
+        before
+      )
+    }
+  )
+
+  it('keeps JSON requests mandatory and bounded for mutations', async () => {
+    const root = await createProject()
+    expectFailure(runController(root, 'start'), 'INVALID_REQUEST')
+    expectFailure(runController(root, 'start', {}), 'INVALID_REQUEST')
+    const oversized = runController(root, 'start', { content: 'x'.repeat(1024 * 1024) })
+    expectFailure(oversized, 'IO_ERROR')
+    expect(oversized.output.message).toBe('HOOK_INPUT_TOO_LARGE')
+    expect(await fs.pathExists(join(root, '.ccg'))).toBe(false)
+  })
+
   it('migrates legacy tasks without assigning them to a session', async () => {
     const root = await createProject()
     const legacyDir = await createLegacyTask(root)

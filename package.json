@@ -1,6 +1,6 @@
 {
   "name": "ccg-workflow",
-  "version": "3.7.3-aug.1",
+  "version": "3.7.3-aug.2",
   "description": "Multi-model collaboration for Claude Code, Codex, Antigravity, Grok, Kimi Code, and OpenCode",
   "type": "module",
   "private": true,

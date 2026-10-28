@@ -2,25 +2,16 @@ import fs from 'fs-extra'
 import { homedir } from 'node:os'
 import { join } from 'pathe'
 import { parse } from 'smol-toml'
+import { CODEX_MANAGED_FILES, TASK_STATE_RUNTIME_FILES } from './installer-codex-files'
 import { check, files, isRegularFile, readText, record } from './doctor-common'
 import type { DoctorCheck, DoctorReport, RecordValue } from './doctor-common'
 
-const REQUIRED_CODEX_MODE_FILES = [
-  '.ccg/codex-mode.json',
-  'agents/ccg-implement.toml',
-  'agents/ccg-review.toml',
-  'agents/ccg-research.toml',
-  'hooks/ccg-workflow.py',
-  'hooks/ccg/package.json',
-  'hooks/ccg/task-utils.js',
-  'hooks/ccg/task-state.js',
-]
+const REQUIRED_CODEX_MODE_FILES = ['.ccg/codex-mode.json', ...CODEX_MANAGED_FILES]
 const CODEX_MANAGED_BLOCK_START_PREFIX = '<!-- CCG:START'
 const CODEX_MANAGED_BLOCK_START = '<!-- CCG:START — Managed by CCG Workflow. Do not edit this block manually. -->'
 const CODEX_MANAGED_BLOCK_END = '<!-- CCG:END -->'
 const HOOK_FILES = [
-  'task-utils.js',
-  'task-state.js',
+  ...TASK_STATE_RUNTIME_FILES,
   'workflow-state.js',
   'session-start.js',
   'subagent-context.js',
