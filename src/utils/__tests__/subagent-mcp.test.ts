@@ -40,8 +40,10 @@ function payloadLines(template: string): string[] {
   let tag: string | undefined
   for (const line of lines) {
     if (tag === undefined) {
-      const opener = line.match(/<<'([A-Z_]+)'/)
-      if (opener) tag = opener[1]
+      const opener = line.match(/<<'(?<delimiter>[A-Z_]+)'/)
+      if (opener) {
+        tag = opener[1]
+      }
       continue
     }
     if (line.trimStart().startsWith(tag)) {

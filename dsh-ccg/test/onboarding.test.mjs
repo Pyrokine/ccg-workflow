@@ -1,12 +1,11 @@
 /**
- * Unit tests for what a brand-new install says.
+ * Unit tests for what a new installation says.
  *
  * The stated principle is that every prompt is generated from the resolved
  * matrix, so it can never advertise something this deployment does not have.
- * That was honoured for the per-role model names and NOT for the prose around
- * them: with no tiers configured the routing preamble promised "several models
+ * That was honored for the per-role model names and NOT for the surrounding prose: with no tiers configured the routing preamble promised "several models
  * at once" while `ccg_crosscheck` was not even registered, and Deep described
- * panels that did not exist. A fresh install is the configuration most users
+ * panels that did not exist. A fresh installation is the configuration most users
  * see first and the one least likely to be checked, so it gets its own tests.
  */
 
@@ -15,13 +14,20 @@ import assert from 'node:assert/strict'
 
 import { resolveRoles } from '../src/roles.js'
 import { renderRoutingPrompt } from '../src/index.js'
-import { renderTriagePrompt, costMode } from '../src/modes.js'
+import { costMode, renderTriagePrompt } from '../src/modes.js'
 import { resolvePanel } from '../src/crosscheck.js'
 
 const TIERS = { strong: { provider: 'gw', model: 'big' }, worker: { provider: 'gw', model: 'fast' } }
 const WITH_PANEL = {
   ...TIERS,
-  roles: { reviewer: { models: [{ provider: 'gw', model: 'big' }, { provider: 'rival', model: 'other' }] } },
+  roles: {
+    reviewer: {
+      models: [
+        { provider: 'gw', model: 'big' },
+        { provider: 'rival', model: 'other' },
+      ],
+    },
+  },
 }
 
 test('a fresh install does not promise a panel it has not got', () => {

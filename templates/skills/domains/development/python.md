@@ -93,17 +93,24 @@ urlpatterns = [
 import asyncio
 import aiohttp
 
-async def fetch(url: str) -> str:
+
+async def fetch(
+        url: str
+) -> str:
     async with aiohttp.ClientSession() as session:
         async with session.get(url) as response:
             return await response.text()
 
-async def fetch_all(urls: list[str]) -> list[str]:
+
+async def fetch_all(
+        urls: list[str]
+) -> list[str]:
     tasks = [fetch(url) for url in urls]
     return await asyncio.gather(*tasks)
 
+
 # 运行
-asyncio.run(fetch_all(['http://example.com', 'http://example.org']))
+asyncio.run(fetch_all(['https://example.com', 'https://example.org']))
 ```
 
 ## 数据处理
@@ -281,16 +288,15 @@ select = ["E", "F", "I"]
 
 ## 常用库
 
-| 库              | 用途       |
-|----------------|----------|
+| 库             | 用途        |
+|----------------|-------------|
 | requests/httpx | HTTP 客户端 |
-| aiohttp        | 异步 HTTP  |
-| SQLAlchemy     | ORM      |
-| Pydantic       | 数据验证     |
-| Click/Typer    | CLI      |
-| pytest         | 测试       |
-| pandas         | 数据处理     |
-| loguru         | 日志       |
+| aiohttp        | 异步 HTTP   |
+| SQLAlchemy     | ORM         |
+| Pydantic       | 数据验证    |
+| Click/Typer    | CLI         |
+| pytest         | 测试        |
+| pandas         | 数据处理    |
+| loguru         | 日志        |
 
 ---
-

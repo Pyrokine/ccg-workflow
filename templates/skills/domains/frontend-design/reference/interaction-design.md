@@ -1,5 +1,7 @@
 # Interaction Design
 
+CSS examples reuse the target theme’s `--color-accent` token.
+
 ## The Eight Interactive States
 
 Every interactive element needs these states designed:
@@ -73,8 +75,8 @@ Focus trapping in modals used to require complex JavaScript. Now use the `inert`
 Or use the native `<dialog>` element:
 
 ```javascript
-const dialog = document.querySelector('dialog');
-dialog.showModal();  // Opens with focus trap, closes on Escape
+const dialog = document.querySelector('dialog')
+dialog.showModal() // Opens with focus trap, closes on Escape
 ```
 
 ## The Popover API
@@ -109,6 +111,7 @@ The modern solution uses the CSS Anchor Positioning API to tether an overlay to 
   position: fixed;
   position-anchor: --menu-trigger;
   position-area: block-end span-inline-end;
+  position-try-fallbacks: --flip-above;
   margin-top: 4px;
 }
 
@@ -120,8 +123,9 @@ The modern solution uses the CSS Anchor Positioning API to tether an overlay to 
 ```
 
 Because the dropdown uses `position: fixed`, it escapes any `overflow` clipping on ancestor elements. The
-`@position-try` block handles viewport edges automatically. **Browser support**: Chrome 125+, Edge 125+. Not yet in
-Firefox or Safari - use a fallback for those browsers.
+`@position-try` block handles viewport edges automatically. **Browser support**: Baseline 2026 in current browsers;
+older browser versions may require a fallback. See the
+[MDN compatibility reference](https://developer.mozilla.org/en-US/docs/Web/CSS/@position-try).
 
 ### Popover + Anchor Combo
 
@@ -170,8 +174,8 @@ If it would overflow the right edge, align it to the trigger's right side instea
   layer instead.
 - **Arbitrary z-index values** like `z-index: 9999` - Use a semantic z-index scale:
   `dropdown (100) -> sticky (200) -> modal-backdrop (300) -> modal (400) -> toast (500) -> tooltip (600)`.
-- **Rendering dropdown markup inline** without an escape hatch from the parent's stacking context. Either use
-  `popover` (top layer), a portal, or `position: fixed`.
+- **Rendering dropdown markup inline** without an escape hatch from the parent's stacking context. Either use `popover`
+  (top layer), a portal, or `position: fixed`.
 
 ## Destructive Actions: Undo > Confirm
 

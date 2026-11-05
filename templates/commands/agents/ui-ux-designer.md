@@ -43,28 +43,33 @@ color: magenta
 
 ## 输出模板
 
-```markdown
+以下模板保留 `{{...}}` 占位符，生成时替换组件名、类型名和内容；组件片段需在目标项目中导入 React Hooks 和事件类型
+
+````markdown
 # UI/UX 设计方案：{{功能名称}}
 
-**设计时间**：{{当前时间}}
-**目标平台**：Web / Mobile / 跨平台
+**设计时间**：{{当前时间}} **目标平台**：Web / Mobile / 跨平台
 
 ---
 
 ## 1. 设计目标
 
 ### 1.1 用户目标
+
 用户希望通过这个功能达成什么目的？
 
 **示例**：
+
 - 快速完成登录
 - 查看账户余额
 - 提交订单
 
 ### 1.2 业务目标
+
 产品/业务希望通过这个功能达成什么？
 
 **示例**：
+
 - 降低注册流失率
 - 提升转化率
 - 增强品牌信任感
@@ -99,12 +104,12 @@ color: magenta
 
 ### 2.2 区块说明
 
-| 区块 | 用途 | 优先级 |
-|------|------|--------|
-| Header | 导航、品牌展示 | 高 |
-| Main Content | 核心功能区 | 高 |
-| Sidebar | 辅助信息、推荐 | 中 |
-| Footer | 次要链接、版权 | 低 |
+| 区块         | 用途           | 优先级 |
+| ------------ | -------------- | ------ |
+| Header       | 导航、品牌展示 | 高     |
+| Main Content | 核心功能区     | 高     |
+| Sidebar      | 辅助信息、推荐 | 中     |
+| Footer       | 次要链接、版权 | 低     |
 
 ---
 
@@ -227,12 +232,12 @@ graph TD
 
 ### 4.2 状态转换
 
-| 当前状态    | 触发事件     | 下一状态    | UI 变化        |
-|---------|----------|---------|--------------|
-| Idle    | 用户点击"提交" | Loading | 按钮显示 spinner |
-| Loading | API 返回成功 | Success | 显示成功提示，跳转    |
-| Loading | API 返回失败 | Error   | 显示错误提示       |
-| Error   | 用户点击"重试" | Loading | 重新提交         |
+| 当前状态 | 触发事件       | 下一状态 | UI 变化            |
+| -------- | -------------- | -------- | ------------------ |
+| Idle     | 用户点击"提交" | Loading  | 按钮显示 spinner   |
+| Loading  | API 返回成功   | Success  | 显示成功提示，跳转 |
+| Loading  | API 返回失败   | Error    | 显示错误提示       |
+| Error    | 用户点击"重试" | Loading  | 重新提交           |
 
 ### 4.3 关键交互
 
@@ -240,24 +245,24 @@ graph TD
 
 - **触发时机**：用户输入时（onBlur）或提交时（onSubmit）
 - **验证规则**：
-    - 邮箱格式：`/^[^\s@]+@[^\s@]+\.[^\s@]+$/`
-    - 密码长度：≥ 8 字符
-    - 必填字段：非空
+  - 邮箱格式：`/^[^\s@]+@[^\s@]+\.[^\s@]+$/`
+  - 密码长度：≥ 8 字符
+  - 必填字段：非空
 - **错误提示位置**：输入框下方，红色文字
 - **成功状态**：输入框右侧显示绿色 ✓
 
 #### 交互 2：异步操作反馈
 
 - **Loading 状态**：
-    - 按钮文字变为"提交中..."
-    - 显示 spinner 图标
-    - 禁用按钮（`disabled={true}`）
+  - 按钮文字变为"提交中..."
+  - 显示 spinner 图标
+  - 禁用按钮（`disabled={true}`）
 - **成功状态**：
-    - Toast 提示："操作成功"
-    - 3 秒后自动跳转
+  - Toast 提示："操作成功"
+  - 3 秒后自动跳转
 - **失败状态**：
-    - Toast 提示："操作失败：{{错误信息}}"
-    - 保持当前页面，允许重试
+  - Toast 提示："操作失败：{{错误信息}}"
+  - 保持当前页面，允许重试
 
 ---
 
@@ -265,24 +270,25 @@ graph TD
 
 ### 5.1 Breakpoint 策略
 
-| 屏幕尺寸    | Breakpoint     | 布局调整              |
-|---------|----------------|-------------------|
-| Mobile  | < 640px        | 单列布局，全宽表单         |
-| Tablet  | 640px - 1023px | 双列布局，表单宽度 80%     |
-| Desktop | ≥ 1024px       | 三列布局，表单最大宽度 480px |
+| 屏幕尺寸 | Breakpoint     | 布局调整                     |
+| -------- | -------------- | ---------------------------- |
+| Mobile   | < 640px        | 单列布局，全宽表单           |
+| Tablet   | 640px - 1023px | 双列布局，表单宽度 80%       |
+| Desktop  | ≥ 1024px       | 三列布局，表单最大宽度 480px |
 
 ### 5.2 移动端优化
 
 - **触摸友好**：按钮最小尺寸 44x44px
 - **键盘优化**：
-    - 邮箱输入：`type="email"` 触发邮箱键盘
-    - 手机输入：`type="tel"` 触发数字键盘
+  - 邮箱输入：`type="email"` 触发邮箱键盘
+  - 手机输入：`type="tel"` 触发数字键盘
 - **滚动优化**：避免横向滚动，使用 `overflow-x: hidden`
 
 ### 5.3 响应式示例（Tailwind）
 
 ```html
-<div class="
+<div
+  class="
   w-full                   <!-- Mobile: 全宽 -->
   sm:w-4/5                 <!-- Tablet: 80% -->
   lg:w-1/2                 <!-- Desktop: 50% -->
@@ -290,7 +296,8 @@ graph TD
   mx-auto                  <!-- 居中 -->
   px-4                     <!-- Mobile: 左右内边距 16px -->
   sm:px-8                  <!-- Tablet: 左右内边距 32px -->
-">
+"
+>
   <!-- 内容 -->
 </div>
 ```
@@ -301,50 +308,27 @@ graph TD
 
 ### 6.1 关键实践
 
-| 实践       | 实施方法              | 示例                                 |
-|----------|-------------------|------------------------------------|
-| 语义化 HTML | 使用正确的 HTML 标签     | `<button>` 而非 `<div onclick>`      |
-| 键盘导航     | 确保所有交互可用 Tab 导航   | `tabindex` 顺序逻辑                    |
-| 屏幕阅读器    | 使用 ARIA 属性        | `aria-label`, `aria-describedby`   |
-| 颜色对比度    | WCAG AA 标准（4.5:1） | 文字 vs 背景对比度检查                      |
-| 焦点可见     | 显示焦点环             | `focus:ring-2 focus:ring-blue-500` |
+| 实践        | 实施方法                  | 示例                               |
+| ----------- | ------------------------- | ---------------------------------- |
+| 语义化 HTML | 使用正确的 HTML 标签      | `<button>` 而非 `<div onclick>`    |
+| 键盘导航    | 确保所有交互可用 Tab 导航 | `tabindex` 顺序逻辑                |
+| 屏幕阅读器  | 使用 ARIA 属性            | `aria-label`, `aria-describedby`   |
+| 颜色对比度  | WCAG AA 标准（4.5:1）     | 文字 vs 背景对比度检查             |
+| 焦点可见    | 显示焦点环                | `focus:ring-2 focus:ring-blue-500` |
 
 ### 6.2 表单 A11y 示例
 
 ```html
 <form>
   <!-- 使用 label + for 关联 -->
-  <label for="email" class="block text-sm font-medium">
-    邮箱地址
-  </label>
-  <input
-    id="email"
-    type="email"
-    required
-    aria-describedby="email-error"
-    aria-invalid="false"
-    class="..."
-  />
+  <label for="email" class="block text-sm font-medium"> 邮箱地址 </label>
+  <input id="email" type="email" required aria-describedby="email-error" aria-invalid="false" class="..." />
 
   <!-- 错误提示使用 aria-live -->
-  <p
-    id="email-error"
-    role="alert"
-    aria-live="polite"
-    class="text-red-600 text-sm mt-1"
-  >
-    请输入有效的邮箱地址
-  </p>
+  <p id="email-error" role="alert" aria-live="polite" class="text-red-600 text-sm mt-1">请输入有效的邮箱地址</p>
 
   <!-- 按钮使用 aria-label 描述状态 -->
-  <button
-    type="submit"
-    aria-label="提交登录表单"
-    aria-disabled="false"
-    class="..."
-  >
-    登录
-  </button>
+  <button type="submit" aria-label="提交登录表单" aria-disabled="false" class="...">登录</button>
 </form>
 ```
 
@@ -375,14 +359,28 @@ Neutral:   #6B7280 (灰色)
 ### 7.2 字体排版
 
 ```css
-/* 标题 */
-h1: font-size: 2.25rem (36px), font-weight: 700
-h2: font-size: 1.875rem (30px), font-weight: 600
-h3: font-size: 1.5rem (24px), font-weight: 600
+/* 标题：默认根字号为 16px 时分别对应 36px、30px、24px */
+h1 {
+  font-size: 2.25rem;
+  font-weight: 700;
+}
+h2 {
+  font-size: 1.875rem;
+  font-weight: 600;
+}
+h3 {
+  font-size: 1.5rem;
+  font-weight: 600;
+}
 
-/* 正文 */
-body: font-size: 1rem (16px), line-height: 1.5
-small: font-size: 0.875rem (14px)
+/* 正文：默认根字号为 16px 时分别对应 16px、14px */
+body {
+  font-size: 1rem;
+  line-height: 1.5;
+}
+small {
+  font-size: 0.875rem;
+}
 ```
 
 ### 7.3 间距系统（Tailwind 标准）
@@ -402,12 +400,12 @@ xl:  32px (p-8)
 
 ### 8.1 需要的图标
 
-| 图标            | 用途         | 来源                 |
-|---------------|------------|--------------------|
-| 关闭 (X)        | 关闭弹窗、删除    | Heroicons / Lucide |
-| 成功 (✓)        | 成功状态提示     | Heroicons / Lucide |
-| 加载中 (Spinner) | Loading 状态 | Heroicons / Lucide |
-| 警告 (⚠)        | 警告提示       | Heroicons / Lucide |
+| 图标             | 用途           | 来源               |
+| ---------------- | -------------- | ------------------ |
+| 关闭 (X)         | 关闭弹窗、删除 | Heroicons / Lucide |
+| 成功 (✓)         | 成功状态提示   | Heroicons / Lucide |
+| 加载中 (Spinner) | Loading 状态   | Heroicons / Lucide |
+| 警告 (⚠)         | 警告提示       | Heroicons / Lucide |
 
 ### 8.2 需要的插图/图片
 
@@ -428,6 +426,7 @@ xl:  32px (p-8)
 - [ ] A11y 检查清单
 - [ ] 颜色/字体/间距规范
 - [ ] 图标和图片资产清单
+````
 
 ---
 
@@ -446,16 +445,18 @@ xl:  32px (p-8)
 
 ### 输出示例（简化版）
 
-```markdown
+````markdown
 # UI/UX 设计方案：用户登录页面
 
 ## 1. 设计目标
 
 ### 1.1 用户目标
+
 - 快速完成登录（< 5 秒）
 - 清晰的错误提示
 
 ### 1.2 业务目标
+
 - 降低登录流失率
 - 提升安全性（防暴力破解）
 
@@ -547,11 +548,11 @@ interface LoginFormProps {
 
 ## 5. 响应式设计
 
-| 屏幕      | 卡片宽度       | 其他调整    |
-|---------|------------|---------|
-| Mobile  | 100%       | 移除卡片阴影  |
-| Tablet  | 80%        | 居中显示    |
-| Desktop | 480px 最大宽度 | 居中 + 阴影 |
+| 屏幕    | 卡片宽度       | 其他调整     |
+| ------- | -------------- | ------------ |
+| Mobile  | 100%           | 移除卡片阴影 |
+| Tablet  | 80%            | 居中显示     |
+| Desktop | 480px 最大宽度 | 居中 + 阴影  |
 
 ## 6. A11y 要点
 
@@ -566,8 +567,7 @@ interface LoginFormProps {
 - [ ] LoginForm.tsx (含验证逻辑)
 - [ ] EmailInput.tsx / PasswordInput.tsx (可复用)
 - [ ] SubmitButton.tsx (含 loading 状态)
-
-```
+````
 
 ---
 

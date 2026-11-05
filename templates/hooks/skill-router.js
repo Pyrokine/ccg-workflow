@@ -11,14 +11,18 @@ try {
   const { outputHook, readHookInput, readFileBounded, escapeXml } = require('./task-utils.js');
 
   // Direct template execution keeps legacy defaults; installed Hooks contain serialized configuration.
-  const routing = JSON.parse("{{HOOK_CONFIG_JSON}}".replace(/^\{\{HOOK_CONFIG_JSON\}\}$/, '{}'));
+  const routing = JSON.parse('{{HOOK_CONFIG_JSON}}'.replace(/^\{\{HOOK_CONFIG_JSON}}$/, '{}'));
   const homeDir = process.env.HOME || process.env.USERPROFILE || '';
   const installDir = routing.installDir || path.join(homeDir, '.claude');
 
   const input = readHookInput();
-  if (input.hook_event_name && input.hook_event_name !== 'UserPromptSubmit') process.exit(0);
+  if (input.hook_event_name && input.hook_event_name !== 'UserPromptSubmit') {
+    process.exit(0);
+  }
   const message = input.prompt || input.message || input.content || '';
-  if (message && typeof message === 'object' && message.role && message.role !== 'user') process.exit(0);
+  if (message && typeof message === 'object' && message.role && message.role !== 'user') {
+    process.exit(0);
+  }
   let userMessage = typeof message === 'string' || Array.isArray(message) ? message : message.content;
   if (Array.isArray(userMessage)) {
     userMessage = userMessage
@@ -26,24 +30,28 @@ try {
       .map((part) => part.text)
       .join('\n');
   }
-  if (typeof userMessage !== 'string' || userMessage.length < 5) process.exit(0);
+  if (typeof userMessage !== 'string' || userMessage.length < 5) {
+    process.exit(0);
+  }
   if (
     userMessage.includes('[SYSTEM NOTIFICATION - NOT USER INPUT]') ||
     userMessage.startsWith('This session is being continued from a previous conversation')
-  )
+  ) {
     process.exit(0);
+  }
 
   // Match the request outside delimited reference material; matches only suggest routes.
   const routingText = userMessage
     .replace(
-      /<(agent-message|task-notification|cross-session-message|ccg-task-context|system-reminder)\b[^>]*>[\s\S]*?<\/\1\s*>/gi,
+      /<(?<tag>agent-message|task-notification|cross-session-message|ccg-task-context|system-reminder)\b[^>]*>[\s\S]*?<\/\k<tag>\s*>/gi,
       ''
     )
-    .replace(/^ {0,3}(`{3,}|~{3,})[^\n]*\n[\s\S]*?^ {0,3}\1[^\n]*$/gm, '')
+    .replace(/^ {0,3}(?<fence>`{3,}|~{3,})[^\n]*\n[\s\S]*?^ {0,3}\k<fence>[^\n]*$/gm, '')
     .replace(/^\s*>.*$/gm, '')
     .replace(/`[^`\n]*`|"[^"\n]*"|“[^”]*”|「[^」]*」|『[^』]*』/g, '');
-  if (/<(?:agent-message|task-notification|cross-session-message|ccg-task-context)(?:\s|>)/i.test(routingText))
+  if (/<(?:agent-message|task-notification|cross-session-message|ccg-task-context)[\s>]/i.test(routingText)) {
     process.exit(0);
+  }
   const msgLower = routingText.toLowerCase();
 
   // Keyword → skill file routing table
@@ -79,7 +87,18 @@ try {
       name: '威胁情报',
     },
     {
-      keywords: ['api设计', 'rest', 'graphql', 'grpc', 'endpoint', 'versioning', 'api design'],
+      keywords: [
+        'api设计',
+        'rest api',
+        'restful',
+        'rest接口',
+        'rest 接口',
+        'graphql',
+        'grpc',
+        'endpoint',
+        'versioning',
+        'api design',
+      ],
       skill: 'domains/architecture/api-design.md',
       name: 'API设计',
     },
@@ -89,7 +108,7 @@ try {
       name: '缓存架构',
     },
     {
-      keywords: ['kubernetes', 'docker', 'k8s', '微服务', 'service mesh', 'cloud native'],
+      keywords: ['kubernetes', 'docker', 'dockerfile', 'k8s', '微服务', 'service mesh', 'cloud native'],
       skill: 'domains/architecture/cloud-native.md',
       name: '云原生',
     },
@@ -115,8 +134,14 @@ try {
     },
   ];
 
-  // Find matching skills
-  const matched = ROUTES.filter((route) => route.keywords.some((kw) => msgLower.includes(kw)));
+  const keywordMatches = (keyword) => {
+    if (/[^\p{ASCII}]/u.test(keyword)) {
+      return msgLower.includes(keyword);
+    }
+    const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`(?:^|[^a-z0-9_])${escaped}(?:e?s)?(?:[^a-z0-9_]|$)`).test(msgLower);
+  };
+  const matched = ROUTES.filter((route) => route.keywords.some(keywordMatches));
 
   const REVIEWER_ACTION = {
     model: 'review-profiles',
@@ -190,8 +215,8 @@ try {
   const modelAction = MODEL_ACTIONS.find((a) => a.keywords.some((kw) => msgLower.includes(kw)));
   if (modelAction) {
     const configuration = path.join(installDir, '.ccg', 'config.toml');
-    const quote = value => "'" + String(value).replace(/'/g, "'\\''") + "'";
-    const modelFlags = backend => {
+    const quote = (value) => "'" + String(value).replace(/'/g, "'\\''") + "'";
+    const modelFlags = (backend) => {
       const flag = { grok: '--grok-model', kimi: '--kimi-model', opencode: '--opencode-model' }[backend];
       return flag && routing.models && routing.models[backend] ? ` ${flag} ${quote(routing.models[backend])}` : '';
     };
@@ -201,11 +226,13 @@ try {
     ];
     if (modelAction.model.endsWith('review-profile') || modelAction.model === 'review-profiles') {
       hints.push(
-        `审查配置：${configuration} 中 routing.review.profiles 的 model 与 effort；默认 GPT=gpt-5.6-sol / xhigh，Grok=grok-4.6 / high`,
+        `审查配置：${configuration} 中 routing.review.profiles 的 model 与 effort；` +
+          '默认 GPT=gpt-5.6-sol / xhigh，Grok=grok-4.6 / high',
         '已授权的外部审查使用当前 Claude Code provider 与 --backend claude --no-session-persistence；reviewer 不复用 resume 或 SESSION_ID'
       );
       if (Array.isArray(routing.review)) {
-        hints.push(`当前 review profiles：${routing.review.map(profile => `${profile.id}=${profile.model} / ${profile.effort}`).join(', ')}`);
+        const profiles = routing.review.map((profile) => `${profile.id}=${profile.model} / ${profile.effort}`);
+        hints.push(`当前 review profiles：${profiles.join(', ')}`);
       }
     } else if (modelAction.model === 'both') {
       hints.push(
@@ -214,7 +241,10 @@ try {
         '外部型号配置保留 grokModel、kimiModel、opencodeModel 与对应的 --grok-model、--kimi-model、--opencode-model 参数'
       );
       const selected = [...new Set([routing.backend || 'claude', routing.frontend || 'claude'])];
-      hints.push(`当前主路由：${selected.map(backend => backend === 'claude' ? 'Claude Code 原生 Agent' : `--backend ${backend}${modelFlags(backend)}`).join(', ')}`);
+      const routes = selected.map((backend) =>
+        backend === 'claude' ? 'Claude Code 原生 Agent' : `--backend ${backend}${modelFlags(backend)}`
+      );
+      hints.push(`当前主路由：${routes.join(', ')}`);
     } else {
       hints.push(`已授权的 CLI 路由参数：--backend ${modelAction.model}${modelFlags(modelAction.model)}`);
     }
@@ -226,18 +256,26 @@ try {
   }
 
   // ── Domain knowledge injection ──
-  if (routing.nativeSkills) process.exit(0);
-  if (matched.length === 0) process.exit(0);
+  if (routing.nativeSkills) {
+    process.exit(0);
+  }
+  if (matched.length === 0) {
+    process.exit(0);
+  }
 
   const skillsBase = path.join(installDir, 'skills', 'ccg');
 
-  if (!fs.existsSync(skillsBase)) process.exit(0);
+  if (!fs.existsSync(skillsBase)) {
+    process.exit(0);
+  }
 
   const injections = [];
   const diagnostics = [];
-  for (const match of matched.slice(0, 2)) {
+  for (const match of matched) {
+    if (injections.length === 2) {
+      break;
+    }
     const skillPath = path.join(skillsBase, match.skill);
-    if (!fs.existsSync(skillPath)) continue;
 
     try {
       const source = readFileBounded(skillPath, 16 * 1024);
@@ -248,24 +286,31 @@ try {
       const lines = source.content.split('\n');
       const excerpt = lines.slice(0, 120).join('\n');
       const truncated = source.truncated || lines.length > 120;
-      if (truncated) diagnostics.push(`SKILL_CONTEXT_TRUNCATED:${match.skill}:16KiB/120-lines`);
-      injections.push(
-        `## ${match.name} (auto-injected reference)\n${escapeXml(excerpt)}${truncated ? '\n...(truncated, full: ' + match.skill + ')' : ''}`
-      );
+      if (truncated) {
+        diagnostics.push(`SKILL_CONTEXT_TRUNCATED:${match.skill}:16KiB/120-lines`);
+      }
+      const continuation = truncated ? '\n...(truncated, full: ' + match.skill + ')' : '';
+      injections.push(`## ${match.name} (auto-injected reference)\n${escapeXml(excerpt)}${continuation}`);
     } catch (error) {
       diagnostics.push(`SKILL_READ_FAILED:${match.skill}:${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
-  if (injections.length === 0 && diagnostics.length === 0) process.exit(0);
+  if (injections.length === 0 && diagnostics.length === 0) {
+    process.exit(0);
+  }
 
   const sections = [];
-  if (injections.length > 0)
+  if (injections.length > 0) {
     sections.push(`<ccg-domain-knowledge>\n${injections.join('\n\n---\n\n')}\n</ccg-domain-knowledge>`);
-  if (diagnostics.length > 0)
+  }
+  if (diagnostics.length > 0) {
     sections.push(
-      `<ccg-domain-knowledge-diagnostics>\n${diagnostics.map((item) => escapeXml(item)).join('\n')}\n</ccg-domain-knowledge-diagnostics>`
+      '<ccg-domain-knowledge-diagnostics>\n' +
+        diagnostics.map((item) => escapeXml(item)).join('\n') +
+        '\n</ccg-domain-knowledge-diagnostics>'
     );
+  }
   outputHook('UserPromptSubmit', sections.join('\n\n'));
 } catch (error) {
   const message = error instanceof Error ? error.message : String(error);

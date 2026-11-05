@@ -32,8 +32,8 @@ const FC_MARKER_END = '<!-- CCG-FAST-CONTEXT-END -->'
 
 /**
  * Write fast-context search guidance to:
- * 1. ~/.claude/rules/ccg-fast-context.md (Claude Code — auto-loaded via rules/)
- * 2. ~/.codex/AGENTS.md (Codex CLI — auto-loaded as global instructions)
+ * 1. ~/.claude/rules/ccg-fast-context.md (Claude Code — loaded automatically via rules/)
+ * 2. ~/.codex/AGENTS.md (Codex CLI — loaded automatically as global instructions)
  */
 export async function writeFastContextPrompt(auxiliaryMode = false): Promise<void> {
   const promptContent = auxiliaryMode ? FAST_CONTEXT_PROMPT_AUXILIARY : FAST_CONTEXT_PROMPT_PRIMARY

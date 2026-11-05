@@ -8,7 +8,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { Readable } from 'node:stream'
 
-import { buildConfigPayload, isLoopback, nextUserSection, registerConfigRoute, liveActivity } from '../src/api.js'
+import { buildConfigPayload, isLoopback, liveActivity, nextUserSection, registerConfigRoute } from '../src/api.js'
 import { ROLE_NAMES } from '../src/roles.js'
 
 test('the payload reports each tier, whether the user layer carries it, and the tools', () => {
@@ -18,17 +18,18 @@ test('the payload reports each tier, whether the user layer carries it, and the 
   assert.deepEqual(payload.tiers.strong, { provider: 'gw', model: 'big', overridden: true })
   assert.deepEqual(payload.tiers.worker, { provider: 'gw', model: 'fast', overridden: false })
   assert.equal(payload.roles.length, ROLE_NAMES.length)
-  assert.deepEqual(payload.roles.find((entry) => entry.role === 'reviewer'), {
-    role: 'reviewer',
-    tool: 'ccg_review',
-    tier: 'strong',
-    enabled: true,
-    members: [{ provider: 'gw', model: 'big' }],
-    pinned: false,
-  })
-  assert.deepEqual(payload.roles.find((entry) => entry.role === 'builder').members, [
-    { provider: 'gw', model: 'fast' },
-  ])
+  assert.deepEqual(
+    payload.roles.find((entry) => entry.role === 'reviewer'),
+    {
+      role: 'reviewer',
+      tool: 'ccg_review',
+      tier: 'strong',
+      enabled: true,
+      members: [{ provider: 'gw', model: 'big' }],
+      pinned: false,
+    }
+  )
+  assert.deepEqual(payload.roles.find((entry) => entry.role === 'builder').members, [{ provider: 'gw', model: 'fast' }])
 })
 
 test('a role holding several models reports them all and reads as pinned', () => {
@@ -44,8 +45,7 @@ test('a role holding several models reports them all and reads as pinned', () =>
       },
     },
   }
-  const analyzer = buildConfigPayload(value, value, true).roles
-    .find((entry) => entry.role === 'analyzer')
+  const analyzer = buildConfigPayload(value, value, true).roles.find((entry) => entry.role === 'analyzer')
 
   // The duplicate is dropped — asking one model the same question twice is
   // not a second opinion.
@@ -57,17 +57,20 @@ test('a role holding several models reports them all and reads as pinned', () =>
 })
 
 test('a role model list is stored, deduplicated, and cleared back to its tier', () => {
-  const added = nextUserSection({}, {
-    roles: {
-      tester: {
-        models: [
-          { provider: 'gw', model: 'a' },
-          { provider: 'gw', model: 'b' },
-          { provider: 'gw', model: 'a' },
-        ],
+  const added = nextUserSection(
+    {},
+    {
+      roles: {
+        tester: {
+          models: [
+            { provider: 'gw', model: 'a' },
+            { provider: 'gw', model: 'b' },
+            { provider: 'gw', model: 'a' },
+          ],
+        },
       },
-    },
-  })
+    }
+  )
   assert.deepEqual(added.roles.tester.models, [
     { provider: 'gw', model: 'a' },
     { provider: 'gw', model: 'b' },
@@ -76,14 +79,14 @@ test('a role model list is stored, deduplicated, and cleared back to its tier', 
   // Clearing the models must not discard what else that role carries.
   const cleared = nextUserSection(
     { roles: { tester: { models: [{ provider: 'gw', model: 'a' }], tier: 'strong' } } },
-    { roles: { tester: null } },
+    { roles: { tester: null } }
   )
   assert.deepEqual(cleared, { roles: { tester: { tier: 'strong' } } })
 
   // A role left holding nothing at all leaves no empty husk behind.
   const emptied = nextUserSection(
     { roles: { tester: { models: [{ provider: 'gw', model: 'a' }] } } },
-    { roles: { tester: null } },
+    { roles: { tester: null } }
   )
   assert.deepEqual(emptied, {})
 })
@@ -100,7 +103,7 @@ test('the payload reflects role overrides the document carries', () => {
   const payload = buildConfigPayload(
     { roles: { optimizer: { enabled: false }, analyzer: { toolName: 'deep_think', tier: 'worker' } } },
     undefined,
-    true,
+    true
   )
   assert.equal(payload.roles.find((entry) => entry.role === 'optimizer').enabled, false)
   const analyzer = payload.roles.find((entry) => entry.role === 'analyzer')
@@ -111,14 +114,12 @@ test('the payload reflects role overrides the document carries', () => {
 test('a save stores a full pair, clears on null, and carries other keys through', () => {
   const user = { strong: { provider: 'old', model: 'old' }, roles: { builder: { tier: 'strong' } } }
 
-  assert.deepEqual(
-    nextUserSection(user, { worker: { provider: ' gw ', model: ' fast ' } }),
-    { strong: { provider: 'old', model: 'old' }, roles: { builder: { tier: 'strong' } }, worker: { provider: 'gw', model: 'fast' } },
-  )
-  assert.deepEqual(
-    nextUserSection(user, { strong: null }),
-    { roles: { builder: { tier: 'strong' } } },
-  )
+  assert.deepEqual(nextUserSection(user, { worker: { provider: ' gw ', model: ' fast ' } }), {
+    strong: { provider: 'old', model: 'old' },
+    roles: { builder: { tier: 'strong' } },
+    worker: { provider: 'gw', model: 'fast' },
+  })
+  assert.deepEqual(nextUserSection(user, { strong: null }), { roles: { builder: { tier: 'strong' } } })
 })
 
 test('half a route clears the tier instead of storing something inert', () => {
@@ -143,20 +144,17 @@ test('writes are recognised as local only from loopback peers', () => {
 
 test('the card reads whether hiring is on, and who decided it', () => {
   // Absent means on: the plugin registers `ccg_team` unless told not to.
-  assert.deepEqual(
-    buildConfigPayload({ strong: { provider: 'gw', model: 'a' } }, undefined, true).team,
-    { enabled: true, overridden: false },
-  )
-  assert.deepEqual(
-    buildConfigPayload({ team: false }, { team: false }, true).team,
-    { enabled: false, overridden: true },
-  )
+  assert.deepEqual(buildConfigPayload({ strong: { provider: 'gw', model: 'a' } }, undefined, true).team, {
+    enabled: true,
+    overridden: false,
+  })
+  assert.deepEqual(buildConfigPayload({ team: false }, { team: false }, true).team, {
+    enabled: false,
+    overridden: true,
+  })
   // On by the profile patch rather than by the user: the badge must not claim
   // an override the document does not hold.
-  assert.deepEqual(
-    buildConfigPayload({ team: true }, {}, true).team,
-    { enabled: true, overridden: false },
-  )
+  assert.deepEqual(buildConfigPayload({ team: true }, {}, true).team, { enabled: true, overridden: false })
 })
 
 test('the hiring switch stores a boolean, and null returns it to the layer below', () => {
@@ -165,45 +163,72 @@ test('the hiring switch stores a boolean, and null returns it to the layer below
   // Clearing is not the same as writing `true` — it lets the profile decide.
   assert.deepEqual(nextUserSection({ team: false }, { team: null }), {})
   // And it leaves everything else in the document alone.
-  assert.deepEqual(
-    nextUserSection({ strong: { provider: 'gw', model: 'a' } }, { team: false }),
-    { strong: { provider: 'gw', model: 'a' }, team: false },
-  )
+  assert.deepEqual(nextUserSection({ strong: { provider: 'gw', model: 'a' } }, { team: false }), {
+    strong: { provider: 'gw', model: 'a' },
+    team: false,
+  })
 })
 
 async function configRequest({ method = 'POST', body = {}, address = '127.0.0.1', state, replace }) {
   let route
-  registerConfigRoute({ webServer: { register(value) { route = value; return () => {} } } },
-    { replace }, () => state)
+  registerConfigRoute(
+    {
+      webServer: {
+        register(value) {
+          route = value
+          return () => {}
+        },
+      },
+    },
+    { replace },
+    () => state
+  )
   const req = Readable.from([Buffer.from(JSON.stringify(body))])
   req.method = method
   req.socket = { remoteAddress: address }
   const res = {
-    writeHead(status) { this.status = status },
-    end(body) { this.body = body === undefined ? undefined : JSON.parse(body) },
+    writeHead(status) {
+      this.status = status
+    },
+    end(body) {
+      this.body = body === undefined ? undefined : JSON.parse(body)
+    },
   }
   await route.handler(req, res)
   return res
 }
 
 test('profile edits carry the current revision and preserve unrelated role options', async () => {
-  const state = { value: {}, user: { roles: { builder: { tier: 'strong', enabled: false } } }, writable: true, revision: 3 }
+  const state = {
+    value: {},
+    user: { roles: { builder: { tier: 'strong', enabled: false } } },
+    writable: true,
+    revision: 3,
+  }
   let saved
-  const response = await configRequest({ state,
+  const response = await configRequest({
+    state,
     body: { expectedRevision: 3, roles: { builder: { provider: 'gw', model: 'fast' } } },
-    replace: async (section, revision) => { saved = { section, revision } },
+    replace: async (section, revision) => {
+      saved = { section, revision }
+    },
   })
   assert.equal(response.status, 200)
   assert.equal(response.body.revision, 3)
-  assert.deepEqual(saved, { revision: 3, section: {
-    roles: { builder: { tier: 'strong', enabled: false, models: [{ provider: 'gw', model: 'fast' }] } },
-  } })
+  assert.deepEqual(saved, {
+    revision: 3,
+    section: {
+      roles: { builder: { tier: 'strong', enabled: false, models: [{ provider: 'gw', model: 'fast' }] } },
+    },
+  })
 })
 
 test('a stale browser, a readonly profile and a remote peer cannot write', async () => {
   const state = { value: {}, user: {}, writable: true, revision: 4 }
   let writes = 0
-  const replace = async () => { writes += 1 }
+  const replace = async () => {
+    writes += 1
+  }
   assert.equal((await configRequest({ state, replace, body: { expectedRevision: 3, team: false } })).status, 409)
   assert.equal((await configRequest({ state: { ...state, writable: false }, replace })).status, 403)
   assert.equal((await configRequest({ state, replace, address: '192.168.1.2' })).status, 403)
@@ -211,8 +236,11 @@ test('a stale browser, a readonly profile and a remote peer cannot write', async
 })
 
 test('a conflict between reading and persistence stays a conflict', async () => {
-  const response = await configRequest({ state: { value: {}, user: {}, writable: true, revision: 1 },
-    replace: async () => { throw Object.assign(new Error('revision changed'), { code: 'SETTINGS_CONFLICT' }) },
+  const response = await configRequest({
+    state: { value: {}, user: {}, writable: true, revision: 1 },
+    replace: async () => {
+      throw Object.assign(new Error('revision changed'), { code: 'SETTINGS_CONFLICT' })
+    },
   })
   assert.equal(response.status, 409)
   assert.match(response.body.error, /revision changed/)
@@ -221,8 +249,12 @@ test('a conflict between reading and persistence stays a conflict', async () => 
 test('malformed configuration bodies and revisions do not reach persistence', async () => {
   let writes = 0
   for (const body of [null, [], 'bad', { expectedRevision: -1 }, { expectedRevision: '3' }]) {
-    const response = await configRequest({ state: { value: {}, user: {}, writable: true, revision: 3 }, body,
-      replace: async () => { writes += 1 },
+    const response = await configRequest({
+      state: { value: {}, user: {}, writable: true, revision: 3 },
+      body,
+      replace: async () => {
+        writes += 1
+      },
     })
     assert.equal(response.status, 400)
   }
@@ -230,10 +262,12 @@ test('malformed configuration bodies and revisions do not reach persistence', as
 })
 
 test('the team strip reads direct child activity from the new recursive catalog', async () => {
-  const subagents = { listDescendants: async () => [
-    { kind: 'child', depth: 1, id: 'direct', activity: 'running' },
-    { kind: 'child', depth: 2, id: 'nested', activity: 'running' },
-    { kind: 'diagnostic', depth: 1, id: 'broken', activity: 'inactive' },
-  ] }
+  const subagents = {
+    listDescendants: async () => [
+      { kind: 'child', depth: 1, id: 'direct', activity: 'running' },
+      { kind: 'child', depth: 2, id: 'nested', activity: 'running' },
+      { kind: 'diagnostic', depth: 1, id: 'broken', activity: 'inactive' },
+    ],
+  }
   assert.deepEqual(await liveActivity(subagents, 'parent', [{ childId: 'direct' }]), { direct: 'running' })
 })

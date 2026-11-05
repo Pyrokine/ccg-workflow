@@ -7,7 +7,8 @@
 - 用户请求 commit / rollback / branch 管理 / worktree 等 Git 操作
 - 任何复杂度级别
 
-本策略 taskless，不创建或修改 `.ccg/` 任务状态。若 Git 操作是某个 active task 的一个步骤，只执行用户授权的 Git 动作，不改变任务生命周期。
+本策略 taskless，不创建或修改 `.ccg/` 任务状态。若 Git 操作是某个 active
+task 的一个步骤，只执行用户授权的 Git 动作，不改变任务生命周期。
 
 ---
 
@@ -15,12 +16,12 @@
 
 根据用户请求中的关键词，加载对应的现有命令文件并按其指令执行：
 
-| 关键词                        | 命令文件                                              | 说明                        |
-|----------------------------|---------------------------------------------------|---------------------------|
+| 关键词                       | 命令文件                                   | 说明                            |
+|------------------------------|--------------------------------------------|---------------------------------|
 | commit, 提交                 | `~/.claude/commands/ccg/commit.md`         | 智能提交（conventional commit） |
-| rollback, 回滚, revert, undo | `~/.claude/commands/ccg/rollback.md`       | 交互式回滚                     |
-| clean branch, 清理分支         | `~/.claude/commands/ccg/clean-branches.md` | 清理已合并分支                   |
-| worktree                   | `~/.claude/commands/ccg/worktree.md`       | Worktree 管理               |
+| rollback, 回滚, revert, undo | `~/.claude/commands/ccg/rollback.md`       | 交互式回滚                      |
+| clean branch, 清理分支       | `~/.claude/commands/ccg/clean-branches.md` | 清理已合并分支                  |
+| worktree                     | `~/.claude/commands/ccg/worktree.md`       | Worktree 管理                   |
 
 ## 执行方式
 

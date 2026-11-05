@@ -5,9 +5,9 @@ import { homedir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'pathe'
 import { i18n } from '../i18n'
-import type { ClaudeSettings } from './command-settings'
 
 import { getSponsor, promptSponsorMenuKey, sponsorInquirerChoices } from '../utils/installer'
+import type { ClaudeSettings } from './command-settings'
 import { configureApiDefaults } from './command-settings'
 
 export async function configApi(): Promise<void> {
@@ -27,8 +27,12 @@ export async function configApi(): Promise<void> {
   const currentKey = settings.env?.ANTHROPIC_AUTH_TOKEN || settings.env?.ANTHROPIC_API_KEY
   if (currentUrl || currentKey) {
     console.log(ansis.gray(`  ${i18n.t('menu:api.currentConfig')}`))
-    if (currentUrl) console.log(ansis.gray(`    URL: ${currentUrl}`))
-    if (currentKey) console.log(ansis.gray(`    Key: ${i18n.t('menu:api.keyConfigured')}`))
+    if (currentUrl) {
+      console.log(ansis.gray(`    URL: ${currentUrl}`))
+    }
+    if (currentKey) {
+      console.log(ansis.gray(`    Key: ${i18n.t('menu:api.keyConfigured')}`))
+    }
     console.log()
   }
 
@@ -126,13 +130,17 @@ async function applyApiProvider(
   const sponsor = getSponsor(apiProvider)
   if (apiProvider === 'official') {
     // Clear third-party config, let Claude Code use official auth
-    if (!settings.env) settings.env = {}
+    if (!settings.env) {
+      settings.env = {}
+    }
     delete settings.env.ANTHROPIC_BASE_URL
     delete settings.env.ANTHROPIC_AUTH_TOKEN
     delete settings.env.ANTHROPIC_API_KEY
   } else if (sponsor) {
     const key = await promptSponsorMenuKey(sponsor)
-    if (!settings.env) settings.env = {}
+    if (!settings.env) {
+      settings.env = {}
+    }
     settings.env.ANTHROPIC_BASE_URL = sponsor.anthropicBaseUrl
     settings.env.ANTHROPIC_AUTH_TOKEN = key
     delete settings.env.ANTHROPIC_API_KEY
@@ -154,7 +162,9 @@ async function applyApiProvider(
       },
     ])
 
-    if (!settings.env) settings.env = {}
+    if (!settings.env) {
+      settings.env = {}
+    }
     settings.env.ANTHROPIC_BASE_URL = answers.url.trim()
     settings.env.ANTHROPIC_AUTH_TOKEN = answers.key.trim()
     delete settings.env.ANTHROPIC_API_KEY

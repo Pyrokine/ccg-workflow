@@ -40,7 +40,7 @@ export interface ClaudeCodeConfig {
 /**
  * Get Claude Code config path (~/.claude.json)
  */
-export function getClaudeCodeConfigPath(): string {
+function getClaudeCodeConfigPath(): string {
   return join(homedir(), '.claude.json')
 }
 
@@ -82,7 +82,7 @@ export async function writeClaudeCodeConfig(config: ClaudeCodeConfig): Promise<v
  *
  * @param config - MCP server configuration to modify
  */
-export function applyPlatformCommand(config: McpServerConfig): void {
+function applyPlatformCommand(config: McpServerConfig): void {
   // Only process if command exists (avoid wrapping SSE services)
   if (isWindows() && config.command) {
     // 幂等性检查：如果 command 已经是 'cmd'，说明已处理过，跳过
@@ -153,7 +153,7 @@ export function buildMcpServerConfig(
  * @param config - MCP server configuration to repair
  * @returns true if config was repaired, false if no repair needed
  */
-export function repairCorruptedMcpArgs(config: McpServerConfig): boolean {
+function repairCorruptedMcpArgs(config: McpServerConfig): boolean {
   if (!isWindows() || config.command !== 'cmd' || !config.args) {
     return false
   }
@@ -267,7 +267,9 @@ export async function backupClaudeCodeConfig(): Promise<string | null> {
 }
 
 function diagnoseWindowsMcpServers(servers: Record<string, McpServerConfig>): string[] {
-  if (!isWindows()) return []
+  if (!isWindows()) {
+    return []
+  }
   return Object.entries(servers)
     .filter(([, server]) => server.command && ['npx', 'uvx', 'node'].includes(server.command))
     .map(([name]) => `❌ ${name}: Command not properly wrapped for Windows (should use cmd /c)`)

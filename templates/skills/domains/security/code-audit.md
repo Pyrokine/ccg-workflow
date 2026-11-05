@@ -68,58 +68,90 @@ yaml.safe_load(user_data)
 
 ### Java
 
+以下为方法体内的独立调用模式，目标项目提供输入变量与连接对象，并导入 Java 网络、HTTP、SQL、I/O 和 XML 类型；方法需处理或声明
+I/O、SQL 及中断等受检异常
+
 ```java
 // 🔴 命令执行
-Runtime.getRuntime().exec(userInput);
-new ProcessBuilder(userInput).start();
+Runtime.getRuntime().
+
+exec(userInput);
+new
+
+ProcessBuilder(userInput).
+
+start();
 
 // 🔴 SQL 注入
 Statement stmt = conn.createStatement();
-stmt.execute("SELECT * FROM users WHERE id = " + userId);
+stmt.
+
+execute("SELECT * FROM users WHERE id = "+userId);
 
 // 🔴 反序列化
 ObjectInputStream ois = new ObjectInputStream(userInputStream);
-ois.readObject();
+ois.
+
+readObject();
 
 // 🔴 SSRF
-new URL(userUrl).openConnection();
-HttpClient.newHttpClient().send(request);
+new
+
+URL(userUrl).
+
+openConnection();
+HttpClient.
+
+newHttpClient().
+
+send(request, HttpResponse.BodyHandlers.ofString());
 
 // 🔴 XXE
-DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(userXml);
+        DocumentBuilderFactory.
+
+newInstance().
+
+newDocumentBuilder().
+
+parse(userXml);
 
 // ✅ 安全替代
 PreparedStatement pstmt = conn.prepareStatement("SELECT * FROM users WHERE id = ?");
-pstmt.setInt(1, userId);
+pstmt.
+
+setInt(1,userId);
 ```
 
 ### JavaScript/Node.js
 
 ```javascript
 // 🔴 命令执行
-child_process.exec(userInput);
-eval(userInput);
-new Function(userInput)();
+child_process.exec(userInput)
+eval(userInput)
+new Function(userInput)()
 
 // 🔴 原型污染
-Object.assign(target, userInput);
-_.merge(target, userInput);
-JSON.parse(userInput);  // 配合 __proto__
+Object.assign(target, userInput)
+_.merge(target, userInput)
+JSON.parse(userInput) // 配合 __proto__
 
 // 🔴 SQL 注入
-db.query(`SELECT * FROM users WHERE id = ${userId}`);
+db.query(`SELECT * FROM users WHERE id = ${userId}`)
 
 // 🔴 XSS
-element.innerHTML = userInput;
-document.write(userInput);
+element.innerHTML = userInput
+document.write(userInput)
 
 // ✅ 安全替代
-child_process.execFile(cmd, [arg1, arg2]);
-db.query("SELECT * FROM users WHERE id = ?", [userId]);
-element.textContent = userInput;
+child_process.execFile(cmd, [arg1, arg2])
+db.query('SELECT * FROM users WHERE id = ?', [userId])
+element.textContent = userInput
 ```
 
 ### Go
+
+以下为函数体内的独立审计样本，目标项目提供 `db`、用户输入与命令参数，并导入
+`os/exec`、`path/filepath`、`html/template`；危险调用用于识别问题，实际使用应检查操作错误
 
 ```go
 // 🔴 命令执行
@@ -129,7 +161,7 @@ exec.Command("sh", "-c", userInput).Run()
 db.Query("SELECT * FROM users WHERE id = " + userId)
 
 // 🔴 路径穿越
-filepath.Join(baseDir, userPath)  // 未校验 ..
+filepath.Join(baseDir, userPath) // 未校验 ..
 
 // 🔴 SSTI
 template.HTML(userInput)
@@ -200,20 +232,21 @@ grep -rn "execute.*+\|execute.*f\"\|Query.*+" --include="*.py" --include="*.java
 
 ## 漏洞报告格式
 
-```markdown
+````markdown
 ## [漏洞类型] - [严重程度: Critical/High/Medium/Low]
 
 **文件:** `path/to/file.py:行号`
 
 **漏洞代码:**
+
 ```python
 # 有问题的代码片段
 user_id = request.args.get('id')
 cursor.execute(f"SELECT * FROM users WHERE id = {user_id}")
 ```
+````
 
-**漏洞原理:**
-用户输入直接拼接到 SQL 语句中，未经过滤或参数化，导致 SQL 注入。
+**漏洞原理:** 用户输入直接拼接到 SQL 语句中，未经过滤或参数化，导致 SQL 注入。
 
 **污点追踪:**
 
@@ -273,3 +306,4 @@ cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
 
 ---
 
+```

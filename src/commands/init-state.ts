@@ -131,7 +131,9 @@ export async function initializeLanguage(options: InitOptions): Promise<Supporte
 }
 
 function restoreRouting(state: InitState, config: CcgConfig | null): void {
-  if (!config?.routing) return
+  if (!config?.routing) {
+    return
+  }
   const routing = normalizeRoutingForInstall(config.routing)
   state.frontendModels = state.options.frontend
     ? normalizeModelNames(state.options.frontend, routing.frontend.models)
@@ -149,7 +151,9 @@ function restoreRouting(state: InitState, config: CcgConfig | null): void {
 
 function validateRequestedSkills(state: InitState): void {
   const requested = state.requestedSkills
-  if (requested === undefined) return
+  if (requested === undefined) {
+    return
+  }
   const unknown = requested.some(
     (name) => !['all', 'none'].includes(name) && !state.skillCatalog.some((skill) => skill.name === name)
   )
@@ -179,8 +183,12 @@ async function restoreSkills(state: InitState): Promise<void> {
 
 function requestedSkillProfile(state: InitState): string[] {
   const requested = state.requestedSkills!
-  if (requested[0] === 'all') return state.skillCatalog.map((skill) => skill.name)
-  if (requested[0] === 'none') return []
+  if (requested[0] === 'all') {
+    return state.skillCatalog.map((skill) => skill.name)
+  }
+  if (requested[0] === 'none') {
+    return []
+  }
   return [...new Set(requested)]
 }
 
@@ -223,7 +231,9 @@ export function buildRouting(state: InitState): ModelRouting {
 function restoreSavedSkillsMode(state: InitState, saved: CcgConfig | null): void {
   state.selectedSkillsMode = saved?.performance?.skillsMode
   state.skillsProfile = state.selectedSkillsMode === 'legacy' ? undefined : saved?.performance?.skillsProfile
-  if (state.selectedSkillsMode === undefined && state.skillsProfile !== undefined) state.selectedSkillsMode = 'native'
+  if (state.selectedSkillsMode === undefined && state.skillsProfile !== undefined) {
+    state.selectedSkillsMode = 'native'
+  }
 }
 
 async function restoreWorkflowSelection(state: InitState): Promise<void> {
@@ -232,15 +242,23 @@ async function restoreWorkflowSelection(state: InitState): Promise<void> {
   const hadLegacy = config?.workflows?.installed?.some((w) =>
     ['workflow', 'plan', 'execute', 'frontend', 'backend', 'feat', 'debug', 'team'].includes(w)
   )
-  if (hadLegacy) state.selectedWorkflows = getAllCommandIds()
+  if (hadLegacy) {
+    state.selectedWorkflows = getAllCommandIds()
+  }
 }
 
 function restorePerformance(state: InitState, config: CcgConfig | null): void {
   const { liteMode, skipImpeccable } = config?.performance ?? {}
-  if (liteMode !== undefined) state.liteMode = liteMode
+  if (liteMode !== undefined) {
+    state.liteMode = liteMode
+  }
   if (state.options.skipPrompt) {
-    if (skipImpeccable !== undefined) state.skipImpeccable = skipImpeccable
-    if (state.options.skipMcp) state.mcpProvider = config?.mcp?.provider || 'skip'
+    if (skipImpeccable !== undefined) {
+      state.skipImpeccable = skipImpeccable
+    }
+    if (state.options.skipMcp) {
+      state.mcpProvider = config?.mcp?.provider || 'skip'
+    }
   } else {
     state.existingConfig = config
     restoreRouting(state, config)

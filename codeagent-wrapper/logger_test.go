@@ -15,8 +15,9 @@ import (
 	"time"
 )
 
-func compareCleanupStats(got, want CleanupStats) bool {
-	if got.Scanned != want.Scanned || got.Deleted != want.Deleted || got.Kept != want.Kept || got.Errors != want.Errors {
+func compareCleanupStats(got, want cleanupStats) bool {
+	if got.Scanned != want.Scanned || got.Deleted != want.Deleted || got.Kept != want.Kept ||
+		got.Errors != want.Errors {
 		return false
 	}
 	// File lists may be in different order, just check lengths
@@ -30,15 +31,19 @@ func TestLoggerCreatesFileWithPID(t *testing.T) {
 	tempDir := t.TempDir()
 	t.Setenv("TMPDIR", tempDir)
 
-	logger, err := NewLogger()
+	logger, err := newLogger()
 	if err != nil {
 		t.Fatalf("NewLogger() error = %v", err)
 	}
-	defer logger.Close()
+	defer func() {
+		if err := logger.Close(); err != nil {
+			t.Errorf("I/O operation failed: %v", err)
+		}
+	}()
 
 	expectedPath := filepath.Join(tempDir, fmt.Sprintf("codeagent-wrapper-%d.log", os.Getpid()))
-	if logger.Path() != expectedPath {
-		t.Fatalf("logger path = %s, want %s", logger.Path(), expectedPath)
+	if logger.logPath() != expectedPath {
+		t.Fatalf("logger path = %s, want %s", logger.logPath(), expectedPath)
 	}
 
 	if _, err := os.Stat(expectedPath); err != nil {
@@ -50,20 +55,24 @@ func TestLoggerWritesLevels(t *testing.T) {
 	tempDir := t.TempDir()
 	t.Setenv("TMPDIR", tempDir)
 
-	logger, err := NewLogger()
+	logger, err := newLogger()
 	if err != nil {
 		t.Fatalf("NewLogger() error = %v", err)
 	}
-	defer logger.Close()
+	defer func() {
+		if err := logger.Close(); err != nil {
+			t.Errorf("I/O operation failed: %v", err)
+		}
+	}()
 
-	logger.Info("info message")
-	logger.Warn("warn message")
-	logger.Debug("debug message")
-	logger.Error("error message")
+	logger.info("info message")
+	logger.warn("warn message")
+	logger.debug("debug message")
+	logger.error("error message")
 
 	logger.Flush()
 
-	data, err := os.ReadFile(logger.Path())
+	data, err := os.ReadFile(logger.logPath())
 	if err != nil {
 		t.Fatalf("failed to read log file: %v", err)
 	}
@@ -85,7 +94,11 @@ func TestLoggerDefaultIsTerminalCoverage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("os.CreateTemp() error = %v", err)
 	}
-	defer os.Remove(f.Name())
+	defer func() {
+		if err := os.Remove(f.Name()); err != nil && !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("I/O operation failed: %v", err)
+		}
+	}()
 
 	os.Stdin = f
 	if got := defaultIsTerminal(); got {
@@ -105,15 +118,15 @@ func TestLoggerCloseStopsWorkerAndKeepsFile(t *testing.T) {
 	tempDir := t.TempDir()
 	t.Setenv("TMPDIR", tempDir)
 
-	logger, err := NewLogger()
+	logger, err := newLogger()
 	if err != nil {
 		t.Fatalf("NewLogger() error = %v", err)
 	}
 
-	logger.Info("before close")
+	logger.info("before close")
 	logger.Flush()
 
-	logPath := logger.Path()
+	logPath := logger.logPath()
 
 	if err := logger.Close(); err != nil {
 		t.Fatalf("Close() returned error: %v", err)
@@ -130,7 +143,11 @@ func TestLoggerCloseStopsWorkerAndKeepsFile(t *testing.T) {
 	}
 
 	// Clean up manually for test
-	defer os.Remove(logPath)
+	defer func() {
+		if err := os.Remove(logPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("I/O operation failed: %v", err)
+		}
+	}()
 
 	done := make(chan struct{})
 	go func() {
@@ -149,11 +166,15 @@ func TestLoggerConcurrentWritesSafe(t *testing.T) {
 	tempDir := t.TempDir()
 	t.Setenv("TMPDIR", tempDir)
 
-	logger, err := NewLogger()
+	logger, err := newLogger()
 	if err != nil {
 		t.Fatalf("NewLogger() error = %v", err)
 	}
-	defer logger.Close()
+	defer func() {
+		if err := logger.Close(); err != nil {
+			t.Errorf("I/O operation failed: %v", err)
+		}
+	}()
 
 	const goroutines = 10
 	const perGoroutine = 50
@@ -161,11 +182,11 @@ func TestLoggerConcurrentWritesSafe(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(goroutines)
 
-	for i := 0; i < goroutines; i++ {
+	for i := range goroutines {
 		go func(id int) {
 			defer wg.Done()
-			for j := 0; j < perGoroutine; j++ {
-				logger.Debug(fmt.Sprintf("g%d-%d", id, j))
+			for j := range perGoroutine {
+				logger.debug(fmt.Sprintf("g%d-%d", id, j))
 			}
 		}(i)
 	}
@@ -173,11 +194,15 @@ func TestLoggerConcurrentWritesSafe(t *testing.T) {
 	wg.Wait()
 	logger.Flush()
 
-	f, err := os.Open(logger.Path())
+	f, err := os.Open(logger.logPath())
 	if err != nil {
 		t.Fatalf("failed to open log file: %v", err)
 	}
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil && !errors.Is(err, os.ErrClosed) {
+			t.Errorf("I/O operation failed: %v", err)
+		}
+	}()
 
 	scanner := bufio.NewScanner(f)
 	count := 0
@@ -263,7 +288,7 @@ func TestLoggerCleanupOldLogsRemovesOrphans(t *testing.T) {
 		t.Fatalf("cleanupOldLogs() unexpected error: %v", err)
 	}
 
-	want := CleanupStats{Scanned: 4, Deleted: 2, Kept: 2}
+	want := cleanupStats{Scanned: 4, Deleted: 2, Kept: 2}
 	if !compareCleanupStats(stats, want) {
 		t.Fatalf("cleanup stats mismatch: got %+v, want %+v", stats, want)
 	}
@@ -333,7 +358,7 @@ func TestLoggerCleanupOldLogsHandlesInvalidNamesAndErrors(t *testing.T) {
 		t.Fatalf("cleanupOldLogs error = %v, want %v", err, removeErr)
 	}
 
-	want := CleanupStats{Scanned: 2, Kept: 1, Errors: 1}
+	want := cleanupStats{Scanned: 2, Kept: 1, Errors: 1}
 	if !compareCleanupStats(stats, want) {
 		t.Fatalf("cleanup stats mismatch: got %+v, want %+v", stats, want)
 	}
@@ -376,7 +401,9 @@ func TestLoggerCleanupOldLogsHandlesGlobFailures(t *testing.T) {
 	if !errors.Is(err, globErr) {
 		t.Fatalf("cleanupOldLogs error = %v, want %v", err, globErr)
 	}
-	if stats.Scanned != 0 || stats.Deleted != 0 || stats.Kept != 0 || stats.Errors != 0 || len(stats.DeletedFiles) != 0 || len(stats.KeptFiles) != 0 {
+	if stats.Scanned != 0 || stats.Deleted != 0 || stats.Kept != 0 || stats.Errors != 0 ||
+		len(stats.DeletedFiles) != 0 ||
+		len(stats.KeptFiles) != 0 {
 		t.Fatalf("cleanup stats mismatch: got %+v, want zero", stats)
 	}
 }
@@ -400,7 +427,9 @@ func TestLoggerCleanupOldLogsEmptyDirectoryStats(t *testing.T) {
 	if err != nil {
 		t.Fatalf("cleanupOldLogs() unexpected error: %v", err)
 	}
-	if stats.Scanned != 0 || stats.Deleted != 0 || stats.Kept != 0 || stats.Errors != 0 || len(stats.DeletedFiles) != 0 || len(stats.KeptFiles) != 0 {
+	if stats.Scanned != 0 || stats.Deleted != 0 || stats.Kept != 0 || stats.Errors != 0 ||
+		len(stats.DeletedFiles) != 0 ||
+		len(stats.KeptFiles) != 0 {
 		t.Fatalf("cleanup stats mismatch: got %+v, want zero", stats)
 	}
 }
@@ -432,7 +461,7 @@ func TestLoggerCleanupOldLogsHandlesTempDirPermissionErrors(t *testing.T) {
 		t.Fatalf("cleanupOldLogs error = %v, want permission", err)
 	}
 
-	want := CleanupStats{Scanned: len(paths), Errors: len(paths)}
+	want := cleanupStats{Scanned: len(paths), Errors: len(paths)}
 	if !compareCleanupStats(stats, want) {
 		t.Fatalf("cleanup stats mismatch: got %+v, want %+v", stats, want)
 	}
@@ -473,7 +502,7 @@ func TestLoggerCleanupOldLogsHandlesPermissionDeniedFile(t *testing.T) {
 		t.Fatalf("cleanupOldLogs error = %v, want permission", err)
 	}
 
-	want := CleanupStats{Scanned: 2, Deleted: 1, Errors: 1}
+	want := cleanupStats{Scanned: 2, Deleted: 1, Errors: 1}
 	if !compareCleanupStats(stats, want) {
 		t.Fatalf("cleanup stats mismatch: got %+v, want %+v", stats, want)
 	}
@@ -491,7 +520,7 @@ func TestLoggerCleanupOldLogsPerformanceBound(t *testing.T) {
 
 	const fileCount = 400
 	fakePaths := make([]string, fileCount)
-	for i := 0; i < fileCount; i++ {
+	for i := range fileCount {
 		name := fmt.Sprintf("codex-wrapper-%d.log", 10000+i)
 		fakePaths[i] = createTempLog(t, tempDir, name)
 	}
@@ -527,7 +556,7 @@ func TestLoggerCleanupOldLogsPerformanceBound(t *testing.T) {
 		t.Fatalf("cleanup took too long: %v for %d files", elapsed, fileCount)
 	}
 
-	want := CleanupStats{Scanned: fileCount, Deleted: fileCount}
+	want := cleanupStats{Scanned: fileCount, Deleted: fileCount}
 	if !compareCleanupStats(stats, want) {
 		t.Fatalf("cleanup stats mismatch: got %+v, want %+v", stats, want)
 	}
@@ -647,7 +676,7 @@ func TestLoggerCleanupOldLogsKeepsCurrentProcessLog(t *testing.T) {
 	if err != nil {
 		t.Fatalf("cleanupOldLogs() unexpected error: %v", err)
 	}
-	want := CleanupStats{Scanned: 1, Kept: 1}
+	want := cleanupStats{Scanned: 1, Kept: 1}
 	if !compareCleanupStats(stats, want) {
 		t.Fatalf("cleanup stats mismatch: got %+v, want %+v", stats, want)
 	}
@@ -770,22 +799,22 @@ func TestLoggerPathAndRemove(t *testing.T) {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
 
-	logger := &Logger{path: path}
-	if got := logger.Path(); got != path {
+	logger := &fileLogger{path: path}
+	if got := logger.logPath(); got != path {
 		t.Fatalf("Path() = %q, want %q", got, path)
 	}
-	if err := logger.RemoveLogFile(); err != nil {
+	if err := logger.removeLogFile(); err != nil {
 		t.Fatalf("RemoveLogFile() error = %v", err)
 	}
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Fatalf("expected log file to be removed, err=%v", err)
 	}
 
-	var nilLogger *Logger
-	if nilLogger.Path() != "" {
+	var nilLogger *fileLogger
+	if nilLogger.logPath() != "" {
 		t.Fatalf("nil logger Path() should be empty")
 	}
-	if err := nilLogger.RemoveLogFile(); err != nil {
+	if err := nilLogger.removeLogFile(); err != nil {
 		t.Fatalf("nil logger RemoveLogFile() should return nil, got %v", err)
 	}
 }
@@ -803,7 +832,7 @@ func TestLoggerTruncateBytesCoverage(t *testing.T) {
 }
 
 func TestLoggerInternalLog(t *testing.T) {
-	logger := &Logger{
+	logger := &fileLogger{
 		ch:        make(chan logEntry, 1),
 		done:      make(chan struct{}),
 		pendingWG: sync.WaitGroup{},
@@ -955,7 +984,7 @@ func (f fakeFileInfo) Size() int64        { return 0 }
 func (f fakeFileInfo) Mode() os.FileMode  { return f.mode }
 func (f fakeFileInfo) ModTime() time.Time { return f.modTime }
 func (f fakeFileInfo) IsDir() bool        { return false }
-func (f fakeFileInfo) Sys() interface{}   { return nil }
+func (f fakeFileInfo) Sys() any           { return nil }
 
 func TestLoggerExtractRecentErrors(t *testing.T) {
 	tests := []struct {
@@ -1022,30 +1051,34 @@ func TestLoggerExtractRecentErrors(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(
 			tt.name, func(t *testing.T) {
-				logger, err := NewLoggerWithSuffix("extract-test")
+				logger, err := newLoggerWithSuffix("extract-test")
 				if err != nil {
 					t.Fatalf("NewLoggerWithSuffix() error = %v", err)
 				}
-				defer logger.Close()
-				defer logger.RemoveLogFile()
+				defer func() {
+					if err := logger.Close(); err != nil {
+						t.Errorf("I/O operation failed: %v", err)
+					}
+				}()
+				defer logger.removeLogFile()
 
 				// Write logs using logger methods
 				for _, entry := range tt.logs {
 					switch entry.level {
 					case "INFO":
-						logger.Info(entry.msg)
+						logger.info(entry.msg)
 					case "WARN":
-						logger.Warn(entry.msg)
+						logger.warn(entry.msg)
 					case "ERROR":
-						logger.Error(entry.msg)
+						logger.error(entry.msg)
 					case "DEBUG":
-						logger.Debug(entry.msg)
+						logger.debug(entry.msg)
 					}
 				}
 
 				logger.Flush()
 
-				got := logger.ExtractRecentErrors(tt.maxEntries)
+				got := logger.extractRecentErrors(tt.maxEntries)
 
 				if len(got) != len(tt.want) {
 					t.Fatalf("ExtractRecentErrors() got %d entries, want %d", len(got), len(tt.want))
@@ -1061,22 +1094,22 @@ func TestLoggerExtractRecentErrors(t *testing.T) {
 }
 
 func TestLoggerExtractRecentErrorsNilLogger(t *testing.T) {
-	var logger *Logger
-	if got := logger.ExtractRecentErrors(10); got != nil {
+	var logger *fileLogger
+	if got := logger.extractRecentErrors(10); got != nil {
 		t.Fatalf("nil logger ExtractRecentErrors() should return nil, got %v", got)
 	}
 }
 
 func TestLoggerExtractRecentErrorsEmptyPath(t *testing.T) {
-	logger := &Logger{path: ""}
-	if got := logger.ExtractRecentErrors(10); got != nil {
+	logger := &fileLogger{path: ""}
+	if got := logger.extractRecentErrors(10); got != nil {
 		t.Fatalf("empty path ExtractRecentErrors() should return nil, got %v", got)
 	}
 }
 
 func TestLoggerExtractRecentErrorsFileNotExist(t *testing.T) {
-	logger := &Logger{path: "/nonexistent/path/to/log.log"}
-	if got := logger.ExtractRecentErrors(10); got != nil {
+	logger := &fileLogger{path: "/nonexistent/path/to/log.log"}
+	if got := logger.extractRecentErrors(10); got != nil {
 		t.Fatalf("nonexistent file ExtractRecentErrors() should return nil, got %v", got)
 	}
 }
@@ -1112,58 +1145,66 @@ func TestSanitizeLogSuffixNoDuplicates(t *testing.T) {
 }
 
 func TestExtractRecentErrorsBoundaryCheck(t *testing.T) {
-	logger, err := NewLoggerWithSuffix("boundary-test")
+	logger, err := newLoggerWithSuffix("boundary-test")
 	if err != nil {
 		t.Fatalf("NewLoggerWithSuffix() error = %v", err)
 	}
-	defer logger.Close()
-	defer logger.RemoveLogFile()
+	defer func() {
+		if err := logger.Close(); err != nil {
+			t.Errorf("I/O operation failed: %v", err)
+		}
+	}()
+	defer logger.removeLogFile()
 
 	// Write some errors
-	logger.Error("error 1")
-	logger.Warn("warn 1")
-	logger.Error("error 2")
+	logger.error("error 1")
+	logger.warn("warn 1")
+	logger.error("error 2")
 	logger.Flush()
 
 	// Test zero
-	result := logger.ExtractRecentErrors(0)
+	result := logger.extractRecentErrors(0)
 	if result != nil {
 		t.Fatalf("ExtractRecentErrors(0) should return nil, got %v", result)
 	}
 
 	// Test negative
-	result = logger.ExtractRecentErrors(-5)
+	result = logger.extractRecentErrors(-5)
 	if result != nil {
 		t.Fatalf("ExtractRecentErrors(-5) should return nil, got %v", result)
 	}
 
 	// Test positive still works
-	result = logger.ExtractRecentErrors(10)
+	result = logger.extractRecentErrors(10)
 	if len(result) != 3 {
 		t.Fatalf("ExtractRecentErrors(10) expected 3 entries, got %d", len(result))
 	}
 }
 
 func TestErrorEntriesMaxLimit(t *testing.T) {
-	logger, err := NewLoggerWithSuffix("max-limit-test")
+	logger, err := newLoggerWithSuffix("max-limit-test")
 	if err != nil {
 		t.Fatalf("NewLoggerWithSuffix() error = %v", err)
 	}
-	defer logger.Close()
-	defer logger.RemoveLogFile()
+	defer func() {
+		if err := logger.Close(); err != nil {
+			t.Errorf("I/O operation failed: %v", err)
+		}
+	}()
+	defer logger.removeLogFile()
 
 	// Write 150 error/warn entries
 	for i := 1; i <= 150; i++ {
 		if i%2 == 0 {
-			logger.Error(fmt.Sprintf("error-%03d", i))
+			logger.error(fmt.Sprintf("error-%03d", i))
 		} else {
-			logger.Warn(fmt.Sprintf("warn-%03d", i))
+			logger.warn(fmt.Sprintf("warn-%03d", i))
 		}
 	}
 	logger.Flush()
 
 	// Extract all cached errors
-	result := logger.ExtractRecentErrors(200) // Request more than cache size
+	result := logger.extractRecentErrors(200) // Request more than cache size
 
 	// Should only have last 100 entries (entries 51-150 in sequence)
 	if len(result) != 100 {

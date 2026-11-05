@@ -18,11 +18,11 @@ import {
   writeFastContextPrompt,
 } from '../utils/installer'
 import { migrateToV1_4_0, needsMigration } from '../utils/migration'
-import type { InitState } from './init-state'
-import { configureApiDefaults, installHook } from './command-settings'
 import type { ClaudeSettings } from './command-settings'
+import { configureApiDefaults, installHook } from './command-settings'
 import { appendGrokSearchPrompt, installGrokSearchMcp } from './grok-search'
 import { showInitResult } from './init-result'
+import type { InitState } from './init-state'
 
 type Spinner = ReturnType<typeof ora>
 
@@ -109,7 +109,9 @@ async function saveApiSettings(state: InitState, settingsPath: string): Promise<
     if (await fs.pathExists(settingsPath)) {
       settings = await fs.readJSON(settingsPath)
     }
-    if (!settings.env) settings.env = {}
+    if (!settings.env) {
+      settings.env = {}
+    }
     settings.env.ANTHROPIC_BASE_URL = state.apiUrl
     settings.env.ANTHROPIC_AUTH_TOKEN = state.apiKey
     delete settings.env.ANTHROPIC_API_KEY
@@ -231,7 +233,9 @@ export async function installInit(state: InitState, routing: ModelRouting): Prom
 
     if (!result.success) {
       spinner.fail(ansis.red(i18n.t('init:installFailed')))
-      for (const error of result.errors) console.log(`    ${ansis.red('✗')} ${error}`)
+      for (const error of result.errors) {
+        console.log(`    ${ansis.red('✗')} ${error}`)
+      }
       process.exitCode = 1
       return
     }

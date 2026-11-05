@@ -17,8 +17,8 @@ func stripTimestampPrefix(line string) string {
 	if !strings.HasPrefix(line, "[") {
 		return line
 	}
-	if idx := strings.Index(line, "] "); idx >= 0 {
-		return line[idx+2:]
+	if _, after, ok := strings.Cut(line, "] "); ok {
+		return after
 	}
 	return line
 }
@@ -29,13 +29,17 @@ func TestConcurrentStressLogger(t *testing.T) {
 		t.Skip("skipping stress test in short mode")
 	}
 
-	logger, err := NewLoggerWithSuffix("stress")
+	logger, err := newLoggerWithSuffix("stress")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer logger.Close()
+	defer func() {
+		if err := logger.Close(); err != nil {
+			t.Errorf("I/O operation failed: %v", err)
+		}
+	}()
 
-	t.Logf("Log file: %s", logger.Path())
+	t.Logf("Log file: %s", logger.logPath())
 
 	const (
 		numGoroutines  = 100  // 并发协程数
@@ -47,12 +51,12 @@ func TestConcurrentStressLogger(t *testing.T) {
 	start := time.Now()
 
 	// 启动并发写入
-	for i := 0; i < numGoroutines; i++ {
+	for i := range numGoroutines {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
-			for j := 0; j < logsPerRoutine; j++ {
-				logger.Info(fmt.Sprintf("goroutine-%d-msg-%d", id, j))
+			for j := range logsPerRoutine {
+				logger.info(fmt.Sprintf("goroutine-%d-msg-%d", id, j))
 			}
 		}(i)
 	}
@@ -62,7 +66,7 @@ func TestConcurrentStressLogger(t *testing.T) {
 	elapsed := time.Since(start)
 
 	// 读取日志文件验证
-	data, err := os.ReadFile(logger.Path())
+	data, err := os.ReadFile(logger.logPath())
 	if err != nil {
 		t.Fatalf("failed to read log file: %v", err)
 	}
@@ -106,13 +110,17 @@ func TestConcurrentBurstLogger(t *testing.T) {
 		t.Skip("skipping burst test in short mode")
 	}
 
-	logger, err := NewLoggerWithSuffix("burst")
+	logger, err := newLoggerWithSuffix("burst")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer logger.Close()
+	defer func() {
+		if err := logger.Close(); err != nil {
+			t.Errorf("I/O operation failed: %v", err)
+		}
+	}()
 
-	t.Logf("Log file: %s", logger.Path())
+	t.Logf("Log file: %s", logger.logPath())
 
 	const (
 		numBursts          = 10
@@ -124,15 +132,15 @@ func TestConcurrentBurstLogger(t *testing.T) {
 	start := time.Now()
 
 	// 模拟突发流量
-	for burst := 0; burst < numBursts; burst++ {
+	for burst := range numBursts {
 		var wg sync.WaitGroup
-		for i := 0; i < goroutinesPerBurst; i++ {
+		for i := range goroutinesPerBurst {
 			wg.Add(1)
 			totalLogs += logsPerGoroutine
 			go func(b, g int) {
 				defer wg.Done()
-				for j := 0; j < logsPerGoroutine; j++ {
-					logger.Info(fmt.Sprintf("burst-%d-goroutine-%d-msg-%d", b, g, j))
+				for j := range logsPerGoroutine {
+					logger.info(fmt.Sprintf("burst-%d-goroutine-%d-msg-%d", b, g, j))
 				}
 			}(burst, i)
 		}
@@ -144,7 +152,7 @@ func TestConcurrentBurstLogger(t *testing.T) {
 	elapsed := time.Since(start)
 
 	// 验证
-	data, err := os.ReadFile(logger.Path())
+	data, err := os.ReadFile(logger.logPath())
 	if err != nil {
 		t.Fatalf("failed to read log file: %v", err)
 	}
@@ -171,17 +179,21 @@ func TestConcurrentBurstLogger(t *testing.T) {
 
 // TestLoggerChannelCapacity 测试 channel 容量极限
 func TestLoggerChannelCapacity(t *testing.T) {
-	logger, err := NewLoggerWithSuffix("capacity")
+	logger, err := newLoggerWithSuffix("capacity")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer logger.Close()
+	defer func() {
+		if err := logger.Close(); err != nil {
+			t.Errorf("I/O operation failed: %v", err)
+		}
+	}()
 
 	const rapidLogs = 2000 // 超过 channel 容量 (1000)
 
 	start := time.Now()
-	for i := 0; i < rapidLogs; i++ {
-		logger.Info(fmt.Sprintf("rapid-log-%d", i))
+	for i := range rapidLogs {
+		logger.info(fmt.Sprintf("rapid-log-%d", i))
 	}
 	sendDuration := time.Since(start)
 
@@ -194,7 +206,7 @@ func TestLoggerChannelCapacity(t *testing.T) {
 	t.Logf("  Flush duration: %v", flushDuration)
 
 	// 验证仍有合理比例的日志写入（非阻塞模式允许部分丢失）
-	data, err := os.ReadFile(logger.Path())
+	data, err := os.ReadFile(logger.logPath())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -209,24 +221,28 @@ func TestLoggerChannelCapacity(t *testing.T) {
 
 // TestLoggerMemoryUsage 内存使用测试
 func TestLoggerMemoryUsage(t *testing.T) {
-	logger, err := NewLoggerWithSuffix("memory")
+	logger, err := newLoggerWithSuffix("memory")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer logger.Close()
+	defer func() {
+		if err := logger.Close(); err != nil {
+			t.Errorf("I/O operation failed: %v", err)
+		}
+	}()
 
 	const numLogs = 20000
 	longMessage := strings.Repeat("x", 500) // 500 字节长消息
 
 	start := time.Now()
-	for i := 0; i < numLogs; i++ {
-		logger.Info(fmt.Sprintf("log-%d-%s", i, longMessage))
+	for i := range numLogs {
+		logger.info(fmt.Sprintf("log-%d-%s", i, longMessage))
 	}
 	logger.Flush()
 	elapsed := time.Since(start)
 
 	// 检查文件大小
-	info, err := os.Stat(logger.Path())
+	info, err := os.Stat(logger.logPath())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -250,15 +266,19 @@ func TestLoggerMemoryUsage(t *testing.T) {
 
 // TestLoggerFlushTimeout 测试 Flush 超时机制
 func TestLoggerFlushTimeout(t *testing.T) {
-	logger, err := NewLoggerWithSuffix("flush")
+	logger, err := newLoggerWithSuffix("flush")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer logger.Close()
+	defer func() {
+		if err := logger.Close(); err != nil {
+			t.Errorf("I/O operation failed: %v", err)
+		}
+	}()
 
 	// 写入一些日志
-	for i := 0; i < 100; i++ {
-		logger.Info(fmt.Sprintf("test-log-%d", i))
+	for i := range 100 {
+		logger.info(fmt.Sprintf("test-log-%d", i))
 	}
 
 	// 测试 Flush 应该在合理时间内完成
@@ -275,22 +295,26 @@ func TestLoggerFlushTimeout(t *testing.T) {
 
 // TestLoggerOrderPreservation 测试日志顺序保持
 func TestLoggerOrderPreservation(t *testing.T) {
-	logger, err := NewLoggerWithSuffix("order")
+	logger, err := newLoggerWithSuffix("order")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer logger.Close()
+	defer func() {
+		if err := logger.Close(); err != nil {
+			t.Errorf("I/O operation failed: %v", err)
+		}
+	}()
 
 	const numGoroutines = 10
 	const logsPerRoutine = 100
 
 	var wg sync.WaitGroup
-	for i := 0; i < numGoroutines; i++ {
+	for i := range numGoroutines {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
-			for j := 0; j < logsPerRoutine; j++ {
-				logger.Info(fmt.Sprintf("G%d-SEQ%04d", id, j))
+			for j := range logsPerRoutine {
+				logger.info(fmt.Sprintf("G%d-SEQ%04d", id, j))
 			}
 		}(i)
 	}
@@ -299,7 +323,7 @@ func TestLoggerOrderPreservation(t *testing.T) {
 	logger.Flush()
 
 	// 读取并验证每个 goroutine 的日志顺序
-	data, err := os.ReadFile(logger.Path())
+	data, err := os.ReadFile(logger.logPath())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -344,7 +368,7 @@ func TestConcurrentWorkerPoolLimit(t *testing.T) {
 	orig := runCodexTaskFn
 	defer func() { runCodexTaskFn = orig }()
 
-	logger, err := NewLoggerWithSuffix("pool-limit")
+	logger, err := newLoggerWithSuffix("pool-limit")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -352,17 +376,17 @@ func TestConcurrentWorkerPoolLimit(t *testing.T) {
 	t.Cleanup(
 		func() {
 			_ = closeLogger()
-			_ = logger.RemoveLogFile()
+			_ = logger.removeLogFile()
 		},
 	)
 
-	var active int64
+	var active atomic.Int64
 	var maxSeen int64
-	runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
+	runCodexTaskFn = func(task taskSpec, timeout int) taskResult {
 		if task.Context == nil {
 			t.Fatalf("context not propagated for task %s", task.ID)
 		}
-		cur := atomic.AddInt64(&active, 1)
+		cur := active.Add(1)
 		for {
 			prev := atomic.LoadInt64(&maxSeen)
 			if cur <= prev || atomic.CompareAndSwapInt64(&maxSeen, prev, cur) {
@@ -371,15 +395,15 @@ func TestConcurrentWorkerPoolLimit(t *testing.T) {
 		}
 		select {
 		case <-task.Context.Done():
-			atomic.AddInt64(&active, -1)
-			return TaskResult{TaskID: task.ID, ExitCode: 130, Error: "context cancelled"}
+			active.Add(-1)
+			return taskResult{TaskID: task.ID, ExitCode: 130, Error: "context cancelled"}
 		case <-time.After(30 * time.Millisecond):
 		}
-		atomic.AddInt64(&active, -1)
-		return TaskResult{TaskID: task.ID}
+		active.Add(-1)
+		return taskResult{TaskID: task.ID}
 	}
 
-	layers := [][]TaskSpec{{{ID: "t1"}, {ID: "t2"}, {ID: "t3"}, {ID: "t4"}, {ID: "t5"}}}
+	layers := [][]taskSpec{{{ID: "t1"}, {ID: "t2"}, {ID: "t3"}, {ID: "t4"}, {ID: "t5"}}}
 	results := executeConcurrentWithContext(context.Background(), layers, 5, 2)
 
 	if len(results) != 5 {
@@ -390,7 +414,7 @@ func TestConcurrentWorkerPoolLimit(t *testing.T) {
 	}
 
 	logger.Flush()
-	data, err := os.ReadFile(logger.Path())
+	data, err := os.ReadFile(logger.logPath())
 	if err != nil {
 		t.Fatalf("failed to read log file: %v", err)
 	}
@@ -410,19 +434,19 @@ func TestConcurrentCancellationPropagation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
+	runCodexTaskFn = func(task taskSpec, timeout int) taskResult {
 		if task.Context == nil {
 			t.Fatalf("context not propagated for task %s", task.ID)
 		}
 		select {
 		case <-task.Context.Done():
-			return TaskResult{TaskID: task.ID, ExitCode: 130, Error: "context cancelled"}
+			return taskResult{TaskID: task.ID, ExitCode: 130, Error: "context cancelled"}
 		case <-time.After(200 * time.Millisecond):
-			return TaskResult{TaskID: task.ID}
+			return taskResult{TaskID: task.ID}
 		}
 	}
 
-	layers := [][]TaskSpec{{{ID: "a"}, {ID: "b"}, {ID: "c"}}}
+	layers := [][]taskSpec{{{ID: "a"}, {ID: "b"}, {ID: "c"}}}
 	go func() {
 		time.Sleep(50 * time.Millisecond)
 		cancel()

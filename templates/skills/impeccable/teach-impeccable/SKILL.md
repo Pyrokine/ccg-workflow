@@ -56,15 +56,19 @@ Synthesize your findings and the user's answers into a `## Design Context` secti
 ## Design Context
 
 ### Users
+
 [Who they are, their context, the job to be done]
 
 ### Brand Personality
+
 [Voice, tone, 3-word personality, emotional goals]
 
 ### Aesthetic Direction
+
 [Visual tone, references, anti-references, theme]
 
 ### Design Principles
+
 [3-5 principles derived from the conversation that should guide all design decisions]
 ```
 

@@ -202,4 +202,3 @@ grype sbom:sbom.json
   - Checkov
   - Terrascan
 ```
-

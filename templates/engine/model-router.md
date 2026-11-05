@@ -22,7 +22,8 @@ Read ~/.claude/.ccg/config.toml
 
 模型可为 `codex`、`claude`、`antigravity`、`grok`、`kimi` 或 `opencode`。配置文件缺失或不可读时，使用默认路由。
 
-Gemini CLI 已禁用：2026-06-18 后 consumer OAuth 请求不再处理。不要选择 `gemini`，旧配置中的 `gemini` 会迁移为 `grok`；`agy` 是 `antigravity` 的别名。
+Gemini CLI 已禁用：2026-06-18 后 consumer OAuth 请求不再处理。不要选择 `gemini`，旧配置中的 `gemini` 会迁移为
+`grok`；`agy` 是 `antigravity` 的别名。
 
 ## 1b. 纯 Claude Code 模式
 
@@ -38,20 +39,20 @@ Gemini CLI 已禁用：2026-06-18 后 consumer OAuth 请求不再处理。不要
 
 ### 分析/研究阶段
 
-| 任务领域  | 推荐模型                                       | 角色提示词                   |
-|-------|--------------------------------------------|-------------------------|
-| 后端/架构 | backend 模型                                 | `$BACKEND/analyzer.md`  |
-| 前端/UI | frontend 模型                                | `$FRONTEND/analyzer.md` |
-| 全栈    | backend 模型，涉及前端、布局、界面、页面设计时再调用 frontend 模型 | 对应 analyzer             |
-| 安全    | backend 模型                                 | `$BACKEND/analyzer.md`  |
+| 任务领域  | 推荐模型                                                           | 角色提示词              |
+|-----------|--------------------------------------------------------------------|-------------------------|
+| 后端/架构 | backend 模型                                                       | `$BACKEND/analyzer.md`  |
+| 前端/UI   | frontend 模型                                                      | `$FRONTEND/analyzer.md` |
+| 全栈      | backend 模型，涉及前端、布局、界面、页面设计时再调用 frontend 模型 | 对应 analyzer           |
+| 安全      | backend 模型                                                       | `$BACKEND/analyzer.md`  |
 
 ### 规划阶段
 
-| 任务领域     | 推荐模型                                       | 角色提示词                    |
-|----------|--------------------------------------------|--------------------------|
-| 架构设计     | backend 模型                                 | `$BACKEND/architect.md`  |
-| UI/UX 设计 | frontend 模型                                | `$FRONTEND/architect.md` |
-| 全栈       | backend 模型，涉及前端、布局、界面、页面设计时再调用 frontend 模型 | 对应 architect             |
+| 任务领域   | 推荐模型                                                           | 角色提示词               |
+|------------|--------------------------------------------------------------------|--------------------------|
+| 架构设计   | backend 模型                                                       | `$BACKEND/architect.md`  |
+| UI/UX 设计 | frontend 模型                                                      | `$FRONTEND/architect.md` |
+| 全栈       | backend 模型，涉及前端、布局、界面、页面设计时再调用 frontend 模型 | 对应 architect           |
 
 ### 审查阶段
 
@@ -65,11 +66,11 @@ Gemini CLI 已禁用：2026-06-18 后 consumer OAuth 请求不再处理。不要
 
 ### 调试阶段
 
-| 任务领域 | 推荐模型                                           | 角色提示词                   |
-|------|------------------------------------------------|-------------------------|
-| 后端问题 | backend 模型优先                                   | `$BACKEND/debugger.md`  |
-| 前端问题 | frontend 模型优先                                  | `$FRONTEND/debugger.md` |
-| 不确定  | backend 模型优先，确认涉及前端、布局、界面、页面设计时再调用 frontend 模型 | 对应 debugger             |
+| 任务领域 | 推荐模型                                                                   | 角色提示词              |
+|----------|----------------------------------------------------------------------------|-------------------------|
+| 后端问题 | backend 模型优先                                                           | `$BACKEND/debugger.md`  |
+| 前端问题 | frontend 模型优先                                                          | `$FRONTEND/debugger.md` |
+| 不确定   | backend 模型优先，确认涉及前端、布局、界面、页面设计时再调用 frontend 模型 | 对应 debugger           |
 
 ### 实施阶段
 
@@ -89,7 +90,8 @@ Gemini CLI 已禁用：2026-06-18 后 consumer OAuth 请求不再处理。不要
 
 ## 3. 调用模板
 
-仅 Antigravity 在 `[routing.proxy]` 显式配置 `antigravity` / `agy` 和代理 URL 时，才由 `~/.claude/bin/codeagent-wrapper` 注入代理。Codex、Claude、Grok、Kimi 与 OpenCode 不走代理。
+仅 Antigravity 在 `[routing.proxy]` 显式配置 `antigravity` / `agy` 和代理 URL 时，才由 `~/.claude/bin/codeagent-wrapper`
+注入代理。Codex、Claude、Grok、Kimi 与 OpenCode 不走代理。
 
 ### 获取工作目录
 
@@ -101,12 +103,13 @@ WORKDIR=$(pwd)
 
 ### 显式外部 route 的新会话调用
 
-以下调用只适用于用户已明确配置为 Codex、Antigravity、Grok、Kimi Code 或 OpenCode 的 primary route。根据选定 backend 添加对应的可选 model flag：
+以下调用只适用于用户已明确配置为 Codex、Antigravity、Grok、Kimi Code 或 OpenCode 的 primary
+route。根据选定 backend 添加对应的可选 model flag：
 
-| Backend | routing 字段 | CLI 参数 |
-|---|---|---|
-| `grok` | `grokModel` | `--grok-model <model>` |
-| `kimi` | `kimiModel` | `--kimi-model <model>` |
+| Backend    | routing 字段    | CLI 参数                            |
+|------------|-----------------|-------------------------------------|
+| `grok`     | `grokModel`     | `--grok-model <model>`              |
+| `kimi`     | `kimiModel`     | `--kimi-model <model>`              |
 | `opencode` | `opencodeModel` | `--opencode-model <provider/model>` |
 
 其它 backend 不添加 model flag。随后以完成替换的命令启动 wrapper：
@@ -132,7 +135,9 @@ Bash({
 
 ### 显式外部 route 的会话复用
 
-此调用只适用于已明确配置的外部 route 的非审查任务。审查 profile 使用 `--no-session-persistence`，因此不得加入 `resume <SESSION_ID>`。其它外部任务沿用新会话调用的 backend 和 model flag 选择规则，仅在 task 前加入 `resume <SESSION_ID>`：
+此调用只适用于已明确配置的外部 route 的非审查任务。审查 profile 使用 `--no-session-persistence`，因此不得加入
+`resume <SESSION_ID>`。其它外部任务沿用新会话调用的 backend 和 model flag 选择规则，仅在 task 前加入
+`resume <SESSION_ID>`：
 
 ```
 Bash({
@@ -145,18 +150,22 @@ Bash({
 
 ### 条件双视角调用模式
 
-默认创建 backend Claude Code Agent。只有任务明确涉及前端、布局、界面、页面设计、UI/UX 时，才同时创建 frontend Claude Code Agent。两个 Agent 都使用独立上下文，不调用 codeagent-wrapper 或任何外部 CLI。
+默认创建 backend Claude Code Agent。只有任务明确涉及前端、布局、界面、页面设计、UI/UX 时，才同时创建 frontend Claude
+Code Agent。两个 Agent 都使用独立上下文，不调用 codeagent-wrapper 或任何外部 CLI。
 
-用户已将某条 primary route 明确配置为 Codex、Antigravity、Grok、Kimi Code 或 OpenCode 时，才按该 route 的配置启动外部 CLI。混合路由中，Claude route 仍使用 Agent，外部 route 才使用 wrapper。外部 route 返回 task ID 时使用 `TaskOutput` 等待；Agent 完成后由运行时通知。
+用户已将某条 primary route 明确配置为 Codex、Antigravity、Grok、Kimi
+Code 或 OpenCode 时，才按该 route 的配置启动外部 CLI。混合路由中，Claude
+route 仍使用 Agent，外部 route 才使用 wrapper。外部 route 返回 task ID 时使用 `TaskOutput`
+等待；Agent 完成后由运行时通知。
 
 ## 4. 等待与重试规则
 
-| 场景 | 策略 |
-|---|---|
-| Claude Code Agent 运行中 | 等待完成通知，不轮询 |
-| 显式配置的外部 route 失败 | 重试最多 2 次，间隔 5s |
-| 显式配置的外部 route 仍失败 | 报告失败，不自动切换到另一个 CLI |
-| 外部 route 超时 | 600s 等待上限，超时后报告并询问用户 |
+| 场景                        | 策略                                |
+|-----------------------------|-------------------------------------|
+| Claude Code Agent 运行中    | 等待完成通知，不轮询                |
+| 显式配置的外部 route 失败   | 重试最多 2 次，间隔 5s              |
+| 显式配置的外部 route 仍失败 | 报告失败，不自动切换到另一个 CLI    |
+| 外部 route 超时             | 600s 等待上限，超时后报告并询问用户 |
 
 ## 5. SESSION_ID 管理
 

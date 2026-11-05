@@ -24,7 +24,8 @@ GPT、Grok 两个 reviewer 并行交叉验证。无参数时自动审查当前 g
 
 ## GPT、Grok 双 profile 审查
 
-在同一条消息中发起 GPT、Grok 两个 `Bash` 调用，均使用 `run_in_background: true`。每个调用带入完整 diff、相关文件上下文和验收规则。主 Claude 只编排调用和汇总结果。
+在同一条消息中发起 GPT、Grok 两个 `Bash` 调用，均使用
+`run_in_background: true`。每个调用带入完整 diff、相关文件上下文和验收规则。主 Claude 只编排调用和汇总结果。
 
 所有 reviewer 使用同一个角色提示词：
 
@@ -37,10 +38,10 @@ ROLE_FILE: ~/.claude/.ccg/prompts/claude/reviewer.md
 OUTPUT: 按 Critical/Warning/Info 分类列出问题。每项包含文件、行号、描述和修复建议。
 ```
 
-| reviewer | wrapper 参数 | 审查重点 |
-| --- | --- | --- |
-| GPT | `--backend claude --no-session-persistence --claude-model {{REVIEW_GPT_MODEL}} --claude-effort {{REVIEW_GPT_EFFORT}}` | 后端逻辑、正确性、安全、回归与测试缺口 |
-| Grok | `--backend claude --no-session-persistence --claude-model {{REVIEW_GROK_MODEL}} --claude-effort {{REVIEW_GROK_EFFORT}}` | 前端交互、可访问性、设计一致性与前端安全 |
+| reviewer | wrapper 参数                                                                                                            | 审查重点                                 |
+|----------|-------------------------------------------------------------------------------------------------------------------------|------------------------------------------|
+| GPT      | `--backend claude --no-session-persistence --claude-model {{REVIEW_GPT_MODEL}} --claude-effort {{REVIEW_GPT_EFFORT}}`   | 后端逻辑、正确性、安全、回归与测试缺口   |
+| Grok     | `--backend claude --no-session-persistence --claude-model {{REVIEW_GROK_MODEL}} --claude-effort {{REVIEW_GROK_EFFORT}}` | 前端交互、可访问性、设计一致性与前端安全 |
 
 示例：
 
@@ -55,7 +56,8 @@ Bash({
 
 在同一条消息中追加 Grok 调用。使用 `TaskOutput` 等待两个结果。
 
-GPT 与 Grok 使用独立临时会话，因此禁止使用 `resume`、保存或复用 reviewer 的 `SESSION_ID`。单个 reviewer 失败时最多重试两次，之后只报告该 reviewer 不可用。
+GPT 与 Grok 使用独立临时会话，因此禁止使用 `resume`、保存或复用 reviewer 的
+`SESSION_ID`。单个 reviewer 失败时最多重试两次，之后只报告该 reviewer 不可用。
 
 ## 综合反馈
 
@@ -68,12 +70,15 @@ GPT 与 Grok 使用独立临时会话，因此禁止使用 `resume`、保存或�
 ## 代码审查报告
 
 ### Critical
+
 1. [GPT] `file.ts:42` — 问题描述
 
 ### Warning
+
 1. [Grok] `file.ts:88` — 问题描述
 
 ### Info
+
 1. [GPT] `file.ts:20` — 问题描述
 ```
 

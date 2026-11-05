@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createVolatile, updateVolatile } from '@deepseek-ai/cosmokit'
-import { Config, readConfig, apply } from '../src/index.js'
+import { apply, Config, readConfig } from '../src/index.js'
 
 test('the real schema exposes all card fields as profile-editable references', () => {
   const config = Config({ strong: { provider: 'gw', model: 'reasoner' }, team: false })
@@ -30,16 +30,30 @@ test('a Loader commit is read on the next operation without losing ordinary conf
 test('Loader validation rejects an invalid matrix before retiring the live tools', () => {
   const listeners = new Map()
   const fiber = {}
-  const ctx = { fiber,
+  const ctx = {
+    fiber,
     on: (event, handler) => listeners.set(event, handler),
     plugin: () => ({ dispose: async () => {} }),
-    effect: () => {}, inject: () => {},
+    effect: () => {},
+    inject: () => {},
   }
   apply(ctx, Config({}))
   const validate = (raw) => listeners.get('internal/config').call(fiber, raw, () => raw)
   assert.throws(() => validate({ roles: { typo: {} } }), /unknown role/)
-  assert.throws(() => validate({ roles: { reviewer: { context: 'inherit', models: [
-    { provider: 'gw', model: 'a' }, { provider: 'gw', model: 'b' },
-  ] } } }), /panel/)
+  assert.throws(
+    () =>
+      validate({
+        roles: {
+          reviewer: {
+            context: 'inherit',
+            models: [
+              { provider: 'gw', model: 'a' },
+              { provider: 'gw', model: 'b' },
+            ],
+          },
+        },
+      }),
+    /panel/
+  )
   assert.deepEqual(validate({ team: false }), { team: false })
 })

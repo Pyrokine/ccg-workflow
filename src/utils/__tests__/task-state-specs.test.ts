@@ -1,22 +1,21 @@
+import fs from 'fs-extra'
+import { join } from 'node:path'
+import { describe, expect, it } from 'vitest'
+import type { JsonObject } from './task-state-fixtures'
 import {
-  linkSpec,
-  writeArtifact,
   cleanupPaths,
-  git,
   createProject,
+  currentExpected,
+  expectFailure,
+  expectSuccess,
+  git,
+  hookOutput,
+  linkSpec,
   runController,
   runHook,
-  expectSuccess,
-  expectFailure,
-  currentExpected,
   startTask,
-  hookOutput,
+  writeArtifact,
 } from './task-state-fixtures'
-import { join } from 'node:path'
-import fs from 'fs-extra'
-import { describe, expect, it } from 'vitest'
-
-import type { JsonObject } from './task-state-fixtures'
 
 async function prepareAuthorityDocuments(root: string): Promise<void> {
   await fs.writeFile(
@@ -178,7 +177,9 @@ describe('spec references and snapshots', () => {
   ])('rejects an unsafe or invalid spec reference: %s', async (_name, specPath, section, code) => {
     const root = await createProject()
     startTask(root, 'invalid-spec-task')
-    if (specPath === 'docs/untracked.md') await fs.writeFile(join(root, specPath), '# Rules\n')
+    if (specPath === 'docs/untracked.md') {
+      await fs.writeFile(join(root, specPath), '# Rules\n')
+    }
 
     expectFailure(
       runController(root, 'link-spec', {

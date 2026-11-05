@@ -35,7 +35,7 @@ color: green
 - **测试命令**：npm test / pnpm test / pytest / go test ./...
 - **Lint 命令**：npm run lint / pnpm lint（若有）
 - **Typecheck 命令**：npx tsc --noEmit / pnpm typecheck（若有）
-- **测试文件位置**：__tests__/ / tests/ / *.test.ts / 等
+- **测试文件位置**： **tests**/ / tests/ / *.test.ts / 等
 - **现有测试模式**：AAA / Given-When-Then / describe-it / 等
 
 ### Step 2: 理解变更范围
@@ -83,32 +83,39 @@ color: green
 # QA 质量报告
 
 ## 测试环境
+
 - **框架**: [Jest/Vitest/pytest/...]
 - **运行命令**: [npm test / ...]
 
 ## 新增测试
-| 测试文件 | 覆盖源文件 | 用例数 | 描述 |
-|----------|-----------|--------|------|
-| path/to/file.test.ts | path/to/file.ts | N | [测试内容] |
+
+| 测试文件             | 覆盖源文件      | 用例数 | 描述       |
+| -------------------- | --------------- | ------ | ---------- |
+| path/to/file.test.ts | path/to/file.ts | N      | [测试内容] |
 
 ## 测试结果
+
 - **总用例**: N
 - **通过**: N ✅
 - **失败**: N ❌
 - **跳过**: N ⏭
 
 ### 失败详情（如有）
+
 - `test-name`: [错误信息 + 堆栈关键行]
 
 ## Lint 结果
+
 - **状态**: ✅ 通过 / ❌ N 个问题
 - **详情**: [问题列表，如有]
 
 ## Typecheck 结果
+
 - **状态**: ✅ 通过 / ❌ N 个错误
 - **详情**: [错误列表，如有]
 
 ## 总结
+
 - **构建状态**: ✅ 绿灯 / ❌ 红灯
 - **阻塞问题**: [列出阻止发布的问题]
 - **建议**: [改进建议]

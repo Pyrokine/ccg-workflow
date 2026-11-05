@@ -1,5 +1,7 @@
 # UI 美学
 
+以下语义令牌示例依赖目标主题定义的 `--color-blue-600`
+
 ## 色彩理论
 
 ### 色彩体系设计
@@ -39,15 +41,25 @@ body {
 
 ### 8px网格间距体系
 
-基准8px，建立4/8/12/16/24/32/48/64px间距令牌。组件内用小间距(4-12)，组件间用中间距(16-32)，区块间用大间距(48+)。
+基准8px，建立4/8/12/16/24/32/48/64px间距令牌。组件内用小间距 (4-12)，组件间用中间距 (16-32)，区块间用大间距 (48+)。
 
 ```css
 :root {
-  --sp-1: 0.25rem; --sp-2: 0.5rem; --sp-3: 0.75rem; --sp-4: 1rem;
-  --sp-6: 1.5rem; --sp-8: 2rem; --sp-12: 3rem; --sp-16: 4rem;
+  --sp-1: 0.25rem;
+  --sp-2: 0.5rem;
+  --sp-3: 0.75rem;
+  --sp-4: 1rem;
+  --sp-6: 1.5rem;
+  --sp-8: 2rem;
+  --sp-12: 3rem;
+  --sp-16: 4rem;
 }
-.stack-sm > * + * { margin-top: var(--sp-2); }
-.stack-md > * + * { margin-top: var(--sp-4); }
+.stack-sm > * + * {
+  margin-top: var(--sp-2);
+}
+.stack-md > * + * {
+  margin-top: var(--sp-4);
+}
 ```
 
 ## 视觉层次
@@ -63,7 +75,7 @@ body {
 
 ### Design Token架构
 
-三层架构：基础令牌(颜色/字号原始值)→语义令牌(primary/heading)→组件令牌(button-bg)。
+三层架构：基础令牌 (颜色/字号原始值)→语义令牌 (primary/heading)→组件令牌 (button-bg)。
 
 ```css
 :root {
@@ -72,7 +84,7 @@ body {
   --color-primary: var(--color-blue-600);
   --text-primary: var(--color-gray-900);
   --bg-surface: white;
-  --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 ```
 
@@ -80,30 +92,42 @@ body {
 
 ### 暗色模式设计规范
 
-背景用深灰(#121212)非纯黑。降低白色文本亮度至#e0e0e0。提升表面层级用更亮灰色。注意色彩对比度WCAG AA。
+背景用深灰 (#121212)非纯黑。降低白色文本亮度至#e0e0e0。提升表面层级用更亮灰色。注意色彩对比度WCAG AA。
 
 ```css
-:root { --bg: white; --text: #111; }
-@media (prefers-color-scheme: dark) {
-  :root { --bg: #121212; --text: #e0e0e0; }
+:root {
+  --bg: white;
+  --text: #111;
 }
-[data-theme="dark"] { --bg: #121212; --text: #e0e0e0; }
-body { background: var(--bg); color: var(--text); }
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #121212;
+    --text: #e0e0e0;
+  }
+}
+[data-theme='dark'] {
+  --bg: #121212;
+  --text: #e0e0e0;
+}
+body {
+  background: var(--bg);
+  color: var(--text);
+}
 ```
 
 ## 阴影与层级
 
 ### 阴影层级体系
 
-5级阴影：1-贴地(1px) 2-悬浮(2-4px) 3-浮起(8-12px) 4-弹出(16-24px) 5-模态(24-32px)。
+5级阴影：1-贴地 (1px) 2-悬浮 (2-4px) 3-浮起 (8-12px) 4-弹出 (16-24px) 5-模态 (24-32px)。
 
 ```css
 :root {
-  --shadow-1: 0 1px 2px rgba(0,0,0,0.05);
-  --shadow-2: 0 2px 4px rgba(0,0,0,0.08);
-  --shadow-3: 0 8px 16px rgba(0,0,0,0.12);
-  --shadow-4: 0 16px 24px rgba(0,0,0,0.16);
-  --shadow-5: 0 24px 32px rgba(0,0,0,0.2);
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-2: 0 2px 4px rgba(0, 0, 0, 0.08);
+  --shadow-3: 0 8px 16px rgba(0, 0, 0, 0.12);
+  --shadow-4: 0 16px 24px rgba(0, 0, 0, 0.16);
+  --shadow-5: 0 24px 32px rgba(0, 0, 0, 0.2);
 }
 ```
 

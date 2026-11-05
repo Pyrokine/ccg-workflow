@@ -13,8 +13,8 @@ import {
   statMaybe,
   treeDigest,
 } from './skill-manager-files'
-import { collectNativeSkills } from './skill-registry'
 import type { SkillMeta } from './skill-registry'
+import { collectNativeSkills } from './skill-registry'
 
 export type SkillTarget = 'claude' | 'codex'
 export interface SkillManagerOptions {
@@ -54,13 +54,16 @@ const DIGEST = /^[a-f0-9]{64}$/
 export const SKILL_MANIFEST_FILE = 'manifest.json'
 
 function assertSkillPath(path: string): void {
-  if (!isAbsolute(path) || dirname(resolve(path)) === resolve(path))
+  if (!isAbsolute(path) || dirname(resolve(path)) === resolve(path)) {
     throw new Error(`Absolute non-root skill path required: ${path}`)
+  }
 }
 
 export function resolveSkillPaths(options: SkillManagerOptions = {}) {
   const target = options.target ?? 'claude'
-  if (target !== 'claude' && target !== 'codex') throw new Error(`Unsupported skill target: ${target}`)
+  if (target !== 'claude' && target !== 'codex') {
+    throw new Error(`Unsupported skill target: ${target}`)
+  }
   const home = target === 'claude' ? join(homedir(), '.claude') : join(homedir(), '.agents')
   const paths = {
     target,
@@ -85,8 +88,9 @@ async function canonicalPaths(options: SkillManagerOptions, create: boolean) {
   const dirs = [paths.templatesDir, paths.nativeDir, paths.storeDir]
   for (let i = 0; i < dirs.length; i++) {
     for (let j = i + 1; j < dirs.length; j++) {
-      if (contained(dirs[i], dirs[j]) || contained(dirs[j], dirs[i]))
+      if (contained(dirs[i], dirs[j]) || contained(dirs[j], dirs[i])) {
         throw new Error('Skill source, native directory and store must be separate')
+      }
     }
   }
   if (create) {
@@ -113,12 +117,16 @@ function validateRecord(value: ManagedSkill, paths: Paths): void {
     typeof value.version !== 'string' ||
     typeof value.target !== 'string' ||
     !isAbsolute(value.target)
-  )
+  ) {
     throw new Error('Invalid managed skill record')
+  }
   const snapshotRoot = join(paths.storeDir, 'snapshots', value.snapshot)
-  if (value.target === snapshotRoot || !contained(snapshotRoot, value.target))
+  if (value.target === snapshotRoot || !contained(snapshotRoot, value.target)) {
     throw new Error('Managed skill target escapes its snapshot')
-  if (value.target !== join(snapshotRoot, 'entries', value.name)) throw new Error('Invalid managed skill entry target')
+  }
+  if (value.target !== join(snapshotRoot, 'entries', value.name)) {
+    throw new Error('Invalid managed skill entry target')
+  }
 }
 
 function validateManifestHeader(value: SkillManifest, paths: Paths, path: string): void {
@@ -129,21 +137,28 @@ function validateManifestHeader(value: SkillManifest, paths: Paths, path: string
     value.nativeDir !== paths.nativeDir ||
     value.selectionMode !== 'native' ||
     !Array.isArray(value.skills)
-  )
+  ) {
     throw new Error(`Invalid skill manifest: ${path}`)
+  }
 }
 
 async function readManifest(paths: Paths): Promise<SkillManifest> {
   const path = join(paths.storeDir, SKILL_MANIFEST_FILE)
   const stat = await statMaybe(path)
-  if (!stat) return emptyManifest(paths)
-  if (!stat.isFile() || stat.isSymbolicLink()) throw new Error(`Invalid skill manifest: ${path}`)
+  if (!stat) {
+    return emptyManifest(paths)
+  }
+  if (!stat.isFile() || stat.isSymbolicLink()) {
+    throw new Error(`Invalid skill manifest: ${path}`)
+  }
   const value = JSON.parse(await fs.readFile(path, 'utf8')) as SkillManifest
   validateManifestHeader(value, paths, path)
   const names = new Set<string>()
   for (const record of value.skills) {
     validateRecord(record, paths)
-    if (names.has(record.name)) throw new Error('Duplicate managed skill record')
+    if (names.has(record.name)) {
+      throw new Error('Duplicate managed skill record')
+    }
     names.add(record.name)
   }
   return value
@@ -177,7 +192,9 @@ export async function listSkills(options: SkillManagerOptions = {}): Promise<Ski
     [...names].sort().map(async (name) => {
       const skill = catalog.find((s) => s.name === name)
       const record = manifest.skills.find((s) => s.name === name)
-      if (record && !health.has(record.snapshot)) health.set(record.snapshot, cacheMatches(paths, record))
+      if (record && !health.has(record.snapshot)) {
+        health.set(record.snapshot, cacheMatches(paths, record))
+      }
       return {
         name,
         alias: `ccg-${name}`,
@@ -196,9 +213,12 @@ export async function installedNames(options: SkillManagerOptions = {}): Promise
 }
 
 function validateNames(names: string[]): void {
-  if (!Array.isArray(names) || names.some((n) => typeof n !== 'string' || !SLUG.test(n)))
+  if (!Array.isArray(names) || names.some((n) => typeof n !== 'string' || !SLUG.test(n))) {
     throw new Error('Skill names must be catalog slugs')
-  if (new Set(names).size !== names.length) throw new Error('Duplicate skill selection')
+  }
+  if (new Set(names).size !== names.length) {
+    throw new Error('Duplicate skill selection')
+  }
 }
 
 async function withLock<T>(paths: Paths, operation: () => Promise<T>): Promise<T> {
@@ -207,8 +227,9 @@ async function withLock<T>(paths: Paths, operation: () => Promise<T>): Promise<T
   try {
     lock = await fs.open(path, 'wx', 0o600)
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'EEXIST')
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
       throw new Error(`Skills manager busy; lock preserved: ${path}`, { cause: error })
+    }
     throw error
   }
   try {
@@ -218,19 +239,24 @@ async function withLock<T>(paths: Paths, operation: () => Promise<T>): Promise<T
     const ours = await lock.stat()
     await lock.close()
     const current = await statMaybe(path)
-    if (current?.ino === ours.ino && current.dev === ours.dev) await fs.unlink(path)
+    if (current?.ino === ours.ino && current.dev === ours.dev) {
+      await fs.unlink(path)
+    }
   }
 }
 
 async function assertOwnership(paths: Paths, manifest: SkillManifest): Promise<void> {
   for (const record of manifest.skills) {
-    if (!(await aliasMatches(paths, record))) throw new Error(`Managed skill alias changed; preserved: ${record.alias}`)
+    if (!(await aliasMatches(paths, record))) {
+      throw new Error(`Managed skill alias changed; preserved: ${record.alias}`)
+    }
   }
 }
 
 async function assertManifestUnchanged(paths: Paths, previous: SkillManifest): Promise<void> {
-  if (JSON.stringify(await readManifest(paths)) !== JSON.stringify(previous))
+  if (JSON.stringify(await readManifest(paths)) !== JSON.stringify(previous)) {
     throw new Error('Skill manifest changed concurrently; preserved')
+  }
 }
 
 type AliasChange = { old?: ManagedSkill; next?: ManagedSkill }
@@ -243,21 +269,35 @@ async function replaceAlias(paths: Paths, name: string, change: AliasChange, cha
   await plainDirectory(paths.nativeDir)
   await plainDirectory(paths.storeDir)
   const { old, next } = change
-  if (old?.target === next?.target) return
+  if (old?.target === next?.target) {
+    return
+  }
   const path = join(paths.nativeDir, `ccg-${name}`)
-  if (old && !(await aliasMatches(paths, old))) throw new Error(`Managed skill alias changed; preserved: ${path}`)
-  if (!old && (await statMaybe(path))) throw new Error(`Unmanaged skill conflict; preserved: ${path}`)
-  if (old) await fs.unlink(path)
+  if (old && !(await aliasMatches(paths, old))) {
+    throw new Error(`Managed skill alias changed; preserved: ${path}`)
+  }
+  if (!old && (await statMaybe(path))) {
+    throw new Error(`Unmanaged skill conflict; preserved: ${path}`)
+  }
+  if (old) {
+    await fs.unlink(path)
+  }
   changed.push(change)
-  if (next) await createAlias(next, path)
+  if (next) {
+    await createAlias(next, path)
+  }
 }
 
 async function restoreAliases(paths: Paths, changed: AliasChange[]): Promise<void> {
   for (const item of changed.reverse()) {
     const name = (item.old ?? item.next)!.name
     const path = join(paths.nativeDir, `ccg-${name}`)
-    if (item.next && (await aliasMatches(paths, item.next))) await fs.unlink(path)
-    if (item.old && !(await statMaybe(path))) await createAlias(item.old, path)
+    if (item.next && (await aliasMatches(paths, item.next))) {
+      await fs.unlink(path)
+    }
+    if (item.old && !(await statMaybe(path))) {
+      await createAlias(item.old, path)
+    }
   }
 }
 
@@ -295,11 +335,16 @@ async function validateSelection(
   catalog: SkillMeta[]
 ): Promise<void> {
   for (const name of names) {
-    if (!catalog.some((s) => s.name === name)) throw new Error(`Unknown skill: ${name}`)
+    if (!catalog.some((s) => s.name === name)) {
+      throw new Error(`Unknown skill: ${name}`)
+    }
     const old = previous.skills.find((s) => s.name === name)
-    if (old && !(await cacheMatches(paths, old))) throw new Error(`Modified skill cache preserved: ${name}`)
-    if (!old && (await statMaybe(join(paths.nativeDir, `ccg-${name}`))))
+    if (old && !(await cacheMatches(paths, old))) {
+      throw new Error(`Modified skill cache preserved: ${name}`)
+    }
+    if (!old && (await statMaybe(join(paths.nativeDir, `ccg-${name}`)))) {
       throw new Error(`Unmanaged skill conflict; preserved: ccg-${name}`)
+    }
   }
 }
 
@@ -314,8 +359,9 @@ async function mutate(action: Action, requested: string[], options: SkillManager
     const catalog = action === 'remove' ? [] : getSkillCatalog(paths)
     if (action !== 'remove') {
       await validateSelection(paths, names, previous, catalog)
-    } else if (names.some((n) => !previous.skills.some((s) => s.name === n)))
+    } else if (names.some((n) => !previous.skills.some((s) => s.name === n))) {
       throw new Error('Only managed skills can be removed')
+    }
     const keep = action === 'sync' || action === 'update' ? [] : previous.skills.filter((s) => !names.includes(s.name))
     const snapshot =
       action !== 'remove' && names.length

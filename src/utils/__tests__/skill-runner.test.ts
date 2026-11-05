@@ -1,6 +1,6 @@
 import { spawn, spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -20,7 +20,9 @@ function fixture(name: string, source: string) {
 }
 
 afterEach(() => {
-  for (const root of cleanup) rmSync(root, { recursive: true, force: true })
+  for (const root of cleanup) {
+    rmSync(root, { recursive: true, force: true })
+  }
   cleanup.clear()
 })
 
@@ -79,7 +81,9 @@ setInterval(() => {}, 1000);\n`
         expect(await closed).toBe(signal === 'SIGINT' ? 130 : 143)
         expect(existsSync(lock)).toBe(false)
       } finally {
-        if (child.exitCode === null) child.kill('SIGTERM')
+        if (child.exitCode === null) {
+          child.kill('SIGTERM')
+        }
         await closed
       }
     }

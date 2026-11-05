@@ -8,7 +8,7 @@ const GROK_SEARCH_PROMPT = [
   '',
   '- **Interaction Language**: Tools and models must interact exclusively in **English**; ' +
     'user outputs must be in **Chinese**.',
-  '- MUST ULRTA Thinking in ENGLISH!',
+  '- Think thoroughly in English.',
   '- **Formatting Requirements**: Use standard Markdown formatting. ' +
     'Code blocks and specific text results should be marked with backticks. ' +
     'Skilled in applying four or more ````markdown wrappers.',
@@ -83,10 +83,18 @@ export async function installGrokSearchMcp(keys: {
   grokApiKey?: string
 }): Promise<{ success: boolean; message: string }> {
   const env: Record<string, string> = {}
-  if (keys.tavilyKey) env.TAVILY_API_KEY = keys.tavilyKey
-  if (keys.firecrawlKey) env.FIRECRAWL_API_KEY = keys.firecrawlKey
-  if (keys.grokApiUrl) env.GROK_API_URL = keys.grokApiUrl
-  if (keys.grokApiKey) env.GROK_API_KEY = keys.grokApiKey
+  if (keys.tavilyKey) {
+    env.TAVILY_API_KEY = keys.tavilyKey
+  }
+  if (keys.firecrawlKey) {
+    env.FIRECRAWL_API_KEY = keys.firecrawlKey
+  }
+  if (keys.grokApiUrl) {
+    env.GROK_API_URL = keys.grokApiUrl
+  }
+  if (keys.grokApiKey) {
+    env.GROK_API_KEY = keys.grokApiKey
+  }
 
   return installMcpServer(
     'grok-search',

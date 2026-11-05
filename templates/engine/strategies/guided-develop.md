@@ -12,40 +12,20 @@
 
 ## 工作流状态机
 
-[phase-state:1-requirements]
-当前阶段：需求增强
-📍 Next: 需求结构化后进入上下文检索
-[/phase-state:1-requirements]
+[phase-state:1-requirements] 当前阶段：需求增强 📍 Next: 需求结构化后进入上下文检索 [/phase-state:1-requirements]
 
-[phase-state:2-context]
-当前阶段：上下文检索
-Gate: 需求已增强 ✓
-📍 Next: 上下文收集完毕后判断是否需要外部模型分析
-[/phase-state:2-context]
+[phase-state:2-context] 当前阶段：上下文检索 Gate: 需求已增强 ✓ 📍
+Next: 上下文收集完毕后判断是否需要外部模型分析 [/phase-state:2-context]
 
-[phase-state:3-analysis]
-当前阶段：领域分析（可选外部模型）
-Gate: 上下文已收集 ✓
-📍 Next: 分析完成后进入规划阶段
-[/phase-state:3-analysis]
+[phase-state:3-analysis] 当前阶段：领域分析（可选外部模型）Gate: 上下文已收集 ✓ 📍
+Next: 分析完成后进入规划阶段 [/phase-state:3-analysis]
 
-[phase-state:4-plan]
-当前阶段：规划
-Gate: 分析已完成 ✓
-📍 Next: 用户确认计划后进入实施
-[/phase-state:4-plan]
+[phase-state:4-plan] 当前阶段：规划 Gate: 分析已完成 ✓ 📍 Next: 用户确认计划后进入实施 [/phase-state:4-plan]
 
-[phase-state:5-implement]
-当前阶段：实施
-Gate: 用户已确认计划 ✓（HARD STOP）
-📍 Next: 实施完成后进入验证
-[/phase-state:5-implement]
+[phase-state:5-implement] 当前阶段：实施 Gate: 用户已确认计划 ✓（HARD STOP）📍
+Next: 实施完成后进入验证 [/phase-state:5-implement]
 
-[phase-state:6-verify]
-当前阶段：验证
-Gate: 实施已完成 ✓
-📍 Next: 验证通过后报告结果
-[/phase-state:6-verify]
+[phase-state:6-verify] 当前阶段：验证 Gate: 实施已完成 ✓ 📍 Next: 验证通过后报告结果 [/phase-state:6-verify]
 
 ---
 
@@ -60,7 +40,8 @@ Gate: 实施已完成 ✓
 - **范围**：哪些文件/模块会受影响
 - **验收标准**：怎样算完成
 
-展示增强后的需求，用户确认或调整。确认后使用 `update-requirements` 写入完整任务契约，再用 `checkpoint` 更新为 `1-requirements`，下一动作设为“检索相关代码与规范”。
+展示增强后的需求，用户确认或调整。确认后使用 `update-requirements` 写入完整任务契约，再用 `checkpoint` 更新为
+`1-requirements`，下一动作设为“检索相关代码与规范”。
 
 ### Phase 2: 上下文检索 [required]
 
@@ -75,16 +56,22 @@ Gate: 实施已完成 ✓
 
 **Gate check**: 需求已增强 ✓ 上下文已收集 ✓
 
-**⛔ M 复杂度必须启动后端分析。只有任务明确涉及前端、布局、界面、页面设计、UI/UX、视觉样式或交互设计时，才额外启动前端分析。**
+**⛔
+M 复杂度必须启动后端分析。只有任务明确涉及前端、布局、界面、页面设计、UI/UX、视觉样式或交互设计时，才额外启动前端分析。**
 
 执行步骤：
 
-1. primary route 为 Claude 时，创建独立 Claude Code Agent。后端 Agent 的 prompt 包含 `CCG_ROLE: research`、增强后的需求和 Phase 2 的项目上下文；前端 Agent 仅在前端设计范围内创建，prompt 同样包含 `CCG_ROLE: research`。不得调用 codeagent-wrapper 或任何外部 CLI。
-2. 只有用户已将相应 primary route 明确配置为 Codex、Antigravity、Grok、Kimi Code 或 OpenCode 时，才按 `model-router.md` 调用 wrapper。
-3. 多个 Agent 或外部 route 必须在同一条消息中启动。Claude Code Agent 完成后由运行时通知；外部 route 返回 task ID 时使用 `TaskOutput` 等待。
+1. primary route 为 Claude 时，创建独立 Claude Code Agent。后端 Agent 的 prompt 包含
+   `CCG_ROLE: research`、增强后的需求和 Phase 2 的项目上下文；前端 Agent 仅在前端设计范围内创建，prompt 同样包含
+   `CCG_ROLE: research`。不得调用 codeagent-wrapper 或任何外部 CLI。
+2. 只有用户已将相应 primary route 明确配置为 Codex、Antigravity、Grok、Kimi Code 或 OpenCode 时，才按 `model-router.md`
+   调用 wrapper。
+3. 多个 Agent 或外部 route 必须在同一条消息中启动。Claude Code Agent 完成后由运行时通知；外部 route 返回 task ID 时使用
+   `TaskOutput` 等待。
 4. 外部模型返回后重新 `resolve`，确认 active task 和 revision 未变化。
 5. 综合分析结果，提取关键建议用于 Phase 4 规划
-7. 有可复用分析时使用 `write-artifact` 写入 `analysis.md`，再用 `checkpoint` 更新为 `3-analysis`，下一动作设为“撰写实施计划”
+6. 有可复用分析时使用 `write-artifact` 写入 `analysis.md`，再用 `checkpoint` 更新为
+   `3-analysis`，下一动作设为“撰写实施计划”
 
 ### Phase 4: 规划 [required]
 
@@ -119,6 +106,7 @@ Gate: 实施已完成 ✓
 你现在必须输出以下内容（原样输出，不是代码块示例）：
 
 ---
+
 ⛔ **计划审批 + 执行模式选择**
 
 请审批以上计划，并选择谁来写代码：
@@ -173,11 +161,13 @@ Bash({
 
 **Step 3**: 等待完成，读取汇总报告
 
-**Step 4**: Lead 收集 `git diff`、完整相关文件和 plan 验收标准，作为独立 Claude Code 审查 Agent 的输入，不在此步骤自行审查或修复
+**Step 4**: Lead 收集 `git diff`、完整相关文件和 plan 验收标准，作为独立 Claude
+Code 审查 Agent 的输入，不在此步骤自行审查或修复
 
 **降级**：外部模型失败/超时 → 切换到模式 A
 
-实施开始时使用 `checkpoint` 保持阶段为 `5-implement`，下一动作写成当前实际实施步骤。子 Agent 或外部模型不得修改 `.ccg/`。
+实施开始时使用 `checkpoint` 保持阶段为 `5-implement`，下一动作写成当前实际实施步骤。子 Agent 或外部模型不得修改
+`.ccg/`。
 
 ### Phase 6: 迭代审查 [Ralph Loop]
 
@@ -190,8 +180,10 @@ Bash({
 
 **⛔ 审查线程：**
 
-3. 创建独立 Claude Code 审查 Agent，使用完整 diff、相关文件和验收标准检查正确性、安全、回归与测试缺口，不调用 codeagent-wrapper 或外部 CLI
-4. 只有用户明确请求 GPT、Grok、双模型审查或 `/ccg:spec-review` 时，才启动对应外部 review profile。外部 reviewer 使用 `--no-session-persistence`，不使用 `resume` 或 `SESSION_ID`。Lead 汇总并确认 finding
+3. 创建独立 Claude
+   Code 审查 Agent，使用完整 diff、相关文件和验收标准检查正确性、安全、回归与测试缺口，不调用 codeagent-wrapper 或外部 CLI
+4. 只有用户明确请求 GPT、Grok、双模型审查或 `/ccg:spec-review` 时，才启动对应外部 review profile。外部 reviewer 使用
+   `--no-session-persistence`，不使用 `resume` 或 `SESSION_ID`。Lead 汇总并确认 finding
 
 **⛔ 质量关卡（必须逐个调用 Skill，不可跳过）：**
 
@@ -221,9 +213,11 @@ Bash({
 
 #### Spec Evolution 与完成
 
-按 `phase-guide.md § 7` 检查是否需要更新项目已有的 tracked 文档或 OpenSpec，并用 `set-spec-evolution` 记录 `applied`、`skipped` 或 `not_applicable`。
+按 `phase-guide.md § 7` 检查是否需要更新项目已有的 tracked 文档或 OpenSpec，并用 `set-spec-evolution` 记录
+`applied`、`skipped` 或 `not_applicable`。
 
-验收、测试和审查完成且 Gate 为 `null` 后，使用 `finish` 标记任务为 `completed`。任务目录保持原路径，不移动、不提交 `.ccg/`。
+验收、测试和审查完成且 Gate 为 `null` 后，使用 `finish` 标记任务为 `completed`。任务目录保持原路径，不移动、不提交
+`.ccg/`。
 
 ---
 

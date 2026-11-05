@@ -81,7 +81,7 @@ func getProcessStartTime(pid int) time.Time {
 
 // fileTimeToUnix converts Windows FILETIME to Unix time.
 func fileTimeToUnix(ft syscall.Filetime) time.Time {
-	// FILETIME is 100-nanosecond intervals since January 1, 1601 UTC
+	// FILETIME counts 100-nanosecond intervals since 1601-01-01 UTC
 	nsec := ft.Nanoseconds()
 	return time.Unix(0, nsec)
 }

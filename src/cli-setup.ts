@@ -1,6 +1,6 @@
-import { homedir } from 'node:os'
 import ansis from 'ansis'
 import type { CAC } from 'cac'
+import { homedir } from 'node:os'
 import { join } from 'pathe'
 import { version } from '../package.json'
 import { configMcp } from './commands/config-mcp'
@@ -303,8 +303,12 @@ function registerUninstallCommand(cli: CAC): void {
       if (result.removedCommands.length > 0) {
         console.log(ansis.gray(`  Commands: ${result.removedCommands.length} removed`))
       }
-      if (result.removedHooks) console.log(ansis.gray('  Hooks: removed'))
-      if (result.removedBin) console.log(ansis.gray('  Binary: removed'))
+      if (result.removedHooks) {
+        console.log(ansis.gray('  Hooks: removed'))
+      }
+      if (result.removedBin) {
+        console.log(ansis.gray('  Binary: removed'))
+      }
       return
     }
 

@@ -10,11 +10,11 @@ $ARGUMENTS
 
 ## 核心协议
 
-- **语言协议**：与工具/模型交互用**英语**，与用户交互用**中文**
+- **语言协议**：与工具/模型交互用 **英语**，与用户交互用 **中文**
 - **强制并行**：后端/前端模型调用必须使用 `run_in_background: true`（包含单模型调用，避免阻塞主线程）
-- **代码主权**：外部模型对文件系统**零写入权限**，所有修改由 Claude 执行
+- **代码主权**：外部模型对文件系统 **零写入权限**，所有修改由 Claude 执行
 - **止损机制**：当前阶段输出通过验证前，不进入下一阶段
-- **仅规划**：本命令允许读取上下文与写入 `.claude/plan/*` 计划文件，但**禁止修改产品代码**
+- **仅规划**：本命令允许读取上下文与写入 `.claude/plan/*` 计划文件，但 **禁止修改产品代码**
 
 ---
 
@@ -22,7 +22,8 @@ $ARGUMENTS
 
 **工作目录**：
 
-- `{{WORKDIR}}`：**必须通过 Bash 执行 `pwd`（Unix）或 `cd`（Windows CMD）获取当前工作目录的绝对路径**，禁止从 `$HOME` 或环境变量推断
+- `{{WORKDIR}}`： **必须通过 Bash 执行 `pwd`（Unix）或 `cd`（Windows CMD）获取当前工作目录的绝对路径**，禁止从 `$HOME`
+  或环境变量推断
 - 如果用户通过 `/add-dir` 添加了多个工作区，先用 Glob/Grep 确定任务相关的工作区
 - 如果无法确定，用 `AskUserQuestion` 询问用户选择目标工作区
 
@@ -36,7 +37,7 @@ ROLE_FILE: <角色提示词路径>
 需求：<增强后的需求>
 上下文：<检索到的项目上下文>
 </TASK>
-OUTPUT: Step-by-step implementation plan with pseudo-code. DO NOT modify any files.
+OUTPUT: Step-by-step implementation plan with pseudocode. DO NOT modify any files.
 EOF",
   run_in_background: true,
   timeout: 3600000,
@@ -46,12 +47,12 @@ EOF",
 
 **角色提示词**：
 
-| 阶段 | 后端                                                        | 前端                                                         |
-|----|-----------------------------------------------------------|------------------------------------------------------------|
+| 阶段 | 后端                                                      | 前端                                                       |
+|------|-----------------------------------------------------------|------------------------------------------------------------|
 | 分析 | `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/analyzer.md`  | `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/analyzer.md`  |
 | 规划 | `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/architect.md` | `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/architect.md` |
 
-**会话复用**：每次调用返回 `SESSION_ID: xxx`（通常由 wrapper 输出），**必须保存**以供后续 `/ccg:execute` 使用。
+**会话复用**：每次调用返回 `SESSION_ID: xxx`（通常由 wrapper 输出）， **必须保存**以供后续 `/ccg:execute` 使用。
 
 **等待后台任务**（最大超时 600000ms = 10 分钟）：
 
@@ -62,12 +63,12 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 **重要**：
 
 - 必须指定 `timeout: 600000`，否则默认只有 30 秒会导致提前超时
-- 若 10 分钟后仍未完成，继续用 `TaskOutput` 轮询，**绝对不要 Kill 进程**
-- 若因等待时间过长跳过了等待，**必须调用 `AskUserQuestion` 询问用户选择继续等待还是 Kill Task**
+- 若 10 分钟后仍未完成，继续用 `TaskOutput` 轮询， **绝对不要 Kill 进程**
+- 若因等待时间过长跳过了等待， **必须调用 `AskUserQuestion` 询问用户选择继续等待还是 Kill Task**
 - ⛔ **前端模型失败必须重试**：若前端模型调用失败（非零退出码或输出包含错误信息），最多重试 2 次（间隔 5 秒）。仅当 3
   次全部失败时才跳过前端模型结果并使用单模型结果继续。
 - ⛔ **后端模型结果必须等待**：后端模型执行时间较长（5-15 分钟）属于正常。TaskOutput 超时后必须继续用 TaskOutput 轮询，*
-  *绝对禁止在后端模型未返回结果时直接跳过或继续下一阶段**。已启动的后端任务若被跳过 = 浪费 token + 丢失结果。
+  _绝对禁止在后端模型未返回结果时直接跳过或继续下一阶段_*。已启动的后端任务若被跳过 = 浪费 token + 丢失结果。
 
 ---
 
@@ -102,13 +103,13 @@ ARGUMENTS** 用于后续所有阶段。
 
 #### 1.3 完整性检查
 
-- 必须获取相关类、函数、变量的**完整定义与签名**
-- 若上下文不足，触发**递归检索**
+- 必须获取相关类、函数、变量的 **完整定义与签名**
+- 若上下文不足，触发 **递归检索**
 - 优先输出：入口文件 + 行号 + 关键符号名；必要时补充最小代码片段（仅用于消除歧义）
 
 #### 1.4 需求对齐
 
-- 若需求仍有模糊空间，**必须**向用户输出引导性问题列表
+- 若需求仍有模糊空间， **必须**向用户输出引导性问题列表
 - 直至需求边界清晰（无遗漏、无冗余）
 
 ### 💡 Phase 2：多模型协作分析
@@ -119,7 +120,7 @@ ARGUMENTS** 用于后续所有阶段。
 
 **并行调用** {{BACKEND_PRIMARY}} 和 {{FRONTEND_PRIMARY}}（`run_in_background: true`）：
 
-将**原始需求**（不带预设观点）分发给两个模型：
+将 **原始需求**（不带预设观点）分发给两个模型：
 
 1. **{{BACKEND_PRIMARY}} 后端分析**：
     - ROLE_FILE: `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/analyzer.md`
@@ -131,7 +132,7 @@ ARGUMENTS** 用于后续所有阶段。
     - 关注：UI/UX 影响、用户体验、视觉设计
     - OUTPUT: 多角度解决方案 + 优劣势分析
 
-用 `TaskOutput` 等待两个模型的完整结果。**📌 保存 SESSION_ID**（`CODEX_SESSION` 和 `FRONTEND_SESSION`）。
+用 `TaskOutput` 等待两个模型的完整结果。 **📌 保存 SESSION_ID**（`CODEX_SESSION` 和 `FRONTEND_SESSION`）。
 
 #### 2.2 交叉验证
 
@@ -144,15 +145,15 @@ ARGUMENTS** 用于后续所有阶段。
 
 #### 2.3（可选但推荐）双模型产出“计划草案”
 
-为降低 Claude 合成计划的遗漏风险，可并行让两个模型输出“计划草案”（仍然**不允许**修改文件）：
+为降低 Claude 合成计划的遗漏风险，可并行让两个模型输出“计划草案”（仍然 **不允许**修改文件）：
 
 1. **{{BACKEND_PRIMARY}} 计划草案**（后端权威）：
     - ROLE_FILE: `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/architect.md`
-    - OUTPUT: Step-by-step plan + pseudo-code（重点：数据流/边界条件/错误处理/测试策略）
+    - OUTPUT: Step-by-step plan + pseudocode（重点：数据流/边界条件/错误处理/测试策略）
 
 2. **{{FRONTEND_PRIMARY}} 计划草案**（前端权威）：
     - ROLE_FILE: `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/architect.md`
-    - OUTPUT: Step-by-step plan + pseudo-code（重点：信息架构/交互/可访问性/视觉一致性）
+    - OUTPUT: Step-by-step plan + pseudocode（重点：信息架构/交互/可访问性/视觉一致性）
 
 用 `TaskOutput` 等待两个模型的完整结果，并记录其建议的关键差异点。
 
@@ -196,9 +197,10 @@ ARGUMENTS** 用于后续所有阶段。
 
 1. 向用户展示完整实施计划（含伪代码）
 2. 将计划保存至 `.claude/plan/<功能名>.md`（功能名从需求中提取，如 `user-auth`、`payment-module` 等）
-3. 以**加粗文本**输出提示（必须使用实际保存的文件路径）：
+3. 以 **加粗文本**输出提示（必须使用实际保存的文件路径）：
 
-   ---
+   ***
+
    **📋 计划已生成并保存至 `.claude/plan/实际功能名.md`**
 
    **请审查上述计划，您可以：**
@@ -208,7 +210,8 @@ ARGUMENTS** 用于后续所有阶段。
    ```
    /ccg:execute .claude/plan/实际功能名.md
    ```
-   ---
+
+   ***
 
    **⚠️ 注意**：上面的 `实际功能名.md` 必须替换为你实际保存的文件名！
 
@@ -247,7 +250,7 @@ ARGUMENTS** 用于后续所有阶段。
 
 ## 后续步骤
 
-用户审查满意后，**手动**执行：
+用户审查满意后， **手动**执行：
 
 ```bash
 /ccg:execute .claude/plan/<功能名>.md
@@ -260,5 +263,6 @@ ARGUMENTS** 用于后续所有阶段。
 1. **仅规划不实施** – 本命令不执行任何代码变更
 2. **不问 Y/N** – 只展示计划，让用户决定下一步
 3. **信任规则** – 后端以 {{BACKEND_PRIMARY}} 为准，前端以 {{FRONTEND_PRIMARY}} 为准
-4. 外部模型对文件系统**零写入权限**
-5. **SESSION_ID 交接** – 计划末尾必须包含 `CODEX_SESSION` / `FRONTEND_SESSION`（供 `/ccg:execute resume <SESSION_ID>` 使用）
+4. 外部模型对文件系统 **零写入权限**
+5. **SESSION_ID 交接** – 计划末尾必须包含 `CODEX_SESSION` / `FRONTEND_SESSION`（供 `/ccg:execute resume <SESSION_ID>`
+   使用）

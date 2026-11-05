@@ -18,22 +18,30 @@ queries:
 ```css
 /* Fine pointer (mouse, trackpad) */
 @media (pointer: fine) {
-  .button { padding: 8px 16px; }
+  .button {
+    padding: 8px 16px;
+  }
 }
 
 /* Coarse pointer (touch, stylus) */
 @media (pointer: coarse) {
-  .button { padding: 12px 20px; }  /* Larger touch target */
+  .button {
+    padding: 12px 20px;
+  } /* Larger touch target */
 }
 
 /* Device supports hover */
 @media (hover: hover) {
-  .card:hover { transform: translateY(-2px); }
+  .card:hover {
+    transform: translateY(-2px);
+  }
 }
 
 /* Device doesn't support hover (touch) */
 @media (hover: none) {
-  .card { /* No hover state - use active instead */ }
+  .card {
+    /* No hover state - use active instead */
+  }
 }
 ```
 
@@ -45,10 +53,7 @@ Modern phones have notches, rounded corners, and home indicators. Use `env()`:
 
 ```css
 body {
-  padding-top: env(safe-area-inset-top);
-  padding-bottom: env(safe-area-inset-bottom);
-  padding-left: env(safe-area-inset-left);
-  padding-right: env(safe-area-inset-right);
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
 /* With fallback */
@@ -60,7 +65,7 @@ body {
 **Enable viewport-fit** in your meta tag:
 
 ```html
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 ```
 
 ## Responsive Images: Get It Right
@@ -77,7 +82,7 @@ body {
   "
   sizes="(max-width: 768px) 100vw, 50vw"
   alt="Hero image"
->
+/>
 ```
 
 **How it works**:
@@ -92,17 +97,17 @@ When you need different crops/compositions (not just resolutions):
 
 ```html
 <picture>
-  <source media="(min-width: 768px)" srcset="wide.jpg">
-  <source media="(max-width: 767px)" srcset="tall.jpg">
-  <img src="fallback.jpg" alt="...">
+  <source media="(min-width: 768px)" srcset="wide.jpg" />
+  <source media="(max-width: 767px)" srcset="tall.jpg" />
+  <img src="fallback.jpg" alt="..." />
 </picture>
 ```
 
 ## Layout Adaptation Patterns
 
-**Navigation**: Three stages—hamburger + drawer on mobile, horizontal compact on tablet, full with labels on desktop. *
-*Tables**: Transform to cards on mobile using `display: block` and `data-label` attributes. **Progressive disclosure**:
-Use `<details>/<summary>` for content that can collapse on mobile.
+**Navigation**: Three stages—hamburger + drawer on mobile, horizontal compact on tablet, full navigation with labels on
+desktop. * _Tables_*: Transform to cards on mobile using `display: block` and `data-label` attributes. **Progressive
+disclosure**: Use `<details>/<summary>` for content that can collapse on mobile.
 
 ## Testing: Don't Trust DevTools Alone
 

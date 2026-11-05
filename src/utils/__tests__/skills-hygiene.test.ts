@@ -8,7 +8,7 @@ const SKILLS_DIR = join(__dirname, '../../../templates/skills')
 /**
  * Walk templates/skills and return every text file we ship.
  *
- * Skills are the one place where hand-written operational notes (real panel
+ * Skills are the one place where handwritten operational notes (real panel
  * addresses, API keys, client project paths) can slip into the npm tarball,
  * because they start life as someone's working notes rather than as source
  * code. A grep in review catches that once; this catches it every run.
@@ -19,7 +19,9 @@ function shippedTextFiles(): string[] {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       const full = join(dir, entry.name)
       if (entry.isDirectory()) {
-        if (entry.name === '__pycache__') continue
+        if (entry.name === '__pycache__') {
+          continue
+        }
         walk(full)
       } else if (/\.(?:md|py|js|json|ya?ml|txt)$/.test(entry.name)) {
         out.push(full)
@@ -75,7 +77,9 @@ describe('skills hygiene — nothing personal ships to npm', () => {
     for (const f of files) {
       for (const m of fs.readFileSync(f, 'utf-8').matchAll(/\b[A-Za-z0-9]{32,64}\b/g)) {
         const s = m[0]
-        if (!/[a-z]/.test(s) || !/[A-Z]/.test(s) || !/[0-9]/.test(s)) continue
+        if (!/[a-z]/.test(s) || !/[A-Z]/.test(s) || !/[0-9]/.test(s)) {
+          continue
+        }
         offenders.push(`${f}: ${s}`)
       }
     }
@@ -87,8 +91,12 @@ describe('skills hygiene — nothing personal ships to npm', () => {
     // somebody's actual server.
     const offenders: string[] = []
     for (const f of files) {
-      for (const m of fs.readFileSync(f, 'utf-8').matchAll(/\b(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\b/g)) {
-        if (isExampleOrPrivateAddress(m)) continue
+      for (const m of fs
+        .readFileSync(f, 'utf-8')
+        .matchAll(/\b(?<octet1>\d{1,3})\.(?<octet2>\d{1,3})\.(?<octet3>\d{1,3})\.(?<octet4>\d{1,3})\b/g)) {
+        if (isExampleOrPrivateAddress(m)) {
+          continue
+        }
         offenders.push(`${f}: ${m[0]}`)
       }
     }

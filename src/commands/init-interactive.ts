@@ -1,14 +1,14 @@
 import ansis from 'ansis'
 import inquirer from 'inquirer'
 import { i18n } from '../i18n'
-import type { InitState } from './init-state'
+import { runMcpStep } from './init-mcp'
 import type { StepId, SummaryAction } from './init-navigation'
 import { runApiStep, runModelStep, runPerfStep } from './init-prompts'
-import { runMcpStep } from './init-mcp'
+import type { InitState } from './init-state'
 
 const STEP_RUNNERS = { api: runApiStep, model: runModelStep, mcp: runMcpStep, perf: runPerfStep }
 
-export const runSummaryStep = async (state: InitState, workflowsCount: number): Promise<SummaryAction> => {
+const runSummaryStep = async (state: InitState, workflowsCount: number): Promise<SummaryAction> => {
   showInitSummary(state, workflowsCount)
 
   const { action } = await inquirer.prompt([
@@ -132,20 +132,28 @@ function showInitSummary(state: InitState, workflowsCount: number): void {
 }
 
 function apiSummary(state: InitState): string {
-  if (state.apiUrl && state.apiKey) return `${ansis.green('●')} ${state.apiUrl} ${ansis.gray('+ ***')}`
-  if (state.apiUrl) return `${ansis.green('●')} ${state.apiUrl}`
+  if (state.apiUrl && state.apiKey) {
+    return `${ansis.green('●')} ${state.apiUrl} ${ansis.gray('+ ***')}`
+  }
+  if (state.apiUrl) {
+    return `${ansis.green('●')} ${state.apiUrl}`
+  }
   return `${ansis.gray('○')} ${i18n.t('init:summary.apiSelfManaged')}`
 }
 
 function summarizeMcp(state: InitState): string {
-  if (state.mcpProvider === 'fast-context') return ansis.green('fast-context')
-  if (state.mcpProvider === 'ace-tool' || state.mcpProvider === 'ace-tool-rs')
+  if (state.mcpProvider === 'fast-context') {
+    return ansis.green('fast-context')
+  }
+  if (state.mcpProvider === 'ace-tool' || state.mcpProvider === 'ace-tool-rs') {
     return state.aceToolToken
       ? ansis.green(state.mcpProvider)
       : ansis.yellow(`${state.mcpProvider} (${i18n.t('init:summary.pendingConfig')})`)
-  if (state.mcpProvider === 'contextweaver')
+  }
+  if (state.mcpProvider === 'contextweaver') {
     return state.contextWeaverApiKey
       ? ansis.green('contextweaver')
       : ansis.yellow(`contextweaver (${i18n.t('init:summary.pendingConfig')})`)
+  }
   return ansis.gray(i18n.t('init:summary.skipped'))
 }

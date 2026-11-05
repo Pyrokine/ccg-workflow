@@ -18,12 +18,16 @@ const { randomUUID } = require('crypto');
 const { taskForWrite } = require('./task-state-store.js');
 
 function assertStateReadable(stateResult) {
-  if (!stateResult.ok) fail(stateResult.code, stateResult.message);
+  if (!stateResult.ok) {
+    fail(stateResult.code, stateResult.message);
+  }
   return stateResult;
 }
 
 function assertTaskReadable(taskResult) {
-  if (!taskResult.ok) fail(taskResult.code, taskResult.message);
+  if (!taskResult.ok) {
+    fail(taskResult.code, taskResult.message);
+  }
   return taskResult.task;
 }
 
@@ -69,13 +73,16 @@ function assertTaskRevision(task, expectedRevision) {
 }
 
 function assertOpenTask(task) {
-  if (task.status !== 'open')
+  if (task.status !== 'open') {
     fail('TASK_NOT_OPEN', `Task is not open: ${task.id}`, { taskId: task.id, status: task.status });
+  }
 }
 
 function readCurrentStateAndBinding(projectRoot, sessionKey) {
   const stateResult = assertStateReadable(readState(projectRoot));
-  if (!stateResult.exists) fail('TASK_MIGRATION_REQUIRED', 'Initialize task state before mutation');
+  if (!stateResult.exists) {
+    fail('TASK_MIGRATION_REQUIRED', 'Initialize task state before mutation');
+  }
   const bindingResult = assertStateReadable(readBinding(projectRoot, sessionKey, stateResult.state.stateId));
   return { stateResult, bindingResult };
 }
@@ -85,7 +92,9 @@ function assertActiveMutation(projectRoot, sessionKey, request) {
   const { stateResult, bindingResult } = readCurrentStateAndBinding(projectRoot, sessionKey);
   assertExpectedState(stateResult, expected);
   assertExpectedBinding(bindingResult, expected, stateResult.state);
-  if (!bindingResult.binding.activeTaskId) fail('ACTIVE_TASK_CONFLICT', 'No task is active for this session');
+  if (!bindingResult.binding.activeTaskId) {
+    fail('ACTIVE_TASK_CONFLICT', 'No task is active for this session');
+  }
   const task = assertTaskReadable(readTask(projectRoot, bindingResult.binding.activeTaskId));
   assertOpenTask(task);
   assertTaskRevision(task, expected.taskRevision);
@@ -93,8 +102,9 @@ function assertActiveMutation(projectRoot, sessionKey, request) {
 }
 
 function makeState(previousState) {
-  if (previousState.revision >= Number.MAX_SAFE_INTEGER)
+  if (previousState.revision >= Number.MAX_SAFE_INTEGER) {
     fail('STATE_REVISION_CONFLICT', 'Task state revision overflow');
+  }
   return {
     schemaVersion: STATE_SCHEMA_VERSION,
     stateId: previousState.stateId || randomUUID(),
@@ -119,7 +129,9 @@ function makeBinding(state, previousBinding, activeTaskId) {
 }
 
 function bumpTask(task, patch) {
-  if (task.revision >= Number.MAX_SAFE_INTEGER) fail('TASK_REVISION_CONFLICT', `Task revision overflow: ${task.id}`);
+  if (task.revision >= Number.MAX_SAFE_INTEGER) {
+    fail('TASK_REVISION_CONFLICT', `Task revision overflow: ${task.id}`);
+  }
   return {
     ...taskForWrite(task),
     ...patch,
@@ -138,18 +150,24 @@ function generatedProgress(task, note) {
 
 function ensureTaskRuntimeIgnored(projectRoot) {
   const result = ensureLocalCcgExclude(projectRoot);
-  if (!result.ok) fail(result.code, 'Cannot exclude .ccg runtime state from Git', null, 3);
+  if (!result.ok) {
+    fail(result.code, 'Cannot exclude .ccg runtime state from Git', null, 3);
+  }
 }
 
 function currentClaims(projectRoot, state) {
   const bindings = listBindings(projectRoot, state.stateId);
-  if (!bindings.ok) fail(bindings.code, bindings.message);
+  if (!bindings.ok) {
+    fail(bindings.code, bindings.message);
+  }
   return { bindings: bindings.bindings, claims: collectTaskClaims(projectRoot, bindings.bindings) };
 }
 
 function claimOwnersForSession(projectRoot, task, claims, sessionKey) {
   const ownership = claimOwnersForTask(projectRoot, task, claims);
-  if (!ownership.ok) fail(ownership.code, ownership.message);
+  if (!ownership.ok) {
+    fail(ownership.code, ownership.message);
+  }
   return new Set(ownership.owners.filter((owner) => owner !== sessionKey));
 }
 
@@ -166,7 +184,9 @@ function assertTaskAvailableForSession(projectRoot, state, sessionKey, task) {
 
 function findReturnTarget(projectRoot, startTaskId) {
   const chain = inspectReturnChain(projectRoot, startTaskId);
-  if (!chain.ok) fail(chain.code, chain.message);
+  if (!chain.ok) {
+    fail(chain.code, chain.message);
+  }
   return chain.chain.find((task) => task.status === 'open') || null;
 }
 

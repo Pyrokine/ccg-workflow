@@ -1,4 +1,5 @@
-import { mkdtempSync, mkdirSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import childProcess from 'node:child_process'
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
@@ -80,11 +81,26 @@ export function fakeExecutable(directory: string, name: string, script: string):
   return bin
 }
 
+export function nativeClock(delays: Record<string, number>) {
+  let now = 0
+  vi.spyOn(Date, 'now').mockImplementation(() => now)
+  const original = childProcess.spawnSync
+  return vi.spyOn(childProcess, 'spawnSync').mockImplementation((command, args, options) => {
+    const result = original(command, args, options)
+    now += delays[args?.[0] ?? ''] || 0
+    return result
+  })
+}
+
 export function files(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true })
     .flatMap((entry) => {
-      if (entry.isSymbolicLink()) return [entry.name]
-      if (entry.isDirectory()) return files(join(directory, entry.name)).map((file) => `${entry.name}/${file}`)
+      if (entry.isSymbolicLink()) {
+        return [entry.name]
+      }
+      if (entry.isDirectory()) {
+        return files(join(directory, entry.name)).map((file) => `${entry.name}/${file}`)
+      }
       return [entry.name]
     })
     .sort()
@@ -93,6 +109,8 @@ export function files(directory: string): string[] {
 afterEach(() => {
   vi.restoreAllMocks()
   vi.unstubAllEnvs()
-  for (const directory of cleanup) rmSync(directory, { recursive: true, force: true })
+  for (const directory of cleanup) {
+    rmSync(directory, { recursive: true, force: true })
+  }
   cleanup.clear()
 })

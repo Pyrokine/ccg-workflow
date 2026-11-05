@@ -159,15 +159,15 @@ VIPER（复杂场景）：
 
 ### React Native vs Flutter
 
-| 维度     | React Native | Flutter       |
-|--------|--------------|---------------|
-| 语言     | TypeScript   | Dart          |
-| 渲染     | 原生组件(桥接)     | 自绘引擎(Skia)    |
-| 性能     | 接近原生         | 接近原生          |
-| 热重载    | Fast Refresh | Hot Reload    |
-| 生态     | npm（成熟）      | pub.dev（快速增长） |
-| UI 一致性 | 跟随系统         | 完全一致          |
-| 包体积    | ~7MB         | ~15MB         |
+| 维度      | React Native   | Flutter             |
+|-----------|----------------|---------------------|
+| 语言      | TypeScript     | Dart                |
+| 渲染      | 原生组件(桥接) | 自绘引擎(Skia)      |
+| 性能      | 接近原生       | 接近原生            |
+| 热重载    | Fast Refresh   | Hot Reload          |
+| 生态      | npm（成熟）    | pub.dev（快速增长） |
+| UI 一致性 | 跟随系统       | 完全一致            |
+| 包体积    | ~7MB           | ~15MB               |
 
 ### React Native 核心模式
 
@@ -175,7 +175,7 @@ VIPER（复杂场景）：
 - 列表：`FlatList` + `keyExtractor` + `initialNumToRender` + `windowSize`
 - Navigation：`@react-navigation/native` + `createNativeStackNavigator`
 - 状态管理：Redux Toolkit（`createSlice` + `createAsyncThunk`）/ Zustand
-- 原生桥接：`NativeModules` 调用 iOS(Swift) / Android(Kotlin) 原生代码
+- 原生桥接：`NativeModules` 调用 iOS (Swift) / Android (Kotlin) 原生代码
 - 性能：`React.memo` / Hermes 引擎 / 新架构 JSI（无桥接序列化）
 
 ### Flutter 核心模式
@@ -190,36 +190,36 @@ VIPER（复杂场景）：
 
 ### 选型建议
 
-| 场景         | 推荐           | 理由         |
-|------------|--------------|------------|
-| 团队有 Web 背景 | React Native | 学习成本低      |
-| 追求极致性能/动画  | Flutter      | 自绘引擎 60fps |
-| UI 高度定制    | Flutter      | 完全控制渲染     |
-| 大量原生交互     | React Native | 桥接生态成熟     |
-| 需要原生极致体验   | 原生开发         | 无桥接开销      |
+| 场景              | 推荐         | 理由           |
+|-------------------|--------------|----------------|
+| 团队有 Web 背景   | React Native | 学习成本低     |
+| 追求极致性能/动画 | Flutter      | 自绘引擎 60fps |
+| UI 高度定制       | Flutter      | 完全控制渲染   |
+| 大量原生交互      | React Native | 桥接生态成熟   |
+| 需要原生极致体验  | 原生开发     | 无桥接开销     |
 
 ### 跨平台 Checklist
 
 - [ ] 选型匹配团队技术栈和业务需求
-- [ ] 列表优化：FlatList(RN) / ListView.builder(Flutter) + key
-- [ ] 状态管理：Redux Toolkit(RN) / Riverpod(Flutter)
+- [ ] 列表优化：FlatList (RN) / ListView.builder (Flutter) + key
+- [ ] 状态管理：Redux Toolkit (RN) / Riverpod (Flutter)
 - [ ] 原生模块桥接方案验证
-- [ ] 包体积优化：ProGuard(Android) / tree-shake-icons(Flutter)
+- [ ] 包体积优化：ProGuard (Android) / tree-shake-icons (Flutter)
 - [ ] 性能基线：冷启动 < 1.5s / 渲染 > 55fps
 
 ---
 
 ## 通用最佳实践
 
-| 实践      | 说明                                          |
-|---------|---------------------------------------------|
-| MVVM 架构 | 分离 UI / 业务逻辑 / 数据层                          |
-| 依赖注入    | Hilt(Android) / Protocol(iOS) / Context(RN) |
-| 响应式状态   | StateFlow / Combine / Hooks / Riverpod      |
-| 网络层封装   | 统一错误处理 + Token 管理 + 重试                      |
-| 本地持久化   | Room / Core Data / AsyncStorage / Hive      |
-| 列表优化    | 懒加载 + 稳定 key + 缓存                           |
-| 测试覆盖    | ViewModel 单元测试 + UI 测试关键流程                  |
+| 实践       | 说明                                        |
+|------------|---------------------------------------------|
+| MVVM 架构  | 分离 UI / 业务逻辑 / 数据层                 |
+| 依赖注入   | Hilt(Android) / Protocol(iOS) / Context(RN) |
+| 响应式状态 | StateFlow / Combine / Hooks / Riverpod      |
+| 网络层封装 | 统一错误处理 + Token 管理 + 重试            |
+| 本地持久化 | Room / Core Data / AsyncStorage / Hive      |
+| 列表优化   | 懒加载 + 稳定 key + 缓存                    |
+| 测试覆盖   | ViewModel 单元测试 + UI 测试关键流程        |
 
 ## 触发词
 

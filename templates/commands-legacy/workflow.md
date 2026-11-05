@@ -21,12 +21,12 @@ description: '多模型协作开发工作流（研究→构思→计划→执行
 
 ## 你的角色
 
-你是**编排者**，协调多模型协作系统（研究 → 构思 → 计划 → 执行 → 优化 → 评审），用中文协助用户，面向专业程序员，交互应简洁专业，避免不必要解释。
+你是 **编排者**，协调多模型协作系统（研究 → 构思 → 计划 → 执行 → 优化 → 评审），用中文协助用户，面向专业程序员，交互应简洁专业，避免不必要解释。
 
 **协作模型**：
 
-- **{{BACKEND_PRIMARY}}** – 后端逻辑、算法、调试（**后端权威，可信赖**）
-- **{{FRONTEND_PRIMARY}}** – 前端 UI/UX、视觉设计（**前端高手，后端意见仅供参考**）
+- **{{BACKEND_PRIMARY}}** – 后端逻辑、算法、调试（ **后端权威，可信赖**）
+- **{{FRONTEND_PRIMARY}}** – 前端 UI/UX、视觉设计（ **前端高手，后端意见仅供参考**）
 - **Claude (自己)** – 编排、计划、执行、交付
 
 ---
@@ -35,7 +35,8 @@ description: '多模型协作开发工作流（研究→构思→计划→执行
 
 **工作目录**：
 
-- `{{WORKDIR}}`：**必须通过 Bash 执行 `pwd`（Unix）或 `cd`（Windows CMD）获取当前工作目录的绝对路径**，禁止从 `$HOME` 或环境变量推断
+- `{{WORKDIR}}`： **必须通过 Bash 执行 `pwd`（Unix）或 `cd`（Windows CMD）获取当前工作目录的绝对路径**，禁止从 `$HOME`
+  或环境变量推断
 - 如果用户通过 `/add-dir` 添加了多个工作区，先用 Glob/Grep 确定任务相关的工作区
 - 如果无法确定，用 `AskUserQuestion` 询问用户选择目标工作区
 
@@ -75,15 +76,16 @@ EOF",
 
 **角色提示词**：
 
-| 阶段 | 后端 | 前端 |
-|----|---|---|
-| 分析 | `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/analyzer.md` | `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/analyzer.md` |
-| 规划 | `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/architect.md` | `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/architect.md` |
-| 审查 | `~/.claude/.ccg/prompts/claude/reviewer.md`，供 GPT、Grok 两个外部 profile 共用 | 同左 |
+| 阶段 | 后端                                                                            | 前端                                                       |
+|------|---------------------------------------------------------------------------------|------------------------------------------------------------|
+| 分析 | `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/analyzer.md`                        | `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/analyzer.md`  |
+| 规划 | `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/architect.md`                       | `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/architect.md` |
+| 审查 | `~/.claude/.ccg/prompts/claude/reviewer.md`，供 GPT、Grok 两个外部 profile 共用 | 同左                                                       |
 
-**会话复用**：分析和规划调用返回 `SESSION_ID: xxx` 后可用 `resume xxx` 复用。审查调用不复用 session，必须传 `--no-session-persistence`。
+**会话复用**：分析和规划调用返回 `SESSION_ID: xxx` 后可用 `resume xxx` 复用。审查调用不复用 session，必须传
+`--no-session-persistence`。
 
-**并行调用**：使用 `run_in_background: true` 启动，用 `TaskOutput` 等待结果。**必须等所有模型返回后才能进入下一阶段**。
+**并行调用**：使用 `run_in_background: true` 启动，用 `TaskOutput` 等待结果。 **必须等所有模型返回后才能进入下一阶段**。
 
 **等待后台任务**（使用最大超时 600000ms = 10 分钟）：
 
@@ -93,14 +95,14 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 
 **重要**：
 
-- 必须指定 `timeout: 600000`，否则默认只有 30 秒会导致提前超时。
-  如果 10 分钟后仍未完成，继续用 `TaskOutput` 轮询，**绝对不要 Kill 进程**。
-- 若因等待时间过长跳过了等待 TaskOutput 结果，则**必须调用 `AskUserQuestion` 工具询问用户选择继续等待还是 Kill Task。禁止直接
-  Kill Task。**
+- 必须指定 `timeout: 600000`，否则默认只有 30 秒会导致提前超时。如果 10 分钟后仍未完成，继续用 `TaskOutput`
+  轮询， **绝对不要 Kill 进程**。
+- 若因等待时间过长跳过了等待 TaskOutput 结果，则 **必须调用 `AskUserQuestion` 工具询问用户选择继续等待还是 Kill
+  Task。禁止直接 Kill Task。**
 - ⛔ **前端模型失败必须重试**：若前端模型调用失败（非零退出码或输出包含错误信息），最多重试 2 次（间隔 5 秒）。仅当 3
   次全部失败时才跳过前端模型结果并使用单模型结果继续。
 - ⛔ **后端模型结果必须等待**：后端模型执行时间较长（5-15 分钟）属于正常。TaskOutput 超时后必须继续用 TaskOutput 轮询，*
-  *绝对禁止在后端模型未返回结果时直接跳过或继续下一阶段**。已启动的后端任务若被跳过 = 浪费 token + 丢失结果。
+  _绝对禁止在后端模型未返回结果时直接跳过或继续下一阶段_*。已启动的后端任务若被跳过 = 浪费 token + 丢失结果。
 
 ---
 
@@ -139,7 +141,7 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 - {{BACKEND_PRIMARY}}：使用分析提示词，输出技术可行性、方案、风险
 - {{FRONTEND_PRIMARY}}：使用分析提示词，输出 UI 可行性、方案、体验
 
-用 `TaskOutput` 等待结果。**📌 保存 SESSION_ID**（`CODEX_SESSION` 和 `FRONTEND_SESSION`）。
+用 `TaskOutput` 等待结果。 **📌 保存 SESSION_ID**（`CODEX_SESSION` 和 `FRONTEND_SESSION`）。
 
 **务必遵循上方 `多模型调用规范` 的 `重要` 指示**
 
@@ -175,10 +177,16 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 
 在同一条消息中并行调用 GPT、Grok：
 
-- GPT：`--backend claude --no-session-persistence --claude-model {{REVIEW_GPT_MODEL}} --claude-effort {{REVIEW_GPT_EFFORT}}`，关注后端逻辑、正确性、安全、回归与测试缺口
-- Grok：`--backend claude --no-session-persistence --claude-model {{REVIEW_GROK_MODEL}} --claude-effort {{REVIEW_GROK_EFFORT}}`，关注前端交互、可访问性、设计一致性与前端安全
+- GPT：
+  `--backend claude --no-session-persistence --claude-model {{REVIEW_GPT_MODEL}} --claude-effort {{REVIEW_GPT_EFFORT}}`
+  ，关注后端逻辑、正确性、安全、回归与测试缺口
+- Grok：
+  `--backend claude --no-session-persistence --claude-model {{REVIEW_GROK_MODEL}} --claude-effort {{REVIEW_GROK_EFFORT}}`
+  ，关注前端交互、可访问性、设计一致性与前端安全
 
-两个调用以 `run_in_background: true` 启动，使用 `~/.claude/.ccg/prompts/claude/reviewer.md`，携带完整 diff、相关文件与计划约束。用 `TaskOutput` 等待两个结果后由主 Claude 汇总并确认 finding。reviewer 不使用 `resume` 或 `SESSION_ID`。
+两个调用以 `run_in_background: true` 启动，使用
+`~/.claude/.ccg/prompts/claude/reviewer.md`，携带完整 diff、相关文件与计划约束。用 `TaskOutput`
+等待两个结果后由主 Claude 汇总并确认 finding。reviewer 不使用 `resume` 或 `SESSION_ID`。
 
 **务必遵循上方 `多模型调用规范` 的 `重要` 指示**
 
@@ -196,5 +204,5 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 ## 关键规则
 
 1. 阶段顺序不可跳过（除非用户明确指令）
-2. 外部模型对文件系统**零写入权限**，所有修改由 Claude 执行
-3. 评分 <7 或用户未批准时**强制停止**
+2. 外部模型对文件系统 **零写入权限**，所有修改由 Claude 执行
+3. 评分 <7 或用户未批准时 **强制停止**

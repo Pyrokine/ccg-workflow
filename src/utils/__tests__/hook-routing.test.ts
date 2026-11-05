@@ -22,7 +22,7 @@ async function runHook(
   await mkdir(hookDir, { recursive: true })
   const template = await readFile(join(PACKAGE_ROOT, 'templates', 'hooks', 'skill-router.js'), 'utf8')
   const script = injectHookConfig(template, config, installDir)
-  expect(script).not.toMatch(/\{\{[A-Z_]+\}\}/)
+  expect(script).not.toMatch(/\{\{[A-Z_]+}}/)
   await writeFile(join(hookDir, 'skill-router.js'), script)
   await copyFile(join(PACKAGE_ROOT, 'templates', 'hooks', 'task-utils.js'), join(hookDir, 'task-utils.js'))
   await setup?.(installDir)
@@ -107,6 +107,53 @@ async function longKnowledge(dir: string) {
   await mkdir(root, { recursive: true })
   await writeFile(join(root, 'api-design.md'), 'x'.repeat(50_000))
 }
+
+async function domainKnowledge(dir: string) {
+  for (const [category, name] of [
+    ['ai', 'rag-system.md'],
+    ['architecture', 'caching.md'],
+    ['architecture', 'api-design.md'],
+    ['architecture', 'cloud-native.md'],
+  ]) {
+    const folder = join(dir, 'skills', 'ccg', 'domains', category)
+    await mkdir(folder, { recursive: true })
+    await writeFile(join(folder, name), `# ${name}`)
+  }
+}
+
+describe('domain keyword matching', () => {
+  it.each([
+    'fix average() in calc.py',
+    'restore the backup and check interest',
+    'the cached value is stale',
+    'read the rest of the file',
+  ])('keeps unrelated words from matching domain keywords: %s', async (prompt) => {
+    expect(await runHook({}, prompt, domainKnowledge)).toBe('')
+  })
+
+  it.each([
+    ['Build a RAG pipeline', 'RAG系统'],
+    ['add a cache layer (redis)', '缓存架构'],
+    ['design the REST API', 'API设计'],
+    ['list all endpoints', 'API设计'],
+    ['store the embeddings', 'RAG系统'],
+    ['open the dockerfile', '云原生'],
+    ['帮我加一层缓存', '缓存架构'],
+    ['这个api设计要怎么做', 'API设计'],
+  ])('matches a domain in %s', async (prompt, name) => {
+    expect(await runHook({}, prompt, domainKnowledge)).toContain(name)
+  })
+
+  it('keeps missing or unreadable domains from consuming available slots', async () => {
+    const context = await runHook({}, 'a pentest for xss of the graphql api behind redis', async (dir) => {
+      await domainKnowledge(dir)
+      await mkdir(join(dir, 'skills/ccg/domains/security/pentest.md'), { recursive: true })
+    })
+    expect(context).toContain('API设计')
+    expect(context).toContain('缓存架构')
+    expect(context).toContain('domains/security/pentest.md')
+  })
+})
 
 describe('installed knowledge context', () => {
   it('retains the 16 KiB read bound and truncation diagnostic for legacy skills', async () => {

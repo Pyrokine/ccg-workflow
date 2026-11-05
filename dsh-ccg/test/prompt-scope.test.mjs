@@ -6,7 +6,7 @@
  * hired teammate opened its first turn with "**Mode: Direct**" because it had
  * been handed the triage convention meant for the agent talking to the user.
  *
- * The leak is silent and it is per request, so it is worth a test that does not
+ * The leak is silent, and it occurs on every request, so it is worth a test that does not
  * depend on noticing it in a transcript again.
  */
 

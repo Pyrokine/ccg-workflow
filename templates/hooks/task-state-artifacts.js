@@ -57,8 +57,9 @@ function ensureResearchDirectory(task) {
       fsyncDirectory(task.dir);
     }
     const stat = fs.lstatSync(researchDir);
-    if (stat.isSymbolicLink() || !stat.isDirectory())
+    if (stat.isSymbolicLink() || !stat.isDirectory()) {
       fail('PATH_INVALID', 'Task research path must be a regular directory');
+    }
     const taskReal = fs.realpathSync(task.dir);
     const researchReal = fs.realpathSync(researchDir);
     const relative = path.relative(taskReal, researchReal);
@@ -67,7 +68,9 @@ function ensureResearchDirectory(task) {
     }
     return researchDir;
   } catch (error) {
-    if (error instanceof TaskStateError) throw error;
+    if (error instanceof TaskStateError) {
+      throw error;
+    }
     fail(
       'IO_ERROR',
       `Cannot prepare task research directory: ${error instanceof Error ? error.message : String(error)}`,
@@ -79,7 +82,9 @@ function ensureResearchDirectory(task) {
 
 function resolveArtifactPath(task, request) {
   const kind = requireString(request, 'kind', 64);
-  if (VALID_ARTIFACTS.has(kind)) return path.join(task.dir, VALID_ARTIFACTS.get(kind));
+  if (VALID_ARTIFACTS.has(kind)) {
+    return path.join(task.dir, VALID_ARTIFACTS.get(kind));
+  }
   if (kind === 'research') {
     const name = requireString(request, 'name', 80);
     if (!/^[a-z0-9]+(?:[._-][a-z0-9]+)*\.md$/.test(name) || name.includes('..')) {
@@ -109,15 +114,23 @@ function operationLinkSpec(projectRoot, sessionKey, request) {
   return withStateLock(projectRoot, () => {
     const { state, binding, task } = assertActiveMutation(projectRoot, sessionKey, request);
     const validated = validateSpecRef(projectRoot, specRef, { requireSection: true });
-    if (!validated.ok) fail(validated.code, validated.message);
+    if (!validated.ok) {
+      fail(validated.code, validated.message);
+    }
     const duplicate = task.specRefs.some(
       (ref) => ref.path === validated.ref.path && ref.section === validated.ref.section
     );
-    if (duplicate) return { state, binding, task, linked: false };
-    if (task.specRefs.length >= 32) fail('INVALID_REQUEST', 'A task may link at most 32 spec sections');
+    if (duplicate) {
+      return { state, binding, task, linked: false };
+    }
+    if (task.specRefs.length >= 32) {
+      fail('INVALID_REQUEST', 'A task may link at most 32 spec sections');
+    }
     const specRefs = [...task.specRefs, validated.ref];
     const collected = collectSpecContext(projectRoot, specRefs, 'all');
-    if (!collected.ok) fail(collected.code, collected.message);
+    if (!collected.ok) {
+      fail(collected.code, collected.message);
+    }
     const nextTask = bumpTask(task, { specRefs });
     writeTask(projectRoot, nextTask);
     return { state, binding, task: nextTask, linked: true };
@@ -130,7 +143,9 @@ function operationUnlinkSpec(projectRoot, sessionKey, request) {
   return withStateLock(projectRoot, () => {
     const { state, binding, task } = assertActiveMutation(projectRoot, sessionKey, request);
     const specRefs = task.specRefs.filter((ref) => !(ref.path === specPath && ref.section === section));
-    if (specRefs.length === task.specRefs.length) return { state, binding, task, unlinked: false };
+    if (specRefs.length === task.specRefs.length) {
+      return { state, binding, task, unlinked: false };
+    }
     const nextTask = bumpTask(task, { specRefs });
     writeTask(projectRoot, nextTask);
     return { state, binding, task: nextTask, unlinked: true };
@@ -139,10 +154,14 @@ function operationUnlinkSpec(projectRoot, sessionKey, request) {
 
 function operationSetSpecEvolution(projectRoot, sessionKey, request) {
   const value = requireString(request, 'value', 32);
-  if (!VALID_SPEC_EVOLUTION.has(value)) fail('INVALID_REQUEST', 'value is not a valid spec evolution result');
+  if (!VALID_SPEC_EVOLUTION.has(value)) {
+    fail('INVALID_REQUEST', 'value is not a valid spec evolution result');
+  }
   return withStateLock(projectRoot, () => {
     const { state, binding, task } = assertActiveMutation(projectRoot, sessionKey, request);
-    if (task.specEvolution === value) return { state, binding, task, changed: false };
+    if (task.specEvolution === value) {
+      return { state, binding, task, changed: false };
+    }
     const nextTask = bumpTask(task, { specEvolution: value });
     writeTask(projectRoot, nextTask);
     return { state, binding, task: nextTask, changed: true };

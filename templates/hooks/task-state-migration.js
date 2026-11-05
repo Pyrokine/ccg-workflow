@@ -28,7 +28,9 @@ const path = require('path');
 const fs = require('fs');
 
 function requireLegacyActiveTaskExpectation(request, stateResult) {
-  if (!stateResult.legacy) return;
+  if (!stateResult.legacy) {
+    return;
+  }
   if (!Object.prototype.hasOwnProperty.call(request.expected || {}, 'legacyActiveTaskId')) {
     fail('INVALID_REQUEST', 'expected.legacyActiveTaskId is required for state schema v1');
   }
@@ -47,7 +49,9 @@ function operationMigrateState(projectRoot, request) {
   return withStateLock(projectRoot, () => {
     ensureTaskRuntimeIgnored(projectRoot);
     const stateResult = assertStateReadable(readState(projectRoot, { allowLegacy: true }));
-    if (!stateResult.exists) fail('STATE_NOT_FOUND', 'state.json does not exist');
+    if (!stateResult.exists) {
+      fail('STATE_NOT_FOUND', 'state.json does not exist');
+    }
     assertExpectedState(stateResult, expected);
     if (!stateResult.legacy) {
       const existing = readManifest(projectRoot, '.ccg/migrations/state-v2/manifest.json');
@@ -101,7 +105,9 @@ function assertRepairExpected(projectRoot, sessionKey, request, stateResult, exp
 
 function readTaskForRepair(projectRoot, taskId) {
   const taskPath = getTaskPath(projectRoot, taskId);
-  if (!taskPath) fail('INVALID_REQUEST', 'taskId is invalid');
+  if (!taskPath) {
+    fail('INVALID_REQUEST', 'taskId is invalid');
+  }
   const parsed = readJsonDetailed(taskPath, 64 * 1024);
   if (!parsed.ok || !parsed.exists || !parsed.data || typeof parsed.data !== 'object' || Array.isArray(parsed.data)) {
     fail('TASK_INVALID', `Cannot read task for repair: ${taskId}`);
@@ -112,11 +118,15 @@ function readTaskForRepair(projectRoot, taskId) {
 function operationRepairStatus(projectRoot, sessionKey, request) {
   const expected = requireExpected(request, true);
   const taskId = requireString(request, 'taskId', 80);
-  if (!isValidTaskId(taskId)) fail('INVALID_REQUEST', 'taskId is invalid');
+  if (!isValidTaskId(taskId)) {
+    fail('INVALID_REQUEST', 'taskId is invalid');
+  }
   const repair = requireString(request, 'repair', 64);
   return withStateLock(projectRoot, () => {
     const stateResult = assertStateReadable(readState(projectRoot, { allowLegacy: true }));
-    if (!stateResult.exists) fail('STATE_NOT_FOUND', 'state.json does not exist');
+    if (!stateResult.exists) {
+      fail('STATE_NOT_FOUND', 'state.json does not exist');
+    }
     const binding = assertRepairExpected(projectRoot, sessionKey, request, stateResult, expected);
     const current = readTaskForRepair(projectRoot, taskId);
     if (!Number.isSafeInteger(current.raw.revision) || current.raw.revision !== expected.taskRevision) {
@@ -135,7 +145,9 @@ function operationRepairStatus(projectRoot, sessionKey, request) {
       updatedAt: new Date().toISOString(),
     };
     const validationError = validateCanonicalTask(task, taskId);
-    if (validationError) fail('TASK_INVALID', `${validationError}: ${taskId}`);
+    if (validationError) {
+      fail('TASK_INVALID', `${validationError}: ${taskId}`);
+    }
     atomicWriteJson(current.taskPath, task);
     return { state: stateResult.state, binding, task, repair, changed: true };
   });
@@ -158,15 +170,18 @@ function backupLegacyState(projectRoot, stateResult) {
 
 function resolveRepairedStatus(projectRoot, taskId, current, repair) {
   if (repair === 'canonical-in-progress') {
-    if (current.raw.schemaVersion !== TASK_SCHEMA_VERSION || current.raw.status !== 'in_progress')
+    if (current.raw.schemaVersion !== TASK_SCHEMA_VERSION || current.raw.status !== 'in_progress') {
       fail('STATUS_REPAIR_NOT_APPLICABLE', `Task is not a schema v1 in_progress task: ${taskId}`);
-    if (current.raw.finishedAt !== null)
+    }
+    if (current.raw.finishedAt !== null) {
       fail('STATUS_REPAIR_NOT_APPLICABLE', `in_progress task has a terminal timestamp: ${taskId}`);
+    }
     return 'open';
   }
   if (repair === 'superseded-completed') {
-    if (current.raw.schemaVersion !== TASK_SCHEMA_VERSION || current.raw.status !== 'completed')
+    if (current.raw.schemaVersion !== TASK_SCHEMA_VERSION || current.raw.status !== 'completed') {
       fail('STATUS_REPAIR_NOT_APPLICABLE', `Task is not a schema v1 completed task: ${taskId}`);
+    }
     assertSupersededBackup(projectRoot, taskId);
     return 'cancelled';
   }

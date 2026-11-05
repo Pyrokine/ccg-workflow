@@ -3,6 +3,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"syscall"
@@ -23,7 +24,7 @@ func isolateProcessGroup(cmd *exec.Cmd) {
 				return os.ErrProcessDone
 			}
 			if err := killProcessGroup(cmd.Process.Pid, syscall.SIGTERM); err != nil {
-				if err == syscall.ESRCH {
+				if errors.Is(err, syscall.ESRCH) {
 					return os.ErrProcessDone
 				}
 				return err

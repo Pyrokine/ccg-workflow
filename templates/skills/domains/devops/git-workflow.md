@@ -132,7 +132,7 @@ git commit --amend
 ## Commit 规范
 
 ```yaml
-格式: <type>(<scope>): <subject>
+格式: '<type>(<scope>): <subject>'
 
 类型:
   - feat: 新功能
@@ -180,4 +180,3 @@ git push origin main
   - 使用具体文件名 add
   - 每次 commit 聚焦单一变更
 ```
-

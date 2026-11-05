@@ -260,6 +260,7 @@ clang++ -fsanitize=fuzzer,address fuzz_target.cpp -o fuzzer
 ```python
 # pwntools 生成
 from pwn import *
+
 context.arch = 'amd64'
 
 # execve("/bin/sh", NULL, NULL)
@@ -370,16 +371,15 @@ checksec ./pwn
 
 ## 工具清单
 
-| 工具           | 用途          |
-|--------------|-------------|
-| IDA Pro      | 反汇编/反编译     |
-| Ghidra       | 开源逆向        |
+| 工具         | 用途          |
+|--------------|---------------|
+| IDA Pro      | 反汇编/反编译 |
+| Ghidra       | 开源逆向      |
 | pwntools     | Exploit 开发  |
 | GDB + pwndbg | 调试          |
-| AFL++        | Fuzzing     |
-| ROPgadget    | ROP 链       |
-| one_gadget   | libc gadget |
-| angr         | 符号执行        |
+| AFL++        | Fuzzing       |
+| ROPgadget    | ROP 链        |
+| one_gadget   | libc gadget   |
+| angr         | 符号执行      |
 
 ---
-

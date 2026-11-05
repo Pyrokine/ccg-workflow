@@ -12,25 +12,25 @@
  * here. The standalone `ccg_crosscheck` is the same machine with no role
  * persona, for a question that belongs to no single specialism.
  *
- * Nothing here votes or synthesises. A majority of models can be wrong
+ * Nothing here votes or synthesizes. A majority of models can be wrong
  * together, and averaging two answers usually destroys what was right in each,
  * so every answer comes back verbatim and the verdict stays where CCG always
  * leaves it: with the model holding the context.
  */
 
-import { defineTool } from '@deepseek-ai/dsh-tools'
+import { defineTool } from '@deepseek-ai/dsh-tools';
 
-import { ROLES } from './roles.js'
-import { collectSubagentResult } from './subagent.js'
+import { ROLES } from './roles.js';
+import { collectSubagentResult } from './subagent.js';
 
 /** The standalone cross-check's tool name, named once for both halves. */
-export const CROSSCHECK_TOOL = 'ccg_crosscheck'
+export const CROSSCHECK_TOOL = 'ccg_crosscheck';
 
 /**
  * Tag on the durable presentation payload, versioned so a browser half from an
  * older install renders nothing rather than misreading a changed shape.
  */
-export const PANEL_META_KIND = 'ccg.panel/1'
+export const PANEL_META_KIND = 'ccg.panel/1';
 
 /** How a panel member is told to answer. */
 const PANEL_FRAMING = [
@@ -41,56 +41,57 @@ const PANEL_FRAMING = [
   'Do not hedge toward a middle position and do not pad — a distinct, well-argued answer is',
   'worth more to the reader than a safe one, because they are about to compare yours against',
   'the others and act on where you differ.',
-].join(' ')
+].join(' ');
 
 /** Name one member for the report. */
 export function memberLabel(member) {
-  return member.label ?? `${member.provider} / ${member.model}`
+  return member.label ?? `${member.provider} / ${member.model}`;
 }
 
 /**
  * Resolve the standalone panel: who `ccg_crosscheck` asks.
  *
- * An explicit `panel` wins. Otherwise the two tiers stand in, which is the
+ * An explicit `panel` wins. Otherwise, the two tiers stand in, which is the
  * common two-model deployment. Members that would ask the same model the same
  * way are collapsed — a panel of clones is a slower single call.
  *
  * @param config - the validated plugin config.
  * @returns the resolved members, in declaration order.
- * @throws if a member is incomplete or names a role that does not exist.
+ * @throws {Error} If a member is incomplete or names a role that does not exist.
  */
 export function resolvePanel(config = {}) {
-  const declared = Array.isArray(config.panel) && config.panel.length > 0
-    ? config.panel
-    : ['strong', 'worker']
-      .map((tier) => {
-        const entry = config[tier]
-        return entry?.provider && entry?.model
-          ? { provider: entry.provider, model: entry.model, label: tier }
-          : undefined
-      })
-      .filter(Boolean)
+  const declared =
+    Array.isArray(config.panel) && config.panel.length > 0
+      ? config.panel
+      : ['strong', 'worker']
+          .map((tier) => {
+            const entry = config[tier];
+            return entry?.provider && entry?.model
+              ? { provider: entry.provider, model: entry.model, label: tier }
+              : undefined;
+          })
+          .filter(Boolean);
 
-  const seen = new Set()
-  const members = []
+  const seen = new Set();
+  const members = [];
   for (const member of declared) {
-    const provider = typeof member?.provider === 'string' ? member.provider.trim() : ''
-    const model = typeof member?.model === 'string' ? member.model.trim() : ''
+    const provider = typeof member?.provider === 'string' ? member.provider.trim() : '';
+    const model = typeof member?.model === 'string' ? member.model.trim() : '';
     if (provider === '' || model === '') {
-      throw new Error('ccg: every panel member needs both a provider and a model')
+      throw new Error('ccg: every panel member needs both a provider and a model');
     }
     if (member.role !== undefined && ROLES[member.role] === undefined) {
       throw new Error(
-        `ccg: panel member names unknown role "${member.role}"; valid roles are ${Object.keys(ROLES).join(', ')}`,
-      )
+        `ccg: panel member names unknown role "${member.role}"; valid roles are ${Object.keys(ROLES).join(', ')}`
+      );
     }
-    const lens = typeof member.lens === 'string' && member.lens.trim() !== ''
-      ? member.lens.trim()
-      : undefined
+    const lens = typeof member.lens === 'string' && member.lens.trim() !== '' ? member.lens.trim() : undefined;
 
-    const key = `${provider}/${model}/${member.role ?? ''}/${lens ?? ''}`
-    if (seen.has(key)) continue
-    seen.add(key)
+    const key = `${provider}/${model}/${member.role ?? ''}/${lens ?? ''}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
 
     members.push({
       provider,
@@ -98,9 +99,9 @@ export function resolvePanel(config = {}) {
       role: member.role,
       lens,
       label: member.label ?? member.role ?? `${provider} / ${model}`,
-    })
+    });
   }
-  return members
+  return members;
 }
 
 /**
@@ -114,20 +115,31 @@ export function resolvePanel(config = {}) {
  * @returns the child's prompt text.
  */
 export function buildMemberPrompt(member, question, context, persona) {
-  const parts = []
-  const own = member.role !== undefined ? ROLES[member.role]?.persona : undefined
-  if (own ?? persona) parts.push(own ?? persona)
-  if (member.lens !== undefined) parts.push(`Answer through this lens specifically: ${member.lens}`)
-  parts.push(PANEL_FRAMING)
-  if (context) parts.push(`Shared context:\n${context}`)
-  parts.push(`Task:\n${question}`)
-  return parts.join('\n\n')
+  const parts = [];
+  const own = member.role !== undefined ? ROLES[member.role]?.persona : undefined;
+  if (own ?? persona) {
+    parts.push(own ?? persona);
+  }
+  if (member.lens !== undefined) {
+    parts.push(`Answer through this lens specifically: ${member.lens}`);
+  }
+  parts.push(PANEL_FRAMING);
+  if (context) {
+    parts.push(`Shared context:\n${context}`);
+  }
+  parts.push(`Task:\n${question}`);
+  return parts.join('\n\n');
 }
 
 /** Flatten a subagent result's content blocks to text. */
 function contentText(blocks) {
-  if (!Array.isArray(blocks)) return ''
-  return blocks.filter((block) => typeof block?.text === 'string').map((block) => block.text).join('\n')
+  if (!Array.isArray(blocks)) {
+    return '';
+  }
+  return blocks
+    .filter((block) => typeof block?.text === 'string')
+    .map((block) => block.text)
+    .join('\n');
 }
 
 /**
@@ -138,24 +150,24 @@ function contentText(blocks) {
  * @returns the model-facing report.
  */
 export function formatPanelReport(question, answers) {
-  const lines = [`Panel of ${answers.length} on: ${question}`, '']
+  const lines = [`Panel of ${answers.length} on: ${question}`, ''];
   for (const answer of answers) {
     // A member with no label of its own is already named by its route; saying
     // it twice reads like two different things.
-    const route = `${answer.provider} / ${answer.model}`
-    lines.push(`── ${answer.label === route ? route : `${answer.label} (${route})`} ──`)
-    lines.push(answer.ok ? answer.answer.trim() : `[no answer: ${answer.error}]`)
-    lines.push('')
+    const route = `${answer.provider} / ${answer.model}`;
+    lines.push(`── ${answer.label === route ? route : `${answer.label} (${route})`} ──`);
+    lines.push(answer.ok ? answer.answer.trim() : `[no answer: ${answer.error}]`);
+    lines.push('');
   }
-  const answered = answers.filter((answer) => answer.ok).length
+  const answered = answers.filter((answer) => answer.ok).length;
   lines.push(
     answered >= 2
-      ? 'These were answered independently. Where they agree you have corroboration, not proof — '
-        + 'they may share a blind spot. Where they disagree is the finding: work out which is right '
-        + 'from the evidence rather than averaging them, and say which you took and why.'
-      : 'Too few answers came back to cross-check. Treat what you have as a single opinion.',
-  )
-  return lines.join('\n')
+      ? 'These were answered independently. Where they agree you have corroboration, not proof — ' +
+          'they may share a blind spot. Where they disagree is the finding: work out which is right ' +
+          'from the evidence rather than averaging them, and say which you took and why.'
+      : 'Too few answers came back to cross-check. Treat what you have as a single opinion.'
+  );
+  return lines.join('\n');
 }
 
 /**
@@ -180,27 +192,23 @@ export function formatPanelReport(question, answers) {
  * @returns the presentation payload.
  */
 export function panelPresentationMeta(value, members = []) {
-  const answers = Array.isArray(value?.answers) ? value.answers : []
+  const answers = Array.isArray(value?.answers) ? value.answers : [];
   return {
     kind: PANEL_META_KIND,
     question: String(value?.question ?? ''),
     answers: answers.map((answer, index) => {
-      const member = members[index]
-      const lens = member?.provider === answer?.provider && member?.model === answer?.model
-        ? member.lens
-        : undefined
+      const member = members[index];
+      const lens = member?.provider === answer?.provider && member?.model === answer?.model ? member.lens : undefined;
       return {
         label: String(answer?.label ?? ''),
         provider: String(answer?.provider ?? ''),
         model: String(answer?.model ?? ''),
         ok: answer?.ok === true,
         ...(lens ? { lens } : {}),
-        ...(answer?.ok === true
-          ? { answer: String(answer.answer ?? '') }
-          : { error: String(answer?.error ?? '') }),
-      }
+        ...(answer?.ok === true ? { answer: String(answer.answer ?? '') } : { error: String(answer?.error ?? '') }),
+      };
     }),
-  }
+  };
 }
 
 /**
@@ -211,10 +219,12 @@ export function panelPresentationMeta(value, members = []) {
  * @returns the disposer removing the tool.
  */
 export function registerPanelTool(ctx, spec) {
-  return ctx.tools.register(panelToolDefinition({
-    ...spec,
-    getSubagents: () => ctx.get('subagents'),
-  }))
+  return ctx.tools.register(
+    panelToolDefinition({
+      ...spec,
+      getSubagents: () => ctx.get('subagents'),
+    })
+  );
 }
 
 /**
@@ -228,12 +238,12 @@ export function registerPanelTool(ctx, spec) {
  * @returns the registry-ready definition.
  */
 export function panelToolDefinition(spec) {
-  const { toolName, description, members, persona } = spec
-  const provider = spec.subagentProvider ?? 'spawn'
-  const getSubagents = spec.getSubagents ?? (() => undefined)
+  const { toolName, description, members, persona } = spec;
+  const provider = spec.subagentProvider ?? 'spawn';
+  const getSubagents = spec.getSubagents ?? (() => undefined);
   // Members answer a question; they do not run the plugin. Without this a panel
   // member could open a panel of its own inside the depth cap.
-  const toolFilter = spec.toolFilter
+  const toolFilter = spec.toolFilter;
 
   return defineTool({
     name: toolName,
@@ -251,9 +261,9 @@ export function panelToolDefinition(spec) {
         type: 'string',
         required: true,
         description:
-          'The full, self-contained task every member is given. They see none of this '
-          + 'conversation: name the files, symbols and constraints, and say what shape of '
-          + 'answer you want.',
+          'The full, self-contained task every member is given. They see none of this ' +
+          'conversation: name the files, symbols and constraints, and say what shape of ' +
+          'answer you want.',
       },
       context: {
         type: 'string',
@@ -295,20 +305,26 @@ export function panelToolDefinition(spec) {
       presentationMeta: (args, value) => panelPresentationMeta(value, members),
     },
     async execute(args, exec) {
-      const subagents = getSubagents()
-      if (subagents === undefined) throw new Error('ccg: the subagents service is not available')
-      const parent = exec?.agent
-      if (parent === undefined) throw new Error(`ccg: ${toolName} needs an agent session`)
-      exec?.signal?.throwIfAborted()
+      const subagents = getSubagents();
+      if (subagents === undefined) {
+        throw new Error('ccg: the subagents service is not available');
+      }
+      const parent = exec?.agent;
+      if (parent === undefined) {
+        throw new Error(`ccg: ${toolName} needs an agent session`);
+      }
+      exec?.signal?.throwIfAborted();
 
-      const question = String(args.prompt ?? '').trim()
-      if (question === '') throw new Error('ccg: prompt is required')
-      const context = typeof args.context === 'string' ? args.context.trim() : ''
+      const question = String(args.prompt ?? '').trim();
+      if (question === '') {
+        throw new Error('ccg: prompt is required');
+      }
+      const context = typeof args.context === 'string' ? args.context.trim() : '';
 
       // Every member is started before any is awaited: a panel costs the
       // slowest answer, not the sum of them.
       const runs = members.map(async (member) => {
-        const label = memberLabel(member)
+        const label = memberLabel(member);
         try {
           const result = await collectSubagentResult(subagents, provider, {
             label: `${String(args.description ?? toolName)} · ${label}`,
@@ -321,44 +337,49 @@ export function panelToolDefinition(spec) {
               ...(typeof member.maxTokens === 'number' ? { maxTokens: member.maxTokens } : {}),
             },
             ...(toolFilter ? { toolFilter } : {}),
-          })
-          const answer = contentText(result?.output).trim()
+          });
+          const answer = contentText(result?.output).trim();
           if (result?.stopReason !== 'completed' || answer === '') {
             // The result seam carries no failure text, so say what the stop
             // reason usually means: a route that lists a model in its catalog
             // but does not actually serve it is the common cause.
-            const reason = result?.stopReason ?? 'unknown'
+            const reason = result?.stopReason ?? 'unknown';
             return {
               ...member,
               label,
               ok: false,
-              error: result?.diagnostic || (reason === 'error' && answer === ''
-                ? `the child ended with an error and produced nothing — check that ${member.provider} really serves ${member.model}`
-                : answer === '' ? `no output (${reason})` : `the child did not complete (${reason}): ${answer}`),
-            }
+              error:
+                result?.diagnostic ||
+                (reason === 'error' && answer === ''
+                  ? 'the child ended with an error and produced nothing — ' +
+                    `check that ${member.provider} really serves ${member.model}`
+                  : answer === ''
+                    ? `no output (${reason})`
+                    : `the child did not complete (${reason}): ${answer}`),
+            };
           }
-          return { ...member, label, ok: true, answer }
+          return { ...member, label, ok: true, answer };
         } catch (error) {
           // One member failing is a thinner panel, not a failed call — the
           // reader still gets the answers that did come back.
-          return { ...member, label, ok: false, error: String(error?.message ?? error) }
+          return { ...member, label, ok: false, error: String(error?.message ?? error) };
         }
-      })
+      });
 
-      const settled = await Promise.all(runs)
-      // Every admitted child is cleaned up before a cancelled panel ends.
-      exec?.signal?.throwIfAborted()
+      const settled = await Promise.all(runs);
+      // Every admitted child is cleaned up before a canceled panel ends.
+      exec?.signal?.throwIfAborted();
       const answers = settled.map((entry) => ({
         label: entry.label,
         provider: entry.provider,
         model: entry.model,
         ok: entry.ok,
         ...(entry.ok ? { answer: entry.answer } : { error: entry.error }),
-      }))
+      }));
 
-      return { question, answered: answers.filter((entry) => entry.ok).length, answers }
+      return { question, answered: answers.filter((entry) => entry.ok).length, answers };
     },
-  })
+  });
 }
 
 /**
@@ -368,11 +389,13 @@ export function panelToolDefinition(spec) {
  * @returns the tool description the model reads.
  */
 export function describeRolePanel(entry) {
-  const roster = entry.members.map(memberLabel).join(', ')
-  return `${entry.summary}. Asked of ${entry.members.length} models at once — ${roster} — each `
-    + 'answering independently with the same expert instructions, so their answers come back side '
-    + 'by side and where they disagree is the finding. Give it a self-contained brief: the children '
-    + 'see none of this conversation.'
+  const roster = entry.members.map(memberLabel).join(', ');
+  return (
+    `${entry.summary}. Asked of ${entry.members.length} models at once — ${roster} — each ` +
+    'answering independently with the same expert instructions, so their answers come back side ' +
+    'by side and where they disagree is the finding. Give it a self-contained brief: the children ' +
+    'see none of this conversation.'
+  );
 }
 
 /**
@@ -382,11 +405,13 @@ export function describeRolePanel(entry) {
  * @returns the tool description the model reads.
  */
 export function describeCrosscheck(members) {
-  const roster = members.map(memberLabel).join(', ')
-  return `Ask ${members.length} models the same question at once and read their answers side by `
-    + `side: ${roster}. Use it when being wrong would be expensive and one opinion is not enough — `
-    + 'a design call between real alternatives, a diagnosis you cannot reproduce, an estimate you '
-    + 'are staking a plan on. Each answers independently and none sees the others, so where they '
-    + 'disagree is the finding. Not for questions with one correct answer you could look up, and '
-    + 'not for work you can simply do.'
+  const roster = members.map(memberLabel).join(', ');
+  return (
+    `Ask ${members.length} models the same question at once and read their answers side by ` +
+    `side: ${roster}. Use it when being wrong would be expensive and one opinion is not enough — ` +
+    'a design call between real alternatives, a diagnosis you cannot reproduce, an estimate you ' +
+    'are staking a plan on. Each answers independently and none sees the others, so where they ' +
+    'disagree is the finding. Not for questions with one correct answer you could look up, and ' +
+    'not for work you can simply do.'
+  );
 }

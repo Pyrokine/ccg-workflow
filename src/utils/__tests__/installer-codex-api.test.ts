@@ -1,15 +1,15 @@
-import { homedir } from 'node:os'
 import fs from 'fs-extra'
+import { homedir } from 'node:os'
 import { join } from 'pathe'
 import { parse as parseToml } from 'smol-toml'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   APIMART_CODEX_PROVIDER,
-  PACKYCODE_CODEX_PROVIDER,
   configureAllSponsorsForCodex,
   configureApiMartForCodex,
   configurePackyCodeForCodex,
   configureSponsorForCodex,
+  PACKYCODE_CODEX_PROVIDER,
   removeAllSponsorsFromCodex,
   removeApiMartFromCodex,
   removePackyCodeFromCodex,

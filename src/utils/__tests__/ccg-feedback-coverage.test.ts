@@ -85,9 +85,15 @@ describe.each(distributions)('%s feedback coverage', (distribution) => {
       git(root, 'commit', '-qm', 'test: document baseline')
       const source = write(root, `${mod}/scripts/main.py`, 'value = 2\n'.repeat(60))
       write(root, `${mod}/references/usage.md`, '# Usage\n\nUpdated interface\n')
-      if (mode !== 'working') git(root, 'add', '.')
-      if (mode === 'committed') git(root, 'commit', '-qm', 'test: documented source change')
-      if (mode !== 'working') write(root, `${mod}/references/usage.md`, '# Usage\n')
+      if (mode !== 'working') {
+        git(root, 'add', '.')
+      }
+      if (mode === 'committed') {
+        git(root, 'commit', '-qm', 'test: documented source change')
+      }
+      if (mode !== 'working') {
+        write(root, `${mod}/references/usage.md`, '# Usage\n')
+      }
       const result = run(distribution, 'change', [source, '--mode', mode], root)
       expect(result.status).toBe(0)
       expect(result.output.changes).toHaveLength(1)

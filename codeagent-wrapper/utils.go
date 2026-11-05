@@ -54,7 +54,7 @@ func shouldUseStdin(taskText string, piped bool) bool {
 	if len(taskText) > 800 {
 		return true
 	}
-	return strings.IndexAny(taskText, stdinSpecialChars) >= 0
+	return strings.ContainsAny(taskText, stdinSpecialChars)
 }
 
 func defaultIsTerminal() bool {
@@ -330,13 +330,6 @@ func sanitizeOutput(s string) string {
 	return result.String()
 }
 
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 func hello() string {
 	return "hello world"
 }
@@ -347,30 +340,6 @@ func greet(name string) string {
 
 func farewell(name string) string {
 	return "goodbye " + name
-}
-
-// extractMessageSummary extracts a brief summary from task output
-// Returns first meaningful line or truncated content up to maxLen chars
-func extractMessageSummary(message string, maxLen int) string {
-	if message == "" || maxLen <= 0 {
-		return ""
-	}
-
-	// Try to find a meaningful summary line
-	lines := strings.Split(message, "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		// Skip empty lines and common noise
-		if line == "" || strings.HasPrefix(line, "```") || strings.HasPrefix(line, "---") {
-			continue
-		}
-		// Found a meaningful line
-		return safeTruncate(line, maxLen)
-	}
-
-	// Fallback: truncate entire message
-	clean := strings.TrimSpace(message)
-	return safeTruncate(clean, maxLen)
 }
 
 // extractCoverageFromLines extracts coverage from pre-split lines.
@@ -386,9 +355,9 @@ func extractCoverageFromLines(lines []string) string {
 
 	if end == 1 {
 		trimmed := strings.TrimSpace(lines[0])
-		if strings.HasSuffix(trimmed, "%") {
+		if before, ok := strings.CutSuffix(trimmed, "%"); ok {
 			if num, err := strconv.ParseFloat(
-				strings.TrimSuffix(trimmed, "%"), 64,
+				before, 64,
 			); err == nil && num >= 0 && num <= 100 {
 				return trimmed
 			}
@@ -484,9 +453,9 @@ func extractFilesChangedFromLines(lines []string) []string {
 		// Pattern 1: "Modified: path/to/file.ts" or "Created: path/to/file.ts"
 		matchedPrefix := false
 		for _, prefix := range []string{"Modified:", "Created:", "Updated:", "Edited:", "Wrote:", "Changed:"} {
-			if strings.HasPrefix(line, prefix) {
-				file := strings.TrimSpace(strings.TrimPrefix(line, prefix))
-				file = strings.Trim(file, "`,\"'()[],:")
+			if after, ok := strings.CutPrefix(line, prefix); ok {
+				file := strings.TrimSpace(after)
+				file = strings.Trim(file, "`\"'()[],:")
 				file = strings.TrimPrefix(file, "@")
 				if file != "" && !seen[file] {
 					files = append(files, file)
@@ -501,9 +470,9 @@ func extractFilesChangedFromLines(lines []string) []string {
 		}
 
 		// Pattern 2: Tokens that look like file paths (allow root files, strip @ prefix).
-		parts := strings.Fields(line)
-		for _, part := range parts {
-			part = strings.Trim(part, "`,\"'()[],:")
+		parts := strings.FieldsSeq(line)
+		for part := range parts {
+			part = strings.Trim(part, "`\"'()[],:")
 			part = strings.TrimPrefix(part, "@")
 			for _, ext := range exts {
 				if strings.HasSuffix(part, ext) && !seen[part] {
@@ -675,15 +644,6 @@ func extractKeyOutputFromLines(lines []string, maxLen int) string {
 	return safeTruncate(clean, maxLen)
 }
 
-// extractKeyOutput extracts a brief summary of what the task accomplished
-// Looks for summary lines, first meaningful sentence, or truncates message
-func extractKeyOutput(message string, maxLen int) string {
-	if message == "" || maxLen <= 0 {
-		return ""
-	}
-	return extractKeyOutputFromLines(strings.Split(message, "\n"), maxLen)
-}
-
 // extractCoverageGap extracts what's missing from coverage reports
 // Looks for uncovered lines, branches, or functions
 func extractCoverageGap(message string) string {
@@ -780,10 +740,7 @@ func extractErrorDetail(message string, maxLen int) string {
 
 	if len(errorLines) == 0 {
 		// No specific error lines found, take last few lines
-		start := len(lines) - 5
-		if start < 0 {
-			start = 0
-		}
+		start := max(len(lines)-5, 0)
 		for _, line := range lines[start:] {
 			line = strings.TrimSpace(line)
 			if line != "" {

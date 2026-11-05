@@ -1,9 +1,10 @@
-import fs from 'node:fs/promises'
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
+import fs from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { SkillManagerOptions } from '../skill-manager'
 import {
   getSkillCatalog,
   installedNames,
@@ -14,7 +15,6 @@ import {
   syncSkills,
   updateSkills,
 } from '../skill-manager'
-import type { SkillManagerOptions } from '../skill-manager'
 import { readTree, treeDigest } from '../skill-manager-files'
 
 let root: string
@@ -32,8 +32,11 @@ async function nativeSkillNames(dir: string): Promise<string[]> {
   const found: string[] = []
   for (const name of await fs.readdir(dir)) {
     const path = join(dir, name)
-    if ((await fs.stat(path)).isDirectory()) found.push(...(await nativeSkillNames(path)))
-    else if (name === 'SKILL.md') found.push((await fs.readFile(path, 'utf8')).match(/^name: (.+)$/m)![1])
+    if ((await fs.stat(path)).isDirectory()) {
+      found.push(...(await nativeSkillNames(path)))
+    } else if (name === 'SKILL.md') {
+      found.push((await fs.readFile(path, 'utf8')).match(/^name: (?<name>.+)$/m)![1])
+    }
   }
   return found.sort()
 }
@@ -174,9 +177,13 @@ describe('ownership, update and atomic boundaries', () => {
       )
       .digest('hex')
     const legacyRoot = join(options.storeDir!, 'snapshots', legacyKey)
-    if (legacyRoot !== initialRoot) await fs.rename(initialRoot, legacyRoot)
+    if (legacyRoot !== initialRoot) {
+      await fs.rename(initialRoot, legacyRoot)
+    }
     for (const file of await readTree(legacyRoot)) {
-      if (!file.path.endsWith('.md')) continue
+      if (!file.path.endsWith('.md')) {
+        continue
+      }
       await fs.writeFile(
         join(legacyRoot, file.path),
         file.data.toString('utf8').replaceAll(initialRoot, legacyRoot).replaceAll('/ccg-quality', '/ccg:quality')
@@ -268,7 +275,9 @@ describe('ownership, update and atomic boundaries', () => {
     const original = await fs.readlink(join(options.nativeDir!, 'ccg-quality'))
     const rename = fs.rename.bind(fs)
     vi.spyOn(fs, 'rename').mockImplementation(async (from, to) => {
-      if (String(to).endsWith('manifest.json')) throw new Error('disk full')
+      if (String(to).endsWith('manifest.json')) {
+        throw new Error('disk full')
+      }
       return rename(from, to)
     })
     await expect(syncSkills({ ...options, names: ['design'] })).rejects.toThrow('disk full')
@@ -323,7 +332,7 @@ describe('ownership, update and atomic boundaries', () => {
     const templatesDir = join(__dirname, '../../../templates/skills')
     await installSkills(['verify-quality'], { ...options, templatesDir })
     const facade = await fs.readFile(join(options.nativeDir!, 'ccg-verify-quality/SKILL.md'), 'utf8')
-    const base = facade.match(/resources for this skill are in `([^`]+)`/)![1]
+    const base = facade.match(/resources for this skill are in `(?<directory>[^`]+)`/)![1]
     await fs.mkdir(join(root, 'scan'))
     await fs.writeFile(join(root, 'scan', 'small.js'), 'const value = 1\n')
     const result = JSON.parse(
@@ -339,7 +348,7 @@ describe('ownership, update and atomic boundaries', () => {
     const templatesDir = join(__dirname, '../../../templates/skills')
     await installSkills(['verify-quality'], { ...options, templatesDir })
     const facade = await fs.readFile(join(options.nativeDir!, 'ccg-verify-quality/SKILL.md'), 'utf8')
-    const base = facade.match(/resources for this skill are in `([^`]+)`/)![1]
+    const base = facade.match(/resources for this skill are in `(?<directory>[^`]+)`/)![1]
     await fs.mkdir(join(root, 'esm-scan'))
     await fs.writeFile(join(root, 'esm-scan', 'module.js'), 'export const value = 1\n')
     const result = JSON.parse(

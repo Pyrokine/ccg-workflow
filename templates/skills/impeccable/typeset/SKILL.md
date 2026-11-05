@@ -51,8 +51,8 @@ typography is invisible; bad typography is distracting.
 
 ## Plan Typography Improvements
 
-Consult the [typography reference](reference/typography.md) from the frontend-design skill for detailed guidance on
-scales, pairing, and loading strategies.
+Consult the [typography reference](../../domains/frontend-design/reference/typography.md) from the frontend-design skill
+for detailed guidance on scales, pairing, and loading strategies.
 
 Create a systematic plan:
 

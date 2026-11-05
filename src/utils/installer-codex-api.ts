@@ -1,9 +1,9 @@
+import fs from 'fs-extra'
 import { randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
-import fs from 'fs-extra'
 import { join } from 'pathe'
 import { parse as parseToml, stringify as stringifyToml } from 'smol-toml'
-import { SPONSORS, getSponsor, type CodexProviderSpec, type SponsorGateway } from './sponsors'
+import { type CodexProviderSpec, getSponsor, type SponsorGateway, SPONSORS } from './sponsors'
 
 export type { CodexProviderSpec }
 
@@ -61,7 +61,9 @@ async function readCodexConfig(configPath: string): Promise<{
   exists: boolean
 }> {
   const current = await fs.lstat(configPath).catch((error: unknown) => {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return undefined
+    }
     throw error
   })
   if (!current) {
@@ -80,7 +82,9 @@ async function readCodexConfig(configPath: string): Promise<{
 
 function getModelProviders(config: Record<string, unknown>, create: boolean): Record<string, unknown> | null {
   if (config.model_providers === undefined) {
-    if (!create) return null
+    if (!create) {
+      return null
+    }
     const providers: Record<string, unknown> = {}
     config.model_providers = providers
     return providers
@@ -95,7 +99,9 @@ function getModelProviders(config: Record<string, unknown>, create: boolean): Re
 
 async function writeTomlAtomic(path: string, config: Record<string, unknown>): Promise<void> {
   const current = await fs.lstat(path).catch((error: unknown) => {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return undefined
+    }
     throw error
   })
   if (current && (!current.isFile() || current.isSymbolicLink())) {
@@ -163,7 +169,9 @@ function removeSponsorProvider(
     }
   }
   delete providers[sponsor.id]
-  if (config.model_provider === sponsor.id) delete config.model_provider
+  if (config.model_provider === sponsor.id) {
+    delete config.model_provider
+  }
   return {
     id: sponsor.id,
     success: true,
@@ -188,7 +196,9 @@ async function configureSponsors(
 
     for (const sponsor of sponsors) {
       const result = registerSponsorProvider(providers, sponsor)
-      if (result.status === 'added') changed = true
+      if (result.status === 'added') {
+        changed = true
+      }
       results.push(result)
     }
 
@@ -198,7 +208,9 @@ async function configureSponsors(
       changed = true
     }
 
-    if (changed) await writeTomlAtomic(configPath, config)
+    if (changed) {
+      await writeTomlAtomic(configPath, config)
+    }
 
     return {
       activated,
@@ -244,12 +256,18 @@ async function removeSponsors(sponsors: readonly SponsorGateway[]): Promise<Code
 
     for (const sponsor of sponsors) {
       const result = removeSponsorProvider(config, providers, sponsor)
-      if (result.status === 'removed') changed = true
+      if (result.status === 'removed') {
+        changed = true
+      }
       results.push(result)
     }
 
-    if (providers && Object.keys(providers).length === 0) delete config.model_providers
-    if (changed) await writeTomlAtomic(configPath, config)
+    if (providers && Object.keys(providers).length === 0) {
+      delete config.model_providers
+    }
+    if (changed) {
+      await writeTomlAtomic(configPath, config)
+    }
 
     return {
       success: true,
@@ -333,7 +351,9 @@ export async function removeSponsorsFromCodex(ids: readonly string[]): Promise<C
     }
     sponsors.push(sponsor)
   }
-  if (sponsors.length === 0) return { success: true, results: [], message: 'No managed Codex sponsors to remove' }
+  if (sponsors.length === 0) {
+    return { success: true, results: [], message: 'No managed Codex sponsors to remove' }
+  }
   return removeSponsors(sponsors)
 }
 

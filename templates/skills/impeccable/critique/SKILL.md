@@ -9,8 +9,7 @@ user-invocable: false
 
 Use the `frontend-design` skill as the governing entry point and follow its design principles, anti-patterns, and
 **Context Gathering Protocol**. If design context is missing, ask only for the missing audience, use case, or brand
-direction. Additionally
-gather: what the interface is trying to accomplish.
+direction. Additionally gather: what the interface is trying to accomplish.
 
 ---
 
@@ -41,7 +40,7 @@ the problem.
 
 ### 3. Information Architecture & Cognitive Load
 
-> *Consult [cognitive-load](reference/cognitive-load.md) for the working memory rule and 8-item checklist*
+> _Consult [cognitive-load](reference/cognitive-load.md) for the working memory rule and 8-item checklist_
 
 - Is the structure intuitive? Would a new user understand the organization?
 - Is related content grouped logically?
@@ -112,7 +111,7 @@ Structure your feedback as a design director would:
 
 ### Design Health Score
 
-> *Consult [heuristics-scoring](reference/heuristics-scoring.md)*
+> _Consult [heuristics-scoring](reference/heuristics-scoring.md)_
 
 Score each of Nielsen's 10 heuristics 0–4. Present as a table:
 
@@ -156,12 +155,12 @@ definitions):
 - **Why it matters**: How this hurts users or undermines goals
 - **Fix**: What to do about it (be concrete)
 - **Suggested playbook**: Which focused playbook could address this (`audit`, `critique`, `normalize`, `polish`,
-  `distill`, `clarify`, `optimize`, `harden`, `animate`, `colorize`, `bolder`, `quieter`, `delight`, `extract`,
-  `adapt`, `onboard`, `typeset`, `arrange`, `overdrive`, or `teach-impeccable`)
+  `distill`, `clarify`, `optimize`, `harden`, `animate`, `colorize`, `bolder`, `quieter`, `delight`, `extract`, `adapt`,
+  `onboard`, `typeset`, `arrange`, `overdrive`, or `teach-impeccable`)
 
 ### Persona Red Flags
 
-> *Consult [personas](reference/personas.md)*
+> _Consult [personas](reference/personas.md)_
 
 Auto-select 2–3 personas most relevant to this interface type (use the selection table in the reference). If `CLAUDE.md`
 contains a `## Design Context` section from `teach-impeccable`, also generate 1–2 project-specific personas from the
@@ -229,8 +228,7 @@ from Phase 3.
 List recommended playbooks in priority order, based on the user's answers:
 
 1. **`playbook-name`** — Brief description of what to fix (specific context from critique findings)
-2. **`playbook-name`** — Brief description (specific context)
-   ...
+2. **`playbook-name`** — Brief description (specific context) ...
 
 **Rules for recommendations**:
 

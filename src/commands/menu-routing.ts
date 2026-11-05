@@ -7,8 +7,8 @@ import { i18n } from '../i18n'
 import type { CcgConfig, ModelRouting, ModelType } from '../types'
 import { createDefaultConfig, normalizeRoutingForInstall, readCcgConfig, writeCcgConfig } from '../utils/config'
 import { getAllCommandIds, syncRoutingTemplates } from '../utils/installer'
-import { modelChoices, promptExecutionModels } from './model-prompts'
 import type { ExecutionModels } from './model-prompts'
+import { modelChoices, promptExecutionModels } from './model-prompts'
 
 function showCurrentRouting(routing: ModelRouting): void {
   console.log()
@@ -24,7 +24,9 @@ function showCurrentRouting(routing: ModelRouting): void {
     ['currentKimi', routing.kimiModel],
     ['currentOpencode', routing.opencodeModel],
   ]) {
-    if (model) console.log(`  ${ansis.cyan(`${i18n.t(`init:model.${key}`)}:`)} ${ansis.green(model)}`)
+    if (model) {
+      console.log(`  ${ansis.cyan(`${i18n.t(`init:model.${key}`)}:`)} ${ansis.green(model)}`)
+    }
   }
   showPureClaude(routing.frontend.primary, routing.backend.primary)
   console.log()
@@ -99,7 +101,9 @@ async function refreshRoutingConfig(config: CcgConfig): Promise<void> {
     )
     if (!result.success) {
       spinner.fail(i18n.t('init:model.reinstallFailed'))
-      for (const error of result.errors) console.log(ansis.red(`  ${error}`))
+      for (const error of result.errors) {
+        console.log(ansis.red(`  ${error}`))
+      }
     } else {
       await writeCcgConfig(config)
       spinner.succeed(i18n.t('init:model.reinstallDone'))
@@ -136,8 +140,9 @@ export async function configModelRouting(): Promise<void> {
     console.log(ansis.gray(`  ${i18n.t('common:configNotModified')}`))
     return
   }
-  if (config) config.routing = routing
-  else {
+  if (config) {
+    config.routing = routing
+  } else {
     config = createDefaultConfig({
       language: i18n.language === 'en' ? 'en' : 'zh-CN',
       routing,

@@ -11,8 +11,7 @@ Strategically introduce color to designs that are too monochromatic, gray, or la
 
 Use the `frontend-design` skill as the governing entry point and follow its design principles, anti-patterns, and
 **Context Gathering Protocol**. If design context is missing, ask only for the missing audience, use case, or brand
-direction. Additionally
-gather: existing brand colors.
+direction. Additionally gather: existing brand colors.
 
 ---
 
@@ -81,7 +80,7 @@ Add color systematically across these dimensions:
 - **Gradient backgrounds**: Add depth with subtle, intentional gradients (not generic purple-blue)
 - **Cards & surfaces**: Tint cards or surfaces slightly for warmth
 
-**Use OKLCH for color**: It's perceptually uniform, meaning equal steps in lightness *look* equal. Great for generating
+**Use OKLCH for color**: It's perceptually uniform, meaning equal steps in lightness _look_ equal. Great for generating
 harmonious scales.
 
 ### Data Visualization

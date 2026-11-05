@@ -1,15 +1,17 @@
-import { homedir } from 'node:os'
 import ansis from 'ansis'
 import fs from 'fs-extra'
+import { homedir } from 'node:os'
 import { join } from 'pathe'
 import { version as packageVersion } from '../../package.json'
 import { readCcgConfig } from '../utils/config'
-import { defaultDshHome, findDshProfiles } from '../utils/installer-dsh'
-import { collectDoctorReport, executeVersion, readCodexModeStatus, readTaskStatus } from '../utils/doctor-checks'
 import type { DoctorDependencies, DoctorReport } from '../utils/doctor-checks'
+import { collectDoctorReport, executeVersion, readCodexModeStatus, readTaskStatus } from '../utils/doctor-checks'
+import { defaultDshHome, findDshProfiles } from '../utils/installer-dsh'
 
 async function dirFiles(path: string): Promise<string[]> {
-  if (!(await fs.pathExists(path))) return []
+  if (!(await fs.pathExists(path))) {
+    return []
+  }
   return (await fs.readdir(path)).filter((file) => !file.startsWith('.'))
 }
 
@@ -18,7 +20,9 @@ function printDoctorReport(report: DoctorReport, output: (text: string) => void)
   const symbols = { pass: ansis.green('✓'), warn: ansis.yellow('!'), fail: ansis.red('✗'), skip: ansis.gray('—') }
   for (const check of report.checks) {
     output(`  ${symbols[check.status]} ${ansis.bold(check.label.padEnd(20))} ${check.detail}`)
-    if (check.remediation) output(`    ${check.remediation}`)
+    if (check.remediation) {
+      output(`    ${check.remediation}`)
+    }
   }
   output(
     report.failureCount
@@ -32,11 +36,17 @@ function printDoctorReport(report: DoctorReport, output: (text: string) => void)
 export async function doctor(options: { json?: boolean } = {}, deps: DoctorDependencies = {}): Promise<DoctorReport> {
   const report = await collectDoctorReport(deps)
   const output = deps.output || console.log
-  if (options.json) output(JSON.stringify(report, null, 2))
-  else printDoctorReport(report, output)
+  if (options.json) {
+    output(JSON.stringify(report, null, 2))
+  } else {
+    printDoctorReport(report, output)
+  }
   const exitCode = report.failureCount ? 1 : 0
-  if (deps.setExitCode) deps.setExitCode(exitCode)
-  else process.exitCode = exitCode
+  if (deps.setExitCode) {
+    deps.setExitCode(exitCode)
+  } else {
+    process.exitCode = exitCode
+  }
   return report
 }
 
@@ -49,7 +59,9 @@ async function readBinaryVersion(installDir: string): Promise<string> {
 
 async function readMcpServers(): Promise<string[]> {
   const claudeJsonPath = join(homedir(), '.claude.json')
-  if (!(await fs.pathExists(claudeJsonPath))) return []
+  if (!(await fs.pathExists(claudeJsonPath))) {
+    return []
+  }
   try {
     const claudeConfig = await fs.readJson(claudeJsonPath)
     return Object.keys(claudeConfig.mcpServers || {})
@@ -59,8 +71,12 @@ async function readMcpServers(): Promise<string[]> {
 }
 
 function codexStatusLabel(codexMode: Awaited<ReturnType<typeof readCodexModeStatus>>): string {
-  if (codexMode.kind === 'installed') return 'installed'
-  if (codexMode.kind === 'incomplete') return ansis.yellow(codexMode.detail.toLowerCase())
+  if (codexMode.kind === 'installed') {
+    return 'installed'
+  }
+  if (codexMode.kind === 'incomplete') {
+    return ansis.yellow(codexMode.detail.toLowerCase())
+  }
   return ansis.gray('not installed')
 }
 

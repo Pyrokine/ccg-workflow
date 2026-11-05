@@ -5,27 +5,47 @@ const os = require('node:os');
 const path = require('node:path');
 const { ancestors, canonical, execute, issue, checked, unavailable } = require('./language-checks-runtime.js');
 
+/**
+ * @param {Iterable<string>} configs
+ * @param {typeof import('typescript')} ts
+ */
 function typescriptProjects(configs, ts) {
   const projects = new Map();
   function load(config) {
     config = canonical(config);
-    if (projects.has(config)) return;
+    if (projects.has(config)) {
+      return;
+    }
     const parsed = ts.getParsedCommandLineOfConfigFile(
       config,
       { noEmit: true },
       {
-        ...ts.sys,
+        useCaseSensitiveFileNames: ts.sys.useCaseSensitiveFileNames,
+        getCurrentDirectory: ts.sys.getCurrentDirectory,
+        readDirectory: ts.sys.readDirectory,
+        fileExists: ts.sys.fileExists,
+        readFile: ts.sys.readFile,
         onUnRecoverableConfigFileDiagnostic() {},
       }
     );
-    if (!parsed || parsed.errors.length) throw new Error();
+    if (!parsed || parsed.errors.length) {
+      throw new Error();
+    }
     projects.set(config, parsed);
-    for (const reference of parsed.projectReferences || []) load(ts.resolveProjectReferencePath(reference));
+    for (const reference of parsed.projectReferences || []) {
+      load(ts.resolveProjectReferencePath(reference));
+    }
   }
-  for (const config of configs) load(config);
+  for (const config of configs) {
+    load(config);
+  }
   return projects;
 }
 
+/**
+ * @param {typeof import('typescript')} ts
+ * @param {import('typescript').DiagnosticWithLocation} diagnostic
+ */
 function typescriptApiIssue(ts, diagnostic) {
   const line =
     diagnostic.start === undefined ? 0 : diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start).line + 1;
@@ -38,8 +58,16 @@ function typescriptApiIssue(ts, diagnostic) {
   return issue('typescript', severity, diagnostic.file.fileName, line, `TS${diagnostic.code}`);
 }
 
+/**
+ * @param {{root: string, files: string[]}} job
+ * @param {typeof import('typescript')} ts
+ * @param {string} config
+ * @param {import('typescript').ParsedCommandLine} parsed
+ */
 function typescriptProgram(job, ts, config, parsed) {
-  if (!parsed.fileNames.length) return null;
+  if (!parsed.fileNames.length) {
+    return null;
+  }
   const program = ts.createProgram({
     rootNames: parsed.fileNames,
     options: parsed.options,
@@ -48,28 +76,34 @@ function typescriptProgram(job, ts, config, parsed) {
   });
   const sources = new Set(program.getSourceFiles().map((file) => canonical(file.fileName)));
   const inputs = job.files.filter((file) => sources.has(canonical(file)));
-  if (!inputs.length) return null;
+  if (!inputs.length) {
+    return null;
+  }
   const diagnostics = ts.getPreEmitDiagnostics(program);
   const invalid = diagnostics.some(
     (diagnostic) =>
       !diagnostic.file || canonical(diagnostic.file.fileName) === config || [6305, 6306, 6310].includes(diagnostic.code)
   );
-  if (invalid)
+  if (invalid) {
     return unavailable('typescript', job.root, job.files, 'TypeScript project configuration could not be analyzed');
+  }
   return checked('typescript', path.dirname(config), {
     requested: inputs,
     covered: inputs,
-    issues: diagnostics.map((diagnostic) => typescriptApiIssue(ts, diagnostic)),
+    issues: diagnostics.map((diagnostic) =>
+      typescriptApiIssue(ts, /** @type {import('typescript').DiagnosticWithLocation} */ (diagnostic))
+    ),
     reason: 'Project-local TypeScript compiler API; project scope; no emit or build-info writes',
   });
 }
 
 function typescriptCoverage(job, result, covered) {
   const skipped = job.files.filter((file) => /\.[cm]?tsx?$/u.test(file) && !covered.has(file));
-  if (!covered.size)
+  if (!covered.size) {
     return skipped.length
       ? unavailable('typescript', job.root, skipped, 'No requested files belong to the TypeScript program')
       : { checks: [], issues: [], uncovered: [] };
+  }
   return {
     checks: result.checks,
     issues: result.issues,
@@ -86,11 +120,17 @@ function typescriptWorker(job) {
   const covered = new Set();
   for (const [config, parsed] of typescriptProjects(job.configs, ts)) {
     const project = typescriptProgram(job, ts, config, parsed);
-    if (!project) continue;
-    if (project.uncovered.length) return project;
+    if (!project) {
+      continue;
+    }
+    if (project.uncovered.length) {
+      return project;
+    }
     result.checks.push(...project.checks);
     result.issues.push(...project.issues);
-    for (const file of project.checks[0].files) covered.add(file);
+    for (const file of project.checks[0].files) {
+      covered.add(file);
+    }
   }
   return typescriptCoverage(job, result, covered);
 }
@@ -100,10 +140,11 @@ function typescriptCliExecutable(modulePath) {
     fs.existsSync(path.join(directory, 'package.json'))
   );
   const manifest = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-  if (typeof manifest.bin?.tsc !== 'string')
+  if (typeof manifest.bin?.tsc !== 'string') {
     return {
       reason: 'Project-local TypeScript package provides neither the compiler API nor bin.tsc',
     };
+  }
   const cli = canonical(path.resolve(root, manifest.bin.tsc));
   const relative = path.relative(canonical(root), cli);
   if (
@@ -119,7 +160,9 @@ function typescriptCliExecutable(modulePath) {
 
 function invokeTypescript(context, config, flags) {
   const timeout = context.deadline - Date.now();
-  if (timeout <= 0) throw new Error('Analysis timed out');
+  if (timeout <= 0) {
+    throw new Error('Analysis timed out');
+  }
   const result = execute(
     process.execPath,
     [
@@ -137,7 +180,9 @@ function invokeTypescript(context, config, flags) {
     undefined,
     { timeout, acceptedStatuses: [0, 1, 2] }
   );
-  if (result.reason) throw new Error(result.reason);
+  if (result.reason) {
+    throw new Error(result.reason);
+  }
   return result;
 }
 
@@ -148,8 +193,9 @@ function typescriptCliInventory(context, config) {
   }
   const parsed = JSON.parse(settings.stdout);
   const inventory = invokeTypescript(context, config, ['--listFilesOnly']);
-  if (inventory.status !== 0 || inventory.stderr.trim())
+  if (inventory.status !== 0 || inventory.stderr.trim()) {
     throw new Error('TypeScript project files could not be enumerated');
+  }
   const sources = new Set(
     inventory.stdout
       .split(/\r?\n/u)
@@ -161,13 +207,17 @@ function typescriptCliInventory(context, config) {
 
 function loadTypescriptCli(context, config) {
   config = canonical(config);
-  if (context.projects.has(config)) return;
+  if (context.projects.has(config)) {
+    return;
+  }
   context.projects.add(config);
   const { parsed, sources } = typescriptCliInventory(context, config);
   const inputs = context.job.files.filter((file) => sources.has(canonical(file)));
   if (inputs.length) {
     const diagnostics = typescriptDiagnostics(invokeTypescript(context, config, []), config, sources);
-    for (const file of inputs) context.covered.add(file);
+    for (const file of inputs) {
+      context.covered.add(file);
+    }
     const result = checked('typescript', path.dirname(config), {
       requested: inputs,
       covered: inputs,
@@ -185,7 +235,9 @@ function loadTypescriptCli(context, config) {
 
 function typescriptCli(job, deadline) {
   const executable = typescriptCliExecutable(job.modulePath);
-  if (executable.reason) return unavailable('typescript', job.root, job.files, executable.reason);
+  if (executable.reason) {
+    return unavailable('typescript', job.root, job.files, executable.reason);
+  }
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'ccg-tsc-'));
   const context = {
     job,
@@ -198,7 +250,9 @@ function typescriptCli(job, deadline) {
     covered: new Set(),
   };
   try {
-    for (const config of job.configs) loadTypescriptCli(context, config);
+    for (const config of job.configs) {
+      loadTypescriptCli(context, config);
+    }
     return typescriptCoverage(job, context, context.covered);
   } catch (error) {
     const known = [
@@ -218,22 +272,35 @@ function typescriptCli(job, deadline) {
 }
 
 function typescriptCliIssue(line, config, sources) {
-  const match = /^(.*)\((\d+),(\d+)\): (error|warning|message|suggestion) TS(\d+):/u.exec(line);
-  if (!match) throw new Error();
+  const match =
+    /^(?<file>.*)\((?<line>\d+),(?<column>\d+)\): (?<severity>error|warning|message|suggestion) TS(?<code>\d+):/u.exec(
+      line
+    );
+  if (!match) {
+    throw new Error();
+  }
   const file = canonical(path.resolve(path.dirname(config), match[1]));
-  if (file === config || !sources.has(file) || ['6305', '6306', '6310'].includes(match[5])) throw new Error();
+  if (file === config || !sources.has(file) || ['6305', '6306', '6310'].includes(match[5])) {
+    throw new Error();
+  }
   const severity = { error: 'error', warning: 'warning' }[match[4]] || 'info';
   return issue('typescript', severity, file, Number(match[2]), `TS${match[5]}`);
 }
 
 function typescriptDiagnostics(result, config, sources) {
-  if (result.stderr.trim()) throw new Error();
+  if (result.stderr.trim()) {
+    throw new Error();
+  }
   const diagnostics = [];
   for (const line of result.stdout.split(/\r?\n/u)) {
-    if (!line.trim() || (diagnostics.length && /^\s/u.test(line))) continue;
+    if (!line.trim() || (diagnostics.length && /^\s/u.test(line))) {
+      continue;
+    }
     diagnostics.push(typescriptCliIssue(line, config, sources));
   }
-  if ((result.status !== 0) !== diagnostics.some((entry) => entry.severity === 'error')) throw new Error();
+  if ((result.status !== 0) !== diagnostics.some((entry) => entry.severity === 'error')) {
+    throw new Error();
+  }
   return diagnostics;
 }
 

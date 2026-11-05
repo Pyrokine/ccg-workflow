@@ -36,10 +36,14 @@ async function readDelayedInput(input: Buffer, keepOpen = false): Promise<Record
     child.stdout.on('data', (chunk: string) => (stdout += chunk))
     child.on('error', reject)
     child.stdin.on('error', (error: NodeJS.ErrnoException) => {
-      if (error.code !== 'EPIPE') reject(error)
+      if (error.code !== 'EPIPE') {
+        reject(error)
+      }
     })
     child.stderr.once('data', () => {
-      if (keepOpen) return
+      if (keepOpen) {
+        return
+      }
       timers.push(setTimeout(() => child.stdin.write(input.subarray(0, 13)), 40))
       timers.push(setTimeout(() => child.stdin.end(input.subarray(13)), 100))
     })

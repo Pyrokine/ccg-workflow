@@ -16,16 +16,20 @@ python3 bt_deploy.py \
 ```
 
 或做成 alias：
+
 ```json
-"h5-frontend": {
-  "panel": "https://1.2.3.4:8888",
-  "key":   "xxxx",
-  "local": "~/projects/myapp-h5/dist",
-  "remote": "/www/wwwroot/h5.example.com",
-  "clean": true,
-  "exclude": ["*.map"]
+{
+  "h5-frontend": {
+    "panel": "https://1.2.3.4:8888",
+    "key": "xxxx",
+    "local": "~/projects/myapp-h5/dist",
+    "remote": "/www/wwwroot/h5.example.com",
+    "clean": true,
+    "exclude": ["*.map"]
+  }
 }
 ```
+
 ```bash
 python3 bt_deploy.py --alias h5-frontend
 ```
@@ -42,19 +46,22 @@ python3 bt_deploy.py \
 ```
 
 alias 配置：
+
 ```json
-"myapp-api": {
-  "panel": "https://1.2.3.4:8888",
-  "key": "xxxx",
-  "local": "~/projects/myapp-api",
-  "remote": "/www/wwwroot/myapp-api",
-  "database": "myapp_db",
-  "backup": true,
-  "exclude": ["node_modules", ".git", ".env.local", "*.log"],
-  "restart": [
-    "cd /www/wwwroot/myapp-api && npm install --production --silent",
-    "cd /www/wwwroot/myapp-api && pm2 restart myapp-api || pm2 start ecosystem.config.js"
-  ]
+{
+  "myapp-api": {
+    "panel": "https://1.2.3.4:8888",
+    "key": "xxxx",
+    "local": "~/projects/myapp-api",
+    "remote": "/www/wwwroot/myapp-api",
+    "database": "myapp_db",
+    "backup": true,
+    "exclude": ["node_modules", ".git", ".env.local", "*.log"],
+    "restart": [
+      "cd /www/wwwroot/myapp-api && npm install --production --silent",
+      "cd /www/wwwroot/myapp-api && pm2 restart myapp-api || pm2 start ecosystem.config.js"
+    ]
+  }
 }
 ```
 
@@ -63,18 +70,20 @@ alias 配置：
 ### 场景 3：更新 PHP 站（FastAdmin/ThinkPHP）
 
 ```json
-"jys-backend": {
-  "panel": "https://1.2.3.4:8888",
-  "key": "xxxx",
-  "local": "~/projects/mysite-php",
-  "remote": "/www/wwwroot/mysite-php",
-  "database": "jys",
-  "backup": true,
-  "exclude": ["vendor", ".git", "runtime/*", "*.log", ".idea"],
-  "restart": [
-    "cd /www/wwwroot/mysite-php && find runtime/temp -name '*.php' -delete 2>/dev/null; true",
-    "systemctl reload nginx"
-  ]
+{
+  "jys-backend": {
+    "panel": "https://1.2.3.4:8888",
+    "key": "xxxx",
+    "local": "~/projects/mysite-php",
+    "remote": "/www/wwwroot/mysite-php",
+    "database": "jys",
+    "backup": true,
+    "exclude": ["vendor", ".git", "runtime/*", "*.log", ".idea"],
+    "restart": [
+      "cd /www/wwwroot/mysite-php && find runtime/temp -name '*.php' -delete 2>/dev/null; true",
+      "systemctl reload nginx"
+    ]
+  }
 }
 ```
 
@@ -114,6 +123,7 @@ python3 bt_client.py sql mydb --from-file /www/backup/mydb_xxx.sql
 ```
 
 或用 `bt_deploy.py` 的集成 `sql` 字段把迁移融入部署：
+
 ```json
 {
   "sql": "./migrations/2026-04-10.sql",
@@ -167,11 +177,13 @@ python3 bt_client.py exec '
 ### 🔑 `签名校验失败 / Invalid signature`
 
 **可能原因**：
+
 1. API 密钥复制错了（多一个空格、少一个字符）
 2. 本地机器时间漂移（与面板服务器差 >60 秒）
 3. 面板设置里 API 密钥被改过了
 
 **排查**：
+
 ```bash
 # 对时
 ntpdate pool.ntp.org          # Linux
@@ -187,6 +199,7 @@ sudo sntp -sS time.apple.com  # macOS
 **原因**：宝塔 API 接口默认只放特定 IP。
 
 **修复**：
+
 1. 登宝塔面板 → 设置 → API 接口
 2. "IP 白名单" 添加本机公网 IP（curl ifconfig.me 查）
 3. 临时方案：加 `0.0.0.0` 放行全部（仅测试环境）
@@ -198,10 +211,12 @@ sudo sntp -sS time.apple.com  # macOS
 **原因**：API 接口的字段名在宝塔不同版本间变化。
 
 **案例**：
+
 - `ExecShellMsg` → v11 改名为 `ExecShell`
 - `SqlExecute` → v11 可能拦截，用 shell + mysql 代替
 
 **调试方法**（仿效）：
+
 ```python
 for candidate in ({"shell": cmd, "path": "/tmp"}, {"cmd": cmd}, ...):
     r = c.request("/files?action=<NewAction>", candidate)
@@ -217,6 +232,7 @@ for candidate in ({"shell": cmd, "path": "/tmp"}, {"cmd": cmd}, ...):
 **原因**：`/tmp` 的 sticky bit 让 SaveFileBody 无法覆写其他进程创建的文件。
 
 **修复**：
+
 1. `bt_client.write_file()` 已自动 delete+recreate 兜底
 2. 或改用子目录：`/tmp/bt_work/xxx` 代替直接 `/tmp/xxx`
 3. 或走 `/files?action=upload`（不受此问题影响）
@@ -225,8 +241,8 @@ for candidate in ({"shell": cmd, "path": "/tmp"}, {"cmd": cmd}, ...):
 
 ### ⏳ `FILE_SHELL_EMPTY` / exec 永远 timeout
 
-**原因 A**：用错了接口名。v11 必须是 `/files?action=ExecShell`（不是 `ExecShellMsg`）。
-**原因 B**：首次 poll 太快，`/tmp/panelExec.pl` 还没被宝塔创建。
+**原因 A**：用错了接口名。v11 必须是 `/files?action=ExecShell`（不是 `ExecShellMsg`）。 **原因 B**：首次 poll 太快，
+`/tmp/panelExec.pl` 还没被宝塔创建。
 
 **修复**：`bt_client.exec_shell()` 已处理——首次下发后 `sleep 0.8s` 再轮询。
 
@@ -237,6 +253,7 @@ for candidate in ({"shell": cmd, "path": "/tmp"}, {"cmd": cmd}, ...):
 **原因**：数据库用户/密码错。
 
 **排查**：
+
 ```bash
 # 1. 从面板查看实际凭据
 python3 bt_client.py dbs
@@ -251,11 +268,13 @@ python3 bt_client.py exec "grep -r $DB_NAME /etc/mysql 2>/dev/null; cat /etc/my.
 ### 📦 `上传文件为 0 字节` / upload 状态异常
 
 **可能原因**：
+
 1. 文件大小超过面板 nginx 限制（默认 1GB）
 2. 分片上传中某一片失败
 3. 磁盘空间不足
 
 **排查**：
+
 ```bash
 python3 bt_client.py exec 'df -h / /tmp /www'
 python3 bt_client.py exec 'cat /www/server/nginx/conf/proxy.conf | grep client_max'
@@ -266,6 +285,7 @@ python3 bt_client.py exec 'cat /www/server/nginx/conf/proxy.conf | grep client_m
 ### 🔄 `pm2 重启没生效`
 
 **排查**：
+
 ```bash
 # 1. 确认 pm2 已启动
 python3 bt_client.py exec 'pm2 status' --cwd /root
@@ -304,7 +324,7 @@ python3 bt_deploy.py --alias myapp --dry-run
 python3 bt_client.py exec 'find /www/wwwroot/myapp -type f -mtime -1 | head -20'
 
 # 检查重启脚本在本地能跑通
-bash -n ecosystem.config.js
+node --check ecosystem.config.js
 ```
 
 ### 🛡 部署后核验
@@ -331,4 +351,5 @@ wait
 echo "all done"
 ```
 
-注意：同一面板并发 exec 会互相覆盖 `/tmp/panelExec.pl`，但 `upload` 和 `SaveFileBody` 独立，所以 **不同站点并发 OK**，**同站点并发可能有 exec 日志串**。
+注意：同一面板并发 exec 会互相覆盖 `/tmp/panelExec.pl`，但 `upload` 和 `SaveFileBody` 独立，所以 **不同站点并发 OK**，
+**同站点并发可能有 exec 日志串**。

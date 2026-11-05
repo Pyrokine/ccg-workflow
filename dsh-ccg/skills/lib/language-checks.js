@@ -30,12 +30,17 @@ function runWorker(job) {
     // 独立管道避免工具日志混入诊断，并保留标准输出的回调语义
     stdio: ['pipe', 'ignore', 'ignore', 'pipe'],
   });
-  if (result.reason) return unavailable(job.tool, job.root, job.files, result.reason);
+  if (result.reason) {
+    return unavailable(job.tool, job.root, job.files, result.reason);
+  }
   try {
     const output = JSON.parse(result.output[3]);
-    if (job.tool === 'typescript' && output?.compilerApi === false) return typescriptCli(job, deadline);
-    if (!output || !Array.isArray(output.checks) || !Array.isArray(output.issues) || !Array.isArray(output.uncovered))
+    if (job.tool === 'typescript' && output?.compilerApi === false) {
+      return typescriptCli(job, deadline);
+    }
+    if (!output || !Array.isArray(output.checks) || !Array.isArray(output.issues) || !Array.isArray(output.uncovered)) {
       throw new Error();
+    }
     return output;
   } catch {
     return unavailable(job.tool, job.root, job.files, 'Analysis returned invalid output');
@@ -43,7 +48,9 @@ function runWorker(job) {
 }
 
 function registrationBinding(node, members = []) {
-  if (node.type === 'CallExpression') return registrationBinding(node.callee, members);
+  if (node.type === 'CallExpression') {
+    return registrationBinding(node.callee, members);
+  }
   if (node.type === 'MemberExpression' && !node.computed) {
     return registrationBinding(node.object, [node.property.name, ...members]);
   }
@@ -53,21 +60,29 @@ function registrationBinding(node, members = []) {
 function importDefinition(node, context) {
   const source = context.sourceCode || context.getSourceCode();
   let scope = source.getScope ? source.getScope(node) : context.getScope();
-  while (scope && !scope.set.has(node.name)) scope = scope.upper;
+  while (scope && !scope.set.has(node.name)) {
+    scope = scope.upper;
+  }
   return scope?.set.get(node.name)?.defs.find((entry) => entry.type === 'ImportBinding');
 }
 
 function registrationName(binding, context) {
   const definition = importDefinition(binding.node, context);
-  if (!definition || definition.parent.source.value !== 'vitest') return undefined;
+  if (!definition || definition.parent.source.value !== 'vitest') {
+    return undefined;
+  }
   return definition.node.type === 'ImportNamespaceSpecifier' ? binding.members.shift() : definition.node.imported?.name;
 }
 
 function registrationCallback(node, context) {
   const call = node.parent;
-  if (call?.type !== 'CallExpression' || call.arguments.length < 2 || call.arguments.at(-1) !== node) return false;
+  if (call?.type !== 'CallExpression' || call.arguments.length < 2 || call.arguments.at(-1) !== node) {
+    return false;
+  }
   const binding = registrationBinding(call.callee);
-  if (binding.node.type !== 'Identifier') return false;
+  if (binding.node.type !== 'Identifier') {
+    return false;
+  }
   const imported = registrationName(binding, context);
   const modifiers = new Set([
     'each',
@@ -89,9 +104,13 @@ function registrationCollector(registrations) {
     meta: { schema: [] },
     create(context) {
       const entry = { source: context.sourceCode || context.getSourceCode(), functions: new Set() };
+      // 旧版 ESLint 通过 getFilename() 提供路径
+      //noinspection JSDeprecatedSymbols
       registrations.set(context.filename || context.getFilename(), entry);
       const collect = (node) => {
-        if (registrationCallback(node, context)) entry.functions.add(node);
+        if (registrationCallback(node, context)) {
+          entry.functions.add(node);
+        }
       };
       return { FunctionExpression: collect, ArrowFunctionExpression: collect };
     },
@@ -99,7 +118,9 @@ function registrationCollector(registrations) {
 }
 
 function registrationMessage(diagnostic, entry) {
-  if (diagnostic.ruleId !== 'max-lines-per-function' || !entry) return false;
+  if (diagnostic.ruleId !== 'max-lines-per-function' || !entry) {
+    return false;
+  }
   const index = entry.source.getIndexFromLoc({ line: diagnostic.line, column: diagnostic.column - 1 });
   let node = entry.source.getNodeByRangeIndex(index);
   while (node && !['ArrowFunctionExpression', 'FunctionExpression', 'FunctionDeclaration'].includes(node.type)) {
@@ -135,7 +156,9 @@ function eslintOptions(job, registrations, flat) {
 async function eslintFiles(eslint, files) {
   const active = [];
   for (const file of files) {
-    if (!(await eslint.isPathIgnored(file)) && (await eslint.calculateConfigForFile(file))) active.push(file);
+    if (!(await eslint.isPathIgnored(file)) && (await eslint.calculateConfigForFile(file))) {
+      active.push(file);
+    }
   }
   return active;
 }
@@ -154,12 +177,18 @@ function eslintResults(active, results, registrations) {
   const issues = [];
   for (const result of results) {
     const file = active.find((entry) => canonical(entry) === canonical(result.filePath));
-    if (!file || !Array.isArray(result.messages)) throw new Error();
+    if (!file || !Array.isArray(result.messages)) {
+      throw new Error();
+    }
     covered.push(file);
     for (const diagnostic of result.messages) {
-      if (invalidEslintDiagnostic(diagnostic)) throw new Error();
+      if (invalidEslintDiagnostic(diagnostic)) {
+        throw new Error();
+      }
       // 注册容器的长度包含全部子用例，测试本体仍按相同阈值检查
-      if (registrationMessage(diagnostic, registrations.get(result.filePath))) continue;
+      if (registrationMessage(diagnostic, registrations.get(result.filePath))) {
+        continue;
+      }
       issues.push(
         issue(
           'eslint',
@@ -175,7 +204,9 @@ function eslintResults(active, results, registrations) {
 }
 
 async function eslintWorker(job) {
-  if (!job.config) return unavailable('eslint', job.root, job.files, 'No project ESLint configuration was found');
+  if (!job.config) {
+    return unavailable('eslint', job.root, job.files, 'No project ESLint configuration was found');
+  }
   const api = require(job.modulePath);
   const flat = FLAT_CONFIGS.includes(path.basename(job.config));
   const ESLint = api.loadESLint ? await api.loadESLint({ useFlatConfig: flat }) : api.ESLint;
@@ -193,10 +224,18 @@ async function eslintWorker(job) {
 }
 
 function languageTool(extension) {
-  if (JS.has(extension)) return 'eslint';
-  if (extension === '.py' || extension === '.pyi') return 'ruff';
-  if (extension === '.go') return 'go-vet';
-  if (extension === '.rs') return 'clippy';
+  if (JS.has(extension)) {
+    return 'eslint';
+  }
+  if (extension === '.py' || extension === '.pyi') {
+    return 'ruff';
+  }
+  if (extension === '.go') {
+    return 'go-vet';
+  }
+  if (extension === '.rs') {
+    return 'clippy';
+  }
   return CPP.has(extension) ? 'clang-tidy' : 'unsupported';
 }
 
@@ -205,8 +244,9 @@ function javascriptJobs(file, add, append) {
   const root = config ? path.dirname(config) : projectRoot(file);
   add('eslint', root, file, config);
   const tsconfig = nearest(file, ['tsconfig.json']);
-  if (tsconfig) add('typescript', path.dirname(tsconfig), file, tsconfig);
-  else if (/\.[cm]?tsx?$/u.test(path.extname(file).toLowerCase())) {
+  if (tsconfig) {
+    add('typescript', path.dirname(tsconfig), file, tsconfig);
+  } else if (/\.[cm]?tsx?$/u.test(path.extname(file).toLowerCase())) {
     append(unavailable('typescript', root, [file], 'No tsconfig.json was found'));
   }
 }
@@ -214,27 +254,38 @@ function javascriptJobs(file, add, append) {
 function nativeJob(file, tool, add, append) {
   const names = tool === 'go-vet' ? ['go.mod', 'go.work'] : ['Cargo.toml'];
   const config = nativeConfig(file, names);
-  if (config) return add(tool, path.dirname(config), file, config);
+  if (config) {
+    return add(tool, path.dirname(config), file, config);
+  }
   return append(unavailable(tool, path.dirname(file), [file], 'No native project manifest was found'));
 }
 
 function languageJobs(file, tool, add, append) {
-  if (tool === 'go-vet' || tool === 'clippy') return nativeJob(file, tool, add, append);
-  if (tool === 'eslint') return javascriptJobs(file, add, append);
+  if (tool === 'go-vet' || tool === 'clippy') {
+    return nativeJob(file, tool, add, append);
+  }
+  if (tool === 'eslint') {
+    return javascriptJobs(file, add, append);
+  }
   if (tool === 'ruff') {
     const config = nearest(file, ['.ruff.toml', 'ruff.toml', 'pyproject.toml']);
     return add('ruff', config ? path.dirname(config) : projectRoot(file), file, config);
   }
   if (tool === 'clang-tidy') {
     const database = nearest(file, ['compile_commands.json', 'build/compile_commands.json']);
-    if (database) return add('clang-tidy', path.dirname(database), file, database);
+    if (database) {
+      return add('clang-tidy', path.dirname(database), file, database);
+    }
     return append(unavailable('clang-tidy', projectRoot(file), [file], 'No compilation database was found'));
   }
   return append(unavailable('unsupported', projectRoot(file), [file], 'No language analyzer supports this file type'));
 }
 
+/** @param {{tool: string, modulePath?: string, files: string[], configs: string[]}} job */
 function unmanagedJavaScript(job) {
-  if (job.tool !== 'typescript' || job.modulePath || job.files.some((file) => /\.[cm]?tsx?$/u.test(file))) return false;
+  if (job.tool !== 'typescript' || job.modulePath || job.files.some((file) => /\.[cm]?tsx?$/u.test(file))) {
+    return false;
+  }
   return job.configs.every((config) => {
     const raw = JSON.parse(fs.readFileSync(config, 'utf8'));
     return raw.compilerOptions?.allowJs === false || (!raw.extends && !raw.compilerOptions?.allowJs);
@@ -242,11 +293,21 @@ function unmanagedJavaScript(job) {
 }
 
 function languageJob(job) {
-  if (job.tool === 'go-vet') return goVet(job);
-  if (job.tool === 'clippy') return clippy(job);
-  if (job.tool === 'ruff') return ruff(job.root, job.files, job.targetVersion);
-  if (job.tool === 'clang-tidy') return clangTidy(job.config, job.files);
-  if (unmanagedJavaScript(job)) return null;
+  if (job.tool === 'go-vet') {
+    return goVet(job);
+  }
+  if (job.tool === 'clippy') {
+    return clippy(job);
+  }
+  if (job.tool === 'ruff') {
+    return ruff(job.root, job.files, job.targetVersion);
+  }
+  if (job.tool === 'clang-tidy') {
+    return clangTidy(job.config, job.files);
+  }
+  if (unmanagedJavaScript(job)) {
+    return null;
+  }
   return job.modulePath
     ? runWorker(job)
     : unavailable(job.tool, job.root, job.files, 'Project-local tool dependency was not found');
@@ -263,18 +324,23 @@ function runLanguageChecks(files, limits, targetVersion) {
   const add = (tool, root, file, config) => {
     const modulePath = tool === 'eslint' || tool === 'typescript' ? localModule(file, tool, root) : undefined;
     const key = `${tool}\0${modulePath || root}\0${tool === 'typescript' ? '' : config || root}`;
-    if (!groups.has(key))
+    if (!groups.has(key)) {
       groups.set(key, { tool, root, files: [], configs: [], config, modulePath, limits, targetVersion });
+    }
     const job = groups.get(key);
     job.files.push(file);
-    if (config && !job.configs.includes(config)) job.configs.push(config);
+    if (config && !job.configs.includes(config)) {
+      job.configs.push(config);
+    }
   };
   const seen = new Set();
   for (const file of files) {
     let tool = 'unsupported';
     try {
       const real = canonical(file);
-      if (seen.has(real)) continue;
+      if (seen.has(real)) {
+        continue;
+      }
       seen.add(real);
       tool = languageTool(path.extname(file).toLowerCase());
       languageJobs(file, tool, add, append);
@@ -285,7 +351,9 @@ function runLanguageChecks(files, limits, targetVersion) {
   for (const job of groups.values()) {
     try {
       const result = languageJob(job);
-      if (result) append(result);
+      if (result) {
+        append(result);
+      }
     } catch {
       append(unavailable(job.tool, job.root, job.files, 'Language analysis could not complete'));
     }

@@ -1,6 +1,6 @@
+import fs from 'fs-extra'
 import { randomUUID } from 'node:crypto'
 import { isAbsolute, relative } from 'node:path'
-import fs from 'fs-extra'
 import { basename, dirname, join } from 'pathe'
 
 /** Package name the profile depends on and lists in its bundles. */
@@ -10,8 +10,12 @@ export function errorMessage(error: unknown): string {
   if (error && typeof error === 'object') {
     const details = error as { stderr?: unknown; message?: unknown }
     const stderr = details.stderr === undefined ? '' : String(details.stderr).trim()
-    if (stderr) return stderr
-    if (details.message !== undefined) return String(details.message)
+    if (stderr) {
+      return stderr
+    }
+    if (details.message !== undefined) {
+      return String(details.message)
+    }
   }
   return String(error)
 }
@@ -20,7 +24,9 @@ export async function lstatIfExists(path: string) {
   try {
     return await fs.lstat(path)
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return undefined
+    }
     throw error
   }
 }
@@ -88,7 +94,9 @@ async function preparePluginTarget(target: string, dshHome: string): Promise<str
   if (targetStat && (!targetStat.isDirectory() || targetStat.isSymbolicLink())) {
     throw new Error(`DSH plugin target must be a non-symlink directory: ${target}`)
   }
-  if (targetStat) await requireContainedPath(dshHome, target, 'DSH plugin target')
+  if (targetStat) {
+    await requireContainedPath(dshHome, target, 'DSH plugin target')
+  }
   return parent
 }
 
@@ -106,7 +114,9 @@ async function copyBundledPlugin(source: string, staged: string): Promise<void> 
     'LICENSE',
   ]) {
     const from = join(source, entry)
-    if (await fs.pathExists(from)) await fs.copy(from, join(staged, entry))
+    if (await fs.pathExists(from)) {
+      await fs.copy(from, join(staged, entry))
+    }
   }
 }
 
@@ -134,6 +144,8 @@ async function restorePluginBackup(
  * otherwise linger and keep being loaded.
  *
  * @param target - destination directory.
+ * @param dshHome - harness home containing the destination.
+ * @param source - bundled plugin directory.
  * @returns a cleanup warning, or undefined on success.
  * @throws if this package does not carry the plugin.
  */
@@ -166,7 +178,9 @@ export async function stagePlugin(target: string, dshHome: string, source: strin
     try {
       await fs.rename(staged, target)
     } catch (error) {
-      if (originalMoved) await fs.rename(backup, target)
+      if (originalMoved) {
+        await fs.rename(backup, target)
+      }
       throw error
     }
 

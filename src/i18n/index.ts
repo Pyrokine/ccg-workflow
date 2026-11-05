@@ -1,7 +1,7 @@
 import i18next from 'i18next'
 import type { SupportedLang } from '../types'
-import zhCN from './zh-CN'
 import en from './en'
+import zhCN from './zh-CN'
 
 export const i18n = i18next
 

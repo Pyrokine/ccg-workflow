@@ -1,18 +1,18 @@
+import fs from 'fs-extra'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
-import fs from 'fs-extra'
 import { describe, expect, it } from 'vitest'
+import type { JsonObject, StateValue, TaskValue } from './task-state-fixtures'
 import {
   createProject,
-  runController,
-  expectSuccess,
-  expectFailure,
-  resolve,
   currentExpected,
-  startTask,
+  expectFailure,
+  expectSuccess,
   finishActive,
+  resolve,
+  runController,
+  startTask,
 } from './task-state-fixtures'
-import type { JsonObject, StateValue, TaskValue } from './task-state-fixtures'
 
 describe('session-scoped bindings and safe migrations', () => {
   it('migrates state schema v1 without assigning its legacy pointer to a session', async () => {
@@ -154,7 +154,9 @@ describe('session-scoped bindings and safe migrations', () => {
       await fs.ensureDir(taskDir)
       const source = `{\n  "id": "${id}",\n  "title": "${id}",\n  "status": "${status}"\n}\n`
       await fs.writeFile(join(taskDir, 'task.json'), source)
-      if (id === 'unfinished-task') originalTask = source
+      if (id === 'unfinished-task') {
+        originalTask = source
+      }
     }
 
     const migrated = expectSuccess(

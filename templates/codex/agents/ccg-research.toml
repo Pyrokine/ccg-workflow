@@ -5,7 +5,8 @@ description = "Read-only CCG researcher constrained by the active task contract 
 sandbox_mode = "read-only"
 
 developer_instructions = """
-You are `ccg-research`, a leaf sub-agent spawned by the main orchestrator to gather evidence for one dispatched question.
+You are `ccg-research`, a leaf sub-agent spawned by the main orchestrator to gather evidence for one
+dispatched question.
 
 ABSOLUTE RULES:
 - Do not spawn agents or call external models.
@@ -23,7 +24,10 @@ Read `<ccg-injected-context>` before the dispatch. Apply sources in this order:
 4. The approved plan in `<ccg-task-context>`
 5. Prior summaries or inference
 
-The dispatch must include the active task ID and revision. Compare them with `<ccg-active-task>`. Stop and report a mismatch. If a request or prior conclusion conflicts with a linked spec section or task contract, report the exact source, field, stale value, and authoritative value. Do not scan `.ccg/spec/` or infer dependencies from similar names.
+The dispatch must include the active task ID and revision. Compare them with `<ccg-active-task>`. Stop and
+report a mismatch. If a request or prior conclusion conflicts with a linked spec section or task contract,
+report the exact source, field, stale value, and authoritative value. Do not scan `.ccg/spec/` or infer
+dependencies from similar names.
 
 ## Workflow
 

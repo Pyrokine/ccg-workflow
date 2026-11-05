@@ -12,19 +12,19 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
-  TEAM_DOMAIN,
   collisionsWith,
   describeCollisions,
   foreignClaimsIn,
   formatRoster,
   normaliseOwns,
   normalisePath,
-  PRUNE_GRACE_MS,
-  sweepStale,
   pathsCollide,
+  PRUNE_GRACE_MS,
   reachOf,
-  rosterToolDefinition,
   rosterOf,
+  rosterToolDefinition,
+  sweepStale,
+  TEAM_DOMAIN,
 } from '../src/memory.js'
 
 /** A table handle shaped like the domain's `KvTable`, backed by a Map. */
@@ -35,9 +35,15 @@ function stubTable(rows = []) {
     get: (key) => map.get(key),
     entries: () => map.entries(),
     keys: () => map.keys(),
-    get size() { return map.size },
-    async put(key, value) { map.set(key, value) },
-    async delete(key) { return map.delete(key) },
+    get size() {
+      return map.size
+    },
+    async put(key, value) {
+      map.set(key, value)
+    },
+    async delete(key) {
+      return map.delete(key)
+    },
   }
 }
 
@@ -102,14 +108,14 @@ test('an empty claim collides with nothing', () => {
 })
 
 test('a declared set is trimmed and deduplicated', () => {
-  assert.deepEqual(
-    normaliseOwns([' src/a.js ', 'src/a.js', './src/a.js', '', null, 'src/b.js']),
-    ['src/a.js', 'src/b.js'],
-  )
+  assert.deepEqual(normaliseOwns([' src/a.js ', 'src/a.js', './src/a.js', '', null, 'src/b.js']), [
+    'src/a.js',
+    'src/b.js',
+  ])
   assert.deepEqual(normaliseOwns(undefined), [])
 })
 
-test('a hire that would take a live teammate\'s files is identified, with whose', () => {
+test("a hire that would take a live teammate's files is identified, with whose", () => {
   const rows = [row('child-a', ['src/parse']), row('child-b', ['src/render'])]
 
   assert.deepEqual(collisionsWith(rows, ['src/emit']), [])
@@ -134,13 +140,16 @@ test('a hire that would take a live teammate\'s files is identified, with whose'
   assert.match(exact, /you asked for src\/a\.js, which is exactly theirs/)
 })
 
-test('one coordinator does not see another\'s team', () => {
-  const table = stubTable([
-    row('child-a', ['src/a.js']),
-    row('child-b', ['src/b.js'], { hiredBy: 'coordinator-2' }),
-  ])
-  assert.deepEqual(rosterOf(table, 'coordinator-1').map((r) => r.childId), ['child-a'])
-  assert.deepEqual(rosterOf(table, 'coordinator-2').map((r) => r.childId), ['child-b'])
+test("one coordinator does not see another's team", () => {
+  const table = stubTable([row('child-a', ['src/a.js']), row('child-b', ['src/b.js'], { hiredBy: 'coordinator-2' })])
+  assert.deepEqual(
+    rosterOf(table, 'coordinator-1').map((r) => r.childId),
+    ['child-a']
+  )
+  assert.deepEqual(
+    rosterOf(table, 'coordinator-2').map((r) => r.childId),
+    ['child-b']
+  )
   assert.deepEqual(rosterOf(undefined, 'coordinator-1'), [])
 })
 
@@ -187,23 +196,17 @@ test('release hands the files back, and only to the coordinator holding them', a
 
   await assert.rejects(
     () => definition.execute({ action: 'release', subagent_id: 'nobody' }, exec),
-    /no teammate "nobody" on your roster/,
+    /no teammate "nobody" on your roster/
   )
-  await assert.rejects(
-    () => definition.execute({ action: 'release' }, exec),
-    /needs the teammate's subagent_id/,
-  )
+  await assert.rejects(() => definition.execute({ action: 'release' }, exec), /needs the teammate's subagent_id/)
 })
 
 test('a coordinator cannot release a teammate it did not hire', async () => {
   const table = stubTable([row('child-b', ['src/b.js'], { hiredBy: 'coordinator-2' })])
   const definition = rosterToolDefinition({ getTable: () => table })
   await assert.rejects(
-    () => definition.execute(
-      { action: 'release', subagent_id: 'child-b' },
-      { agent: { id: 'coordinator-1' } },
-    ),
-    /no teammate "child-b" on your roster/,
+    () => definition.execute({ action: 'release', subagent_id: 'child-b' }, { agent: { id: 'coordinator-1' } }),
+    /no teammate "child-b" on your roster/
   )
   assert.equal(table.map.size, 1)
 })
@@ -212,7 +215,7 @@ test('without a storage form the roster says so rather than claiming an empty te
   const definition = rosterToolDefinition({ getTable: () => undefined })
   await assert.rejects(
     () => definition.execute({ action: 'list' }, { agent: { id: 'c' } }),
-    /team memory is unavailable/,
+    /team memory is unavailable/
   )
 })
 
@@ -222,7 +225,11 @@ test('live status is a bonus, not a dependency', async () => {
   // the part nothing else in the harness holds.
   const definition = rosterToolDefinition({
     getTable: () => table,
-    getSubagents: () => ({ listChildren: async () => { throw new Error('nope') } }),
+    getSubagents: () => ({
+      listChildren: async () => {
+        throw new Error('nope')
+      },
+    }),
   })
   const result = await definition.execute({ action: 'list' }, { agent: { id: 'coordinator-1' } })
   assert.equal(result.count, 1)
@@ -237,9 +244,15 @@ test('a file claimed by another conversation is a warning, never a refusal', () 
   ])
 
   const foreign = foreignClaimsIn(table, '/w/p', 'coordinator-1')
-  assert.deepEqual(foreign.map((r) => r.childId), ['theirs'])
+  assert.deepEqual(
+    foreign.map((r) => r.childId),
+    ['theirs']
+  )
   // Another workspace is none of this conversation's business.
-  assert.deepEqual(foreignClaimsIn(table, '/w/other', 'coordinator-1').map((r) => r.childId), ['elsewhere'])
+  assert.deepEqual(
+    foreignClaimsIn(table, '/w/other', 'coordinator-1').map((r) => r.childId),
+    ['elsewhere']
+  )
   // And with no workspace to compare, nothing is claimed.
   assert.deepEqual(foreignClaimsIn(table, undefined, 'coordinator-1'), [])
 
@@ -260,16 +273,13 @@ test('a file claimed by another conversation is a warning, never a refusal', () 
 test('a row the harness no longer holds is retired — but only on positive evidence', async () => {
   const now = 1_000_000_000
   const old = now - 10 * 60 * 1000
-  const table = stubTable([
-    row('alive', ['src/a.js'], { hiredAt: old }),
-    row('gone', ['src/b.js'], { hiredAt: old }),
-  ])
+  const table = stubTable([row('alive', ['src/a.js'], { hiredAt: old }), row('gone', ['src/b.js'], { hiredAt: old })])
 
   const removed = await sweepStale(
     table,
     ['coordinator-1'],
     async () => [{ kind: 'child', id: 'alive', activity: 'inactive', mode: 'continuable' }],
-    now,
+    now
   )
   assert.deepEqual(removed, ['gone'])
   assert.deepEqual([...table.map.keys()], ['alive'])
@@ -287,10 +297,7 @@ test('a teammate hired moments ago is never swept', async () => {
   assert.equal(table.map.size, 1)
 
   // Past the grace window, the same absence is actionable.
-  assert.deepEqual(
-    await sweepStale(table, ['coordinator-1'], async () => [], now + PRUNE_GRACE_MS + 1),
-    ['fresh'],
-  )
+  assert.deepEqual(await sweepStale(table, ['coordinator-1'], async () => [], now + PRUNE_GRACE_MS + 1), ['fresh'])
 })
 
 test('a store that cannot answer keeps every row', async () => {
@@ -299,7 +306,17 @@ test('a store that cannot answer keeps every row', async () => {
 
   // "The listing failed" and "the child is gone" are different facts, and only
   // one of them is safe to act on.
-  assert.deepEqual(await sweepStale(table, ['coordinator-1'], async () => { throw new Error('down') }, now), [])
+  assert.deepEqual(
+    await sweepStale(
+      table,
+      ['coordinator-1'],
+      async () => {
+        throw new Error('down')
+      },
+      now
+    ),
+    []
+  )
   assert.deepEqual(await sweepStale(table, ['coordinator-1'], async () => undefined, now), [])
   assert.deepEqual(await sweepStale(table, ['coordinator-1'], undefined, now), [])
   assert.deepEqual(await sweepStale(undefined, ['coordinator-1'], async () => [], now), [])
@@ -313,17 +330,22 @@ test('sweeping covers the other conversations whose claims are shown here', asyn
     row('theirs', ['src/b.js'], { hiredAt: 0, workspace: '/w', hiredBy: 'coordinator-2' }),
   ])
   const asked = []
-  await sweepStale(table, ['coordinator-1', 'coordinator-2'], async (id) => { asked.push(id); return [] }, now)
+  await sweepStale(
+    table,
+    ['coordinator-1', 'coordinator-2'],
+    async (id) => {
+      asked.push(id)
+      return []
+    },
+    now
+  )
   assert.deepEqual(asked.sort(), ['coordinator-1', 'coordinator-2'])
   assert.equal(table.map.size, 0)
 })
 
 test('the roster reports what it retired, and reads live activity correctly', async () => {
   const now = 1_000_000_000
-  const table = stubTable([
-    row('alive', ['src/a.js'], { hiredAt: 0 }),
-    row('gone', ['src/b.js'], { hiredAt: 0 }),
-  ])
+  const table = stubTable([row('alive', ['src/a.js'], { hiredAt: 0 }), row('gone', ['src/b.js'], { hiredAt: 0 })])
   const definition = rosterToolDefinition({
     getTable: () => table,
     // The entry field is `activity`, not `status`; reading the wrong one
@@ -345,7 +367,8 @@ test('the roster reports what it retired, and reads live activity correctly', as
 test('the new identity catalog preserves claims while recursive discovery supplies live status', async () => {
   const table = stubTable([row('alive', ['src/a.js'], { hiredAt: 0 })])
   const definition = rosterToolDefinition({
-    getTable: () => table, now: () => 1_000_000_000,
+    getTable: () => table,
+    now: () => 1_000_000_000,
     getSubagents: () => ({
       listChildren: async () => [{ id: 'alive', mode: 'continuable', label: 'builder', createdAt: 0 }],
       listDescendants: async () => [

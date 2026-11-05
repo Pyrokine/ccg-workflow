@@ -26,8 +26,8 @@
 
 ## 真实查询词采集
 
-写 FAQ 和长尾覆盖必须用真实数据。**禁止让模型凭空生成 People Also Ask** —— 模型会编造看似合理
-的问题，且无从验证。以下两条不依赖 Firecrawl，拿到的是 Google 自己吐的数据和已排名页面的实际用词。
+写 FAQ 和长尾覆盖必须用真实数据。 **禁止让模型凭空生成 People Also Ask**
+—— 模型会编造看似合理的问题，且无从验证。以下两条不依赖 Firecrawl，拿到的是 Google 自己吐的数据和已排名页面的实际用词。
 
 ### Google autocomplete 收词
 
@@ -37,16 +37,16 @@ https://suggestqueries.google.com/complete/search?client=firefox&hl=en&gl=us&q=<
 
 返回 `[query, [suggestions...]]`，无需 key 和认证。
 
-- 用法：**种子词 × 疑问前缀交叉跑**，前缀取 `""`、`how to `、`can you `、`is it `、
+- 用法： **种子词 × 疑问前缀交叉跑**，前缀取 `""`、`how to `、`can you `、`is it `、
   `why does `、`does `、`what is `、`how do i `
 - 请求间隔 ~120ms，全局去重
 - 实测 14 个种子词 × 8 前缀 → **341 条真实建议词**
 
-产出直接用于：写 FAQ 问题（**用用户的原话，不要改写**）、发现未覆盖的词簇、
-判断同义词哪个有量（例：`image metadata remover` 有 10 条建议，`metadata cleaner` 零 —— 直接决定 H1 用词）。
+产出直接用于：写 FAQ 问题（ **用用户的原话，不要改写**）、发现未覆盖的词簇、判断同义词哪个有量（例：`image metadata remover`
+有 10 条建议，`metadata cleaner` 零 —— 直接决定 H1 用词）。
 
-⚠️ 必须滤噪音：品牌词会串到同音词（`synthid` → `synthroid` 甲状腺药；`nano banana` → 香蕉味）。
-词簇里混进大量无关词时，说明该词本身有歧义，值得在页面里显式消歧。
+⚠️ 必须滤噪音：品牌词会串到同音词（`synthid` → `synthroid` 甲状腺药；`nano banana`
+→ 香蕉味）。词簇里混进大量无关词时，说明该词本身有歧义，值得在页面里显式消歧。
 
 ### 竞品 FAQ 提取
 
@@ -55,8 +55,8 @@ https://suggestqueries.google.com/complete/search?client=firefox&hl=en&gl=us&q=<
 - FAQPage schema 内的 `"@type":"Question"` → `"name"`
 - 以 `?` 结尾的 `<h2>`–`<h4>` / `<summary>` 文本
 
-这是**已经在排名的页面实际使用的问题**，比 PAA 推测更硬。抓的同时顺手算关键词密度基准
-（见 `feature-page-seo.md` 的「关键词覆盖与密度校准」），一次抓取拿两份数据。
+这是 **已经在排名的页面实际使用的问题**，比 PAA 推测更硬。抓的同时顺手算关键词密度基准（见 `feature-page-seo.md`
+的「关键词覆盖与密度校准」），一次抓取拿两份数据。
 
 ## 意图判断
 

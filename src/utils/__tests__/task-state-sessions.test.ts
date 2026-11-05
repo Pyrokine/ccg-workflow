@@ -1,21 +1,21 @@
-import { join } from 'node:path'
 import fs from 'fs-extra'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import type { JsonObject } from './task-state-fixtures'
 import {
-  DEFAULT_SESSION_ID,
-  deriveSessionKey,
-  DEFAULT_SESSION_KEY,
   createProject,
+  currentExpected,
+  DEFAULT_SESSION_ID,
+  DEFAULT_SESSION_KEY,
+  deriveSessionKey,
+  expectFailure,
+  expectSuccess,
+  hookOutput,
+  resolve,
   runController,
   runHook,
-  expectSuccess,
-  expectFailure,
-  resolve,
-  currentExpected,
   startTask,
-  hookOutput,
 } from './task-state-fixtures'
-import type { JsonObject } from './task-state-fixtures'
 
 function expectSessionTaskContext(root: string, sessionId: string, activeTask: string, otherTask: string): void {
   const output = hookOutput(runHook(root, 'session-start.js', { cwd: root, source: 'resume', session_id: sessionId }))
@@ -263,6 +263,62 @@ describe('session-scoped bindings and safe migrations', () => {
     expect(turnFiles).toEqual([`${DEFAULT_SESSION_KEY}.json`])
     expect(sessionFiles.join('\n')).not.toContain(DEFAULT_SESSION_ID)
     expect(turnFiles.join('\n')).not.toContain(DEFAULT_SESSION_ID)
+  })
+
+  it('exports each current session key once while preserving unrelated environment text', async () => {
+    const root = await createProject()
+    const envFile = join(root, 'claude-env.sh')
+    const original = 'export DEMO_VALUE="keep"'
+    await fs.writeFile(envFile, original)
+    for (const source of ['startup', 'resume', 'compact', 'clear']) {
+      hookOutput(runHook(root, 'session-start.js', { cwd: root, source }, { CLAUDE_ENV_FILE: envFile }))
+    }
+    const first = `${original}\nexport CCG_SESSION_KEY='${DEFAULT_SESSION_KEY}'\n`
+    expect(await fs.readFile(envFile, 'utf8')).toBe(first)
+    const otherId = 'another-opaque-session'
+    const otherKey = deriveSessionKey('claude', otherId)
+    hookOutput(runHook(root, 'session-start.js', { cwd: root, session_id: otherId }, { CLAUDE_ENV_FILE: envFile }))
+    hookOutput(runHook(root, 'session-start.js', { cwd: root }, { CLAUDE_ENV_FILE: envFile }))
+    expect(await fs.readFile(envFile, 'utf8')).toBe(
+      first + `export CCG_SESSION_KEY='${otherKey}'\nexport CCG_SESSION_KEY='${DEFAULT_SESSION_KEY}'\n`
+    )
+    expect(await fs.pathExists(envFile + '.ccg.lock')).toBe(false)
+  })
+
+  it('exports independently to rotated environment files with private permissions', async () => {
+    const root = await createProject()
+    for (const name of ['first-env.sh', 'rotated-env.sh']) {
+      const envFile = join(root, name)
+      for (const source of ['startup', 'resume']) {
+        hookOutput(runHook(root, 'session-start.js', { cwd: root, source }, { CLAUDE_ENV_FILE: envFile }))
+      }
+      expect(await fs.readFile(envFile, 'utf8')).toBe(`export CCG_SESSION_KEY='${DEFAULT_SESSION_KEY}'\n`)
+      expect(await fs.pathExists(envFile + '.ccg.lock')).toBe(false)
+      if (process.platform !== 'win32') {
+        expect((await fs.stat(envFile)).mode & 0o777).toBe(0o600)
+      }
+    }
+  })
+
+  it('releases its lock after rejecting a non-regular environment target', async () => {
+    const root = await createProject()
+    const envFile = join(root, 'environment-directory')
+    await fs.ensureDir(envFile)
+    const output = hookOutput(runHook(root, 'session-start.js', { cwd: root }, { CLAUDE_ENV_FILE: envFile }))
+    expect(output.additionalContext).toContain('CLAUDE_ENV_FILE_INVALID')
+    expect((await fs.stat(envFile)).isDirectory()).toBe(true)
+    expect(await fs.pathExists(envFile + '.ccg.lock')).toBe(false)
+  })
+
+  it('reports an occupied CCG environment lock without changing its file', async () => {
+    const root = await createProject()
+    const envFile = join(root, 'claude-env.sh')
+    await fs.writeFile(envFile, 'export DEMO_VALUE=keep\n')
+    await fs.writeFile(envFile + '.ccg.lock', 'occupied\n')
+    const output = hookOutput(runHook(root, 'session-start.js', { cwd: root }, { CLAUDE_ENV_FILE: envFile }))
+    expect(output.additionalContext).toContain('CLAUDE_ENV_FILE_BUSY')
+    expect(await fs.readFile(envFile, 'utf8')).toBe('export DEMO_VALUE=keep\n')
+    expect(await fs.readFile(envFile + '.ccg.lock', 'utf8')).toBe('occupied\n')
   })
 
   it('refuses a symlinked Claude environment file without modifying its target', async () => {

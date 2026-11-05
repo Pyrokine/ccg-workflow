@@ -2,139 +2,268 @@
 
 All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to
+[Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
+
+## [Unreleased]
+
+## [3.7.4-aug.1] - 2026-11-05
+
+### Fixed
+
+- Restrict the Web UI to loopback, validate Host headers, render tasks as text, and keep event streams same-origin.
+- Parse Antigravity stream-json output in normal and PTY execution, retain conversation IDs for resume, and report
+  failed results and incomplete stream reads even when partial text is available.
+- Drain backend output after process exit before closing stdout, preserving final responses from fast commands.
+- Show final-only and partially streamed Antigravity responses in the Web UI and terminal without duplicate text.
+- Report task-input write failures instead of returning successful results.
+- Match English Skill Router keywords at word boundaries and continue past unreadable knowledge files until two usable
+  entries are selected.
+- Inject Hook configuration into templates using either quote style.
+- Honor README-only and DESIGN-only generation, preserve unselected documents, and include file failures in JSON
+  reports.
+- Propagate output and cleanup failures, remove unused internal declarations, and correct executable documentation
+  examples while preserving protocol fields and test fixtures.
+
+### Changed
+
+- Release CCG 3.7.4-aug.1, codeagent-wrapper 5.16.0-aug.1, and the bundled dsh-ccg 0.5.1.
+- Upgrade compatible dependencies and pin pnpm 12.16.1. TypeScript 6, Vitest 4, and Node 22 types retain the existing
+  compiler and runtime support contracts.
+- Add DeepSeek Harness 0.2.2-rc.1 to the supported prerelease groups and update its related development packages.
+- Update GitHub Actions and use Go 1.27.3 in CI while retaining the Go 1.26.0 source requirement.
+- Apply explicit statement blocks, named regular-expression captures, and consistent source and Markdown formatting.
 
 ## [3.7.3-aug.2] - 2026-10-29
 
 ### Added
 
-- Go and Rust quality checks use native project tools offline, retain workspace, vendor and overlay settings, and report files excluded by build conditions. Build output uses temporary directories.
-- Basic C/C++ security rules cover embedded credentials, dynamic commands and unbounded input, with comment and string context checks.
+- Go and Rust quality checks use native project tools offline, retain workspace, vendor and overlay settings, and report
+  files excluded by build conditions. Build output uses temporary directories.
+- Basic C/C++ security rules cover embedded credentials, dynamic commands and unbounded input, with comment and string
+  context checks.
 
 ### Changed
 
-- Task runtime installation includes every required module while preserving the public controller interface, state schema, locking, transactions and revision checks.
-- CommonJS quality checks use the Node environment. Existing complexity, function-length, file-length and line-length limits remain unchanged.
+- Task runtime installation includes every required module while preserving the public controller interface, state
+  schema, locking, transactions and revision checks.
+- CommonJS quality checks use the Node environment. Existing complexity, function-length, file-length and line-length
+  limits remain unchanged.
 
 ### Fixed
 
-- Read-only task queries and standalone help return without reading stdin. Write operations retain bounded input validation.
-- TypeScript checks support both the compiler API and the TypeScript 7 CLI. Ruff target-version selection remains optional, and repeated tool-availability notices are grouped without hiding incomplete checks.
-- Change analysis recognizes related document updates outside the selected source paths in working, staged and committed modes.
-- The unified Skill runner selects the change-analysis entry point after helper extraction instead of returning empty success output.
-- Existing seven-file Codex ownership records can upgrade to the complete runtime and uninstall while preserving original file records and user-owned content.
+- Read-only task queries and standalone help return without reading stdin. Write operations retain bounded input
+  validation.
+- TypeScript checks support both the compiler API and the TypeScript 7 CLI. Ruff target-version selection remains
+  optional, and repeated tool-availability notices are grouped without hiding incomplete checks.
+- Change analysis recognizes related document updates outside the selected source paths in working, staged and committed
+  modes.
+- The unified Skill runner selects the change-analysis entry point after helper extraction instead of returning empty
+  success output.
+- Existing seven-file Codex ownership records can upgrade to the complete runtime and uninstall while preserving
+  original file records and user-owned content.
 
 ## [3.7.3-aug.1] - 2026-10-27
 
 ### Added
 
-- Absorbed applicable upstream v3.6.8 through v3.7.3 changes: native Skills management, mode-aware doctor, OpenCode model validation, x6.ai sponsor metadata and artwork, and DeepSeek Harness 0.2 integration.
-- Native selections use per-host manifests, namespaced entries, versioned resource snapshots, ownership checks, and atomic manifest replacement. Empty and explicit legacy selections persist through init and routing refreshes.
-- `doctor --json` emits a standalone report and sets a nonzero status for failed checks. Fork-specific checks retain GPT/Grok review profiles, six Hook scripts, five Hook events, Codex completeness, per-session tasks, and offline local version comparison.
-- Opt-in language checks use project-local ESLint and TypeScript, installed Ruff, and clang-tidy with existing compilation commands. Reports expose actual tool coverage, skipped files and unavailable checks without installing dependencies or rewriting source files.
-- Quality and security reports classify built-in findings against Git `HEAD` or `--base`, preserving occurrence counts across line moves and recognized renames. External diagnostics retain an unclassified origin and a changed-line association.
+- Absorbed applicable upstream v3.6.8 through v3.7.3 changes: native Skills management, mode-aware doctor, OpenCode
+  model validation, x6.ai sponsor metadata and artwork, and DeepSeek Harness 0.2 integration.
+- Native selections use per-host manifests, namespaced entries, versioned resource snapshots, ownership checks, and
+  atomic manifest replacement. Empty and explicit legacy selections persist through init and routing refreshes.
+- `doctor --json` emits a standalone report and sets a nonzero status for failed checks. Fork-specific checks retain
+  GPT/Grok review profiles, six Hook scripts, five Hook events, Codex completeness, per-session tasks, and offline local
+  version comparison.
+- Opt-in language checks use project-local ESLint and TypeScript, installed Ruff, and clang-tidy with existing
+  compilation commands. Reports expose actual tool coverage, skipped files and unavailable checks without installing
+  dependencies or rewriting source files.
+- Quality and security reports classify built-in findings against Git `HEAD` or `--base`, preserving occurrence counts
+  across line moves and recognized renames. External diagnostics retain an unclassified origin and a changed-line
+  association.
 
 ### Changed
 
 - Package and native plugin metadata use v3.7.3-aug.1; both packages remain private. The wrapper stays v5.15.0-aug.1.
-- `dsh-ccg` 0.5.0 targets DeepSeek Harness `>=0.2.0-rc.2 <0.2.1-0 || >=0.2.1-alpha.2 <0.2.2-0` with profile settings, activation, subagents, and Windows launcher handling.
-- Current explicit user requests determine task scope. Task contracts, linked specs, progress, and external output remain references rather than new authorization.
-- Generated quality commands and native/DSH Skill guidance request language checks by default; direct script calls retain their text-only contract. Skill documentation describes implemented checks and exit codes.
-- Change analysis associates existing documentation with the nearest module, accepts related README and documentation updates, and excludes test-only changes from implementation-document reminders.
-- CLI setup, initialization, menus, translations and installer utilities are organized by responsibility while retaining their public exports and command options. Tests are grouped by behavior with their existing cases retained.
-- Updated compatible runtime and development dependencies, including ESLint 10.13, Vitest 4.1.12, the official DSH 0.2.1-rc.2 package group and React 19. Vitest 5 excludes the supported Node 25 line. TypeScript remains on 6.0 because the current typescript-eslint release requires a version below 6.1; Node types remain on the supported Node 22 line.
+- `dsh-ccg` 0.5.0 targets DeepSeek Harness `>=0.2.0-rc.2 <0.2.1-0 || >=0.2.1-alpha.2 <0.2.2-0` with profile settings,
+  activation, subagents, and Windows launcher handling.
+- Current explicit user requests determine task scope. Task contracts, linked specs, progress, and external output
+  remain references rather than new authorization.
+- Generated quality commands and native/DSH Skill guidance request language checks by default; direct script calls
+  retain their text-only contract. Skill documentation describes implemented checks and exit codes.
+- Change analysis associates existing documentation with the nearest module, accepts related README and documentation
+  updates, and excludes test-only changes from implementation-document reminders.
+- CLI setup, initialization, menus, translations and installer utilities are organized by responsibility while retaining
+  their public exports and command options. Tests are grouped by behavior with their existing cases retained.
+- Updated compatible runtime and development dependencies, including ESLint 10.13, Vitest 4.1.12, the official DSH
+  0.2.1-rc.2 package group and React 19. Vitest 5 excludes the supported Node 25 line. TypeScript remains on 6.0 because
+  the current typescript-eslint release requires a version below 6.1; Node types remain on the supported Node 22 line.
 
 ### Fixed
 
-- Core installation failures stop init before subsequent settings and MCP changes. Optional binary and generated-command warnings remain non-fatal.
-- Quality and security scanners cover single files and directories and report missing or unreadable targets. Delayed stdin reads preserve bounded input handling and error reporting.
-- Native mode disables legacy knowledge injection without replacing user-edited Hook bodies or unrelated skills. OpenCode prompts share provider/model validation.
-- Normal console output and quoted breakpoint examples no longer trigger the debug rule. JavaScript debugger statements and Python breakpoint calls remain visible findings.
-- Read-only verification no longer waits for write locks. The Skill runner keeps lock messages off JSON stdout, propagates child signals as failures, and retains write locks until the child exits.
-- Vitest `describe` and `suite` callbacks are identified by their imported bindings. Only their own function-length diagnostics are exempt; nested functions, shadowed calls, complexity and parameter limits remain checked.
-- Skills install, update and remove commands report non-JSON results without referencing an undefined selection variable.
-- DSH peer ranges explicitly include the tested 0.2.1 prereleases. The compatibility test installs the matching official slot library separately when the host supplies it only in browser assets.
-- Contributor updates use one README path per job. Forks retain the upstream contributor table instead of replacing it with fork-only history.
+- Core installation failures stop init before subsequent settings and MCP changes. Optional binary and generated-command
+  warnings remain non-fatal.
+- Quality and security scanners cover single files and directories and report missing or unreadable targets. Delayed
+  stdin reads preserve bounded input handling and error reporting.
+- Native mode disables legacy knowledge injection without replacing user-edited Hook bodies or unrelated skills.
+  OpenCode prompts share provider/model validation.
+- Normal console output and quoted breakpoint examples no longer trigger the debug rule. JavaScript debugger statements
+  and Python breakpoint calls remain visible findings.
+- Read-only verification no longer waits for write locks. The Skill runner keeps lock messages off JSON stdout,
+  propagates child signals as failures, and retains write locks until the child exits.
+- Vitest `describe` and `suite` callbacks are identified by their imported bindings. Only their own function-length
+  diagnostics are exempt; nested functions, shadowed calls, complexity and parameter limits remain checked.
+- Skills install, update and remove commands report non-JSON results without referencing an undefined selection
+  variable.
+- DSH peer ranges explicitly include the tested 0.2.1 prereleases. The compatibility test installs the matching official
+  slot library separately when the host supplies it only in browser assets.
+- Contributor updates use one README path per job. Forks retain the upstream contributor table instead of replacing it
+  with fork-only history.
 
 ## [3.6.7-aug.1] - 2026-09-16
 
 ### Added
 
-- Manually absorbed the applicable upstream v3.6.6 and v3.6.7 changes: PackyCode joins APIMart in a shared sponsor registry, and package tarballs now exclude red-team and pentest reference notes.
-- Added PackyCode Claude Code and Codex endpoint metadata, environment-variable guidance, sponsor artwork, and bilingual installer copy.
-- Added opaque per-session task bindings, exclusive task claims with explicit takeover, separate binding revisions, and effective `in_progress` status while durable task status remains `open`.
-- Added explicit state-v1 migration, evidence-limited status repair, resumable byte-preserving legacy-task migration, and reversible orphan-directory quarantine.
+- Manually absorbed the applicable upstream v3.6.6 and v3.6.7 changes: PackyCode joins APIMart in a shared sponsor
+  registry, and package tarballs now exclude red-team and pentest reference notes.
+- Added PackyCode Claude Code and Codex endpoint metadata, environment-variable guidance, sponsor artwork, and bilingual
+  installer copy.
+- Added opaque per-session task bindings, exclusive task claims with explicit takeover, separate binding revisions, and
+  effective `in_progress` status while durable task status remains `open`.
+- Added explicit state-v1 migration, evidence-limited status repair, resumable byte-preserving legacy-task migration,
+  and reversible orphan-directory quarantine.
 - Added validation and GitHub Release automation for annotated `vX.Y.Z-aug.N` tags.
 
 ### Changed
 
-- Grok external review and CLI-route defaults now use `grok-4.6` at `high`. Exact saved `grok-4.5` defaults migrate during install while custom model names and valid effort overrides remain unchanged.
+- Grok external review and CLI-route defaults now use `grok-4.6` at `high`. Exact saved `grok-4.5` defaults migrate
+  during install while custom model names and valid effort overrides remain unchanged.
 - Package and native plugin versions now use v3.6.7-aug.1. The expected codeagent-wrapper binary remains v5.15.0-aug.1.
-- `package.json` now lists skill subdirectories explicitly instead of packaging the complete `templates/skills/` tree. `domains/security/` remains in Git but is excluded from tarballs and default installation.
-- `.ccg/state.json` schema v2 now stores only worktree state identity and revision. Claude and Codex Hooks derive namespaced SHA-256 session keys, and Agent or wrapper authority refreshes use only the parent session binding.
-- Status and doctor output no longer guess a worktree-global active task. With `CCG_SESSION_KEY`, status resolves the current session; without it, status reports schema, open-task count, and binding count.
-- Repository documentation now uses source-install commands for this fork and keeps maintainer-local Agent instructions outside tracked product files.
+- `package.json` now lists skill subdirectories explicitly instead of packaging the complete `templates/skills/` tree.
+  `domains/security/` remains in Git but is excluded from tarballs and default installation.
+- `.ccg/state.json` schema v2 now stores only worktree state identity and revision. Claude and Codex Hooks derive
+  namespaced SHA-256 session keys, and Agent or wrapper authority refreshes use only the parent session binding.
+- Status and doctor output no longer guess a worktree-global active task. With `CCG_SESSION_KEY`, status resolves the
+  current session; without it, status reports schema, open-task count, and binding count.
+- Repository documentation now uses source-install commands for this fork and keeps maintainer-local Agent instructions
+  outside tracked product files.
 
 ### Fixed
 
-- Sponsor Codex registration preserves existing provider tables, authentication files, active provider selection, and restrictive config permissions. Activation remains explicit, and Codex-mode uninstall removes only provider tables recorded as added by that installation.
+- Sponsor Codex registration preserves existing provider tables, authentication files, active provider selection, and
+  restrictive config permissions. Activation remains explicit, and Codex-mode uninstall removes only provider tables
+  recorded as added by that installation.
 - Replaced machine-specific path examples and repository fixtures with portable placeholders.
-- Corrected `dsh-ccg` documentation that referenced a standalone publish workflow which is not present in this repository.
-- Prevented different Claude Code sessions in one worktree from replacing or receiving each other's active task contract. SessionStart now exports the current opaque binding key through `CLAUDE_ENV_FILE`, and controller examples carry the binding CAS revision.
-- Corrected canonical tasks that persisted `in_progress` through a constrained repair path, and corrected legacy `superseded` migrations only when the byte-preserved backup proves the original status.
-- Legacy tasks now remain migration-required after state v2 exists and when only terminal legacy tasks remain. Non-Git project roots can quarantine local orphan artifacts without requiring a Git exclude file.
-- Wrapper context injection now recognizes direct calls behind shell control words and `command`, `exec`, `env`, `nice`, `nohup`, `sudo`, or `time`, while paths used by commands such as `go -C` and search arguments are not treated as wrapper executions.
-- Return-chain claims now cover the target task and every open parent during selection, activation, conflict detection, and takeover, preventing one session from invalidating another session's parent task.
-- Orphan migration now validates manifest names, exact paths, statuses, and timestamps before rename, supports quarantine after restore, and requires matching task IDs for provenance-backed status repair. Legacy metadata truncation now respects UTF-8 byte limits.
-- Codex runtime guidance now uses internal Codex or Claude Code review for automatic quality checks and reserves GPT or Grok for explicit external-review requests. Doctor and status only report Codex mode installed when its managed instructions, agents, task runtime, and single Hook registration are complete.
-- Codex mode install and uninstall now merge only CCG-managed AGENTS and Hook content, reject noncanonical or duplicate markers, malformed JSON, symlink targets, and explicit required-feature conflicts, preserve user file permissions, create reversible backups, and restore every target after a failed write. An ownership manifest restores pre-existing same-name runtime files, preserves runtime files edited after installation, and prevents uninstall from claiming pre-existing sponsor tables. Leaf detection uses Codex Hook `agent_id` and `agent_type`; role files use current boolean feature syntax instead of nested `multi_agent_v2` tables.
-- Doctor and status tests now strip terminal control sequences before matching output, so CI behaves consistently with and without forced color. The contributor updater is skipped when the repository visibility prevents collaborator lookup. CI uses current Node 24-based action releases and disables the unused Go module cache for the standard-library-only wrapper.
+- Corrected `dsh-ccg` documentation that referenced a standalone publish workflow which is not present in this
+  repository.
+- Prevented different Claude Code sessions in one worktree from replacing or receiving each other's active task
+  contract. SessionStart now exports the current opaque binding key through `CLAUDE_ENV_FILE`, and controller examples
+  carry the binding CAS revision.
+- Corrected canonical tasks that persisted `in_progress` through a constrained repair path, and corrected legacy
+  `superseded` migrations only when the byte-preserved backup proves the original status.
+- Legacy tasks now remain migration-required after state v2 exists and when only terminal legacy tasks remain. Non-Git
+  project roots can quarantine local orphan artifacts without requiring a Git exclude file.
+- Wrapper context injection now recognizes direct calls behind shell control words and `command`, `exec`, `env`, `nice`,
+  `nohup`, `sudo`, or `time`, while paths used by commands such as `go -C` and search arguments are not treated as
+  wrapper executions.
+- Return-chain claims now cover the target task and every open parent during selection, activation, conflict detection,
+  and takeover, preventing one session from invalidating another session's parent task.
+- Orphan migration now validates manifest names, exact paths, statuses, and timestamps before rename, supports
+  quarantine after restore, and requires matching task IDs for provenance-backed status repair. Legacy metadata
+  truncation now respects UTF-8 byte limits.
+- Codex runtime guidance now uses internal Codex or Claude Code review for automatic quality checks and reserves GPT or
+  Grok for explicit external-review requests. Doctor and status only report Codex mode installed when its managed
+  instructions, agents, task runtime, and single Hook registration are complete.
+- Codex mode install and uninstall now merge only CCG-managed AGENTS and Hook content. They reject noncanonical or
+  duplicate markers, malformed JSON, symlink targets, and explicit required-feature conflicts. They preserve user file
+  permissions, create reversible backups, and restore every target after a failed write. An ownership manifest restores
+  pre-existing same-name runtime files, preserves runtime files edited after installation, and prevents uninstall from
+  claiming pre-existing sponsor tables. Leaf detection uses Codex Hook `agent_id` and `agent_type`; role files use
+  current boolean feature syntax instead of nested `multi_agent_v2` tables.
+- Doctor and status tests now strip terminal control sequences before matching output, so CI behaves consistently with
+  and without forced color. The contributor updater is skipped when the repository visibility prevents collaborator
+  lookup. CI uses current Node 24-based action releases and disables the unused Go module cache for the
+  standard-library-only wrapper.
 
 ## [3.6.4-aug.1] - 2026-09-05
 
 ### Added
 
-- Added a worktree-local task controller with an explicit active pointer, immutable `stateId`, separate state and task revisions, file locking, atomic writes, staged task creation, and compare-and-swap checks for concurrent sessions.
-- Added explicit task selection, legacy migration, crash recovery, temporary-task return links, and fixed task directories for completed or cancelled tasks. Multi-file mutations use a persistent transaction marker that can be replayed after interruption before another mutation starts.
-- Added required `requirements.md` contracts, checkpoint and artifact operations, and structured `specRefs` that link unique exact headings in tracked or staged Markdown files. Git paths are matched literally, fenced-code heading examples are ignored, and linked sections must be complete and fit the per-section and aggregate rendered-context budgets.
-- Added subprocess tests for controller lifecycle, revision conflicts, state ABA protection, linked-worktree isolation, missing, terminal, and incomplete-transaction recovery, legacy migration, runtime symlink rejection, Git exclude preservation, spec ambiguity and size limits, SessionStart recovery, bounded Codex artifacts, and Agent or wrapper input rewriting.
-- Manually absorbed applicable upstream v3.4.0 through v3.6.4 features: APIMart Claude and Codex provider setup, native Claude Code plugin manifests, web operations skills, orphaned domain routing, CLI `doctor` and `status`, and the bundled `dsh-ccg` DeepSeek Harness plugin.
-- Added `DSH_HOME` support and non-interactive `dsh install`, `dsh list`, `dsh uninstall`, `codex-mode`, and workflow uninstall commands.
-- Added wrapper `--with-mcp` support. Codex sub-agents skip configured MCP startup by default, while MCP-dependent executor calls can opt in.
+- Added a worktree-local task controller with an explicit active pointer, immutable `stateId`, separate state and task
+  revisions, file locking, atomic writes, staged task creation, and compare-and-swap checks for concurrent sessions.
+- Added explicit task selection, legacy migration, crash recovery, temporary-task return links, and fixed task
+  directories for completed or canceled tasks. Multi-file mutations use a persistent transaction marker that can be
+  replayed after interruption before another mutation starts.
+- Added required `requirements.md` contracts, checkpoint and artifact operations, and structured `specRefs` that link
+  unique exact headings in tracked or staged Markdown files. Git paths are matched literally, fenced-code heading
+  examples are ignored, and linked sections must be complete and fit the per-section and aggregate rendered-context
+  budgets.
+- Added subprocess tests for controller lifecycle, revision conflicts, state ABA protection, and linked-worktree
+  isolation. Tests also cover missing, terminal, and incomplete-transaction recovery, legacy migration, runtime symlink
+  rejection, Git exclude preservation, spec ambiguity and size limits, SessionStart recovery, bounded Codex artifacts,
+  and Agent or wrapper input rewriting.
+- Manually absorbed applicable upstream v3.4.0 through v3.6.4 features: APIMart Claude and Codex provider setup, native
+  Claude Code plugin manifests, web operations skills, orphaned domain routing, CLI `doctor` and `status`, and the
+  bundled `dsh-ccg` DeepSeek Harness plugin.
+- Added `DSH_HOME` support and non-interactive `dsh install`, `dsh list`, `dsh uninstall`, `codex-mode`, and workflow
+  uninstall commands.
+- Added wrapper `--with-mcp` support. Codex sub-agents skip configured MCP startup by default, while MCP-dependent
+  executor calls can opt in.
 
 ### Changed
 
-- Startup, resume, clear, compact, and fork restore the complete active-task snapshot. Every user prompt and foreground Agent, wrapper, or `TaskOutput` result refreshes exact authority; Agent prompts and wrapper heredocs receive role-matched task and specification context through `updatedInput`. Wrapper detection accepts `env` invocations and verifies that the quoted heredoc belongs to the same shell command. Invalid authoritative context or unsafe rewriting returns `permissionDecision: "deny"` before the target tool starts.
-- The Codex Python Hook now delegates task resolution to the same Node controller used by Claude Code instead of maintaining a second status table or selecting a task by directory order. Main sessions load all linked roles; leaf Agents load the role matched from `CODEX_AGENT_TYPE`. Research artifacts are included within the output budget, and optional blocks are omitted whole instead of truncating the enclosing XML.
-- Exact linked specification sections and the active task contract now outrank approved plans, progress notes, compact summaries, prior discussion, and model inference. They are rendered before optional artifacts so the final context bound cannot remove them. Leads and Builders must check task identity, revision, entities, versions, dependency direction, exclusions, and acceptance criteria before continuing.
-- Runtime reads and writes reject symbolic links in `.ccg/`, task, staging, migration, research, and turn-state parent paths. Updating `.git/info/exclude` now fails without replacing the file when its complete contents cannot be read.
-- `.ccg/` and `.context/current/` are worktree-local data. `.context/prefs/`, `.context/history/`, project documentation, and OpenSpec remain Git-tracked shared knowledge.
-- Removed implicit `.ccg/spec/` templates, new-task `context.jsonl` creation, physical task archiving, and instructions to commit `.ccg/`. Legacy migration can still back up old files without treating them as current authority.
-- Replaced the 302.AI installer entry with APIMart. The Claude endpoint is configured without `/v1`; the Codex provider keeps `/v1`, is registered without changing the active provider, and never rewrites Codex authentication data.
-- Collapsed the 20 Impeccable UI/UX techniques behind the single user-invocable `frontend-design` skill. The installer removes generated commands retired by that migration without deleting user-owned command files.
-- DeepSeek Harness profile installation now passes profile names as argv, rewrites manifests through same-directory atomic rename, and replaces plugin copies through staging and backup recovery.
-- Default frontend and backend routing now uses Pure Claude Code mode. GPT and Grok remain independent non-persistent Claude provider reviewers; legacy Gemini routes migrate to Grok while agy remains an Antigravity alias.
-- Package version is v3.6.4-aug.1. The expected codeagent-wrapper binary version is v5.15.0-aug.1. The package remains private and no npm or DSH publishing workflow is included.
+- Startup, resume, clear, compact, and fork restore the complete active-task snapshot. Every user prompt and foreground
+  Agent, wrapper, or `TaskOutput` result refreshes exact authority; Agent prompts and wrapper heredocs receive
+  role-matched task and specification context through `updatedInput`. Wrapper detection accepts `env` invocations and
+  verifies that the quoted heredoc belongs to the same shell command. Invalid authoritative context or unsafe rewriting
+  returns `permissionDecision: "deny"` before the target tool starts.
+- The Codex Python Hook now delegates task resolution to the same Node controller used by Claude Code instead of
+  maintaining a second status table or selecting a task by directory order. Main sessions load all linked roles; leaf
+  Agents load the role matched from `CODEX_AGENT_TYPE`. Research artifacts are included within the output budget, and
+  optional blocks are omitted whole instead of truncating the enclosing XML.
+- Exact linked specification sections and the active task contract now outrank approved plans, progress notes, compact
+  summaries, prior discussion, and model inference. They are rendered before optional artifacts so the final context
+  bound cannot remove them. Leads and Builders must check task identity, revision, entities, versions, dependency
+  direction, exclusions, and acceptance criteria before continuing.
+- Runtime reads and writes reject symbolic links in `.ccg/`, task, staging, migration, research, and turn-state parent
+  paths. Updating `.git/info/exclude` now fails without replacing the file when its complete contents cannot be read.
+- `.ccg/` and `.context/current/` are worktree-local data. `.context/prefs/`, `.context/history/`, project
+  documentation, and OpenSpec remain Git-tracked shared knowledge.
+- Removed implicit `.ccg/spec/` templates, new-task `context.jsonl` creation, physical task archiving, and instructions
+  to commit `.ccg/`. Legacy migration can still back up old files without treating them as current authority.
+- Replaced the 302.AI installer entry with APIMart. The Claude endpoint is configured without `/v1`; the Codex provider
+  keeps `/v1`, is registered without changing the active provider, and never rewrites Codex authentication data.
+- Collapsed the 20 Impeccable UI/UX techniques behind the single user-invocable `frontend-design` skill. The installer
+  removes generated commands retired by that migration without deleting user-owned command files.
+- DeepSeek Harness profile installation now passes profile names as argv, rewrites manifests through same-directory
+  atomic rename, and replaces plugin copies through staging and backup recovery.
+- Default frontend and backend routing now uses Pure Claude Code mode. GPT and Grok remain independent non-persistent
+  Claude provider reviewers; legacy Gemini routes migrate to Grok while agy remains an Antigravity alias.
+- Package version is v3.6.4-aug.1. The expected codeagent-wrapper binary version is v5.15.0-aug.1. The package remains
+  private and no npm or DSH publishing workflow is included.
 
 ### Fixed
 
-- `/ccg:codex-exec` now adds `--with-mcp` to its three retrieval-capable executor calls while reviewer and file-line fixer calls retain the faster MCP-disabled default.
-- `doctor` uses an ESM import for `execFileSync`, validates all five Hook event types, and reports damaged worktree state explicitly.
+- `/ccg:codex-exec` now adds `--with-mcp` to its three retrieval-capable executor calls while reviewer and file-line
+  fixer calls retain the faster MCP-disabled default.
+- `doctor` uses an ESM import for `execFileSync`, validates all five Hook event types, and reports damaged worktree
+  state explicitly.
 - DeepSeek Harness slot registration includes both `key` and `id`, preserving compatibility with the current slot API.
 - Added direct routing for infrastructure, mobile, and data-engineering domain entry skills.
-- APIMart registration now preserves an existing provider table and restrictive `config.toml` permissions. CCG removal only deletes the exact provider table it creates.
-- DeepSeek Harness installation rejects symlinked homes, profiles, plugin paths, and manifests; atomic manifest rewrites retain existing permissions.
-- The `bt-panel` CLI now validates TLS certificates by default. An explicit `--insecure` flag is required for self-signed panels.
+- APIMart registration now preserves an existing provider table and restrictive `config.toml` permissions. CCG removal
+  only deletes the exact provider table it creates.
+- DeepSeek Harness installation rejects symlinked homes, profiles, plugin paths, and manifests; atomic manifest rewrites
+  retain existing permissions.
+- The `bt-panel` CLI now validates TLS certificates by default. An explicit `--insecure` flag is required for
+  self-signed panels.
 
 ## [3.4.0-aug.1] - 2026-08-14
 
 ### Added
 
-- Manually absorbed upstream v3.4.0 support for Grok, Kimi Code, and OpenCode backends. Each backend has routing,
-  model override, session resume, and streaming-output parsing support.
+- Manually absorbed upstream v3.4.0 support for Grok, Kimi Code, and OpenCode backends. Each backend has routing, model
+  override, session resume, and streaming-output parsing support.
 - The model routing installer now installs prompt files for enabled backends. Menu routing changes refresh commands,
   engine templates, and prompts, then verify the installed wrapper version and download the matching binary when needed.
   Hooks, settings, MCP configuration, and skills remain untouched.
@@ -147,9 +276,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Claude Code Agents or Agent Teams. GPT and Grok review calls remain separate non-persistent print sessions.
 - Proxy injection remains limited to configured Antigravity or agy calls. Codex, Claude, Grok, Kimi Code, and OpenCode
   do not receive proxy environment variables.
-- Code review now runs GPT and Grok through the Claude Code provider in independent non-persistent print sessions. GPT defaults to `gpt-5.6-sol` at `xhigh` for backend review; Grok defaults to `grok-4.5` at `high` for frontend review.
-- The wrapper accepts `--claude-model`, `--claude-effort`, and `--no-session-persistence`. The last flag is restricted to the Claude backend and cannot be combined with `resume`.
-- Template injection restores any omitted review profile from the default configuration, preventing incomplete configurations from producing empty reviewer arguments.
+- Code review now runs GPT and Grok through the Claude Code provider in independent non-persistent print sessions. GPT
+  defaults to `gpt-5.6-sol` at `xhigh` for backend review; Grok defaults to `grok-4.5` at `high` for frontend review.
+- The wrapper accepts `--claude-model`, `--claude-effort`, and `--no-session-persistence`. The last flag is restricted
+  to the Claude backend and cannot be combined with `resume`.
+- Template injection restores any omitted review profile from the default configuration, preventing incomplete
+  configurations from producing empty reviewer arguments.
 - Package version is v3.4.0-aug.1. The expected codeagent-wrapper binary version is v5.14.0-aug.1.
 
 ## [3.1.6-aug.2] - 2026-06-23
@@ -157,10 +289,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixes
 
 - `codeagent-wrapper` captures per-run agy logs to report backend diagnostics such as location, auth, quota, or
-  permission
-  rejection; when no backend diagnostic is present, it retries empty stdout once through a pseudo-TTY on Linux/macOS.
-  Binary
-  v5.11.1-aug.2
+  permission rejection; when no backend diagnostic is present, it retries empty stdout once through a pseudo-TTY on
+  Linux/macOS. Binary v5.11.1-aug.2
 - Package and installer metadata now expect wrapper v5.11.1-aug.2 so installs refresh the binary after this fix
 
 ## [3.1.6-aug.1] - 2026-06-20
@@ -174,15 +304,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Old `gemini` config values are migrated to canonical `antigravity`, while `--backend gemini` and `--gemini-model` now
   fail with an explicit disabled reason
 - `{{GEMINI_MODEL_FLAG}}` is stripped unconditionally and templates no longer generate Gemini backend invocations
-- `codeagent-wrapper` injects Antigravity proxy settings only when explicitly configured, reports failed Web UI
-  session JSON encoding instead of silently ignoring it, and gives clearer Antigravity/agy auth and empty-output
-  diagnostics. Binary v5.11.1-aug.1
+- `codeagent-wrapper` injects Antigravity proxy settings only when explicitly configured, reports failed Web UI session
+  JSON encoding instead of silently ignoring it, and gives clearer Antigravity/agy auth and empty-output diagnostics.
+  Binary v5.11.1-aug.1
 - Binary downloads now prefer the fork GitHub Release and verify the downloaded wrapper version before marking install
   successful
 - Manually ported upstream v3.1.1-v3.1.6 fixes: Codex hook path rendering, uninstall hook cleanup, sub-agent context
   `updatedInput` injection, terminal task status handling, macOS background Web UI open, Claude permission flag
-  propagation,
-  and Antigravity/agy prompt routing on Windows
+  propagation, and Antigravity/agy prompt routing on Windows
 
 ### Changes
 
@@ -208,11 +337,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Strategy parallel execution** — `guided-develop` and `full-collaborate` Codex/Antigravity mode uses
   `codeagent-wrapper --parallel` with Layer 1 (independent) ∥ Layer 2 (dependent) task decomposition. Supports mixed
   backend per task.
-- **Sub-agent guardrails** — Hook `ccg-workflow.py` detects Codex sub-agents and injects `<ccg-sub-agent-notice>` (
-  execute dispatch only, ignore workflow). Agent TOMLs hardened with ⛔ absolute rules. `config.toml` adds
+- **Sub-agent guardrails** — Hook `ccg-workflow.py` detects Codex sub-agents and injects `<ccg-sub-agent-notice>`
+  (execute dispatch only, ignore workflow). Agent TOMLs hardened with ⛔ absolute rules. `config.toml` adds
   `default_wait_timeout_ms=480000`, `max_wait_timeout_ms=3600000`.
-- **Codex Mode uninstall** — Menu option X now offers Install/Update/Uninstall. Uninstall only removes CCG-managed
-  files (`ccg-*` agents, hooks, CCG-marked AGENTS.md), preserves `config.toml` and user files.
+- **Codex Mode uninstall** — Menu option X now offers Install/Update/Uninstall. Uninstall only removes CCG-managed files
+  (`ccg-*` agents, hooks, CCG-marked AGENTS.md), preserves `config.toml` and user files.
 
 ### 🐛 Fixes
 
@@ -246,8 +375,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 Fixes
 
-- **Help page commands updated to V3** (#135) — `showHelp()` was still showing 25+ V2 commands (
-  workflow/plan/execute/frontend/backend/feat/analyze/debug/optimize/test/review + team-*). Replaced with V3 structure:
+- **Help page commands updated to V3** (#135) — `showHelp()` was still showing 25+ V2 commands
+  (workflow/plan/execute/frontend/backend/feat/analyze/debug/optimize/test/review + team-*). Replaced with V3 structure:
   `/ccg:go` smart engine entry + OpenSpec + Git tools + project management + quality gates. Both zh-CN and en
   translations updated.
 
@@ -307,8 +436,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   review tasks to Gemini and Claude via codeagent-wrapper. Installed separately via menu option `X. Codex Mode`.
   - `~/.codex/AGENTS.md` — Adaptive decision framework (not rigid workflow): auto-assesses complexity/risk, scales
     effort accordingly
-  - `~/.codex/hooks/ccg-workflow.py` — Intelligent guardrail hook: tracks progress per-turn, injects adaptive
-    reminders based on what Codex has/hasn't done
+  - `~/.codex/hooks/ccg-workflow.py` — Intelligent guardrail hook: tracks progress per-turn, injects adaptive reminders
+    based on what Codex has/hasn't done
   - `~/.codex/config.toml` — Multi-agent v2 enabled with 8-min timeout for external model calls
   - `~/.codex/agents/ccg-implement.toml` / `ccg-review.toml` / `ccg-research.toml` — Native sub-agent definitions
   - `~/.codex/hooks.json` — Hook registration for UserPromptSubmit
@@ -338,8 +467,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   while Claude remains the orchestrator: monitoring progress, reviewing `git diff`, and running quality gates afterward.
 - **New role: `codex/builder.md`** — Implementation-focused role prompt with full write permissions. Follows plan
   exactly, validates after each task, outputs structured Execution Report.
-- **Execution mode selection at HARD STOP** — `full-collaborate` offers [Agent Teams / Codex], `guided-develop`
-  offers [Claude / Codex]. Codex failure auto-degrades to the other option.
+- **Execution mode selection at HARD STOP** — `full-collaborate` offers [Agent Teams / Codex], `guided-develop` offers
+  [Claude / Codex]. Codex failure auto-degrades to the other option.
 
 ### 🔄 Changes
 
@@ -400,8 +529,7 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 - **Hook engine** — 4 hooks registered in settings.json:
   - `workflow-state.js` (UserPromptSubmit) — per-turn task state breadcrumb injection
   - `session-start.js` (SessionStart) — full project context on session start/clear/compact
-  - `subagent-context.js` (PreToolUse Bash|Agent) — spec + task context injection into codeagent-wrapper and Team
-    spawns
+  - `subagent-context.js` (PreToolUse Bash|Agent) — spec + task context injection into codeagent-wrapper and Team spawns
   - `skill-router.js` (UserPromptSubmit) — auto-inject domain knowledge on keyword detection
 - **Task persistence** — `.ccg/tasks/{name}/` with task.json, requirements.md, plan.md, context.jsonl, review.md,
   research/
@@ -454,18 +582,21 @@ Critical findings block delivery.
 
 ### ✨ 新功能
 
-- **Init 交互状态机**：`init` 流程重构为状态机模式，支持在每步中途返回上一步，解决"填错一个 URL/KEY 就要 Ctrl+C 全部重来"
-  的痛点。每个 Step 的首个 list 选项末尾内嵌 `← 返回上一步` 和 `× 取消安装` 哨兵（Step 1 只有取消）。Step 3（MCP）因原首
-  prompt 是 checkbox 多选，加入前导 list 守门支持返回。
-- **摘要页跳回菜单**：最终确认页从 `confirm: yes/no` 改为 list 菜单，支持"确认安装 / 改 API 配置 / 改模型路由 / 改 MCP
-  工具 / 改性能模式 / 取消安装"。选"改 XXX"跳回对应 Step 重跑一次后直接回到摘要页，不用再走一遍后续步骤。
-- **API 跳过选项**：Step 1/4 API 提供方菜单新增第 4 个选项 `○ 跳过 — 我已通过 cc-switch / 其他工具自行配置`。选它后 CCG
-  不会写入 `settings.json` 的 `ANTHROPIC_BASE_URL/AUTH_TOKEN`，适用于已通过其他工具配好 API 的用户。
+- **Init 交互状态机**：`init`
+  流程重构为状态机模式，支持在每步中途返回上一步，解决"填错一个 URL/KEY 就要 Ctrl+C 全部重来" 的痛点。每个 Step 的首个 list 选项末尾内嵌
+  `← 返回上一步` 和 `× 取消安装` 哨兵（Step 1 只有取消）。Step
+  3（MCP）因原首 prompt 是 checkbox 多选，加入前导 list 守门支持返回。
+- **摘要页跳回菜单**：最终确认页从 `confirm: yes/no`
+  改为 list 菜单，支持"确认安装 / 改 API 配置 / 改模型路由 / 改 MCP 工具 / 改性能模式 / 取消安装"。选"改 XXX"跳回对应 Step 重跑一次后直接回到摘要页，不用再走一遍后续步骤。
+- **API 跳过选项**：Step 1/4 API 提供方菜单新增第 4 个选项
+  `○ 跳过 — 我已通过 cc-switch / 其他工具自行配置`。选它后 CCG 不会写入 `settings.json` 的
+  `ANTHROPIC_BASE_URL/AUTH_TOKEN`，适用于已通过其他工具配好 API 的用户。
 
 ### 🔄 变更
 
-- **重构 `src/commands/init.ts`**：Step 1-4 抽取为 `runApiStep / runModelStep / runMcpStep / runPerfStep` 闭包函数 +
-  主循环状态机，原 `Show summary / Confirm` 合并入 `runSummaryStep`。非交互模式（`--skip-prompt`）逻辑保持不变。net +200 行。
+- **重构 `src/commands/init.ts`**：Step 1-4 抽取为 `runApiStep / runModelStep / runMcpStep / runPerfStep`
+  闭包函数 + 主循环状态机，原 `Show summary / Confirm` 合并入
+  `runSummaryStep`。非交互模式（`--skip-prompt`）逻辑保持不变。net +200 行。
 - **i18n 新增 key**：`init.nav.*`、`init.summaryMenu.*`、`init.api.skipOption/skipNoticeTitle`、
   `init.mcp.gatePrompt/gateContinue`、`init.summary.apiProvider/apiSelfManaged/geminiModel`（中英双语）。
 
@@ -476,12 +607,12 @@ Critical findings block delivery.
 ### 🐛 修复
 
 - **`--gemini-model` 注入到纯 codex 调用行**（#130）：`injectConfigVariables()` 全局替换 `{{GEMINI_MODEL_FLAG}}`
-  ，不区分当前行的后端硬编码。导致用户配置 `Frontend: gemini + Backend: codex` 后，`/ccg:backend`、`/ccg:codex-exec` 等纯
-  codex 调用被注入 `--gemini-model gemini-3.1-pro-preview` 冗余参数。虽然 `codeagent-wrapper` 有兜底 warn + ignore
-  不影响执行，但命令看起来混乱且有误导性。改为**行级感知替换**：硬编码 `--backend gemini` 或条件行
+  ，不区分当前行的后端硬编码。导致用户配置 `Frontend: gemini + Backend: codex` 后，`/ccg:backend`、`/ccg:codex-exec`
+  等纯 codex 调用被注入 `--gemini-model gemini-3.1-pro-preview` 冗余参数。虽然 `codeagent-wrapper` 有兜底 warn +
+  ignore 不影响执行，但命令看起来混乱且有误导性。改为 **行级感知替换**：硬编码 `--backend gemini` 或条件行
   `--backend <codex|gemini>` 保留 flag，纯 `--backend codex/claude` 行清除。
-- **新增 11 个单元测试**：覆盖 codex-only / gemini-only / 条件行 / 前后端交叉 / 无 gemini / 默认模型 / 自定义模型 /
-  真实模板集成测试
+- **新增 11 个单元测试**：覆盖 codex-only / gemini-only / 条件行 / 前后端交叉 / 无 gemini
+  / 默认模型 / 自定义模型 / 真实模板集成测试
 
 ---
 
@@ -489,9 +620,9 @@ Critical findings block delivery.
 
 ### 🐛 修复
 
-- **模型路由硬编码导致非默认配置失效**：21 个模板文件中 ROLE_FILE 路径、表头、执行指令硬编码了 `codex/` 和 `gemini/`，导致用户配置
-  `Frontend: codex` 后 Claude 仍尝试调用 Gemini（exit code 127）。全量替换为 `{{BACKEND_PRIMARY}}/` 和
-  `{{FRONTEND_PRIMARY}}/` 模板变量，安装时按路由配置动态生成
+- **模型路由硬编码导致非默认配置失效**：21 个模板文件中 ROLE_FILE 路径、表头、执行指令硬编码了 `codex/` 和
+  `gemini/`，导致用户配置 `Frontend: codex` 后 Claude 仍尝试调用 Gemini（exit code 127）。全量替换为
+  `{{BACKEND_PRIMARY}}/` 和 `{{FRONTEND_PRIMARY}}/` 模板变量，安装时按路由配置动态生成
 
 ---
 
@@ -499,8 +630,8 @@ Critical findings block delivery.
 
 ### 🐛 修复
 
-- **Windows Gemini 多行参数截断**（#129）：Windows 上 npm `.cmd` wrapper 经由 cmd.exe 转发时截断多行 `-p` 参数，导致 Gemini
-  仅接收到角色设定首行而不执行任务。修复：Windows 平台改用 stdin pipe 传递任务内容，不再使用 `-p` 参数
+- **Windows Gemini 多行参数截断**（#129）：Windows 上 npm `.cmd` wrapper 经由 cmd.exe 转发时截断多行 `-p`
+  参数，导致 Gemini 仅接收到角色设定首行而不执行任务。修复：Windows 平台改用 stdin pipe 传递任务内容，不再使用 `-p` 参数
 - **Binary 版本升级**：`5.9.0` → `5.10.0`
 
 ---
@@ -518,13 +649,14 @@ Critical findings block delivery.
 
 ### 🐛 修复
 
-- **更新后 MCP 提示词显示未配置**（#124）：`update` 无条件传 `--skip-mcp` 导致 `mcpProvider` 被覆盖为 `skip`，已配置 MCP
-  的用户更新后提示词回退为"未配置"。修复：从已有 `config.toml` 恢复 `mcp.provider`，仅在无历史配置时才 fallback
+- **更新后 MCP 提示词显示未配置**（#124）：`update` 无条件传 `--skip-mcp` 导致 `mcpProvider` 被覆盖为
+  `skip`，已配置 MCP的用户更新后提示词回退为"未配置"。修复：从已有 `config.toml` 恢复
+  `mcp.provider`，仅在无历史配置时才 fallback
 
 ### ✨ 新功能
 
-- **Impeccable 命令可选安装**（#125）：init Step 4/4 新增 confirm 提示，20 个前端设计命令（polish/audit/animate
-  等）默认不安装，需要的用户自行勾选。update 时保留已有选择
+- **Impeccable 命令可选安装**（#125）：init Step
+  4/4 新增 confirm 提示，20 个前端设计命令（polish/audit/animate 等）默认不安装，需要的用户自行勾选。update 时保留已有选择
 - **X (Twitter) 社区入口**：README header 加 `@CCG_Workflow` 徽章 + 架构图下方 demo 推文链接 + Contact 区 Twitter 入口
 
 ---
@@ -560,11 +692,11 @@ Critical findings block delivery.
 
 ### ✨ 新功能
 
-- **Skill Registry 机制**：SKILL.md frontmatter 驱动自动命令生成。新增技能只需写一个 SKILL.md，安装时自动生成 slash command
-- **域知识秘典全量导入**：10 大领域 61 个知识文件（安全 7 + 架构 6 + DevOps 8 + AI 5 + 开发 9 + 前端设计 25 + 基础设施 +
-  移动端 + 数据工程 + 编排）
-- **Impeccable 工具集**：20 个 UI/UX 精打磨技能（polish/audit/harden/clarify/critique/animate/colorize 等），全部
-  user-invocable
+- **Skill Registry 机制**：SKILL.md frontmatter 驱动自动命令生成。新增技能只需写一个 SKILL.md，安装时自动生成 slash
+  command
+- **域知识秘典全量导入**：10 大领域 61 个知识文件（安全 7 + 架构 6 + DevOps 8 + AI
+  5 + 开发 9 + 前端设计 25 + 基础设施 + 移动端 + 数据工程 + 编排）
+- **Impeccable 工具集**：20 个 UI/UX 精打磨技能（polish/audit/harden/clarify/critique/animate/colorize 等），全部 user-invocable
 - **Override-Refusal 工具**：`/hi` 命令，会话级反拒绝覆写器（refusal_rewriter.js）
 - **Scrapling 技能**：网页抓取与数据提取，支持 Cloudflare/WAF 绕过
 - **3 个新输出风格**：冷刃简报（abyss-concise）、铁律军令（abyss-command）、祭仪长卷（abyss-ritual），输出风格总数达 8 种
@@ -573,8 +705,8 @@ Critical findings block delivery.
 ### 🏗 架构
 
 - **`src/utils/skill-registry.ts`**：新模块，负责 SKILL.md frontmatter 解析、技能发现、命令生成
-- **installer 集成**：`installSkillGeneratedCommands()` 在 skill 复制后自动扫描并生成 user-invocable 命令，跳过
-  installer-data.ts 已有命令避免冲突
+- **installer 集成**：`installSkillGeneratedCommands()`
+  在 skill 复制后自动扫描并生成 user-invocable 命令，跳过 installer-data.ts 已有命令避免冲突
 
 ---
 
@@ -582,10 +714,11 @@ Critical findings block delivery.
 
 ### ✨ 新功能
 
-- **`/ccg:team` 统一工作流**：第 28 个斜杠命令，8 阶段企业级工作流（需求→架构→规划→开发→测试→审查→修复→集成），7 角色 Agent
+- **`/ccg:team`
+  统一工作流**：第 28 个斜杠命令，8 阶段企业级工作流（需求→架构→规划→开发→测试→审查→修复→集成），7 角色 Agent
   Teams 自动编排
-- **3 个新 Agent**：`team-architect`（架构师）、`team-qa`（QA 工程师）、`team-reviewer`（代码审查员），均为 Agent Teams 真实
-  teammates
+- **3 个新 Agent**：`team-architect`（架构师）、`team-qa`（QA 工程师）、`team-reviewer`（代码审查员），均为 Agent
+  Teams 真实 teammates
 - **Evaluator-Optimizer 反馈环**：Phase 7 最多 2 轮自动修复 Critical 问题，超出交由用户决断
 - **架构+审查阶段多模型交叉**：Phase 2 Codex∥Gemini 并行架构分析，Phase 6 双模型交叉代码审查
 
@@ -615,9 +748,10 @@ Critical findings block delivery.
 
 ### 🐛 修复
 
-- **Gemini session_id 解析修复**：Gemini CLI 的 `init` 事件前粘有 MCP 警告文本导致 JSON 解析失败，现在自动提取行中 JSON
-  部分，正确捕获 `session_id`
-- **Gemini 会话复用恢复**：所有模板恢复使用 `resume <SESSION_ID>`（支持并行多会话场景），不再 fallback 到 `resume latest`
+- **Gemini session_id 解析修复**：Gemini CLI 的 `init`
+  事件前粘有 MCP 警告文本导致 JSON 解析失败，现在自动提取行中 JSON 部分，正确捕获 `session_id`
+- **Gemini 会话复用恢复**：所有模板恢复使用 `resume <SESSION_ID>`（支持并行多会话场景），不再 fallback 到
+  `resume latest`
 
 ### ✨ 新功能
 
@@ -640,8 +774,8 @@ Critical findings block delivery.
 ### 🐛 修复
 
 - **Gemini `-p -` 显示修正**：`Command:` 行现在显示真实的任务文本而非 `-p -`，与实际执行一致，消除误导
-- **Session-ID 早期输出**：wrapper 在 backend 返回 `session_started` 事件时立即输出 `Session-ID: xxx` 到
-  stderr，不再等到任务完成才输出。即使任务超时/失败，Claude 也能拿到真正的 session ID 来 resume，不再误用 PID
+- **Session-ID 早期输出**：wrapper 在 backend 返回 `session_started` 事件时立即输出 `Session-ID: xxx`
+  到 stderr，不再等到任务完成才输出。即使任务超时/失败，Claude 也能拿到真正的 session ID 来 resume，不再误用 PID
 
 ### 🔄 变更
 
@@ -663,7 +797,8 @@ Critical findings block delivery.
 ### 🐛 修复
 
 - **第三方 API 配置修复**：`ANTHROPIC_API_KEY` → `ANTHROPIC_AUTH_TOKEN`，修复第三方代理配置后仍显示 `/login` 的问题
-- **Gemini CLI stdin 兼容性修复**：Gemini backend 直接通过 `-p "任务文本"` 传递 prompt，修复 `--include-directories` 参数链断裂
+- **Gemini CLI stdin 兼容性修复**：Gemini backend 直接通过 `-p "任务文本"` 传递 prompt，修复 `--include-directories`
+  参数链断裂
 
 ---
 
@@ -672,8 +807,8 @@ Critical findings block delivery.
 ### 🐛 修复
 
 - **Gemini CLI stdin 兼容性修复**：Gemini CLI 不支持 `-p -` 作为 stdin 标记，wrapper 现在对 Gemini backend 直接通过
-  `-p "任务文本"` 传递 prompt，跳过 stdin pipe。修复 v1.7.74 引入的 `--include-directories` 与 `-p -` 参数链断裂导致
-  Gemini 无法调用的问题
+  `-p "任务文本"` 传递 prompt，跳过 stdin pipe。修复 v1.7.74 引入的 `--include-directories` 与 `-p -`
+  参数链断裂导致 Gemini 无法调用的问题
 
 ---
 
@@ -726,7 +861,7 @@ Critical findings block delivery.
 
 - **Gemini 调用失败不重试**：所有 20 个命令模板新增 Gemini 失败重试规则（最多 2 次，间隔 5s），3 次全败才降级为单模型
 - **Codex 结果被跳过**：所有 20 个命令模板新增 Codex 必须等待规则，禁止在 Codex 未返回时跳过或继续下一阶段
-- **team-exec 退化为普通 Agent**：明确指定必须使用 TeamCreate + TaskCreate + Agent(team_name=...) 创建 Agent
+- **team-exec 退化为普通 Agent**：明确指定必须使用 TeamCreate + TaskCreate + Agent (team_name=...) 创建 Agent
   Teams，禁止退化为普通 Agent 子代理
 
 ---
@@ -735,8 +870,8 @@ Critical findings block delivery.
 
 ### 🐛 修复
 
-- **Skills 路径错误**：`SKILL.md` 模板中 `run_skill.js` 路径修正为 `~/.claude/skills/ccg/run_skill.js`，与 v1.7.75
-  命名空间迁移对齐，修复质量关卡调用失败问题
+- **Skills 路径错误**：`SKILL.md` 模板中 `run_skill.js` 路径修正为
+  `~/.claude/skills/ccg/run_skill.js`，与 v1.7.75 命名空间迁移对齐，修复质量关卡调用失败问题
 
 ---
 
@@ -788,7 +923,8 @@ Critical findings block delivery.
   - 安装/卸载/菜单配置完整支持
 - **三端搜索提示词注入**：选择 fast-context 时自动写入搜索指南到 Claude Code (`~/.claude/rules/`)、Codex (
   `~/.codex/AGENTS.md`)、Gemini (`~/.gemini/GEMINI.md`)，卸载时自动清理
-- **Gemini MCP 同步**：新增 `syncMcpToGemini()` 将 CCG 管理的 MCP 服务器镜像到 `~/.gemini/settings.json`，与 Codex 同步机制对齐
+- **Gemini MCP 同步**：新增 `syncMcpToGemini()` 将 CCG 管理的 MCP 服务器镜像到
+  `~/.gemini/settings.json`，与 Codex 同步机制对齐
 
 ---
 
@@ -796,8 +932,9 @@ Critical findings block delivery.
 
 ### 🔄 变更
 
-- **`/ccg:commit` Context 自动归档**：不再依赖手动 session.log，改为从 git diff 自动分析生成
-  ContextEntry（decisions/bugs/changes），session.log 有内容时额外合并。`.context/` 不存在时提示 init 但不阻断
+- **`/ccg:commit` Context 自动归档**：不再依赖手动 session.log，改为从 git
+  diff 自动分析生成 ContextEntry（decisions/bugs/changes），session.log 有内容时额外合并。`.context/`
+  不存在时提示 init 但不阻断
 - **`/ccg:context log` 降为可选**：核心用法简化为 `init` 一次 → 正常开发 → `/ccg:commit` 全自动归档
 
 ---
@@ -807,15 +944,16 @@ Critical findings block delivery.
 ### ✨ 新功能
 
 - **`/ccg:context` 命令**：第 27 个斜杠命令，项目上下文管理（`.context/` 目录初始化、决策日志记录、压缩归档、历史查看）
-- **`.context` 上下文工程体系**：为 LLM 全面自动化提供决策审计链 — 记录 WHY（为什么改）、WHAT（考虑了什么替代方案）、BUG（遇到了什么坑）
+- **`.context`
+  上下文工程体系**：为 LLM 全面自动化提供决策审计链 — 记录 WHY（为什么改）、WHAT（考虑了什么替代方案）、BUG（遇到了什么坑）
 - **ContextEntry Schema v1.0.0**：JSONL canonical store + Markdown 人类视图，UUIDv7 主键（rebase-safe），
   `.gitattributes merge=union` 减少冲突
 - **`/ccg:commit` Context Compress Phase**：提交时自动压缩 session.log → 脱敏 → 追加 history/commits.jsonl → 添加
   `Context-Id` commit trailer
 - **13 个角色提示词 `.context Awareness` 注入**：Codex 6 个 + Gemini 7 个角色提示词增加 `.context/prefs/`
   读取指令，外部模型自动遵守项目规范
-- **Quality Gate Rules 全局规则**：安装时自动写入 `~/.claude/rules/ccg-skills.md`，定义 5
-  个质量关卡的自动触发条件（新建模块/代码变更>30行/安全变更/重构）
+- **Quality Gate Rules 全局规则**：安装时自动写入
+  `~/.claude/rules/ccg-skills.md`，定义 5个质量关卡的自动触发条件（新建模块/代码变更>30行/安全变更/重构）
 
 ### 🔧 修复
 
@@ -832,8 +970,8 @@ Critical findings block delivery.
 - **Binary 下载失败醒目告警**：下载失败时在终端显示红框警告 + 手动下载地址 + 放置路径 + chmod 指引，不再静默吞掉错误
 - **Binary 失败不阻塞安装**：binary 下载失败降级为 warning，commands + skills 仍正常安装，不再将整个安装标记为失败
 - **Update binary 备份/恢复**：更新流程先备份旧 binary，新安装失败后自动恢复，避免"删了旧的、新的又没下成"
-- **Update subprocess 超时**：`npx init` 子进程超时从 120s 提升到 300s（5 分钟），避免 binary 下载慢时进程被杀导致
-  commands/skills 丢失
+- **Update subprocess 超时**：`npx init`
+  子进程超时从 120s 提升到 300s（5 分钟），避免 binary 下载慢时进程被杀导致 commands/skills 丢失
 
 ---
 
@@ -851,10 +989,10 @@ Critical findings block delivery.
 
 ### 🏗 架构
 
-- **二进制产物迁移至 GitHub Release**：`bin/codeagent-wrapper-*` 不再打包到 npm 和 git，改从 GitHub Release (`preset` tag)
-  按需下载，npm 包从 16.3MB 缩减至 161KB
-- **GitHub Actions CI**：新增 `.github/workflows/build-binaries.yml`，`codeagent-wrapper/` 变更时自动交叉编译 6 平台并上传到
-  `preset` Release
+- **二进制产物迁移至 GitHub Release**：`bin/codeagent-wrapper-*` 不再打包到 npm 和 git，改从 GitHub Release (`preset`
+  tag) 按需下载，npm 包从 16.3MB 缩减至 161KB
+- **GitHub Actions CI**：新增 `.github/workflows/build-binaries.yml`，`codeagent-wrapper/`
+  变更时自动交叉编译 6 平台并上传到 `preset` Release
 - **installer.ts 下载逻辑**：仅从 GitHub Release 下载，移除本地 `bin/` fallback（开发者可用 `build-all.sh` 自行编译）
 - **移除本地二进制**：`bin/codeagent-wrapper-*` 6 个文件已从仓库删除，仅保留 `bin/ccg.mjs` 入口
 
@@ -864,8 +1002,8 @@ Critical findings block delivery.
 
 ### 📝 文档
 
-- **README 重构**：命令分组展示（7 类）、新增「Why CCG?」价值主张、架构图上移、Prerequisites 合并、环境变量增加「何时修改」列、FAQ/Hook
-  配置去重折叠
+- **README 重构**：命令分组展示（7 类）、新增「Why
+  CCG?」价值主张、架构图上移、Prerequisites 合并、环境变量增加「何时修改」列、FAQ/Hook 配置去重折叠
 - **新增 CONTRIBUTING.md**：开发环境搭建、PR 流程、Commit 规范、代码标准、Good First Issue 指南
 - **新增 Issue 模板**：`.github/ISSUE_TEMPLATE/` 下 3 套模板（bug report / feature request / good first issue）
 
@@ -885,13 +1023,14 @@ Critical findings block delivery.
 
 ### 🔄 变更
 
-- **spec 模板 guardrail 加固**：`spec-research`/`spec-plan`/`spec-impl` 三个模板新增 USER GUIDANCE RULE，防止 LLM 向用户暴露内部
-  `/opsx:*` 命令，统一引导至 `/ccg:spec-*`；`spec-plan`/`spec-impl` 额外添加 TASKS FORMAT RULE 防止 checkbox 格式问题
+- **spec 模板 guardrail 加固**：`spec-research`/`spec-plan`/`spec-impl` 三个模板新增 USER GUIDANCE
+  RULE，防止 LLM 向用户暴露内部 `/opsx:*` 命令，统一引导至 `/ccg:spec-*`；`spec-plan`/`spec-impl` 额外添加 TASKS FORMAT
+  RULE 防止 checkbox 格式问题
 
 ### 🐛 修复
 
-- **Gemini CLI `.env` 隔离**：修复 Gemini CLI 从项目目录加载 `.env` 导致全局 API Key 被覆盖的问题。codeagent-wrapper 现将
-  Gemini 的 `cmd.Dir` 设为 `$HOME`，项目目录通过 `--include-directories` 传入
+- **Gemini CLI `.env` 隔离**：修复 Gemini CLI 从项目目录加载 `.env` 导致全局 API
+  Key 被覆盖的问题。codeagent-wrapper 现将 Gemini 的 `cmd.Dir` 设为 `$HOME`，项目目录通过 `--include-directories` 传入
 - **Gemini 模型参数支持**：`buildGeminiArgs` 支持 `--gemini-model` / `-m` 参数传递自定义模型
 - **Codex 测试修正**：修复预存的环境变量名错误（`CODEX_BYPASS_SANDBOX` → `CODEX_REQUIRE_APPROVAL`）
 
@@ -901,8 +1040,8 @@ Critical findings block delivery.
 
 ### ✨ 新功能
 
-- **`/ccg:codex-exec` 命令**：新增第 26 个斜杠命令，与 `/ccg:plan` 配对使用——Codex 全权执行（MCP 搜索 + 代码实现 +
-  测试），Claude 仅做决策/审核，极大降低 Claude token 消耗
+- **`/ccg:codex-exec` 命令**：新增第 26 个斜杠命令，与 `/ccg:plan`
+  配对使用——Codex 全权执行（MCP 搜索 + 代码实现 + 测试），Claude 仅做决策/审核，极大降低 Claude token 消耗
 - **Skills 体系**：首次引入 Claude Code 原生 Skills 机制，安装 6 个 skill 到 `~/.claude/skills/`（verify-security /
   verify-quality / verify-change / verify-module / gen-docs / multi-agent）
 - **context7 MCP 自动安装**：初始化时自动安装 context7（免费库文档查询），无需 API Key
@@ -934,8 +1073,8 @@ Critical findings block delivery.
 
 ### ✨ 新功能
 
-- **grok-search 联网搜索 MCP**：初始化和 MCP 菜单新增 grok-search 安装选项，支持 Tavily + Firecrawl + Grok 多信源联网搜索（比
-  Claude Code 内置联网更好用）
+- **grok-search 联网搜索 MCP**：初始化和 MCP 菜单新增 grok-search 安装选项，支持 Tavily + Firecrawl +
+  Grok 多信源联网搜索（比 Claude Code 内置联网更好用）
 - **全局搜索提示词自动追加**：安装 grok-search 时自动追加搜索/证据/推理规范到 `~/.claude/CLAUDE.md`，不替换现有内容
 
 ### 🔄 变更
@@ -954,13 +1093,14 @@ Critical findings block delivery.
 
 ### 🔄 变更
 
-- **MCP 推荐调整**：ace-tool 恢复为默认推荐（`search_context` 可用，`enhance_prompt`
-  已不可用），中转推荐更新为 https://acemcp.heroman.wtf/
+- **MCP 推荐调整**：ace-tool 恢复为默认推荐（`search_context` 可用，`enhance_prompt` 已不可用），中转推荐更新为
+  https://acemcp.heroman.wtf/
 - **ContextWeaver 降为备选**：仍可使用，需硅基流动 API Key
 
 ### 🗑️ 移除
 
-- **清理仓库垃圾文件**：移除 `1.md`、`FINAL_VERIFICATION.md`、`OPENSPEC_COMMANDS_REFERENCE.md`、`OPSX_INTEGRATION_FIX.md`、
+- **清理仓库垃圾文件**：移除
+  `1.md`、`FINAL_VERIFICATION.md`、`OPENSPEC_COMMANDS_REFERENCE.md`、`OPSX_INTEGRATION_FIX.md`、
   `config.json`、`verify-*.sh`、`test-local-install.sh`、`.magi/`、`.claude/index.json`
 - **更新 `.gitignore`**：添加 `.magi/`、`verify-*.sh`、`*_FIX.md`、`*_REFERENCE.md` 防止再次提交
 
@@ -995,8 +1135,8 @@ Critical findings block delivery.
   - `version.test.ts`（14）：`compareVersions` 全场景覆盖，含 update bug 回归用例
   - `config.test.ts`（14）：`createDefaultConfig` + `createDefaultRouting` 纯函数测试
   - `platform.test.ts`（10）：平台检测、`getMcpCommand`、路径分隔符
-  - `installer.test.ts`（54）：注册表一致性、路由/liteMode 注入、模板变量完整性、contextweaver E2E、卸载 E2E、二进制安装、prompts
-    安装
+  - `installer.test.ts`（54）：注册表一致性、路由/liteMode 注入、模板变量完整性、contextweaver
+    E2E、卸载 E2E、二进制安装、prompts 安装
 
 ---
 
@@ -1020,8 +1160,8 @@ Critical findings block delivery.
 
 ### 🐛 修复
 
-- **spec-research 并行调用缺失**：补全 Step 4 多模型并行探索模板，添加 `run_in_background: true` 指令和完整的 Bash
-  并行调用示例（Codex + Gemini），与 `spec-plan` / `spec-impl` 保持一致
+- **spec-research 并行调用缺失**：补全 Step 4 多模型并行探索模板，添加 `run_in_background: true`
+  指令和完整的 Bash 并行调用示例（Codex + Gemini），与 `spec-plan` / `spec-impl` 保持一致
 
 ---
 
@@ -1344,8 +1484,8 @@ Critical findings block delivery.
   Failed to read ROLE_FILE 'C:/Users/USER/.claude/.ccg/prompts/gemini/architect.md':
   The system cannot find the file specified.
   ```
-- **根本原因**: `templates/prompts/gemini/` 目录下缺失 `architect.md` 文件，但命令模板 (`plan.md`, `execute.md` 等)
-  引用了该文件
+- **根本原因**: `templates/prompts/gemini/` 目录下缺失 `architect.md` 文件，但命令模板 (`plan.md`, `execute.md`
+  等) 引用了该文件
 - **修复**: 新增 `templates/prompts/gemini/architect.md` 文件，定义前端架构师角色
 - **影响**:
   - ✅ `/ccg:plan` 和 `/ccg:execute` 可正常使用 Gemini 后端
@@ -1398,7 +1538,8 @@ VSCode 插件启动的子进程不会继承终端环境变量，必须通过 `se
 
 **修复 Windows Git Bash 环境下 PATH 继承问题 (codeagent-wrapper v5.7.1)**
 
-- **问题**: codeagent-wrapper 仅对 `claude` 后端设置环境变量，导致 `codex`/`gemini` 在 Windows Git Bash 后台进程中找不到命令
+- **问题**: codeagent-wrapper 仅对 `claude` 后端设置环境变量，导致 `codex`/`gemini` 在 Windows Git
+  Bash 后台进程中找不到命令
 - **修复**: 统一所有后端的环境变量处理逻辑
   - 所有后端均调用 `cmd.SetEnv()` 显式合并父进程环境变量
   - 确保 PATH 等关键环境变量正确继承
@@ -1471,7 +1612,8 @@ VSCode 插件启动的子进程不会继承终端环境变量，必须通过 `se
 
 #### 问题背景
 
-用户反馈：当通过 npm 全局安装且当前版本已是最新版本时，系统仍然提示用户运行 `npm install -g ccg-workflow@latest`，导致用户困惑。
+用户反馈：当通过 npm 全局安装且当前版本已是最新版本时，系统仍然提示用户运行
+`npm install -g ccg-workflow@latest`，导致用户困惑。
 
 **场景重现**：
 
@@ -1556,7 +1698,8 @@ npm install -g ccg-workflow@latest
 
 #### 背景
 
-社区用户反馈希望支持 [ace-tool-rs](https://github.com/missdeer/ace-tool-rs)，这是 ace-tool 的 Rust 实现版本，具有以下优势：
+社区用户反馈希望支持
+[ace-tool-rs](https://github.com/missdeer/ace-tool-rs)，这是 ace-tool 的 Rust 实现版本，具有以下优势：
 
 - 更轻量（二进制文件更小）
 - 更快速（Rust 性能优势）
@@ -1566,13 +1709,12 @@ npm install -g ccg-workflow@latest
 
 **1. 添加 `installAceToolRs` 函数**
 
-在 `src/utils/installer.ts` 中添加 ace-tool-rs 安装函数：
+在 `src/utils/installer.ts` 中添加 ace-tool-rs 安装函数，以下仅展示签名，省略具体返回类型与实现：
 
 ```typescript
-export async function installAceToolRs(config: AceToolConfig): Promise<...> {
-  // 使用 npx ace-tool-rs 命令
-  // 添加 RUST_LOG=info 环境变量
-}
+export declare function installAceToolRs(config: AceToolConfig): Promise<unknown>
+// 使用 npx ace-tool-rs 命令
+// 添加 RUST_LOG=info 环境变量
 ```
 
 **2. 更新 i18n 文本**
@@ -1753,7 +1895,7 @@ v1.7.21 的修复不完整，Windows 上 Codex 完成后 codeagent-wrapper 进�
 
 #### 修复方案
 
-在 `messageTimerCh` case 中，**先关闭 stdout**，再终止进程：
+在 `messageTimerCh` case 中， **先关闭 stdout**，再终止进程：
 
 ```go
 case <-messageTimerCh:
@@ -1828,6 +1970,11 @@ func killProcessTree(pid int) error {
     return cmd.Run()
 }
 
+```
+
+`terminateCommand` 函数体中的片段：
+
+```go
 // 修改：terminateCommand 使用进程树终止
 if isWindows() {
     if err := killProcessTree(proc.Pid()); err != nil {
@@ -1835,6 +1982,11 @@ if isWindows() {
     }
 }
 
+```
+
+`waitLoop` 的 `select` 分支片段：
+
+```go
 // 修改：messageTimerCh case 不再阻塞
 case <-messageTimerCh:
     // ...terminate logic...
@@ -1923,11 +2075,11 @@ v1.7.19 的表格格式精简过度，导致 Claude 无法理解需要发起并�
 - `terminateCommand` 函数使用 `syscall.SIGTERM` 信号终止进程
 - **Windows 不支持 SIGTERM 信号**，该调用静默失败（不报错但不执行任何操作）
 - 虽然有 `forceKillDelay` 后的 `Kill()` 备用逻辑，但代码在 `waitCh` 上阻塞等待进程退出
-- 导致 Kill() 的定时器无法正确触发或进程无法正常退出
+- 导致 Kill () 的定时器无法正确触发或进程无法正常退出
 
 #### 核心修复
 
-1. **Windows 平台直接使用 Kill()**：
+1. **Windows 平台直接使用 Kill ()**：
    - `terminateCommand()` 函数：Windows 上直接调用 `proc.Kill()` 而非 `SIGTERM`
    - `terminateProcess()` 函数：同样的修复
    - `forwardSignals()` 函数：同样的修复
@@ -2367,7 +2519,7 @@ Windows 用户使用 PowerShell 执行命令时，路径格式不兼容：
    - ✅ **5阶段完整工作流**：上下文检索 → 多模型分析 → 原型生成 → 重构实施 → 多模型审计
    - ✅ **多模型并行分析**：Step 2 新增多模型并行分析（Codex + Gemini / Gemini + Claude）
    - ✅ **多模型审计交付**：Step 5 新增多模型交叉验证审计
-   - ✅ **强制用户确认**：分析完成后询问"是否继续执行此方案？(Y/N)"
+   - ✅ **强制用户确认**：分析完成后询问"是否继续执行此方案？ (Y/N)"
    - ✅ **详细使用说明**：每个命令添加 v1.6.0 升级说明、与 /ccg:dev 的区别、使用建议
 
 2. **用户价值**
@@ -2717,8 +2869,9 @@ C:\Users\USER> npx ccg init
 
 **Windows 命令包装示例**：
 
+Before（不工作）：
+
 ```json
-// Before (不工作)
 {
   "mcpServers": {
     "ace-tool": {
@@ -2728,8 +2881,11 @@ C:\Users\USER> npx ccg init
     }
   }
 }
+```
 
-// After (自动修复)
+After（自动修复）：
+
+```json
 {
   "mcpServers": {
     "ace-tool": {

@@ -1,11 +1,11 @@
-import { spawn, spawnSync, execFileSync } from 'node:child_process'
+import fs from 'fs-extra'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
+import { execFileSync, spawn, spawnSync } from 'node:child_process'
 
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import fs from 'fs-extra'
 import { afterEach, expect } from 'vitest'
 import { TASK_STATE_RUNTIME_FILES } from '../installer-data'
 
@@ -169,7 +169,9 @@ export function currentExpected(root: string, includeTask = false, sessionKey = 
     bindingRevision: current.bindingRevision,
     activeTaskId: current.activeTaskId,
   }
-  if (includeTask) expected.taskRevision = current.taskRevision
+  if (includeTask) {
+    expected.taskRevision = current.taskRevision
+  }
   return expected
 }
 
@@ -298,7 +300,9 @@ function collectControllerResult(child: ChildProcessWithoutNullStreams): Promise
       }
     })
     child.stdin.on('error', (error: NodeJS.ErrnoException) => {
-      if (error.code !== 'EPIPE') reject(error)
+      if (error.code !== 'EPIPE') {
+        reject(error)
+      }
     })
   })
 }

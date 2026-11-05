@@ -1,8 +1,8 @@
 import fs from 'fs-extra'
 import { execFileSync } from 'node:child_process'
 import { join } from 'pathe'
-import { check, readText } from './doctor-common'
 import type { DoctorCheck, DoctorDependencies, RecordValue } from './doctor-common'
+import { check, readText } from './doctor-common'
 
 const OPEN_LIKE_TASK_STATUSES = new Set([
   'open',
@@ -39,21 +39,29 @@ export function executeVersion(file: string, args: string[]): string | null {
 
 export function versionDetail(raw: string): string {
   // Do not echo arbitrary executable output (or terminal escape sequences).
-  const match = raw.match(/\b(?:v)?(\d+\.\d+(?:\.\d+)?(?:-[\w.-]+)?)\b/)
+  const match = raw.match(/\bv?(?<version>\d+\.\d+(?:\.\d+)?(?:-[\w.-]+)?)\b/)
   return match ? `v${match[1]}` : 'Available (--version succeeded)'
 }
 
 async function countOpenTasks(root: string): Promise<number | null> {
   const tasksDir = join(root, '.ccg', 'tasks')
-  if (!(await fs.pathExists(tasksDir))) return 0
+  if (!(await fs.pathExists(tasksDir))) {
+    return 0
+  }
   try {
     let count = 0
     for (const entry of await fs.readdir(tasksDir, { withFileTypes: true })) {
-      if (!entry.isDirectory()) continue
+      if (!entry.isDirectory()) {
+        continue
+      }
       const taskPath = join(tasksDir, entry.name, 'task.json')
-      if (!(await fs.pathExists(taskPath))) continue
+      if (!(await fs.pathExists(taskPath))) {
+        continue
+      }
       const task = await fs.readJson(taskPath)
-      if (OPEN_LIKE_TASK_STATUSES.has(String(task?.status || '').toLowerCase())) count++
+      if (OPEN_LIKE_TASK_STATUSES.has(String(task?.status || '').toLowerCase())) {
+        count++
+      }
     }
     return count
   } catch {
@@ -63,7 +71,9 @@ async function countOpenTasks(root: string): Promise<number | null> {
 
 async function countBindings(root: string): Promise<number | null> {
   const sessionsDir = join(root, '.ccg', 'sessions')
-  if (!(await fs.pathExists(sessionsDir))) return 0
+  if (!(await fs.pathExists(sessionsDir))) {
+    return 0
+  }
   try {
     return (await fs.readdir(sessionsDir, { withFileTypes: true })).filter(
       (entry) => entry.isFile() && /^(?:claude|codex)-[0-9a-f]{64}\.json$/.test(entry.name)
@@ -86,7 +96,9 @@ function resolveSessionTask(
       if (resolution.ok === true && resolution.kind === 'active') {
         return `in_progress: ${String(resolution.activeTaskId)}`
       }
-      if (resolution.ok === true) return String(resolution.kind || 'none')
+      if (resolution.ok === true) {
+        return String(resolution.kind || 'none')
+      }
     } catch {
       return 'session-state-invalid'
     }
@@ -103,7 +115,9 @@ async function taskSummary(root: string, state: RecordValue): Promise<string> {
 
 export async function readTaskStatus(root: string, installDir: string, exec = executeVersion): Promise<string> {
   const statePath = join(root, '.ccg', 'state.json')
-  if (!(await fs.pathExists(statePath))) return 'schema=none, open=0, bindings=0'
+  if (!(await fs.pathExists(statePath))) {
+    return 'schema=none, open=0, bindings=0'
+  }
   let state: RecordValue
   try {
     state = (await fs.readJson(statePath)) as RecordValue
@@ -117,7 +131,9 @@ export async function readTaskStatus(root: string, installDir: string, exec = ex
   }
   if (sessionKey) {
     const controller = join(installDir, 'hooks', 'ccg', 'task-state.js')
-    if (await fs.pathExists(controller)) return resolveSessionTask(root, controller, sessionKey, exec)
+    if (await fs.pathExists(controller)) {
+      return resolveSessionTask(root, controller, sessionKey, exec)
+    }
   }
   return taskSummary(root, state)
 }
@@ -157,11 +173,15 @@ async function backendVersion(
   let output: string | null = null
   for (const command of candidates) {
     output = exec(command, ['--version'])
-    if (output) break
+    if (output) {
+      break
+    }
   }
   if (!output && name === 'grok') {
     const fallback = join(home, '.grok', 'bin', platform === 'win32' ? 'grok.exe' : 'grok')
-    if (await fs.pathExists(fallback)) output = exec(fallback, ['--version'])
+    if (await fs.pathExists(fallback)) {
+      output = exec(fallback, ['--version'])
+    }
   }
   return output
 }
@@ -173,10 +193,11 @@ export async function backendChecks(
   platform: NodeJS.Platform,
   exec: NonNullable<DoctorDependencies['exec']>
 ): Promise<DoctorCheck[]> {
-  if (pureClaude)
+  if (pureClaude) {
     return [
       check('routing.pure-claude', 'Pure Claude Code', 'pass', 'Agent Teams mode; no external model CLI required'),
     ]
+  }
   const checks: DoctorCheck[] = []
   for (const name of names) {
     const spec = BACKENDS[name]
@@ -203,9 +224,9 @@ export async function standaloneDelegationChecks(
 ): Promise<DoctorCheck[]> {
   const raw = await readWrapperVersion(installDir, platform, exec)
   const agents = (await readText(join(codexDir, 'AGENTS.md'))) || ''
-  const names = [...new Set([...agents.matchAll(/--backend ([a-z][a-z0-9-]*)\b/g)].map((match) => match[1]))].filter(
-    (name) => Object.hasOwn(BACKENDS, name)
-  )
+  const names = [
+    ...new Set([...agents.matchAll(/--backend (?<backend>[a-z][a-z0-9-]*)\b/g)].map((match) => match[1])),
+  ].filter((name) => Object.hasOwn(BACKENDS, name))
   const promptFiles = names.flatMap((name) =>
     ['analyzer', 'reviewer'].map((role) => join(installDir, '.ccg', 'prompts', name, `${role}.md`))
   )

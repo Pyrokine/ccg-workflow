@@ -96,9 +96,9 @@ services.tls.certificates.leaf.subject.common_name:example.com
   - Pastebin: 数据泄露
 
 GitHub Dorks:
-  - "example.com" password
-  - "example.com" api_key
-  - "example.com" secret
+  - '"example.com" password'
+  - '"example.com" api_key'
+  - '"example.com" secret'
   - org:example filename:.env
 ```
 
@@ -136,10 +136,12 @@ GitHub Dorks:
   "pattern_type": "stix",
   "valid_from": "2024-01-01T00:00:00.000Z",
   "labels": ["malicious-activity"],
-  "kill_chain_phases": [{
-    "kill_chain_name": "mitre-attack",
-    "phase_name": "execution"
-  }]
+  "kill_chain_phases": [
+    {
+      "kill_chain_name": "mitre-attack",
+      "phase_name": "execution"
+    }
+  ]
 }
 ```
 
@@ -188,8 +190,8 @@ class IOCChecker:
 ```yaml
 # 攻击者画像
 APT_Profile:
-  name: "APT-XX"
-  aliases: ["Group A", "Group B"]
+  name: 'APT-XX'
+  aliases: [ 'Group A', 'Group B' ]
   targets:
     - 金融行业
     - 政府机构
@@ -247,7 +249,7 @@ def generate_navigator_layer(techniques):
 ### 狩猎假设模板
 
 ```yaml
-hypothesis: "攻击者可能通过 PowerShell 下载执行恶意代码"
+hypothesis: '攻击者可能通过 PowerShell 下载执行恶意代码'
 technique: T1059.001
 data_sources:
   - Windows PowerShell 日志 (4103, 4104)
@@ -320,15 +322,15 @@ misp.tag(event, 'misp-galaxy:mitre-attack-pattern="T1566"')
 
 ## 工具清单
 
-| 工具               | 用途      |
-|------------------|---------|
-| MISP             | 威胁情报平台  |
-| OpenCTI          | 威胁情报管理  |
-| TheHive          | 事件响应平台  |
-| Maltego          | 关系分析    |
-| Shodan           | 网络空间搜索  |
-| VirusTotal       | 恶意软件分析  |
-| ATT&CK Navigator | TTP 可视化 |
+| 工具             | 用途         |
+|------------------|--------------|
+| MISP             | 威胁情报平台 |
+| OpenCTI          | 威胁情报管理 |
+| TheHive          | 事件响应平台 |
+| Maltego          | 关系分析     |
+| Shodan           | 网络空间搜索 |
+| VirusTotal       | 恶意软件分析 |
+| ATT&CK Navigator | TTP 可视化   |
 
 ## 威胁建模
 
@@ -340,13 +342,13 @@ misp.tag(event, 'misp-galaxy:mitre-attack-pattern="T1566"')
 
 ### STRIDE 速查
 
-| 威胁              | 含义   | 缓解        |
-|-----------------|------|-----------|
-| Spoofing        | 身份伪造 | 强认证、MFA   |
-| Tampering       | 数据篡改 | 完整性校验、签名  |
+| 威胁            | 含义     | 缓解               |
+|-----------------|----------|--------------------|
+| Spoofing        | 身份伪造 | 强认证、MFA        |
+| Tampering       | 数据篡改 | 完整性校验、签名   |
 | Repudiation     | 否认操作 | 审计日志、数字签名 |
-| Info Disclosure | 信息泄露 | 加密、访问控制   |
-| DoS             | 拒绝服务 | 限流、冗余     |
+| Info Disclosure | 信息泄露 | 加密、访问控制     |
+| DoS             | 拒绝服务 | 限流、冗余         |
 | EoP             | 权限提升 | 最小权限、输入验证 |
 
 ### PASTA 七阶段
@@ -380,12 +382,11 @@ misp.tag(event, 'misp-galaxy:mitre-attack-pattern="T1566"')
 
 ### 工具
 
-| 工具                             | 特点           |
-|--------------------------------|--------------|
-| Microsoft Threat Modeling Tool | STRIDE 自动化   |
+| 工具                           | 特点              |
+|--------------------------------|-------------------|
+| Microsoft Threat Modeling Tool | STRIDE 自动化     |
 | OWASP Threat Dragon            | 开源、DFD 支持    |
-| Threagile                      | CLI、代码化建模    |
+| Threagile                      | CLI、代码化建模   |
 | PyTM                           | Python 编程式建模 |
 
 ---
-

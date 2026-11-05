@@ -18,27 +18,15 @@ Read("~/.claude/.ccg/engine/model-router.md")
 
 ## 工作流状态机
 
-[phase-state:1-clarify]
-当前阶段：明确研究问题
-📍 Next: 问题明确后启动多模型探索
-[/phase-state:1-clarify]
+[phase-state:1-clarify] 当前阶段：明确研究问题 📍 Next: 问题明确后启动多模型探索 [/phase-state:1-clarify]
 
-[phase-state:2-explore]
-当前阶段：多模型并行探索
-Gate: 研究问题已明确 ✓
-📍 Next: 双模型结果返回后进入综合
-[/phase-state:2-explore]
+[phase-state:2-explore] 当前阶段：多模型并行探索 Gate: 研究问题已明确 ✓ 📍
+Next: 双模型结果返回后进入综合 [/phase-state:2-explore]
 
-[phase-state:3-synthesize]
-当前阶段：综合分析
-Gate: 双模型探索已返回 ✓
-📍 Next: 输出结构化报告后进入讨论
-[/phase-state:3-synthesize]
+[phase-state:3-synthesize] 当前阶段：综合分析 Gate: 双模型探索已返回 ✓ 📍
+Next: 输出结构化报告后进入讨论 [/phase-state:3-synthesize]
 
-[phase-state:4-discuss]
-当前阶段：交互式讨论
-📍 Next: 用户满意后结束
-[/phase-state:4-discuss]
+[phase-state:4-discuss] 当前阶段：交互式讨论 📍 Next: 用户满意后结束 [/phase-state:4-discuss]
 
 ---
 
@@ -91,7 +79,9 @@ Gate: 双模型探索已返回 ✓
 
 交叉对比双方视角。
 
-使用 `write-artifact` 将双模型原始分析分别写入 `research/backend-analysis.md` 和 `research/frontend-analysis.md`。每次调用后使用响应中的新 task revision。随后用 `checkpoint` 更新为 `3-synthesize`，下一动作设为“综合研究结论”。
+使用 `write-artifact` 将双模型原始分析分别写入 `research/backend-analysis.md` 和
+`research/frontend-analysis.md`。每次调用后使用响应中的新 task revision。随后用 `checkpoint` 更新为
+`3-synthesize`，下一动作设为“综合研究结论”。
 
 输出结构化报告：
 
@@ -131,7 +121,8 @@ Gate: 双模型探索已返回 ✓
 📍 研究已完成。如需实施推荐方案，可以用 /ccg:go implement [方案描述]
 ```
 
-讨论结束后用 `checkpoint` 记录 `4-discuss`。本研究未改变项目规范时，用 `set-spec-evolution` 记录 `not_applicable`，然后调用 `finish` 标记为 `completed`。后续实施创建新任务，不复用已完成的研究任务。
+讨论结束后用 `checkpoint` 记录 `4-discuss`。本研究未改变项目规范时，用 `set-spec-evolution` 记录
+`not_applicable`，然后调用 `finish` 标记为 `completed`。后续实施创建新任务，不复用已完成的研究任务。
 
 ---
 

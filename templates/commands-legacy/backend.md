@@ -18,12 +18,12 @@ description: '后端专项工作流（研究→构思→计划→执行→优化
 
 ## 你的角色
 
-你是**后端编排者**，协调多模型完成服务端任务（研究 → 构思 → 计划 → 执行 → 优化 → 评审），用中文协助用户。
+你是 **后端编排者**，协调多模型完成服务端任务（研究 → 构思 → 计划 → 执行 → 优化 → 评审），用中文协助用户。
 
 **协作模型**：
 
-- **{{BACKEND_PRIMARY}}** – 后端逻辑、算法（**后端权威，可信赖**）
-- **{{FRONTEND_PRIMARY}}** – 前端视角（**后端意见仅供参考**）
+- **{{BACKEND_PRIMARY}}** – 后端逻辑、算法（ **后端权威，可信赖**）
+- **{{FRONTEND_PRIMARY}}** – 前端视角（ **后端意见仅供参考**）
 - **Claude (自己)** – 编排、计划、执行、交付
 
 ---
@@ -32,7 +32,8 @@ description: '后端专项工作流（研究→构思→计划→执行→优化
 
 **工作目录**：
 
-- `{{WORKDIR}}`：**必须通过 Bash 执行 `pwd`（Unix）或 `cd`（Windows CMD）获取当前工作目录的绝对路径**，禁止从 `$HOME` 或环境变量推断
+- `{{WORKDIR}}`： **必须通过 Bash 执行 `pwd`（Unix）或 `cd`（Windows CMD）获取当前工作目录的绝对路径**，禁止从 `$HOME`
+  或环境变量推断
 - 如果用户通过 `/add-dir` 添加了多个工作区，先用 Glob/Grep 确定任务相关的工作区
 - 如果无法确定，用 `AskUserQuestion` 询问用户选择目标工作区
 
@@ -72,13 +73,14 @@ EOF",
 
 **角色提示词**：
 
-| 阶段 | 后端 |
-|----|---|
-| 分析 | `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/analyzer.md` |
-| 规划 | `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/architect.md` |
+| 阶段 | 后端                                                                            |
+|------|---------------------------------------------------------------------------------|
+| 分析 | `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/analyzer.md`                        |
+| 规划 | `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/architect.md`                       |
 | 审查 | `~/.claude/.ccg/prompts/claude/reviewer.md`，供 GPT、Grok 两个外部 profile 共用 |
 
-**会话复用**：阶段 2 保存 `SESSION_ID`，阶段 3 可以使用 `resume` 复用。阶段 5 审查必须使用 `--no-session-persistence`，不得 `resume` 或保存 reviewer `SESSION_ID`。
+**会话复用**：阶段 2 保存 `SESSION_ID`，阶段 3 可以使用 `resume` 复用。阶段 5 审查必须使用
+`--no-session-persistence`，不得 `resume` 或保存 reviewer `SESSION_ID`。
 
 ⛔ **后端模型结果必须等待**：后端模型执行时间较长（5-15 分钟）属于正常。若调用超时，继续等待，禁止跳过或提前终止。
 
@@ -149,10 +151,15 @@ Claude 综合规划，请求用户批准后存入 `.claude/plan/任务名.md`
 
 在同一条消息中启动 GPT、Grok 两个 `run_in_background: true` 调用：
 
-- GPT：`--backend claude --no-session-persistence --claude-model {{REVIEW_GPT_MODEL}} --claude-effort {{REVIEW_GPT_EFFORT}}`，重点审查后端逻辑、安全、性能、错误处理和 API 规范
-- Grok：`--backend claude --no-session-persistence --claude-model {{REVIEW_GROK_MODEL}} --claude-effort {{REVIEW_GROK_EFFORT}}`，重点审查前端交互、可访问性、设计一致性与前端安全
+- GPT：
+  `--backend claude --no-session-persistence --claude-model {{REVIEW_GPT_MODEL}} --claude-effort {{REVIEW_GPT_EFFORT}}`
+  ，重点审查后端逻辑、安全、性能、错误处理和 API 规范
+- Grok：
+  `--backend claude --no-session-persistence --claude-model {{REVIEW_GROK_MODEL}} --claude-effort {{REVIEW_GROK_EFFORT}}`
+  ，重点审查前端交互、可访问性、设计一致性与前端安全
 
-两个调用使用 `~/.claude/.ccg/prompts/claude/reviewer.md`。等待两个结果后由主 Claude 汇总并确认 finding，禁止 `resume` 或保存 reviewer `SESSION_ID`。
+两个调用使用 `~/.claude/.ccg/prompts/claude/reviewer.md`。等待两个结果后由主 Claude 汇总并确认 finding，禁止 `resume`
+或保存 reviewer `SESSION_ID`。
 
 ### ✅ 阶段 6：评审
 
@@ -168,5 +175,5 @@ Claude 综合规划，请求用户批准后存入 `.claude/plan/任务名.md`
 
 1. **{{BACKEND_PRIMARY}} 后端意见可信赖**
 2. **{{FRONTEND_PRIMARY}} 后端意见仅供参考**
-3. 外部模型对文件系统**零写入权限**
+3. 外部模型对文件系统 **零写入权限**
 4. Claude 负责所有代码写入和文件操作

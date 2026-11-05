@@ -18,40 +18,23 @@ Read("~/.claude/.ccg/engine/model-router.md")
 
 ## 工作流状态机
 
-[phase-state:1-research]
-当前阶段：研究与分析 [模式：研究]
-📍 Next: 需求评分 ≥7 后进入多模型构思
-[/phase-state:1-research]
+[phase-state:1-research] 当前阶段：研究与分析 [模式：研究] 📍
+Next: 需求评分 ≥7 后进入多模型构思 [/phase-state:1-research]
 
-[phase-state:2-ideation]
-当前阶段：多模型构思 [模式：构思]
-Gate: 需求完整性评分 ≥7 ✓
-📍 Next: 双模型分析结果返回后进入规划
-[/phase-state:2-ideation]
+[phase-state:2-ideation] 当前阶段：多模型构思 [模式：构思] Gate: 需求完整性评分 ≥7 ✓ 📍
+Next: 双模型分析结果返回后进入规划 [/phase-state:2-ideation]
 
-[phase-state:3-planning]
-当前阶段：详细规划 [模式：计划]
-Gate: 双模型分析已返回 ✓
-📍 Next: 用户审批计划后进入实施（HARD STOP）
-[/phase-state:3-planning]
+[phase-state:3-planning] 当前阶段：详细规划 [模式：计划] Gate: 双模型分析已返回 ✓ 📍 Next: 用户审批计划后进入实施（HARD
+STOP）[/phase-state:3-planning]
 
-[phase-state:4-implementation]
-当前阶段：实施 [模式：执行]
-Gate: 用户已审批计划 ✓
-📍 Next: 实施完成后进入优化审查
-[/phase-state:4-implementation]
+[phase-state:4-implementation] 当前阶段：实施 [模式：执行] Gate: 用户已审批计划 ✓ 📍
+Next: 实施完成后进入优化审查 [/phase-state:4-implementation]
 
-[phase-state:5-optimization]
-当前阶段：优化审查 [模式：优化]
-Gate: 实施已完成 ✓
-📍 Next: 审查结果整合后进入最终验收
-[/phase-state:5-optimization]
+[phase-state:5-optimization] 当前阶段：优化审查 [模式：优化] Gate: 实施已完成 ✓ 📍
+Next: 审查结果整合后进入最终验收 [/phase-state:5-optimization]
 
-[phase-state:6-final]
-当前阶段：最终验收 [模式：评审]
-Gate: 优化审查已完成 ✓
-📍 Next: 验收通过后建议提交
-[/phase-state:6-final]
+[phase-state:6-final] 当前阶段：最终验收 [模式：评审] Gate: 优化审查已完成 ✓ 📍
+Next: 验收通过后建议提交 [/phase-state:6-final]
 
 ---
 
@@ -67,7 +50,8 @@ Gate: 优化审查已完成 ✓
     - 目标明确性（0-3）、预期结果（0-3）、边界范围（0-2）、约束条件（0-2）
     - ≥7：继续 | <7：停止，提出补充问题
 
-用户确认增强后的需求后，使用 `update-requirements` 写入完整契约，再用 `checkpoint` 更新为 `1-research`，下一动作设为“启动多模型构思”。
+用户确认增强后的需求后，使用 `update-requirements` 写入完整契约，再用 `checkpoint` 更新为
+`1-research`，下一动作设为“启动多模型构思”。
 
 ### Phase 2: 多模型构思 [required]
 
@@ -95,14 +79,16 @@ TaskOutput({ task_id: "$FRONTEND_TASK_ID", block: true, timeout: 600000 })
 
 - frontend 模型失败 → 重试 2 次，间隔 5s
 - frontend 模型 3 次全败 → 按 `frontend.models` 顺序调用下一个候选模型执行同一任务
-- backend 模型执行中（5-15 分钟正常）→ 持续等待，**绝不终止**
+- backend 模型执行中（5-15 分钟正常）→ 持续等待， **绝不终止**
 - fallback 全败 → 降级为后端单模型，告知用户
 
 综合双方分析，输出方案对比（至少 2 个方案）。
 
-外部模型返回后重新 `resolve`。综合结果使用 `write-artifact` 写入 `analysis.md`，再用 `checkpoint` 更新为 `2-ideation`，下一动作设为“根据分析与 authoritative spec 撰写计划”。
+外部模型返回后重新 `resolve`。综合结果使用 `write-artifact` 写入 `analysis.md`，再用 `checkpoint` 更新为
+`2-ideation`，下一动作设为“根据分析与 authoritative spec 撰写计划”。
 
-不要创建 `context.jsonl` 或扫描 `.ccg/spec/`。子 Agent 上下文由 task snapshot 中的 requirements、artifacts 和精确 `specRefs` 提供。
+不要创建 `context.jsonl` 或扫描 `.ccg/spec/`。子 Agent 上下文由 task snapshot 中的 requirements、artifacts 和精确
+`specRefs` 提供。
 
 ### Phase 3: 详细规划 [required]
 
@@ -122,13 +108,15 @@ TaskOutput({ task_id: "$FRONTEND_TASK_ID", block: true, timeout: 600000 })
 - 测试策略
 - 风险及缓解措施
 
-按实体、版本、依赖方向和排除项逐字段核对 authoritative spec，再用 `write-artifact` 写入 `plan.md`。随后用 `checkpoint` 更新为 `3-planning`，`gate` 设为 `user_approval_required`，下一动作设为“等待用户审批计划”。
+按实体、版本、依赖方向和排除项逐字段核对 authoritative spec，再用 `write-artifact` 写入 `plan.md`。随后用 `checkpoint`
+更新为 `3-planning`，`gate` 设为 `user_approval_required`，下一动作设为“等待用户审批计划”。
 
 **⛔⛔⛔ HARD STOP — 你必须在这里停下来，向用户展示以下选项并等待回复。不可跳过，不可默认选择。⛔⛔⛔**
 
 你现在必须输出以下内容（原样输出，不是代码块示例）：
 
 ---
+
 ⛔ **计划审批 + 执行模式选择**
 
 请审批以上计划，并选择谁来写代码：
@@ -163,7 +151,7 @@ TaskOutput({ task_id: "$FRONTEND_TASK_ID", block: true, timeout: 600000 })
 
 #### Step 1: 拆分子任务
 
-从 plan.md 中提取实施步骤，按**文件归属**拆分为独立子任务：
+从 plan.md 中提取实施步骤，按 **文件归属**拆分为独立子任务：
 
 - 每个子任务有明确的文件范围（互不重叠）
 - 标注依赖关系：Layer 1（无依赖）→ Layer 2（依赖 Layer 1）
@@ -177,7 +165,7 @@ TaskOutput({ task_id: "$FRONTEND_TASK_ID", block: true, timeout: 600000 })
 TeamCreate({ team_name: "{task-id}-team", description: "CCG 实施团队" })
 ```
 
-⚠️ 只有当 TeamCreate **实际返回错误**时（Agent Teams 未启用），才可降级为自己写。**不可预判失败而跳过。**
+⚠️ 只有当 TeamCreate **实际返回错误**时（Agent Teams 未启用），才可降级为自己写。 **不可预判失败而跳过。**
 
 #### Step 3: 并行 spawn Layer 1 Builders
 
@@ -207,7 +195,8 @@ Agent({
 
 #### Step 5: 准备 Claude Code 审查
 
-收集完整 `git diff`、相关完整文件和验收标准。在 Phase 5 创建独立 Claude Code 审查 Agent。只有用户明确请求 GPT、Grok、双模型审查或 `/ccg:spec-review` 时才启动外部 reviewer。
+收集完整 `git diff`、相关完整文件和验收标准。在 Phase 5 创建独立 Claude
+Code 审查 Agent。只有用户明确请求 GPT、Grok、双模型审查或 `/ccg:spec-review` 时才启动外部 reviewer。
 
 Critical → spawn fix-dev 修复（最多 2 轮）。
 
@@ -234,7 +223,7 @@ SendMessage({ to: "dev-2", message: { type: "shutdown_request" } })
 
 Claude 作为编排者，调用当前 backend 模型并行写代码。backend 为 `claude` 时使用 Agent Teams，不启动 wrapper。
 
-**Step 1**: 从 plan.md 按**文件归属**拆分为并行子任务：
+**Step 1**: 从 plan.md 按 **文件归属**拆分为并行子任务：
 
 - **Layer 1** — 无依赖（底层模块：model/store/util/schema）→ 并行
 - **Layer 2** — 依赖 Layer 1（上层：route/middleware/controller/component）→ 串行等 Layer 1
@@ -255,7 +244,7 @@ Bash({
 拆分原则：
 
 - Layer 1 子任务数量 = plan 中无依赖的文件组数（通常 2-4 个）
-- 每个子任务的文件范围**不可重叠**
+- 每个子任务的文件范围 **不可重叠**
 - 可混合 backend（后端任务用 backend 模型，前端任务用 frontend 模型）— 在 `---TASK---` 中指定对应 `backend` 值
 
 **Step 3**: 等待完成，读取汇总报告（wrapper 自动合并所有子任务结果）
@@ -284,7 +273,8 @@ Bash({
 
 - 创建独立 Claude Code 审查 Agent，使用完整 diff、相关文件和验收标准检查正确性、安全、回归与测试缺口
 - 不调用 codeagent-wrapper 或任何外部 CLI
-- 只有用户明确请求 GPT、Grok、双模型审查或 `/ccg:spec-review` 时，才启动对应外部 review profile。外部 reviewer 使用 `--no-session-persistence`，不使用 `resume` 或 `SESSION_ID`
+- 只有用户明确请求 GPT、Grok、双模型审查或 `/ccg:spec-review` 时，才启动对应外部 review profile。外部 reviewer 使用
+  `--no-session-persistence`，不使用 `resume` 或 `SESSION_ID`
 - Lead 在收到审查结果后汇总并确认 finding
 
 **5b. 质量关卡**
@@ -303,7 +293,8 @@ Bash({
 - **Warning**：建议修复
 - **Info**：供参考
 
-每轮使用 `write-artifact` 覆盖 `review.md`，再用 `checkpoint` 把轮次、finding 数量和修复结果写入 progress。不要创建单独的状态日志。
+每轮使用 `write-artifact` 覆盖 `review.md`，再用 `checkpoint`
+把轮次、finding 数量和修复结果写入 progress。不要创建单独的状态日志。
 
 **5d. 用户决定（⛔ 必须等待）**
 
@@ -315,7 +306,7 @@ Bash({
 
 用户选择继续 →
 
-1. spawn fix-dev（**新 Agent，干净上下文**）修复 Critical/Warning
+1. spawn fix-dev（ **新 Agent，干净上下文**）修复 Critical/Warning
 2. fix-dev 完成后回到 5a 开始 Round N+1
 3. 使用 `checkpoint` 更新 progress 中的修复记录
 

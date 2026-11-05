@@ -12,8 +12,7 @@ and create delight.
 
 Use the `frontend-design` skill as the governing entry point and follow its design principles, anti-patterns, and
 **Context Gathering Protocol**. If design context is missing, ask only for the missing audience, use case, or brand
-direction. Additionally
-gather: performance constraints.
+direction. Additionally gather: performance constraints.
 
 ---
 
@@ -118,22 +117,25 @@ Use appropriate techniques for each animation:
 **Easing curves (use these, not CSS defaults):**
 
 ```css
-/* Recommended - natural deceleration */
---ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);    /* Smooth, refined */
---ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);   /* Slightly snappier */
---ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);     /* Confident, decisive */
+:root {
+  /* Recommended - natural deceleration */
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1); /* Smooth, refined */
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1); /* Slightly snappier */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1); /* Confident, decisive */
 
-/* AVOID - feel dated and tacky */
-/* bounce: cubic-bezier(0.34, 1.56, 0.64, 1); */
-/* elastic: cubic-bezier(0.68, -0.6, 0.32, 1.6); */
+  /* AVOID - feel dated and tacky */
+  /* bounce: cubic-bezier(0.34, 1.56, 0.64, 1); */
+  /* elastic: cubic-bezier(0.68, -0.6, 0.32, 1.6); */
+}
 ```
 
 **Exit animations are faster than entrances.** Use ~75% of enter duration.
 
 ### CSS Animations
 
-```css
-/* Prefer for simple, declarative animations */
+```markdown
+<!-- Prefer for simple, declarative animations -->
+
 - transitions for state changes
 - @keyframes for complex sequences
 - transform + opacity only (GPU-accelerated)
@@ -141,8 +143,9 @@ Use appropriate techniques for each animation:
 
 ### JavaScript Animation
 
-```javascript
-/* Use for complex, interactive animations */
+```markdown
+<!-- Use for complex, interactive animations -->
+
 - Web Animations API for programmatic control
 - Framer Motion for React
 - GSAP for complex sequences

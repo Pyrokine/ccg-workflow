@@ -5,11 +5,14 @@ description: Java 开发。企业级应用、Spring Boot、微服务。当用户
 
 # 📜 符箓秘典 · Java
 
+示例中的各公开类分别保存到同名 `.java` 文件，包声明、imports、Spring Boot 依赖与业务类型由目标 Java 项目提供
+
 ## Spring Boot
 
 ### 基础项目
 
 ```java
+
 @SpringBootApplication
 public class Application {
     public static void main(String[] args) {
@@ -28,8 +31,8 @@ public class UserController {
     @GetMapping("/{id}")
     public ResponseEntity<User> getUser(@PathVariable Long id) {
         return userService.findById(id)
-            .map(ResponseEntity::ok)
-            .orElse(ResponseEntity.notFound().build());
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
     }
 
     @PostMapping
@@ -63,6 +66,7 @@ public class UserService {
 @Repository
 public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByEmail(String email);
+
     List<User> findByNameContaining(String name);
 }
 ```
@@ -175,12 +179,15 @@ class UserControllerTest {
     @Autowired
     private MockMvc mockMvc;
 
+    @Autowired
+    private ObjectMapper objectMapper;
+
     @MockBean
     private UserService userService;
 
     @Test
     void shouldGetUser() throws Exception {
-        User user = new User(1L, "Alice", "alice@example.com");
+        User user = new User(1L, "Alice", "alice@example.com", null, null);
         when(userService.findById(1L)).thenReturn(Optional.of(user));
 
         mockMvc.perform(get("/api/users/1"))
@@ -194,7 +201,7 @@ class UserControllerTest {
         dto.setName("Bob");
         dto.setEmail("bob@example.com");
 
-        User user = new User(1L, "Bob", "bob@example.com");
+        User user = new User(1L, "Bob", "bob@example.com", null, null);
         when(userService.create(any())).thenReturn(user);
 
         mockMvc.perform(post("/api/users")
@@ -217,7 +224,7 @@ class UserServiceTest {
 
     @Test
     void shouldFindById() {
-        User user = new User(1L, "Alice", "alice@example.com");
+        User user = new User(1L, "Alice", "alice@example.com", null, null);
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
 
         Optional<User> result = userService.findById(1L);
@@ -276,4 +283,3 @@ myproject/
 ```
 
 ---
-

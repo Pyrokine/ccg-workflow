@@ -12,8 +12,7 @@ page = Fetcher.get(url, impersonate='chrome', timeout=30, headers=None, cookies=
 page = Fetcher.post(url, data=None, json=None, impersonate='chrome', timeout=30)
 ```
 
-**Cookie 格式**: `dict` — `{'name': 'value'}`
-**超时单位**: 秒
+**Cookie 格式**: `dict` — `{'name': 'value'}` **超时单位**: 秒
 
 ## FetcherSession（保持会话 cookie）
 
@@ -43,8 +42,7 @@ page = StealthyFetcher.fetch(
 )
 ```
 
-**Cookie 格式**: `list[dict]` — `[{'name': 'n', 'value': 'v', 'domain': '.site.com', 'path': '/'}]`
-**超时单位**: 毫秒
+**Cookie 格式**: `list[dict]` — `[{'name': 'n', 'value': 'v', 'domain': '.site.com', 'path': '/'}]` **超时单位**: 毫秒
 
 ## DynamicFetcher（Playwright，JS 渲染）
 
@@ -62,8 +60,7 @@ page = DynamicFetcher.fetch(
 )
 ```
 
-**Cookie 格式**: `list[dict]`
-**超时单位**: 毫秒
+**Cookie 格式**: `list[dict]` **超时单位**: 毫秒
 
 ## Selector（纯 HTML 解析，无网络请求）
 

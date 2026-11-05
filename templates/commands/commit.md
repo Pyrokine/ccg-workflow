@@ -14,15 +14,15 @@ description: '智能 Git 提交：分析改动生成 Conventional Commit 信息�
 
 ## 选项
 
-| 选项                | 说明          |
-|-------------------|-------------|
+| 选项              | 说明            |
+|-------------------|-----------------|
 | `--no-verify`     | 跳过 Git 钩子   |
-| `--all`           | 暂存所有改动      |
-| `--amend`         | 修补上次提交      |
+| `--all`           | 暂存所有改动    |
+| `--amend`         | 修补上次提交    |
 | `--signoff`       | 附加签名        |
 | `--emoji`         | 包含 emoji 前缀 |
-| `--scope <scope>` | 指定作用域       |
-| `--type <type>`   | 指定提交类型      |
+| `--scope <scope>` | 指定作用域      |
+| `--type <type>`   | 指定提交类型    |
 
 ---
 
@@ -88,8 +88,8 @@ description: '智能 Git 提交：分析改动生成 Conventional Commit 信息�
     - `bugs`：若 commit type 为 `fix`，从 diff 中提取 bug 症状、根因、修复方式
     - `changes.files`：从 `git diff --cached --name-only` 提取
     - `tests`：若变更包含测试文件，记录测试相关信息
-4. **合并 session.log**（可选）：若 `.context/current/branches/<branch>/session.log` 存在且非空，将其中的手动记录合并到
-   decisions/bugs 中，然后清空 session.log
+4. **合并 session.log**（可选）：若 `.context/current/branches/<branch>/session.log`
+   存在且非空，将其中的手动记录合并到 decisions/bugs 中，然后清空 session.log
 5. **脱敏**：扫描 token/key/password/secret 模式 → 替换为 `[REDACTED]`
 6. **追加**：将 ContextEntry 作为一行追加到 `.context/history/commits.jsonl`
 7. **重生成**：更新 `.context/history/commits.md` 人类视图
@@ -112,18 +112,18 @@ git commit [-S] [--no-verify] [-s] -F .git/COMMIT_EDITMSG
 
 ## Type 与 Emoji 映射
 
-| Emoji | Type       | 说明    |
-|-------|------------|-------|
-| ✨     | `feat`     | 新增功能  |
+| Emoji | Type       | 说明      |
+|-------|------------|-----------|
+| ✨    | `feat`     | 新增功能  |
 | 🐛    | `fix`      | 缺陷修复  |
 | 📝    | `docs`     | 文档更新  |
 | 🎨    | `style`    | 代码格式  |
-| ♻️    | `refactor` | 重构    |
+| ♻️    | `refactor` | 重构      |
 | ⚡️    | `perf`     | 性能优化  |
-| ✅     | `test`     | 测试相关  |
+| ✅    | `test`     | 测试相关  |
 | 🔧    | `chore`    | 构建/工具 |
-| 👷    | `ci`       | CI/CD |
-| ⏪️    | `revert`   | 回滚    |
+| 👷    | `ci`       | CI/CD     |
+| ⏪️    | `revert`   | 回滚      |
 
 ---
 

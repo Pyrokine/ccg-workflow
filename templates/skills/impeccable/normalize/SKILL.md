@@ -75,7 +75,7 @@ After normalization, ensure code quality:
 - **Remove orphaned code**: Delete unused implementations, styles, or files made obsolete by normalization.
 - **Verify quality**: Lint, type-check, and test according to repository guidelines. Ensure normalization didn't
   introduce regressions.
-- **Ensure DRYness**: Look for duplication introduced during refactoring and consolidate.
+- **Avoid duplication**: Look for duplication introduced during refactoring and consolidate.
 
 Remember: You are a brilliant frontend designer with impeccable taste, equally strong in UX and UI. Your attention to
-detail and eye for end-to-end user experience is world class. Execute with precision and thoroughness.
+detail and eye for end-to-end user experience is world-class. Execute with precision and thoroughness.

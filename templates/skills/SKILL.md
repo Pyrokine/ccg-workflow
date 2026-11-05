@@ -38,15 +38,19 @@ skills/
 
 **Mandatory quality checkpoints to ensure deliverable standards.**
 
-| Skill              | Trigger                                     | Description                                   |
-|--------------------|---------------------------------------------|-----------------------------------------------|
+| Skill                  | Trigger                                     | Description                                   |
+|------------------------|---------------------------------------------|-----------------------------------------------|
 | `/ccg:verify-module`   | New module completed                        | Module structure & documentation completeness |
 | `/ccg:verify-security` | New module / security changes / refactoring | Security vulnerability scanning               |
 | `/ccg:verify-change`   | Design-level changes / refactoring          | Document sync & change impact analysis        |
 | `/ccg:verify-quality`  | Complex modules / refactoring               | Code quality metrics checking                 |
 | `/ccg:gen-docs`        | New module created                          | README.md & DESIGN.md skeleton generator      |
 
-Language checks use the target project's ESLint and TypeScript, Ruff, clang-tidy, Go vet, or Cargo/Clippy. Native file inventories determine coverage; platform or cfg exclusions remain incomplete. Go and Rust run offline with temporary build output, and require existing project metadata and cached dependencies. C/C++ security rules cover credentials, dynamic shell commands, and unbounded input. Related documentation is checked in the selected Git mode even when it is outside the requested source paths.
+Language checks use the target project's ESLint and TypeScript, Ruff, clang-tidy, Go vet, or Cargo/Clippy. Native file
+inventories determine coverage; platform or cfg exclusions remain incomplete. Go and Rust run offline with temporary
+build output, and require existing project metadata and cached dependencies. C/C++ security rules cover credentials,
+dynamic shell commands, and unbounded input. Related documentation is checked in the selected Git mode even when it is
+outside the requested source paths.
 
 ### Auto-trigger Rules
 
@@ -67,6 +71,7 @@ node ~/.claude/skills/ccg/run_skill.js <skill-name> [args...]
 node ~/.claude/skills/ccg/run_skill.js verify-security ./src
 node ~/.claude/skills/ccg/run_skill.js verify-quality ./src -v
 node ~/.claude/skills/ccg/run_skill.js verify-change --mode staged
+node ~/.claude/skills/ccg/run_skill.js verify-change src --mode committed --base v1 --target-ref v2
 node ~/.claude/skills/ccg/run_skill.js verify-module ./my-module
 node ~/.claude/skills/ccg/run_skill.js gen-docs ./new-module --force
 ```
@@ -91,5 +96,5 @@ Provides:
 
 ## Installed by CCG
 
-These skills are automatically installed during `npx ccg-workflow` initialization.
-To update: run `npx ccg-workflow update` or `npx ccg-workflow` again.
+These skills are automatically installed during `npx ccg-workflow` initialization. To update: run
+`npx ccg-workflow update` or `npx ccg-workflow` again.

@@ -1,12 +1,12 @@
-import fs from 'node:fs/promises'
+import inquirer from 'inquirer'
 import { execFileSync } from 'node:child_process'
+import fs from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { activateNativeSkills, generateNativeSkillRules } from '../skill-activation'
+import { manageSkillsMenu, runSkillsCommand } from '../../commands/skills'
 import { injectHookConfig } from '../installer-template'
-import { runSkillsCommand, manageSkillsMenu } from '../../commands/skills'
-import inquirer from 'inquirer'
+import { activateNativeSkills, generateNativeSkillRules } from '../skill-activation'
 
 const state = vi.hoisted(() => ({
   home: '/uninitialized-ccg-fixture',
@@ -63,8 +63,9 @@ beforeEach(async () => {
     ) + '\n// USER_CUSTOM_HOOK: keep this entire body unchanged.\n'
   await fs.writeFile(hookPath, original)
   customRule = 'CUSTOM: Always preserve my comments.\nLegacy: load ~/.claude/skills/ccg/domains/development/python.md\n'
-  for (const file of ['ccg-skills.md', 'ccg-skill-routing.md'])
+  for (const file of ['ccg-skills.md', 'ccg-skill-routing.md']) {
     await fs.writeFile(join(installDir, 'rules', file), customRule)
+  }
   vi.spyOn(console, 'log').mockImplementation(() => {})
 })
 afterEach(async () => {

@@ -2,14 +2,16 @@
 
 ## Color Spaces: Use OKLCH
 
-**Stop using HSL.** Use OKLCH (or LCH) instead. It's perceptually uniform, meaning equal steps in lightness *look*
+**Stop using HSL.** Use OKLCH (or LCH) instead. It's perceptually uniform, meaning equal steps in lightness _look_
 equal—unlike HSL where 50% lightness in yellow looks bright while 50% in blue looks dark.
 
 ```css
-/* OKLCH: lightness (0-100%), chroma (0-0.4+), hue (0-360) */
---color-primary: oklch(60% 0.15 250);      /* Blue */
---color-primary-light: oklch(85% 0.08 250); /* Same hue, lighter */
---color-primary-dark: oklch(35% 0.12 250);  /* Same hue, darker */
+:root {
+  /* OKLCH: lightness (0-100%), chroma (0-0.4+), hue (0-360) */
+  --color-primary: oklch(60% 0.15 250); /* Blue */
+  --color-primary-light: oklch(85% 0.08 250); /* Same hue, lighter */
+  --color-primary-dark: oklch(35% 0.12 250); /* Same hue, darker */
+}
 ```
 
 **Key insight**: As you move toward white or black, reduce chroma (saturation). High chroma at extreme lightness looks
@@ -22,17 +24,19 @@ garish. A light blue at 85% lightness needs ~0.08 chroma, not the 0.15 of your b
 **Pure gray is dead.** Add a subtle hint of your brand hue to all neutrals:
 
 ```css
-/* Dead grays */
---gray-100: oklch(95% 0 0);     /* No personality */
---gray-900: oklch(15% 0 0);
+:root {
+  /* Dead grays */
+  --gray-100: oklch(95% 0 0); /* No personality */
+  --gray-900: oklch(15% 0 0);
 
-/* Warm-tinted grays (add brand warmth) */
---gray-100: oklch(95% 0.01 60);  /* Hint of warmth */
---gray-900: oklch(15% 0.01 60);
+  /* Warm-tinted grays (add brand warmth) */
+  --gray-100: oklch(95% 0.01 60); /* Hint of warmth */
+  --gray-900: oklch(15% 0.01 60);
 
-/* Cool-tinted grays (tech, professional) */
---gray-100: oklch(95% 0.01 250); /* Hint of blue */
---gray-900: oklch(15% 0.01 250);
+  /* Cool-tinted grays (tech, professional) */
+  --gray-100: oklch(95% 0.01 250); /* Hint of blue */
+  --gray-900: oklch(15% 0.01 250);
+}
 ```
 
 The chroma is tiny (0.01) but perceptible. It creates subconscious cohesion between your brand color and your UI.
@@ -59,7 +63,7 @@ This rule is about **visual weight**, not pixel count:
 - **30%**: Secondary colors—text, borders, inactive states
 - **10%**: Accent—CTAs, highlights, focus states
 
-The common mistake: using the accent color everywhere because it's "the brand color." Accent colors work *because*
+The common mistake: using the accent color everywhere because it's "the brand color." Accent colors work _because_
 they're rare. Overuse kills their power.
 
 ## Contrast & Accessibility
@@ -116,13 +120,13 @@ You can't just swap colors. Dark mode requires different design decisions:
 
 ```css
 /* Dark mode depth via surface color, not shadow */
-:root[data-theme="dark"] {
+:root[data-theme='dark'] {
   --surface-1: oklch(15% 0.01 250);
-  --surface-2: oklch(20% 0.01 250);  /* "Higher" = lighter */
+  --surface-2: oklch(20% 0.01 250); /* "Higher" = lighter */
   --surface-3: oklch(25% 0.01 250);
 
   /* Reduce text weight slightly */
-  --body-weight: 350;  /* Instead of 400 */
+  --body-weight: 350; /* Instead of 400 */
 }
 ```
 

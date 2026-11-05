@@ -12,7 +12,7 @@ export type ClaudeSettings = {
 /**
  * Auto-approve codeagent-wrapper Bash commands in settings.json.
  *
- * All platforms use permissions.allow with wildcard pattern (v1.7.89+).
+ * All platforms use `permissions.allow` with a wildcard pattern (v1.7.89+).
  * Old Hook-based approach and old permission entries are automatically cleaned up.
  */
 export async function installHook(settingsPath: string): Promise<'permission'> {
@@ -35,8 +35,12 @@ export async function installHook(settingsPath: string): Promise<'permission'> {
   }
 
   // Add permissions.allow entry
-  if (!settings.permissions) settings.permissions = {}
-  if (!settings.permissions.allow) settings.permissions.allow = []
+  if (!settings.permissions) {
+    settings.permissions = {}
+  }
+  if (!settings.permissions.allow) {
+    settings.permissions.allow = []
+  }
 
   const permEntry = 'Bash(*codeagent-wrapper*)'
   if (!settings.permissions.allow.includes(permEntry)) {
@@ -48,7 +52,9 @@ export async function installHook(settingsPath: string): Promise<'permission'> {
 }
 
 export function configureApiDefaults(settings: ClaudeSettings): void {
-  if (!settings.env) settings.env = {}
+  if (!settings.env) {
+    settings.env = {}
+  }
   // Default optimization config
   settings.env.DISABLE_TELEMETRY = '1'
   settings.env.DISABLE_ERROR_REPORTING = '1'
@@ -56,8 +62,12 @@ export function configureApiDefaults(settings: ClaudeSettings): void {
   settings.env.CLAUDE_CODE_ATTRIBUTION_HEADER = '0'
   settings.env.MCP_TIMEOUT = '60000'
   // codeagent-wrapper permission allowlist
-  if (!settings.permissions) settings.permissions = {}
-  if (!settings.permissions.allow) settings.permissions.allow = []
+  if (!settings.permissions) {
+    settings.permissions = {}
+  }
+  if (!settings.permissions.allow) {
+    settings.permissions.allow = []
+  }
   const wrapperPerms = [
     'Bash(~/.claude/bin/codeagent-wrapper --backend antigravity*)',
     'Bash(~/.claude/bin/codeagent-wrapper --backend agy*)',
@@ -68,7 +78,9 @@ export function configureApiDefaults(settings: ClaudeSettings): void {
     'Bash(~/.claude/bin/codeagent-wrapper --backend opencode*)',
   ]
   for (const perm of wrapperPerms) {
-    if (!settings.permissions.allow.includes(perm)) settings.permissions.allow.push(perm)
+    if (!settings.permissions.allow.includes(perm)) {
+      settings.permissions.allow.push(perm)
+    }
   }
 }
 
@@ -81,8 +93,12 @@ function removeLegacyWrapperHook(settings: ClaudeSettings): void {
     if (hookIdx >= 0) {
       settings.hooks.PreToolUse.splice(hookIdx, 1)
       // Clean up empty arrays/objects
-      if (settings.hooks.PreToolUse.length === 0) delete settings.hooks.PreToolUse
-      if (settings.hooks && Object.keys(settings.hooks).length === 0) delete settings.hooks
+      if (settings.hooks.PreToolUse.length === 0) {
+        delete settings.hooks.PreToolUse
+      }
+      if (settings.hooks && Object.keys(settings.hooks).length === 0) {
+        delete settings.hooks
+      }
     }
   }
 }

@@ -4,9 +4,9 @@ import type { InstallContext } from './installer-context'
 import { getAllCommandIds } from './installer-data'
 import { copyMdTemplates } from './installer-files'
 import { replaceHomePathsInTemplate } from './installer-template'
-import { collectSkills, installSkillCommands } from './skill-registry'
-import { installedNames, removeSkills, syncSkills } from './skill-manager'
 import { activateNativeSkills } from './skill-activation'
+import { installedNames, removeSkills, syncSkills } from './skill-manager'
+import { collectSkills, installSkillCommands } from './skill-registry'
 
 /**
  * Recursively collect skill names (directories containing SKILL.md, excludes root).
@@ -37,7 +37,9 @@ export async function collectSkillNames(dir: string, depth = 0): Promise<string[
  * Remove a directory and collect .md file stems. Returns [] if dir doesn't exist.
  */
 export async function removeDirCollectMdNames(dir: string): Promise<string[]> {
-  if (!(await fs.pathExists(dir))) return []
+  if (!(await fs.pathExists(dir))) {
+    return []
+  }
   const files = await fs.readdir(dir)
   const names = files.filter((f) => f.endsWith('.md')).map((f) => f.replace('.md', ''))
   await fs.remove(dir)
@@ -67,7 +69,9 @@ export async function installSkillFiles(ctx: InstallContext): Promise<void> {
     }
     if (ctx.config.skillsMode === 'legacy') {
       const selected = await installedNames(nativeOptions)
-      if (selected.length) await removeSkills(selected, nativeOptions)
+      if (selected.length) {
+        await removeSkills(selected, nativeOptions)
+      }
     }
     if (ctx.config.skillsProfile !== undefined) {
       const selected = await syncSkills({
@@ -125,7 +129,7 @@ async function replacePathsInDir(ctx: InstallContext, dir: string): Promise<void
 
 async function copyLegacySkills(ctx: InstallContext, skillsTemplateDir: string, skillsDestDir: string): Promise<void> {
   // Recursive copy: preserves full directory tree
-  // Always overwrite to ensure fresh install gets all files
+  // Always overwrite to ensure fresh installation gets all files
   await fs.copy(skillsTemplateDir, skillsDestDir, {
     overwrite: true,
     errorOnExist: false,
@@ -160,7 +164,9 @@ async function removeRetiredImpeccableCommands(skillsTemplateDir: string, comman
   )
   for (const skill of retired) {
     const commandPath = join(commandsDir, `${skill.name}.md`)
-    if (!(await fs.pathExists(commandPath))) continue
+    if (!(await fs.pathExists(commandPath))) {
+      continue
+    }
 
     const content = (await fs.readFile(commandPath, 'utf-8')).replaceAll('\\', '/')
     const relPath = skill.relPath.replaceAll('\\', '/')
@@ -175,15 +181,19 @@ async function removeRetiredImpeccableCommands(skillsTemplateDir: string, comman
  *
  * Scans templates/skills/ for SKILL.md files with `user-invocable: true` frontmatter,
  * then generates ~/.claude/commands/ccg/{name}.md for each — SKIPPING any name that
- * already exists in installer-data.ts to avoid conflicts with complex multi-model commands.
+ * already exists in installer-data.ts to avoid conflicts with complex commands that use several models.
  */
 export async function installSkillGeneratedCommands(ctx: InstallContext): Promise<void> {
-  if (ctx.config.skillsProfile !== undefined) return
+  if (ctx.config.skillsProfile !== undefined) {
+    return
+  }
   const skillsTemplateDir = join(ctx.templateDir, 'skills')
   const skillsInstallDir = join(ctx.installDir, 'skills', 'ccg')
   const commandsDir = join(ctx.installDir, 'commands', 'ccg')
 
-  if (!(await fs.pathExists(skillsTemplateDir))) return
+  if (!(await fs.pathExists(skillsTemplateDir))) {
+    return
+  }
 
   try {
     await removeRetiredImpeccableCommands(skillsTemplateDir, commandsDir)
@@ -219,12 +229,16 @@ export async function installRuleFiles(ctx: InstallContext): Promise<void> {
   try {
     if (ctx.config.skillsProfile !== undefined) {
       const notes = await activateNativeSkills({ installDir: ctx.installDir, names: ctx.config.skillsProfile })
-      if (notes.length) throw new Error(notes.join('\n'))
+      if (notes.length) {
+        throw new Error(notes.join('\n'))
+      }
       ctx.result.installedRules = true
       return
     }
     const installed = await copyMdTemplates(ctx, join(ctx.templateDir, 'rules'), join(ctx.installDir, 'rules'))
-    if (installed.length > 0) ctx.result.installedRules = true
+    if (installed.length > 0) {
+      ctx.result.installedRules = true
+    }
   } catch (error) {
     ctx.result.errors.push(`Failed to install rules: ${error}`)
   }

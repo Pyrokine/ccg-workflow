@@ -13,8 +13,8 @@ const SECURITY_RULES = [
     id: 'SQL_INJECTION_DYNAMIC', category: '注入',
     severity: 'critical',
     pattern: new RegExp(
-      '\\b(execute|query|raw)\\s*\\(\\s*' +
-      '(f["\']|["\'][^"\'\\n]*["\']\\s*\\+\\s*|["\'][^"\'\\n]*["\']\\s*%\\s*[^,)]|["\'][^"\'\\n]*["\']' +
+      '\\b(?:execute|query|raw)\\s*\\(\\s*' +
+      '(?:f["\']|["\'][^"\'\\n]*["\']\\s*\\+\\s*|["\'][^"\'\\n]*["\']\\s*%\\s*[^,)]|["\'][^"\'\\n]*["\']' +
       '\\.format\\s*\\()', 'i'),
     extensions: ['.py', '.js', '.ts', '.go', '.java', '.php'],
     message: '可能存在 SQL 注入风险',
@@ -23,7 +23,7 @@ const SECURITY_RULES = [
   {
     id: 'SQL_INJECTION_FSTRING', category: '注入',
     severity: 'critical',
-    pattern: /cursor\.(execute|executemany)\s*\(\s*f["']/i,
+    pattern: /cursor\.(?:execute|executemany)\s*\(\s*f["']/i,
     extensions: ['.py'],
     message: '使用 f-string 构造 SQL 语句',
     recommendation: '使用参数化查询',
@@ -31,7 +31,7 @@ const SECURITY_RULES = [
   {
     id: 'COMMAND_INJECTION', category: '注入',
     severity: 'critical',
-    pattern: /(os\.system|os\.popen|subprocess\.call|subprocess\.run|subprocess\.Popen)\s*\([^)]*shell\s*=\s*True/i,
+    pattern: /(?:os\.system|os\.popen|subprocess\.call|subprocess\.run|subprocess\.Popen)\s*\([^)]*shell\s*=\s*True/i,
     extensions: ['.py'],
     message: '使用 shell=True 可能导致命令注入',
     recommendation: '避免 shell=True，使用列表参数',
@@ -39,7 +39,7 @@ const SECURITY_RULES = [
   {
     id: 'COMMAND_INJECTION_EVAL', category: '注入',
     severity: 'critical',
-    pattern: /\b(eval|exec)\s*\([^)]*\b(input|request|argv|args)/i,
+    pattern: /\b(?:eval|exec)\s*\([^)]*\b(?:input|request|argv|args)/i,
     extensions: ['.py'],
     message: 'eval/exec 执行用户输入',
     recommendation: '避免对用户输入使用 eval/exec',
@@ -50,7 +50,7 @@ const SECURITY_RULES = [
     pattern: new RegExp(
       String.raw`(?<!\w)(password|passwd|pwd|secret|api_key|apikey|token|auth_token)` +
       String.raw`\s*(?:\[\s*\d*\s*\])?\s*(?::\s*&?(?:str|String)\s*)?=\s*["'][^"']{8,}["']`, 'i'),
-    excludePattern: /(example|placeholder|changeme|xxx|your[_-]|TODO|FIXME|<.*>|\*{3,})/i,
+    excludePattern: /(?:example|placeholder|changeme|xxx|your[_-]|TODO|FIXME|<.*>|\*{3,})/i,
     extensions: [
       '.py', '.js', '.ts', '.go', '.java', '.php',
       '.rb', '.rs', '.sh', '.bash', '.yaml', '.yml', '.json', '.env', ...CPP_EXTENSIONS,
@@ -69,7 +69,7 @@ const SECURITY_RULES = [
   {
     id: 'HARDCODED_PRIVATE_KEY', category: '敏感信息',
     severity: 'critical',
-    pattern: /-----BEGIN (RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----/,
+    pattern: /-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----/,
     extensions: ['*'],
     message: '发现私钥',
     recommendation: '私钥不应提交到代码库',
@@ -100,7 +100,7 @@ const SECURITY_RULES = [
   {
     id: 'WEAK_CRYPTO_MD5', category: '加密',
     severity: 'medium',
-    pattern: /\b(md5|MD5)\s*\(|hashlib\.md5\s*\(/i,
+    pattern: /\b(?:md5|MD5)\s*\(|hashlib\.md5\s*\(/i,
     extensions: ['.py', '.js', '.ts', '.go', '.java', '.php'],
     message: '使用弱哈希算法 MD5',
     recommendation: '使用 bcrypt/argon2 或 SHA-256+',
@@ -108,7 +108,7 @@ const SECURITY_RULES = [
   {
     id: 'WEAK_CRYPTO_SHA1', category: '加密',
     severity: 'low',
-    pattern: /\b(sha1|SHA1)\s*\(|hashlib\.sha1\s*\(/i,
+    pattern: /\b(?:sha1|SHA1)\s*\(|hashlib\.sha1\s*\(/i,
     extensions: ['.py', '.js', '.ts', '.go', '.java', '.php'],
     message: '使用弱哈希算法 SHA1',
     recommendation: '使用 SHA-256 或更强的算法',
@@ -117,7 +117,7 @@ const SECURITY_RULES = [
     id: 'PATH_TRAVERSAL', category: '路径遍历',
     severity: 'high',
     pattern: new RegExp(
-      '(open|read|write|os\\.path\\.join)\\s*\\([^\\n]*' +
+      '\\b(open|read|write|os\\.path\\.join)\\s*\\([^\\n]*' +
       '(request|input|argv|args|params|query|form|path_param)\\b', 'i'),
     extensions: ['.py'],
     message: '可能存在路径遍历风险',
@@ -163,7 +163,7 @@ const SECURITY_RULES = [
   },
   {
     id: 'C_UNBOUNDED_SCANF', category: '输入', severity: 'high',
-    pattern: /(?<![\w.])(?:scanf|wscanf)\s*\(\s*L?"((?:\\.|[^"\\])*)"/,
+    pattern: /(?<![\w.])(?:scanf|wscanf)\s*\(\s*L?"(?<format>(?:\\.|[^"\\])*)"/,
     extensions: CPP_EXTENSIONS,
     codePrefix: true,
     unboundedFormat: true,
@@ -208,14 +208,14 @@ const SECURITY_RULES = [
   {
     id: 'INSECURE_RANDOM', category: '加密',
     severity: 'medium',
-    pattern: /\brandom\.(random|randint|choice|shuffle)\s*\(/i,
+    pattern: /\brandom\.(?:random|randint|choice|shuffle)\s*\(/i,
     extensions: ['.py'],
     message: '使用不安全的随机数生成器',
     recommendation: '安全场景使用 secrets 模块',
   },
   {
     id: 'XXE', category: 'XXE', severity: 'high',
-    pattern: /etree\.(parse|fromstring)\s*\([^)]*\)|xml\.dom\.minidom\.parse/i,
+    pattern: /etree\.(?:parse|fromstring)\s*\([^)]*\)|xml\.dom\.minidom\.parse/i,
     extensions: ['.py'],
     message: 'XML 解析可能存在 XXE 风险',
     recommendation: '禁用外部实体: XMLParser(resolve_entities=False)',
@@ -264,12 +264,16 @@ const DEFAULT_EXCLUDES = [
 ];
 
 function ruleLineIgnored(line, cpp) {
-  if (!cpp && /^(?:#|\/\/|\*|\/\*)/u.test(line.trim())) return true;
-  return /^\s*(id|pattern|severity|message|recommendation|extensions|excludePattern|category)\s*:/.test(line);
+  if (!cpp && /^(?:#|\/\/|\*|\/\*)/u.test(line.trim())) {
+    return true;
+  }
+  return /^\s*(?:id|pattern|severity|message|recommendation|extensions|excludePattern|category)\s*:/.test(line);
 }
 
 function ruleExcluded(rule, line) {
-  if (!rule.excludePattern) return false;
+  if (!rule.excludePattern) {
+    return false;
+  }
   const excluded = rule.excludePattern.test(line);
   rule.excludePattern.lastIndex = 0;
   return excluded;
@@ -287,7 +291,7 @@ function executableLines(content, python) {
   }
   // 保留表达式前缀，区分作为值的正则与除法后的可执行语句
   const prefix =
-    String.raw`(^|[=(:,;!?&|^~%*<>{\[]|(?<!\+)\+(?!\+)|(?<!-)-(?!-)|` +
+    String.raw`(?<prefix>^|[=(:,;!?&|^~%*<>{\[]|(?<!\+)\+(?!\+)|(?<!-)-(?!-)|` +
     String.raw`(?<![\w.$])\b(?:return|throw|yield|case|else|do)\b)`;
   const spacing = String.raw`(?:\s|/\*[\s\S]*?\*/|//[^\n]*(?:\n|$))*`;
   const expression = String.raw`/(?![/*])(?:\\[^\r\n]|\[(?:\\[^\r\n]|[^\]\\\r\n])*\]|[^/\\[\r\n])+/[dgimsuvy]*`;
@@ -306,7 +310,7 @@ function cppSource(content) {
   const blank = (text) => text.replace(/[^\r\n]/gu, ' ');
   const tokens = new RegExp(
     [
-      String.raw`R"([^ ()\\\t\r\n]{0,16})\([\s\S]*?\)\1"`,
+      String.raw`R"(?<delimiter>[^ ()\\\t\r\n]{0,16})\([\s\S]*?\)\k<delimiter>"`,
       String.raw`//[^\n]*|/\*[\s\S]*?(?:\*/|$)`,
       String.raw`"(?:\\[\s\S]|[^"\\])*"|'(?:\\[\s\S]|[^'\\])*'`,
     ].join('|'),
@@ -320,8 +324,12 @@ function cppSource(content) {
 
 function scanSource(filePath, content) {
   let ext = sourceExtension(filePath, content);
-  if (['.mjs', '.cjs', '.jsx'].includes(ext)) ext = '.js';
-  if (['.mts', '.cts', '.tsx'].includes(ext)) ext = '.ts';
+  if (['.mjs', '.cjs', '.jsx'].includes(ext)) {
+    ext = '.js';
+  }
+  if (['.mts', '.cts', '.tsx'].includes(ext)) {
+    ext = '.ts';
+  }
   const cpp = CPP_EXTENSIONS.includes(ext);
   const testPattern =
     /(?:^|\/)(?:tests?|__tests__|specs?)(?:\/|$)|(?:^|\/)(?:test|spec)[_.][^/]+$|[._](?:test|spec)\.[^/]+$/i;
@@ -335,19 +343,28 @@ function scanSource(filePath, content) {
 }
 
 function unboundedFormat(format) {
-  const conversions = /%(?:%|(?:\d+\$)?(\*)?(\d+)?(?:hh|ll|[hljztL])?([a-zA-Z]|\[))/gu;
+  const conversions =
+    /%(?:%|(?:\d+\$)?(?<suppressed>\*)?(?<width>\d+)?(?:hh|ll|[hljztL])?(?<conversion>[a-zA-Z]|\[))/gu;
   return [...format.matchAll(conversions)].some(
     (match) => !match[1] && (!match[2] || Number(match[2]) === 0) && ['s', '['].includes(match[3])
   );
 }
 
 function matchRule(rule, line, code, cpp) {
-  if (ruleLineIgnored(line, cpp)) return null;
+  if (ruleLineIgnored(line, cpp)) {
+    return null;
+  }
   const match = rule.pattern.exec(rule.codeOnly ? code : line);
   rule.pattern.lastIndex = 0;
-  if (!match || ruleExcluded(rule, line)) return null;
-  if (codeMatchRequired(rule, cpp) && !code.slice(match.index, match.index + match[0].length).trim()) return null;
-  if (rule.unboundedFormat && !unboundedFormat(match[1])) return null;
+  if (!match || ruleExcluded(rule, line)) {
+    return null;
+  }
+  if (codeMatchRequired(rule, cpp) && !code.slice(match.index, match.index + match[0].length).trim()) {
+    return null;
+  }
+  if (rule.unboundedFormat && !unboundedFormat(match[1])) {
+    return null;
+  }
   return match;
 }
 
@@ -373,10 +390,14 @@ function scanFile(filePath, rules, content = fs.readFileSync(filePath, 'utf-8'))
   const findings = [];
   const source = scanSource(filePath, content);
   for (const rule of rules) {
-    if (!rule.extensions.includes('*') && !rule.extensions.includes(source.ext)) continue;
+    if (!rule.extensions.includes('*') && !rule.extensions.includes(source.ext)) {
+      continue;
+    }
     for (const [index, line] of source.lines.entries()) {
       const match = matchRule(rule, line, source.executable[index], source.cpp);
-      if (match) findings.push(securityFinding(rule, { filePath, index }, source, match));
+      if (match) {
+        findings.push(securityFinding(rule, { filePath, index }, source, match));
+      }
     }
   }
   return findings;
@@ -426,6 +447,7 @@ function scanDirectory(targets, excludeDirs, base) {
     scan_errors: selected.errors,
     complete,
     files_scanned: filesScanned,
+    supported_file_types: [...CODE_EXTENSIONS, 'shell-shebang'].sort(),
     baseline: compared.baseline,
     origin_counts: compared.origin_counts,
     passed,
@@ -438,6 +460,8 @@ function formatReport(result, verbose) {
   const fields = {
     扫描路径: result.scan_path,
     扫描文件: result.files_scanned,
+    检查范围: '支持文件类型的模式规则',
+    支持类型: result.supported_file_types.join(', '),
     比较基线: reportBaselines(result.baseline, result.requested_paths),
     分析完整性: result.complete ? '完整' : '未完成',
     未分析: result.scan_errors.map((error) => error.path + ': ' + error.message).join('\n') || '无',
@@ -455,7 +479,9 @@ function main() {
     console.log('Usage: security_scanner.js [paths...] [--base ref] [-v] [--json] [--exclude dirs...]');
     return;
   }
-  if (opts.mode) throw new Error('--mode is only supported by verify-change');
+  if (opts.mode) {
+    throw new Error('--mode is only supported by verify-change');
+  }
   const verbose = opts.verbose;
   const jsonOut = opts.json;
   const excludeDirs = [...DEFAULT_EXCLUDES, ...opts.exclude];
@@ -468,6 +494,7 @@ function main() {
           scan_path: result.scan_path,
           requested_paths: result.requested_paths,
           coverage: result.coverage,
+          supported_file_types: result.supported_file_types,
           scan_errors: result.scan_errors,
           complete: result.complete,
           files_scanned: result.files_scanned,
@@ -487,6 +514,10 @@ function main() {
   process.exitCode = !result.complete ? 2 : result.passed ? 0 : 1;
 }
 
-if (require.main === module) runCli(main);
+if (require.main === module) {
+  runCli(main);
+}
 
-module.exports = { scanFile, SECURITY_RULES };
+module.exports = {
+  SECURITY_RULES,
+};

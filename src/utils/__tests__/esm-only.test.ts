@@ -19,7 +19,7 @@
  * which several modules here correctly do, under those very names.
  */
 
-import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'pathe'
 import { describe, expect, it } from 'vitest'
 import { PACKAGE_ROOT } from '../installer-template'
@@ -30,7 +30,9 @@ function sourceFiles(dir: string): string[] {
   for (const entry of readdirSync(dir)) {
     const path = join(dir, entry)
     if (statSync(path).isDirectory()) {
-      if (entry !== '__tests__') found.push(...sourceFiles(path))
+      if (entry !== '__tests__') {
+        found.push(...sourceFiles(path))
+      }
     } else if (entry.endsWith('.ts')) {
       found.push(path)
     }
@@ -76,7 +78,9 @@ describe('the CLI bundle stays pure ESM', () => {
     for (const path of files) {
       const body = code(path)
       for (const name of ['__dirname', '__filename']) {
-        if (!body.includes(name)) continue
+        if (!body.includes(name)) {
+          continue
+        }
         expect(
           new RegExp(`(?:const|let|var)\\s+${name}\\s*=`).test(body),
           `${path.slice(PACKAGE_ROOT.length)} uses ${name} without deriving it from import.meta.url`

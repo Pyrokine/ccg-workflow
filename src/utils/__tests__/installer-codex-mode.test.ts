@@ -1,11 +1,11 @@
-import { homedir } from 'node:os'
 import fs from 'fs-extra'
+import { spawnSync } from 'node:child_process'
+import { homedir } from 'node:os'
 import { join } from 'pathe'
 import { parse as parseToml } from 'smol-toml'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installCodexMode, uninstallCodexMode } from '../installer'
-import { spawnSync } from 'node:child_process'
-import { TASK_STATE_RUNTIME_FILES, type CodexModeManifest } from '../installer-codex-files'
+import { type CodexModeManifest, TASK_STATE_RUNTIME_FILES } from '../installer-codex-files'
 import { parseCodexModeManifest } from '../installer-codex-manifest'
 
 vi.mock('node:os', async (importOriginal) => {
@@ -66,8 +66,12 @@ function countManagedMarkers(content: string): { starts: number; ends: number } 
 }
 
 function countCcgHooks(value: unknown): number {
-  if (Array.isArray(value)) return value.reduce((total, item) => total + countCcgHooks(item), 0)
-  if (!value || typeof value !== 'object') return 0
+  if (Array.isArray(value)) {
+    return value.reduce((total, item) => total + countCcgHooks(item), 0)
+  }
+  if (!value || typeof value !== 'object') {
+    return 0
+  }
   const record = value as JsonRecord
   const command = typeof record.command === 'string' ? record.command.replace(/\\/g, '/') : ''
   return (command.includes('/.codex/hooks/ccg-workflow.py') ? 1 : 0) + countCcgHooks(Object.values(record))
@@ -177,7 +181,9 @@ describe('Codex mode installation', () => {
     const manifestPath = join(codexHome, '.ccg', 'codex-mode.json')
     const manifest = (await fs.readJson(manifestPath)) as CodexModeManifest
     const added = manifest.files.filter((file) => file.relativePath.startsWith('hooks/ccg/task-state-'))
-    for (const file of added) await fs.remove(join(codexHome, file.relativePath))
+    for (const file of added) {
+      await fs.remove(join(codexHome, file.relativePath))
+    }
     manifest.files = manifest.files.filter((file) => !added.includes(file))
     expect(manifest.files).toHaveLength(7)
     await fs.writeJson(manifestPath, manifest)
@@ -192,7 +198,9 @@ describe('Codex mode installation', () => {
       )
     } else {
       expect(await fs.pathExists(manifestPath)).toBe(false)
-      for (const file of manifest.files) expect(await fs.pathExists(join(codexHome, file.relativePath))).toBe(false)
+      for (const file of manifest.files) {
+        expect(await fs.pathExists(join(codexHome, file.relativePath))).toBe(false)
+      }
     }
     expect(await fs.readFile(authPath, 'utf8')).toBe(userAuth)
   })

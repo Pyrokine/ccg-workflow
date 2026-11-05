@@ -1,9 +1,9 @@
-import { rename } from 'node:fs/promises'
 import fs from 'fs-extra'
+import { rename } from 'node:fs/promises'
 import { join } from 'pathe'
-import { installedNames, removeSkills } from './skill-manager'
-import { collectSkillNames, removeDirCollectMdNames } from './installer-skills'
 import { isCcgHookCommand } from './installer-hooks'
+import { collectSkillNames, removeDirCollectMdNames } from './installer-skills'
+import { installedNames, removeSkills } from './skill-manager'
 
 export interface UninstallResult {
   success: boolean
@@ -25,7 +25,9 @@ async function removeNativeSkills(installDir: string, result: UninstallResult): 
       storeDir: join(installDir, '.ccg-skills'),
     }
     const selected = await installedNames(skillOptions)
-    if (selected.length) await removeSkills(selected, skillOptions)
+    if (selected.length) {
+      await removeSkills(selected, skillOptions)
+    }
     result.removedSkills.push(...selected.map((name) => `ccg-${name}`))
   } catch (error) {
     result.errors.push(`Failed to remove managed native skills: ${error}`)
@@ -51,7 +53,9 @@ async function removeCommandDirectories(installDir: string, result: UninstallRes
 async function removeLegacySkills(installDir: string, result: UninstallResult): Promise<void> {
   // Remove CCG skills directory only (skills/ccg/) — preserves user's own skills
   const skillsDir = join(installDir, 'skills', 'ccg')
-  if (!(await fs.pathExists(skillsDir))) return
+  if (!(await fs.pathExists(skillsDir))) {
+    return
+  }
   try {
     result.removedSkills.push(...(await collectSkillNames(skillsDir)))
     await fs.remove(skillsDir)
@@ -63,7 +67,9 @@ async function removeLegacySkills(installDir: string, result: UninstallResult): 
 
 async function removeWorkflowRules(installDir: string, result: UninstallResult): Promise<void> {
   const rulesDir = join(installDir, 'rules')
-  if (!(await fs.pathExists(rulesDir))) return
+  if (!(await fs.pathExists(rulesDir))) {
+    return
+  }
   try {
     for (const ruleFile of ['ccg-skills.md', 'ccg-grok-search.md', 'ccg-skill-routing.md']) {
       const rulePath = join(rulesDir, ruleFile)
@@ -86,7 +92,9 @@ function removeHookEventCommands(eventHooks: Record<string, unknown>[]): {
     .map((entry) => {
       const commands = Array.isArray(entry.hooks) ? entry.hooks : []
       const keptCommands = commands.filter((hook) => !isCcgHookCommand(hook?.command))
-      if (keptCommands.length !== commands.length) changed = true
+      if (keptCommands.length !== commands.length) {
+        changed = true
+      }
       return keptCommands.length > 0 ? { ...entry, hooks: keptCommands } : null
     })
     .filter((entry) => entry !== null)
@@ -96,17 +104,23 @@ function removeHookEventCommands(eventHooks: Record<string, unknown>[]): {
 function pruneHookSettings(settings: Record<string, unknown>): boolean {
   const hooks =
     settings.hooks && typeof settings.hooks === 'object' ? (settings.hooks as Record<string, unknown>) : null
-  if (!hooks) return false
+  if (!hooks) {
+    return false
+  }
   let changed = false
   for (const event of Object.keys(hooks)) {
     const eventHooks = Array.isArray(hooks[event]) ? hooks[event] : []
     const kept = removeHookEventCommands(eventHooks as Record<string, unknown>[])
-    if (kept.changed) changed = true
+    if (kept.changed) {
+      changed = true
+    }
     if (kept.entries.length > 0) {
       hooks[event] = kept.entries
     } else {
       delete hooks[event]
-      if (eventHooks.length > 0) changed = true
+      if (eventHooks.length > 0) {
+        changed = true
+      }
     }
   }
   if (Object.keys(hooks).length === 0) {
@@ -118,10 +132,14 @@ function pruneHookSettings(settings: Record<string, unknown>): boolean {
 
 async function deregisterWorkflowHooks(installDir: string, result: UninstallResult): Promise<void> {
   const settingsPath = join(installDir, 'settings.json')
-  if (!(await fs.pathExists(settingsPath))) return
+  if (!(await fs.pathExists(settingsPath))) {
+    return
+  }
   try {
     const settings = await fs.readJson(settingsPath)
-    if (!pruneHookSettings(settings)) return
+    if (!pruneHookSettings(settings)) {
+      return
+    }
     const tempSettingsPath = `${settingsPath}.ccg-uninstall-${process.pid}.tmp`
     try {
       await fs.writeFile(tempSettingsPath, `${JSON.stringify(settings, null, 2)}\n`, 'utf-8')
@@ -151,7 +169,9 @@ async function removeWorkflowHooks(installDir: string, result: UninstallResult):
 
 async function removeWorkflowBinary(installDir: string, result: UninstallResult): Promise<void> {
   const binDir = join(installDir, 'bin')
-  if (!(await fs.pathExists(binDir))) return
+  if (!(await fs.pathExists(binDir))) {
+    return
+  }
   try {
     const wrapperName = process.platform === 'win32' ? 'codeagent-wrapper.exe' : 'codeagent-wrapper'
     const wrapperPath = join(binDir, wrapperName)
@@ -167,7 +187,9 @@ async function removeWorkflowBinary(installDir: string, result: UninstallResult)
 
 async function removeWorkflowConfig(installDir: string, result: UninstallResult): Promise<void> {
   const ccgConfigDir = join(installDir, '.ccg')
-  if (!(await fs.pathExists(ccgConfigDir))) return
+  if (!(await fs.pathExists(ccgConfigDir))) {
+    return
+  }
   try {
     await fs.remove(ccgConfigDir)
     result.removedPrompts.push('ALL_PROMPTS_AND_CONFIGS')
@@ -201,7 +223,9 @@ export async function uninstallWorkflows(
   await removeWorkflowRules(installDir, result)
   await removeWorkflowHooks(installDir, result)
   // Preserve the binary during updates to avoid an unnecessary re-download.
-  if (!options?.preserveBinary) await removeWorkflowBinary(installDir, result)
+  if (!options?.preserveBinary) {
+    await removeWorkflowBinary(installDir, result)
+  }
   await removeWorkflowConfig(installDir, result)
   return result
 }

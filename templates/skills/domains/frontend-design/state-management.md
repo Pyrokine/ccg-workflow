@@ -5,16 +5,18 @@ description: 前端状态管理技术。Redux、Zustand、Jotai、Recoil、Conte
 
 # 🎨 🗂️ 状态管理 · State Management
 
+各示例由目标前端项目提供对应框架依赖与 TypeScript 配置，代码块独立使用；业务类型、reducer 和初始状态由所在示例或目标项目定义
+
 ## 状态管理对比
 
-| 框架      | 模式        | 学习曲线 | 性能 | 适用场景         |
-|---------|-----------|------|----|--------------|
-| Redux   | Flux      | 陡峭   | 中  | 大型应用、复杂状态    |
-| Zustand | Flux-like | 平缓   | 高  | 中小型应用、快速开发   |
-| Jotai   | Atomic    | 平缓   | 高  | 细粒度更新、原子化状态  |
-| Recoil  | Atomic    | 中等   | 高  | React生态、派生状态 |
-| Context | Provider  | 简单   | 低  | 简单共享、主题配置    |
-| MobX    | Reactive  | 中等   | 高  | OOP风格、自动追踪   |
+| 框架    | 模式      | 学习曲线 | 性能 | 适用场景               |
+|---------|-----------|----------|------|------------------------|
+| Redux   | Flux      | 陡峭     | 中   | 大型应用、复杂状态     |
+| Zustand | Flux-like | 平缓     | 高   | 中小型应用、快速开发   |
+| Jotai   | Atomic    | 平缓     | 高   | 细粒度更新、原子化状态 |
+| Recoil  | Atomic    | 中等     | 高   | React生态、派生状态    |
+| Context | Provider  | 简单     | 低   | 简单共享、主题配置     |
+| MobX    | Reactive  | 中等     | 高   | OOP风格、自动追踪      |
 
 ## 选择决策树
 
@@ -109,13 +111,10 @@ interface User {
   email: string
 }
 
-export const fetchUser = createAsyncThunk(
-  'user/fetchUser',
-  async (userId: string) => {
-    const response = await fetch(`/api/users/${userId}`)
-    return (await response.json()) as User
-  }
-)
+export const fetchUser = createAsyncThunk('user/fetchUser', async (userId: string) => {
+  const response = await fetch(`/api/users/${userId}`)
+  return (await response.json()) as User
+})
 
 const userSlice = createSlice({
   name: 'user',
@@ -146,7 +145,7 @@ export default userSlice.reducer
 
 ### Hooks 使用
 
-```typescript
+```tsx
 // hooks.ts
 import { TypedUseSelectorHook, useDispatch, useSelector } from 'react-redux'
 import type { RootState, AppDispatch } from './store'
@@ -175,7 +174,7 @@ function Counter() {
 
 ### 基础 Store
 
-```typescript
+```tsx
 // store.ts
 import { create } from 'zustand'
 
@@ -315,7 +314,7 @@ export const userAtom = atom(async (get) => {
 
 ### 使用 Atoms
 
-```typescript
+```tsx
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 
 function Counter() {
@@ -335,7 +334,7 @@ function Counter() {
 
 ### 原子家族
 
-```typescript
+```tsx
 import { atomFamily } from 'jotai/utils'
 
 // 为每个 ID 创建独立 atom
@@ -352,15 +351,8 @@ function TodoItem({ id }: { id: string }) {
 
   return (
     <div>
-      <input
-        value={todo.text}
-        onChange={(e) => setTodo({ ...todo, text: e.target.value })}
-      />
-      <input
-        type="checkbox"
-        checked={todo.done}
-        onChange={(e) => setTodo({ ...todo, done: e.target.checked })}
-      />
+      <input value={todo.text} onChange={(e) => setTodo({ ...todo, text: e.target.value })} />
+      <input type="checkbox" checked={todo.done} onChange={(e) => setTodo({ ...todo, done: e.target.checked })} />
     </div>
   )
 }
@@ -427,7 +419,7 @@ export const userState = selector({
 
 ### 使用 Recoil
 
-```typescript
+```tsx
 import { useRecoilState, useRecoilValue, useSetRecoilState } from 'recoil'
 
 function TextInput() {
@@ -445,7 +437,7 @@ function TextInput() {
 
 ### Atom Family
 
-```typescript
+```tsx
 import { atomFamily } from 'recoil'
 
 export const todoItemState = atomFamily({
@@ -460,12 +452,7 @@ export const todoItemState = atomFamily({
 function TodoItem({ id }: { id: string }) {
   const [todo, setTodo] = useRecoilState(todoItemState(id))
 
-  return (
-    <input
-      value={todo.text}
-      onChange={(e) => setTodo({ ...todo, text: e.target.value })}
-    />
-  )
+  return <input value={todo.text} onChange={(e) => setTodo({ ...todo, text: e.target.value })} />
 }
 ```
 
@@ -473,7 +460,7 @@ function TodoItem({ id }: { id: string }) {
 
 ### 基础 Context
 
-```typescript
+```tsx
 import { createContext, useContext, useState, ReactNode } from 'react'
 
 interface ThemeContextType {
@@ -490,11 +477,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     setTheme((prev) => (prev === 'light' ? 'dark' : 'light'))
   }
 
-  return (
-    <ThemeContext.Provider value={{ theme, toggleTheme }}>
-      {children}
-    </ThemeContext.Provider>
-  )
+  return <ThemeContext.Provider value={{ theme, toggleTheme }}>{children}</ThemeContext.Provider>
 }
 
 export function useTheme() {
@@ -508,7 +491,7 @@ export function useTheme() {
 
 ### 优化 Context
 
-```typescript
+```tsx
 import { createContext, useContext, useMemo, ReactNode } from 'react'
 
 // 分离状态和更新函数
@@ -524,9 +507,7 @@ export function Provider({ children }: { children: ReactNode }) {
 
   return (
     <StateContext.Provider value={memoizedState}>
-      <DispatchContext.Provider value={memoizedDispatch}>
-        {children}
-      </DispatchContext.Provider>
+      <DispatchContext.Provider value={memoizedDispatch}>{children}</DispatchContext.Provider>
     </StateContext.Provider>
   )
 }
@@ -544,19 +525,16 @@ const selectTodos = (state: RootState) => state.todos
 const selectFilter = (state: RootState) => state.filter
 
 // Memoized 选择器
-export const selectFilteredTodos = createSelector(
-  [selectTodos, selectFilter],
-  (todos, filter) => {
-    switch (filter) {
-      case 'completed':
-        return todos.filter((t) => t.done)
-      case 'active':
-        return todos.filter((t) => !t.done)
-      default:
-        return todos
-    }
+export const selectFilteredTodos = createSelector([selectTodos, selectFilter], (todos, filter) => {
+  switch (filter) {
+    case 'completed':
+      return todos.filter((t) => t.done)
+    case 'active':
+      return todos.filter((t) => !t.done)
+    default:
+      return todos
   }
-)
+})
 ```
 
 ### Zustand 选择器
@@ -571,7 +549,7 @@ function Component() {
   const bears = useStore((state) => state.bears)
 
   // ✅ 使用 shallow 比较
-  const { bears, increase } = useStore(
+  const { bears: shallowBears, increase } = useStore(
     (state) => ({ bears: state.bears, increase: state.increase }),
     shallow
   )
@@ -616,21 +594,23 @@ function Component() {
 
 ### 命名规范
 
+以下片段分别展示各框架的命名，`/* ... */` 表示目标项目提供的配置或初始化参数，各组独立使用
+
 ```typescript
 // Redux
-const userSlice = createSlice({ name: 'user', ... })
+const userSlice = createSlice({ name: 'user' /* ... */ })
 export const { setUser, clearUser } = userSlice.actions
 
 // Zustand
-export const useUserStore = create<UserStore>(...)
+export const useUserStore = create<UserStore>(/* ... */)
 
 // Jotai
 export const userAtom = atom<User | null>(null)
 export const userNameAtom = atom((get) => get(userAtom)?.name)
 
 // Recoil
-export const userState = atom({ key: 'userState', ... })
-export const userNameState = selector({ key: 'userNameState', ... })
+export const userState = atom({ key: 'userState' /* ... */ })
+export const userNameState = selector({ key: 'userNameState' /* ... */ })
 ```
 
 ### 错误处理
@@ -668,13 +648,13 @@ export const useStore = create<Store>((set) => ({
 
 ## 工具清单
 
-| 工具                   | 用途           |
-|----------------------|--------------|
-| Redux DevTools       | 时间旅行调试       |
+| 工具                 | 用途             |
+|----------------------|------------------|
+| Redux DevTools       | 时间旅行调试     |
 | Zustand DevTools     | Zustand 状态调试 |
-| Jotai DevTools       | Atom 依赖可视化   |
+| Jotai DevTools       | Atom 依赖可视化  |
 | Recoil DevTools      | Recoil 状态调试  |
-| React Query DevTools | 服务器状态调试      |
-| Immer                | 不可变数据更新      |
+| React Query DevTools | 服务器状态调试   |
+| Immer                | 不可变数据更新   |
 
 ---

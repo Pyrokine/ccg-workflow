@@ -1,16 +1,16 @@
-import type { DoctorDependencies } from '../../utils/doctor-checks'
 import fs from 'fs-extra'
-import { tmpdir } from 'node:os'
-import { join } from 'pathe'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { stringify } from 'smol-toml'
-import { doctor } from '../doctor'
-import { collectDoctorReport } from '../../utils/doctor-checks'
-import { installSkills } from '../../utils/skill-manager'
 import { spawnSync } from 'node:child_process'
 import { createRequire } from 'node:module'
+import { tmpdir } from 'node:os'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { join } from 'pathe'
+import { stringify } from 'smol-toml'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { DoctorDependencies } from '../../utils/doctor-checks'
+import { collectDoctorReport } from '../../utils/doctor-checks'
 import { TASK_STATE_RUNTIME_FILES } from '../../utils/installer-data'
+import { installSkills } from '../../utils/skill-manager'
+import { doctor } from '../doctor'
 
 let home: string
 let exec: ReturnType<typeof vi.fn<NonNullable<DoctorDependencies['exec']>>>
@@ -47,11 +47,12 @@ async function config(frontend = 'claude', backend = 'claude', review = ['gpt', 
 async function claudeInstall() {
   await fs.outputFile(join(home, '.claude', 'commands', 'ccg.md'), '# CCG')
   await fs.ensureDir(join(home, '.claude', 'hooks', 'ccg'))
-  for (const name of hookFiles)
+  for (const name of hookFiles) {
     await fs.copyFile(
       join(import.meta.dirname, '../../../templates/hooks', name),
       join(home, '.claude', 'hooks', 'ccg', name)
     )
+  }
   const hooks = Object.fromEntries(
     Object.entries(hookEvents).map(([event, names]) => [
       event,
@@ -86,11 +87,12 @@ async function codexInstall() {
     await fs.outputFile(join(home, '.codex', file), 'managed')
   }
   await fs.ensureDir(join(home, '.codex', 'hooks', 'ccg'))
-  for (const name of TASK_STATE_RUNTIME_FILES)
+  for (const name of TASK_STATE_RUNTIME_FILES) {
     await fs.copyFile(
       join(import.meta.dirname, '../../../templates/hooks', name),
       join(home, '.codex', 'hooks', 'ccg', name)
     )
+  }
   await fs.outputJSON(join(home, '.codex', 'hooks.json'), {
     hooks: {
       UserPromptSubmit: [
@@ -368,7 +370,9 @@ describe('CCG doctor inventory', () => {
       if (workflow === 'claude') {
         await config()
         await claudeInstall()
-      } else await codexInstall()
+      } else {
+        await codexInstall()
+      }
       const target = workflow === 'claude' ? 'codex' : 'claude'
       const paths = await nativeInstall(target)
       const report = await collectDoctorReport(deps({ skillPaths: { [target]: paths } }))
@@ -392,10 +396,15 @@ describe('CCG doctor inventory', () => {
       if (workflow === 'claude') {
         await config()
         await claudeInstall()
-      } else await codexInstall()
+      } else {
+        await codexInstall()
+      }
       const paths = await nativeInstall(target)
-      if (damage === 'manifest') await fs.writeFile(join(paths.storeDir, 'manifest.json'), 'invalid-json')
-      else await fs.unlink(join(paths.nativeDir, 'ccg-sample'))
+      if (damage === 'manifest') {
+        await fs.writeFile(join(paths.storeDir, 'manifest.json'), 'invalid-json')
+      } else {
+        await fs.unlink(join(paths.nativeDir, 'ccg-sample'))
+      }
       const output = vi.fn()
       const setExitCode = vi.fn()
       const report = await doctor({ json: true }, deps({ skillPaths: { [target]: paths }, output, setExitCode }))

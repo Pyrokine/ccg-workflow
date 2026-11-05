@@ -14,28 +14,14 @@
 
 ## 工作流状态机
 
-[phase-state:1-context]
-当前阶段：上下文收集
-📍 Next: 了解现有代码模式后进入计划阶段
-[/phase-state:1-context]
+[phase-state:1-context] 当前阶段：上下文收集 📍 Next: 了解现有代码模式后进入计划阶段 [/phase-state:1-context]
 
-[phase-state:2-plan]
-当前阶段：简要计划
-Gate: 上下文已收集 ✓
-📍 Next: 用户确认计划后进入实施阶段
-[/phase-state:2-plan]
+[phase-state:2-plan] 当前阶段：简要计划 Gate: 上下文已收集 ✓ 📍 Next: 用户确认计划后进入实施阶段 [/phase-state:2-plan]
 
-[phase-state:3-implement]
-当前阶段：实施
-Gate: 用户已确认计划 ✓
-📍 Next: 实施完成后进入验证阶段
-[/phase-state:3-implement]
+[phase-state:3-implement] 当前阶段：实施 Gate: 用户已确认计划 ✓ 📍
+Next: 实施完成后进入验证阶段 [/phase-state:3-implement]
 
-[phase-state:4-verify]
-当前阶段：验证
-Gate: 实施已完成 ✓
-📍 Next: 验证通过后报告结果
-[/phase-state:4-verify]
+[phase-state:4-verify] 当前阶段：验证 Gate: 实施已完成 ✓ 📍 Next: 验证通过后报告结果 [/phase-state:4-verify]
 
 ---
 

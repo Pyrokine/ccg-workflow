@@ -1,6 +1,6 @@
-import { rename } from 'node:fs/promises'
 import ansis from 'ansis'
 import fs from 'fs-extra'
+import { rename } from 'node:fs/promises'
 import { join } from 'pathe'
 import type { InstallContext } from './installer-context'
 
@@ -9,7 +9,7 @@ import type { InstallContext } from './installer-context'
  * Must match the `version` constant in codeagent-wrapper/main.go.
  * When this differs from the installed binary, update triggers re-download.
  */
-const EXPECTED_BINARY_VERSION = '5.15.0-aug.1'
+const EXPECTED_BINARY_VERSION = '5.16.0-aug.1'
 
 const GITHUB_REPO = 'Pyrokine/ccg-workflow'
 const RELEASE_TAG = 'preset'
@@ -86,7 +86,9 @@ async function downloadBinaryFromRelease(binaryName: string, destPath: string): 
 function getBinaryName(): string | null {
   const osMap: Record<string, string> = { darwin: 'darwin', linux: 'linux', win32: 'windows' }
   const os = osMap[process.platform]
-  if (!os) return null
+  if (!os) {
+    return null
+  }
   const arch = process.arch === 'arm64' ? 'arm64' : 'amd64'
   const ext = process.platform === 'win32' ? '.exe' : ''
   return `codeagent-wrapper-${os}-${arch}${ext}`
@@ -101,7 +103,9 @@ export async function verifyBinary(installDir: string): Promise<boolean> {
   const wrapperName = process.platform === 'win32' ? 'codeagent-wrapper.exe' : 'codeagent-wrapper'
   const wrapperPath = join(binDir, wrapperName)
 
-  if (!(await fs.pathExists(wrapperPath))) return false
+  if (!(await fs.pathExists(wrapperPath))) {
+    return false
+  }
 
   try {
     const { execSync } = await import('node:child_process')

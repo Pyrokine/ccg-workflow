@@ -12,8 +12,7 @@ into delightful experiences.
 
 Use the `frontend-design` skill as the governing entry point and follow its design principles, anti-patterns, and
 **Context Gathering Protocol**. If design context is missing, ask only for the missing audience, use case, or brand
-direction. Additionally
-gather: what's appropriate for the domain (playful vs professional vs quirky vs elegant).
+direction. Additionally gather: what's appropriate for the domain (playful vs professional vs quirky vs elegant).
 
 ---
 
@@ -90,11 +89,13 @@ Add personality and joy through these methods:
 ```css
 /* Satisfying button press */
 .button {
-  transition: transform 0.1s, box-shadow 0.1s;
+  transition:
+    transform 0.1s,
+    box-shadow 0.1s;
 }
 .button:active {
   transform: translateY(2px);
-  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 /* Ripple effect on click */
@@ -273,7 +274,7 @@ Loading messages — write ones specific to your product, not generic AI filler:
 - "Checking for updates since yesterday..."
 ```
 
-**WARNING**: Avoid cliched loading messages like "Herding pixels", "Teaching robots to dance", "Consulting the magic
+**WARNING**: Avoid clichéd loading messages like "Herding pixels", "Teaching robots to dance", "Consulting the magic
 8-ball", "Counting backwards from infinity". These are AI-slop copy — instantly recognizable as machine-generated. Write
 messages that are specific to what your product actually does.
 

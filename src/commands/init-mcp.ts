@@ -1,10 +1,10 @@
 import ansis from 'ansis'
 import inquirer from 'inquirer'
 import { i18n } from '../i18n'
-import { emptyMcpCredentials } from './init-state'
-import type { InitState } from './init-state'
-import { BACK_SENTINEL, CANCEL_SENTINEL, navSentinels } from './init-navigation'
 import type { StepReturn } from './init-navigation'
+import { BACK_SENTINEL, CANCEL_SENTINEL, navSentinels } from './init-navigation'
+import type { InitState } from './init-state'
+import { emptyMcpCredentials } from './init-state'
 
 export async function runMcpStep(state: InitState, canGoBack: boolean): Promise<StepReturn> {
   if (state.options.skipMcp) {
@@ -20,8 +20,12 @@ export async function runMcpStep(state: InitState, canGoBack: boolean): Promise<
   // navigation sentinels cleanly), ask a single-choice list first.
   const gate = await promptMcpGate(canGoBack)
 
-  if (gate === BACK_SENTINEL) return 'back'
-  if (gate === CANCEL_SENTINEL) return 'cancel'
+  if (gate === BACK_SENTINEL) {
+    return 'back'
+  }
+  if (gate === CANCEL_SENTINEL) {
+    return 'cancel'
+  }
 
   Object.assign(state, emptyMcpCredentials())
 
@@ -232,11 +236,19 @@ async function configureSelectedMcpTools(state: InitState, selectedTools: string
     state.mcpProvider = 'skip'
   }
 
-  if (hasAceTool) await promptAceTool(state)
+  if (hasAceTool) {
+    await promptAceTool(state)
+  }
 
-  if (hasFastContext) await promptFastContext(state)
+  if (hasFastContext) {
+    await promptFastContext(state)
+  }
 
-  if (hasContextWeaver) await promptContextWeaver(state)
+  if (hasContextWeaver) {
+    await promptContextWeaver(state)
+  }
 
-  if (state.wantGrokSearch) await promptGrokSearch(state)
+  if (state.wantGrokSearch) {
+    await promptGrokSearch(state)
+  }
 }

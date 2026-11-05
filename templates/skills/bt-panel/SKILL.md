@@ -8,12 +8,13 @@ disable-model-invocation: false
 
 # bt-panel · 宝塔远程操控秘典
 
-一套通过宝塔面板 HTTP API 完成部署 / 运维 / 数据库变更的 Python 工具集。
-无需 SSH、无需 rsync、无需本地装 vercel/docker — 只要一个面板地址和 API 密钥。
+一套通过宝塔面板 HTTP API 完成部署 / 运维 / 数据库变更的 Python 工具集。无需 SSH、无需 rsync、无需本地装 vercel/docker
+— 只要一个面板地址和 API 密钥。
 
 ## 何时使用
 
 **自动触发**（魔尊未显式点名时也应主动调用）：
+
 - 用户给出 `https://IP:port` 形式的宝塔面板地址和一串 32 位 API 密钥
 - 用户说 "更新线上 / 更新一下 / 发布一下 / 部署到服务器 / 推到宝塔"
 - 用户提到具体站点名且路径位于 `/www/wwwroot/` / `/www/server/` 下
@@ -21,28 +22,30 @@ disable-model-invocation: false
 - 用户提交项目目录让你"推上去"
 
 **不触发**：
+
 - 用户只提到 Vercel / Netlify / AWS / 其他平台
 - 纯本地开发任务
 
 ## 支持矩阵（面板变体自适应）
 
-本 skill 不假设特定版本 — `bt_client.py` 首次调用 `test()` 时会自动探测
-面板的 **OS / 变体 / 主版本**，缓存到 `client.panel_info`，后续所有方法都据此选择接口。
+本 skill 不假设特定版本 — `bt_client.py` 首次调用 `test()` 时会自动探测面板的 **OS / 变体 / 主版本**，缓存到
+`client.panel_info`，后续所有方法都据此选择接口。
 
-| 面板 | `panel_info` 识别 | 状态 | 说明 |
-|---|---|---|---|
-| 宝塔 Linux **v11+** | `{os:linux, variant:bt, major:11}` | ✅ 已实测 | Debian 12 + v11.6.0，主验证环境 |
-| 宝塔 Linux **v7/v8/v9/v10** | `{major:7-10}` | ✅ 支持 | `exec_shell` 自动走老接口 `ExecShellMsg`；`sql_execute` 先试面板 `SqlExecute` API |
-| **aaPanel**（英文国际版） | `{os:linux, variant:aapanel}` | ✅ 支持 | API 与宝塔 Linux 完全一致，仅错误消息是英文；`write_file` 兜底已识别中英双语 |
-| 宝塔 **Windows 面板** | `{os:windows}` | ⚠️ 实验 | 文件 / shell / SQL 可用；`bt_deploy.py`（依赖本地 tar）仅在宝塔 Linux 下完整 |
-| **1Panel**（飞致云） | — | ❌ 不覆盖 | 完全不同的 REST API，**不要**用本 skill 操作 1Panel |
-| **宝塔企业版** | 同 v11+ | ✅ 预期兼容 | 未实测但 API 同源 |
+| 面板                        | `panel_info` 识别                  | 状态        | 说明                                                                              |
+|-----------------------------|------------------------------------|-------------|-----------------------------------------------------------------------------------|
+| 宝塔 Linux **v11+**         | `{os:linux, variant:bt, major:11}` | ✅ 已实测   | Debian 12 + v11.6.0，主验证环境                                                   |
+| 宝塔 Linux **v7/v8/v9/v10** | `{major:7-10}`                     | ✅ 支持     | `exec_shell` 自动走老接口 `ExecShellMsg`；`sql_execute` 先试面板 `SqlExecute` API |
+| **aaPanel**（英文国际版）   | `{os:linux, variant:aapanel}`      | ✅ 支持     | API 与宝塔 Linux 完全一致，仅错误消息是英文；`write_file` 兜底已识别中英双语      |
+| 宝塔 **Windows 面板**       | `{os:windows}`                     | ⚠️ 实验     | 文件 / shell / SQL 可用；`bt_deploy.py`（依赖本地 tar）仅在宝塔 Linux 下完整      |
+| **1Panel**（飞致云）        | —                                  | ❌ 不覆盖   | 完全不同的 REST API，**不要**用本 skill 操作 1Panel                               |
+| **宝塔企业版**              | 同 v11+                            | ✅ 预期兼容 | 未实测但 API 同源                                                                 |
 
 ### 自动适配要点（你不需要配置）
 
 - **Shell 接口**：v11+ → `ExecShell`；v7–v10 → `ExecShellMsg`；均失败自动回退另一个
 - **SQL 执行**：先试面板 API（老版本可用），失败退 shell + mysql CLI
-- **MySQL 路径探测**：`/www/server/mysql/bin/mysql` → `/www/server/mariadb/bin/mysql` → `/usr/local/mysql/bin/mysql` → `$(command -v mysql)` → `mysql`
+- **MySQL 路径探测**：`/www/server/mysql/bin/mysql` → `/www/server/mariadb/bin/mysql` → `/usr/local/mysql/bin/mysql` →
+  `$(command -v mysql)` → `mysql`
 - **错误消息识别**：中文 `"不存在"/"权限"` ∪ 英文 `"not exist"/"Permission denied"`
 - **Windows MySQL**：heredoc 改为临时文件 + `type` 重定向（cmd 不支持 heredoc）
 
@@ -55,17 +58,19 @@ python3 bt_client.py test
 ```
 
 Claude 收到 `_skill_detected` 后应据此决定：
-- `major < 11` + `variant=bt`  → 可以直接用 SQL API（可能更快）
-- `variant=aapanel`            → 错误消息会是英文，别困惑
-- `os=windows`                 → 重启命令要改成 Windows 等价（`net stop nginx` 代替 `systemctl restart nginx`）
-- `major=0`                    → 探测失败，面板返回不标准 → 跑 `test` 时把原始 JSON 给魔尊看
+
+- `major < 11` + `variant=bt` → 可以直接用 SQL API（可能更快）
+- `variant=aapanel` → 错误消息会是英文，别困惑
+- `os=windows` → 重启命令要改成 Windows 等价（`net stop nginx` 代替 `systemctl restart nginx`）
+- `major=0` → 探测失败，面板返回不标准 → 跑 `test` 时把原始 JSON 给魔尊看
 
 ## 关键事实
 
 - **签名**：`request_token = md5(request_time + md5(api_key))`，每次请求带 `request_time` 和 `request_token`
 - **Shell 执行身份**：宝塔 Linux/aaPanel 为 root（可写任何目录）；Windows 面板为安装账户（通常 Administrator）
 - **文件上传身份**：Linux 面板为 www（上传后文件属主是 www:www）
-- **/tmp sticky bit**：`SaveFileBody` 在 /tmp 下可能报 `FILE_SAVE_ERR Permission denied`，`write_file` 已自动 delete+recreate 兜底
+- **/tmp sticky bit**：`SaveFileBody` 在 /tmp 下可能报 `FILE_SAVE_ERR Permission denied`，`write_file`
+  已自动 delete+recreate 兜底
 
 ## 工具布局
 
@@ -163,11 +168,11 @@ c.write_file('/www/wwwroot/app/.env', 'KEY=1')  # 写文件
 2. **连通** — 先 `bt_client.py test` 确认密钥有效、面板可达
 3. **盘点** — `bt_client.py sites` 列出站点、`ls /www/wwwroot` 找到目标
 4. **决策** — 判断用户想要的是：
-   - **更新静态前端** → 直接 `bt_deploy.py --clean`（前端资源需要完整替换）
-   - **更新 Node/PHP 后端** → `bt_deploy.py` + 重启服务
-   - **改一两个文件** → 直接 `bt_client.py put` 或 `write`
-   - **执行数据迁移** → `bt_client.py sql ... --from-file`
-   - **重启服务** → `bt_client.py exec "pm2 restart xxx"`
+    - **更新静态前端** → 直接 `bt_deploy.py --clean`（前端资源需要完整替换）
+    - **更新 Node/PHP 后端** → `bt_deploy.py` + 重启服务
+    - **改一两个文件** → 直接 `bt_client.py put` 或 `write`
+    - **执行数据迁移** → `bt_client.py sql ... --from-file`
+    - **重启服务** → `bt_client.py exec "pm2 restart xxx"`
 5. **执行** — 优先 `--dry-run` 预览给魔尊确认，无歧义直接干
 6. **核验** — 执行后 `exec 'curl -I <url>'` 或 `cat .env` 之类读回确认
 7. **上报** — 精简报告：目标、改动范围、服务状态
@@ -184,6 +189,7 @@ c.write_file('/www/wwwroot/app/.env', 'KEY=1')  # 写文件
 ## 故障排查
 
 见 `references/recipes.md` → 故障排查章节。常见问题：
+
 - `签名校验失败` → API 密钥错 / 客户端时间漂移（差 >60s）
 - `IP 未在白名单` → 宝塔面板 → 设置 → API 接口 → 添加本机公网 IP
 - `指定参数无效` → 接口字段名版本差异，参考 `api-reference.md`

@@ -6,15 +6,19 @@ import (
 
 // BenchmarkLoggerWrite 测试日志写入性能
 func BenchmarkLoggerWrite(b *testing.B) {
-	logger, err := NewLogger()
+	logger, err := newLogger()
 	if err != nil {
 		b.Fatal(err)
 	}
-	defer logger.Close()
+	defer func() {
+		if err := logger.Close(); err != nil {
+			b.Errorf("I/O operation failed: %v", err)
+		}
+	}()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		logger.Info("benchmark log message")
+		logger.info("benchmark log message")
 	}
 	b.StopTimer()
 	logger.Flush()
@@ -22,17 +26,21 @@ func BenchmarkLoggerWrite(b *testing.B) {
 
 // BenchmarkLoggerConcurrentWrite 测试并发日志写入性能
 func BenchmarkLoggerConcurrentWrite(b *testing.B) {
-	logger, err := NewLogger()
+	logger, err := newLogger()
 	if err != nil {
 		b.Fatal(err)
 	}
-	defer logger.Close()
+	defer func() {
+		if err := logger.Close(); err != nil {
+			b.Errorf("I/O operation failed: %v", err)
+		}
+	}()
 
 	b.ResetTimer()
 	b.RunParallel(
 		func(pb *testing.PB) {
 			for pb.Next() {
-				logger.Info("concurrent benchmark log message")
+				logger.info("concurrent benchmark log message")
 			}
 		},
 	)

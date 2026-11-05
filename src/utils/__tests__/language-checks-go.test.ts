@@ -2,10 +2,21 @@ import childProcess from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { distributions, fakeExecutable, fixture, limits, loadModule, root, write } from './language-checks-fixtures'
 import type { Analyze } from './language-checks-fixtures'
+import {
+  distributions,
+  fakeExecutable,
+  fixture,
+  limits,
+  loadModule,
+  nativeClock,
+  root,
+  write,
+} from './language-checks-fixtures'
 
 function goProject(): string {
+  vi.stubEnv('GOFLAGS', '')
+  vi.stubEnv('GOWORK', '')
   const directory = fixture()
   write(directory, 'go.mod', 'module example.test/checks\n\ngo 1.22\n')
   return directory
@@ -135,6 +146,29 @@ describe.each(distributions)('%s Go project analysis', (distribution) => {
     }
   )
 
+  it('retains Go failure locations and redacts credentials in native stderr', () => {
+    const directory = goProject()
+    const source = write(directory, 'main.go', 'package checks\n')
+    const secret = 'synthetic-go-credential-123456'
+    const stderr = [
+      'go: errors parsing go.mod:',
+      `${directory}/go.mod:3: invalid go version '1.bad': token=${secret}`,
+      `${source}:7:2: const internalValue = 42`,
+      secret,
+      '',
+    ].join('\n')
+    fakeExecutable(directory, 'go', `process.stderr.write(${JSON.stringify(stderr)}); process.exit(2);`)
+    const result = runLanguageChecks([source], limits)
+    const check = result.checks[0] as (typeof result.checks)[0] & { execution: { stderr: string } }
+    expect(check.status).toBe('unavailable')
+    expect(check.execution.stderr).toContain('go: errors parsing go.mod:')
+    expect(check.execution.stderr).toContain(`${directory}/go.mod:3: invalid go version`)
+    expect(check.execution.stderr).toContain(`${source}:7:2:`)
+    expect(check.execution.stderr).not.toContain('internalValue')
+    expect(check.execution.stderr).not.toContain('1.bad')
+    expect(JSON.stringify(result)).not.toContain(secret)
+  })
+
   it('validates the existing overlay and retains vendor build mode', () => {
     const directory = goProject()
     const source = write(directory, 'main.go', 'package checks\n')
@@ -191,6 +225,34 @@ describe.each(distributions)('%s Go project analysis', (distribution) => {
     expect(existsSync(executed.at(-1)?.env.GOWORK || '')).toBe(false)
   })
 
+  it('shares a 120 second group budget across Go setup, inventory and vet', () => {
+    const directory = goProject()
+    const source = write(directory, 'main.go', 'package checks\n')
+    fakeGo(directory, [{ Dir: directory, GoFiles: ['main.go'] }])
+    const spawn = nativeClock({ env: 45000, list: 45000 })
+    const result = runLanguageChecks([source], limits)
+    expect(result.checks[0]).toMatchObject({
+      status: 'passed',
+      timing: { budget_ms: 120000, elapsed_ms: 90000 },
+    })
+    const budgets = spawn.mock.calls.map((call) => call[2]?.timeout)
+    expect(budgets).toEqual([120000, 75000, 30000])
+  })
+
+  it('keeps an exhausted Go group unavailable with the responsible stage', () => {
+    const directory = goProject()
+    const source = write(directory, 'main.go', 'package checks\n')
+    fakeGo(directory, [{ Dir: directory, GoFiles: ['main.go'] }])
+    nativeClock({ list: 120001 })
+    const result = runLanguageChecks([source], limits)
+    expect(result.checks[0]).toMatchObject({
+      status: 'unavailable',
+      reason: 'Analysis timed out',
+      timing: { budget_ms: 120000, phase: 'list' },
+    })
+    expect(result.uncovered).toContainEqual(expect.objectContaining({ path: source }))
+  })
+
   it.each(['ETIMEDOUT', 'ENOBUFS'])('bounds %s failures without disabling the process limits', (code) => {
     const directory = goProject()
     const source = write(directory, 'main.go', 'package checks\n')
@@ -212,6 +274,7 @@ describe.each(distributions)('%s Go project analysis', (distribution) => {
     expect(JSON.stringify(result)).not.toContain('sentinel-sensitive-output')
     expect(spawn.mock.calls[0][2]).toMatchObject({ shell: false, maxBuffer: 8 * 1024 * 1024 })
     expect(spawn.mock.calls[0][2]?.timeout).toBeGreaterThan(0)
-    expect(spawn.mock.calls[0][2]?.timeout).toBeLessThanOrEqual(30000)
+    expect(spawn.mock.calls[0][2]?.timeout).toBeGreaterThan(30000)
+    expect(spawn.mock.calls[0][2]?.timeout).toBeLessThanOrEqual(120000)
   })
 })

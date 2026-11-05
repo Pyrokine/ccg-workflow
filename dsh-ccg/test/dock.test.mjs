@@ -62,12 +62,18 @@ test('the strip shows one conversation its own team and nobody else’s', () => 
   const table = tableOf(ROWS)
 
   const mine = buildTeamPayload(rosterOf(table, 'session-1'))
-  assert.deepEqual(mine.teammates.map((entry) => entry.childId), ['child-a', 'child-b'])
+  assert.deepEqual(
+    mine.teammates.map((entry) => entry.childId),
+    ['child-a', 'child-b']
+  )
 
   // Ownership is per lineage: this session cannot message session-2's teammate,
   // so showing it in *this* strip would invite exactly the wrong action.
   const theirs = buildTeamPayload(rosterOf(table, 'session-2'))
-  assert.deepEqual(theirs.teammates.map((entry) => entry.childId), ['child-c'])
+  assert.deepEqual(
+    theirs.teammates.map((entry) => entry.childId),
+    ['child-c']
+  )
 
   assert.deepEqual(buildTeamPayload(rosterOf(table, 'nobody')).teammates, [])
 })
@@ -111,28 +117,49 @@ test('reading the strip never mutates the roster', async () => {
 })
 
 test('live activity reads `activity`, and a service that cannot answer says nothing', async () => {
-  const status = await liveActivity({
-    listChildren: async () => [
-      { id: 'child-a', activity: 'running' },
-      { id: 'child-b', activity: 'inactive' },
-      // A `status` field does not exist on the entry; reading one silently
-      // produced no status at all until that was caught.
-      { id: 'child-z', status: 'running' },
-      { activity: 'running' },
-    ],
-  }, 'session-1', ROWS)
+  const status = await liveActivity(
+    {
+      listChildren: async () => [
+        { id: 'child-a', activity: 'running' },
+        { id: 'child-b', activity: 'inactive' },
+        // A `status` field does not exist on the entry; reading one silently
+        // produced no status at all until that was caught.
+        { id: 'child-z', status: 'running' },
+        { activity: 'running' },
+      ],
+    },
+    'session-1',
+    ROWS
+  )
 
   assert.deepEqual(status, { 'child-a': 'running', 'child-b': 'inactive' })
 
   // A refusal or a missing service is not a claim that nobody is running.
   assert.deepEqual(
-    await liveActivity({ listChildren: async () => { throw new Error('nope') } }, 's', ROWS),
-    {},
+    await liveActivity(
+      {
+        listChildren: async () => {
+          throw new Error('nope')
+        },
+      },
+      's',
+      ROWS
+    ),
+    {}
   )
   assert.deepEqual(await liveActivity(undefined, 's', ROWS), {})
   // An empty roster asks nothing at all.
   let asked = false
-  await liveActivity({ listChildren: async () => { asked = true; return [] } }, 's', [])
+  await liveActivity(
+    {
+      listChildren: async () => {
+        asked = true
+        return []
+      },
+    },
+    's',
+    []
+  )
   assert.equal(asked, false)
 })
 

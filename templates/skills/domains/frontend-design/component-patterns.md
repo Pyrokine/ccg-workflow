@@ -1,26 +1,28 @@
 # 组件模式
 
+以下 CSS 片段复用目标项目的主题令牌，需提供 `--shadow-2`、`--shadow-3` 和 `--primary`
+
 ## 布局模板
 
 ### 经典布局模式
 
-圣杯布局(header/nav/main/aside/footer)、卡片网格、侧边栏、仪表盘。优先使用Grid，Flexbox做一维布局。
+圣杯布局 (header/nav/main/aside/footer)、卡片网格、侧边栏、仪表盘。优先使用Grid，Flexbox做一维布局。
 
 ```css
 .layout {
   display: grid;
   grid-template:
-    "header header" auto
-    "nav main" 1fr
-    "nav aside" auto
-    "footer footer" auto
+    'header header' auto
+    'nav main' 1fr
+    'nav aside' auto
+    'footer footer' auto
     / 200px 1fr;
   gap: 1rem;
   min-height: 100vh;
 }
 @media (max-width: 768px) {
   .layout {
-    grid-template: "header" "nav" "main" "aside" "footer" / 1fr;
+    grid-template: 'header' 'nav' 'main' 'aside' 'footer' / 1fr;
   }
 }
 ```
@@ -46,7 +48,7 @@
 
 ### 响应式断点策略
 
-移动优先：320px基准→640px(sm)→768px(md)→1024px(lg)→1280px(xl)。使用em单位断点(除以16)。优先容器查询。
+移动优先：320px基准→640px (sm)→768px (md)→1024px (lg)→1280px (xl)。使用em单位断点 (除以16)。优先容器查询。
 
 ```css
 .card-container {
@@ -68,7 +70,7 @@
 
 ### 微交互设计原则
 
-反馈即时(<100ms)、过渡流畅(200-300ms)、状态清晰(hover/active/focus)、减少认知负担。
+反馈即时 (<100ms)、过渡流畅 (200-300ms)、状态清晰 (hover/active/focus)、减少认知负担。
 
 ```css
 .btn {
@@ -118,12 +120,12 @@
 const fadeInUp = {
   initial: { opacity: 0, y: 20 },
   animate: { opacity: 1, y: 0 },
-  transition: { duration: 0.4, ease: "easeOut" }
-};
+  transition: { duration: 0.4, ease: 'easeOut' },
+}
 const stagger = {
-  animate: { transition: { staggerChildren: 0.1 } }
-};
-<motion.div variants={stagger}>
+  animate: { transition: { staggerChildren: 0.1 } },
+}
+;<motion.div variants={stagger}>
   <motion.div variants={fadeInUp} />
 </motion.div>
 ```
@@ -150,7 +152,7 @@ const stagger = {
 .input:focus {
   outline: none;
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 ```
 

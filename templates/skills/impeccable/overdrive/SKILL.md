@@ -52,7 +52,7 @@ iteration, not code alone.
 ## Assess What "Extraordinary" Means Here
 
 The right kind of technical ambition depends entirely on what you're working with. Before choosing a technique, ask: *
-*what would make a user of THIS specific interface say "wow, that's nice"?**
+_what would make a user of THIS specific interface say "wow, that's nice"?_*
 
 ### For visual/marketing surfaces
 
@@ -89,8 +89,8 @@ Organized by what you're trying to achieve, not by technology name.
   FLIP animations.
 - **`@starting-style`** (all browsers) — animate elements from `display: none` to visible with CSS only, including entry
   keyframes
-- **Spring physics** — natural motion with mass, tension, and damping instead of cubic-bezier. Libraries: motion (
-  formerly Framer Motion), GSAP, or roll your own spring solver.
+- **Spring physics** — natural motion with mass, tension, and damping instead of cubic-bezier. Libraries: motion
+  (formerly Framer Motion), GSAP, or roll your own spring solver.
 
 ### Tie animation to scroll position
 
@@ -148,13 +148,18 @@ Every technique must degrade gracefully. The experience without the enhancement 
 
 ```css
 @supports (animation-timeline: scroll()) {
-  .hero { animation-timeline: scroll(); }
+  .hero {
+    animation-timeline: scroll();
+  }
 }
 ```
 
 ```javascript
-if ('gpu' in navigator) { /* WebGPU */ }
-else if (canvas.getContext('webgl2')) { /* WebGL2 fallback */ }
+if ('gpu' in navigator) {
+  /* WebGPU */
+} else if (canvas.getContext('webgl2')) {
+  /* WebGL2 fallback */
+}
 /* CSS-only fallback must still look good */
 ```
 

@@ -83,7 +83,7 @@ function sourceMetrics(filePath, lines) {
 function metricIssues(filePath, metrics, lines) {
   const issues = [];
   for (const [index, line] of lines.entries()) {
-    if (line.length > MAX_LINE_LENGTH)
+    if (line.length > MAX_LINE_LENGTH) {
       issues.push({
         severity: 'info',
         category: '格式',
@@ -93,8 +93,9 @@ function metricIssues(filePath, metrics, lines) {
         line_number: index + 1,
         suggestion: null,
       });
+    }
   }
-  if (metrics.code_lines > MAX_FILE_LENGTH)
+  if (metrics.code_lines > MAX_FILE_LENGTH) {
     issues.push({
       severity: 'warning',
       category: '复杂度',
@@ -104,6 +105,7 @@ function metricIssues(filePath, metrics, lines) {
       suggestion: '考虑拆分为多个模块',
       line_number: null,
     });
+  }
   return issues;
 }
 
@@ -111,15 +113,22 @@ function measurePythonLines(lines, metrics) {
   let inMultiline = false;
   for (const line of lines) {
     const stripped = line.trim();
-    if (!stripped) metrics.blank_lines++;
-    else if (stripped.startsWith('#')) metrics.comment_lines++;
-    else if (/"""|'''/u.test(stripped)) {
+    if (!stripped) {
+      metrics.blank_lines++;
+    } else if (stripped.startsWith('#')) {
+      metrics.comment_lines++;
+    } else if (/"""|'''/u.test(stripped)) {
       const double = (stripped.match(/"""/gu) || []).length;
       const single = (stripped.match(/'''/gu) || []).length;
-      if (double !== 2 && single !== 2) inMultiline = !inMultiline;
+      if (double !== 2 && single !== 2) {
+        inMultiline = !inMultiline;
+      }
       metrics.comment_lines++;
-    } else if (inMultiline) metrics.comment_lines++;
-    else metrics.code_lines++;
+    } else if (inMultiline) {
+      metrics.comment_lines++;
+    } else {
+      metrics.code_lines++;
+    }
   }
 }
 
@@ -132,8 +141,10 @@ function pythonFunctionLength(funcLines, indent) {
       length++;
       continue;
     }
-    const currentIndent = line.match(/^(\s*)/u)[1].length;
-    if (currentIndent <= indent && line.trim() !== '') break;
+    const currentIndent = line.match(/^(?<indent>\s*)/u)[1].length;
+    if (currentIndent <= indent && line.trim() !== '') {
+      break;
+    }
     length++;
   }
   return length;
@@ -144,29 +155,126 @@ function pythonComplexity(lines) {
   let complexity = 1;
   for (const line of lines) {
     const text = line.trim();
-    if (/^(if|elif|while|for)(?:\s|\()/u.test(text)) complexity++;
-    if (/^except(\s|:)/u.test(text)) complexity++;
-    if (/\s(and|or)\s/u.test(text)) complexity++;
-    if (/\sfor\s/u.test(text) && /\sin\s/u.test(text) && (text.includes('[') || text.includes('('))) complexity++;
+    if (/^(?:if|elif|while|for)[\s(]/u.test(text)) {
+      complexity++;
+    }
+    if (/^except[\s:]/u.test(text)) {
+      complexity++;
+    }
+    if (/\s(?:and|or)\s/u.test(text)) {
+      complexity++;
+    }
+    if (/\sfor\s/u.test(text) && /\sin\s/u.test(text) && (text.includes('[') || text.includes('('))) {
+      complexity++;
+    }
   }
   return complexity;
 }
 
-function pythonFunction(match, content, lines) {
+function pythonStringEnd(content, index) {
+  if (content[index] === '#') {
+    const end = content.indexOf('\n', index);
+    return end < 0 ? content.length : end;
+  }
+  if (!['"', "'"].includes(content[index])) {
+    return index;
+  }
+  const quote = content.startsWith(content[index].repeat(3), index) ? content[index].repeat(3) : content[index];
+  for (let end = index + quote.length; end < content.length; end++) {
+    if (content[end] === '\\') {
+      end++;
+    } else if (content.startsWith(quote, end)) {
+      return end + quote.length;
+    } else if (quote.length === 1 && /[\r\n]/u.test(content[end])) {
+      break;
+    }
+  }
+  throw new Error('Unterminated Python string in function signature');
+}
+
+function pythonBrackets(stack, token) {
+  if ('([{'.includes(token)) {
+    stack.push(token);
+  } else if (')]}'.includes(token)) {
+    const opening = '([{'.charAt(')]}'.indexOf(token));
+    if (stack.pop() !== opening) {
+      throw new Error('Unbalanced Python function signature');
+    }
+  }
+  return stack.length === 0;
+}
+
+const PYTHON_IDENTIFIER = /[_\p{ID_Start}][_\p{ID_Continue}]*/uy;
+
+function pythonParameterToken(content, index, state) {
+  PYTHON_IDENTIFIER.lastIndex = index;
+  const word = PYTHON_IDENTIFIER.exec(content);
+  if (word) {
+    if (word[0] === 'lambda') {
+      state.lambdas++;
+    }
+    return PYTHON_IDENTIFIER.lastIndex - 1;
+  }
+  if (content[index] === ':' && state.lambdas) {
+    state.lambdas--;
+  }
+  if (content[index] === ',' && !state.lambdas) {
+    state.parts.push(content.slice(state.start, index));
+    state.start = index + 1;
+  }
+  return index;
+}
+
+function pythonSignature(content, start) {
+  const stack = ['('];
+  const state = { start, parts: [], lambdas: 0 };
+  for (let index = start; index < content.length; index++) {
+    const quotedEnd = pythonStringEnd(content, index);
+    if (quotedEnd !== index) {
+      index = quotedEnd - 1;
+      continue;
+    }
+    if (pythonBrackets(stack, content[index])) {
+      if (state.lambdas) {
+        throw new Error('Incomplete Python lambda in function signature');
+      }
+      state.parts.push(content.slice(state.start, index));
+      return { parts: state.parts, end: index + 1 };
+    }
+    if (stack.length === 1) {
+      index = pythonParameterToken(content, index, state);
+    }
+  }
+  throw new Error('Python function signature is incomplete');
+}
+
+function pythonParameterCount(parts) {
+  return parts.reduce((count, source, index) => {
+    const parameter = source.replace(/#[^\r\n]*/gu, '').trim();
+    if (!parameter && index === parts.length - 1) {
+      return count;
+    }
+    if (['/', '*'].includes(parameter)) {
+      return count;
+    }
+    const name = /^(?<stars>\*{0,2})(?<name>[_\p{ID_Start}][_\p{ID_Continue}]*)/u.exec(parameter);
+    if (!name) {
+      throw new Error('Python parameter could not be analyzed');
+    }
+    return count + (!name[1] && ['self', 'cls'].includes(name[2]) ? 0 : 1);
+  }, 0);
+}
+
+function pythonFunction(match, content, lines, signature) {
   const line = content.substring(0, match.index).split('\n').length;
-  const params = match[3].trim()
-    ? match[3]
-        .split(',')
-        .map((value) => value.trim())
-        .filter((value) => value && value !== 'self' && value !== 'cls')
-    : [];
-  const length = pythonFunctionLength(lines.slice(line), match[1].length); // lines after def
+  const headerEnd = content.substring(0, signature.end).split('\n').length;
+  const bodyLength = pythonFunctionLength(lines.slice(headerEnd), match[1].length);
   return {
     name: match[2],
     line,
-    length,
-    complexity: pythonComplexity(lines.slice(line, line + length - 1)),
-    parameters: params.length,
+    length: bodyLength + headerEnd - line,
+    complexity: pythonComplexity(lines.slice(headerEnd, headerEnd + bodyLength - 1)),
+    parameters: pythonParameterCount(signature.parts),
   };
 }
 
@@ -174,7 +282,7 @@ function pythonFunctionIssues(filePath, fn) {
   const { name, line, length, complexity, parameters } = fn;
   const issues = [];
   // Check function length
-  if (length > MAX_FUNCTION_LENGTH)
+  if (length > MAX_FUNCTION_LENGTH) {
     issues.push({
       severity: 'warning',
       category: '复杂度',
@@ -184,8 +292,9 @@ function pythonFunctionIssues(filePath, fn) {
       line_number: line,
       suggestion: '考虑拆分为多个小函数',
     });
+  }
   // Check complexity
-  if (complexity > MAX_COMPLEXITY)
+  if (complexity > MAX_COMPLEXITY) {
     issues.push({
       severity: 'warning',
       category: '复杂度',
@@ -195,8 +304,9 @@ function pythonFunctionIssues(filePath, fn) {
       line_number: line,
       suggestion: '减少嵌套层级，提取子函数',
     });
+  }
   // Check parameter count
-  if (parameters > MAX_PARAMETERS)
+  if (parameters > MAX_PARAMETERS) {
     issues.push({
       severity: 'warning',
       category: '设计',
@@ -206,6 +316,7 @@ function pythonFunctionIssues(filePath, fn) {
       line_number: line,
       suggestion: '考虑使用配置对象或数据类封装参数',
     });
+  }
   return issues;
 }
 
@@ -215,7 +326,7 @@ function pythonNamingIssues(filePath, fn) {
   const special = new Set(['setUp', 'tearDown', 'setUpClass', 'tearDownClass', 'setUpModule', 'tearDownModule']);
   const issues = [];
   const exempt = name.startsWith('_') || special.has(name) || name.startsWith('visit_');
-  if (!exempt && !/^[a-z][a-z0-9_]*$/u.test(name))
+  if (!exempt && !/^[a-z][a-z0-9_]*$/u.test(name)) {
     issues.push({
       severity: 'info',
       category: '命名',
@@ -225,7 +336,8 @@ function pythonNamingIssues(filePath, fn) {
       line_number: line,
       suggestion: '函数名应使用 snake_case',
     });
-  if (name.length < MIN_FUNCTION_NAME_LENGTH)
+  }
+  if (name.length < MIN_FUNCTION_NAME_LENGTH) {
     issues.push({
       severity: 'warning',
       category: '命名',
@@ -235,14 +347,15 @@ function pythonNamingIssues(filePath, fn) {
       line_number: line,
       suggestion: '使用更具描述性的函数名',
     });
+  }
   return issues;
 }
 
 function pythonClasses(filePath, content) {
-  const classes = [...content.matchAll(/^( *)class\s+(\w+)/gm)];
+  const classes = [...content.matchAll(/^(?<indent> *)class\s+(?<name>\w+)/gm)];
   const issues = [];
   for (const match of classes) {
-    if (!/^[A-Z][a-zA-Z0-9]*$/u.test(match[2]))
+    if (!/^[A-Z][a-zA-Z0-9]*$/u.test(match[2])) {
       issues.push({
         severity: 'warning',
         category: '命名',
@@ -252,6 +365,7 @@ function pythonClasses(filePath, content) {
         line_number: content.substring(0, match.index).split('\n').length,
         suggestion: '类名应使用 PascalCase，如 MyClassName',
       });
+    }
   }
   return { count: classes.length, issues };
 }
@@ -301,10 +415,13 @@ function analyzeGenericFile(filePath, content = fs.readFileSync(filePath, 'utf-8
   const prefix = COMMENT_PREFIXES[path.extname(filePath).toLowerCase()] || '//';
   for (const line of lines) {
     const stripped = line.trim();
-    if (!stripped) metrics.blank_lines++;
-    else if (stripped.startsWith(prefix) || stripped.startsWith('/*') || stripped.startsWith('*'))
+    if (!stripped) {
+      metrics.blank_lines++;
+    } else if (stripped.startsWith(prefix) || stripped.startsWith('/*') || stripped.startsWith('*')) {
       metrics.comment_lines++;
-    else metrics.code_lines++;
+    } else {
+      metrics.code_lines++;
+    }
   }
   return { metrics, issues: metricIssues(filePath, metrics, lines) };
 }
@@ -314,10 +431,15 @@ function analyzePythonFile(filePath, content = fs.readFileSync(filePath, 'utf-8'
   const metrics = sourceMetrics(filePath, lines);
   measurePythonLines(lines, metrics);
   const issues = metricIssues(filePath, metrics, lines);
-  // Regex-based Python analysis (no AST available in Node)
-  const functions = [...content.matchAll(/^( *)(?:async\s+)?def\s+(\w+)\s*\(([^)]*)\)/gm)].map((match) =>
-    pythonFunction(match, content, lines)
-  );
+  // Collect balanced signatures without requiring a Python runtime.
+  const functions = [];
+  const pattern = /^(?<indent>[ \t]*)(?:async\s+)?def\s+(?<name>[_\p{ID_Start}][_\p{ID_Continue}]*)\s*\(/gmu;
+  let match;
+  while ((match = pattern.exec(content))) {
+    const signature = pythonSignature(content, pattern.lastIndex);
+    functions.push(pythonFunction(match, content, lines, signature));
+    pattern.lastIndex = signature.end;
+  }
   for (const fn of functions) {
     metrics.max_complexity = Math.max(metrics.max_complexity, fn.complexity);
     issues.push(...pythonFunctionIssues(filePath, fn), ...pythonNamingIssues(filePath, fn));
@@ -326,8 +448,9 @@ function analyzePythonFile(filePath, content = fs.readFileSync(filePath, 'utf-8'
   metrics.classes = classes.count;
   issues.push(...classes.issues);
   metrics.functions = functions.length;
-  if (functions.length)
+  if (functions.length) {
     metrics.avg_function_length = functions.reduce((sum, fn) => sum + fn.length, 0) / functions.length;
+  }
   return { metrics, issues };
 }
 
@@ -347,6 +470,7 @@ function scanDirectory(targets, excludeDirs, options = {}) {
     coverage: selected.coverage,
     scan_errors: selected.errors,
     analysis_mode: options.languageChecks ? 'language' : 'text',
+    supported_file_types: [...CODE_EXTENSIONS].sort(),
     checks: [],
     uncovered: [],
     complete: false,
@@ -358,7 +482,9 @@ function scanDirectory(targets, excludeDirs, options = {}) {
   };
   const contents = scanSelectedFiles(selected.files, result);
   const files = [...contents.keys()];
-  if (options.languageChecks && files.length) analyzeLanguages(files, result, options.targetVersion);
+  if (options.languageChecks && files.length) {
+    analyzeLanguages(files, result, options.targetVersion);
+  }
   const compared = compareBaseline(
     files,
     result.issues,
@@ -402,6 +528,14 @@ function formatReport(result, verbose) {
     扫描路径: result.scan_path,
     扫描文件: result.files_scanned,
     检查范围: result.analysis_mode === 'language' ? '文本规则与语言工具' : '文本规则（未请求语言检查）',
+    支持类型: result.supported_file_types.join(', '),
+    执行阶段:
+      result.checks
+        .filter((check) => check.timing)
+        .map(
+          (check) => `${check.tool}: ${check.timing.phase}，${check.timing.elapsed_ms} / ${check.timing.budget_ms} ms`
+        )
+        .join('\n') || '未执行原生工具',
     语言工具:
       [
         ...new Set(
@@ -430,7 +564,9 @@ function formatReport(result, verbose) {
       .slice(0, 5);
     if (complex.length) {
       const lines = ['\n' + '-'.repeat(40), 'Python 启发式复杂度估算:', '-'.repeat(40)];
-      for (const m of complex) lines.push(`  ${m.path}: 复杂度 ${m.max_complexity}, ${m.functions} 个函数`);
+      for (const m of complex) {
+        lines.push(`  ${m.path}: 复杂度 ${m.max_complexity}, ${m.functions} 个函数`);
+      }
       report += '\n' + lines.join('\n');
     }
   }
@@ -448,24 +584,15 @@ function main() {
     );
     return;
   }
-  if (opts.mode) throw new Error('--mode is only supported by verify-change');
+  if (opts.mode) {
+    throw new Error('--mode is only supported by verify-change');
+  }
   const result = scanDirectory(opts.targets, new Set([...EXCLUDE_DIRS, ...(opts.exclude || [])]), opts);
 
   if (opts.json) {
     const output = {
-      scan_path: result.scan_path,
-      requested_paths: result.requested_paths,
-      coverage: result.coverage,
-      scan_errors: result.scan_errors,
-      complete: result.complete,
-      files_scanned: result.files_scanned,
-      total_lines: result.total_lines,
-      total_code_lines: result.total_code_lines,
-      analysis_mode: result.analysis_mode,
-      checks: result.checks,
-      uncovered: result.uncovered,
-      baseline: result.baseline,
-      origin_counts: result.origin_counts,
+      ...result,
+      file_metrics: undefined,
       passed: passed(result),
       error_count: result.issues.filter((i) => i.severity === 'error').length,
       warning_count: result.issues.filter((i) => i.severity === 'warning').length,
@@ -479,4 +606,6 @@ function main() {
   process.exitCode = !result.complete ? 2 : passed(result) ? 0 : 1;
 }
 
-if (require.main === module) runCli(main);
+if (require.main === module) {
+  runCli(main);
+}

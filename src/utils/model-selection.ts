@@ -3,7 +3,9 @@ import inquirer from 'inquirer'
 /** Model IDs are interpolated into command templates, so reject shell syntax. */
 export function validateOpencodeModel(value: string, isZh = true): true | string {
   const model = value.trim()
-  if (!model || /^[\w.-]+\/[\w.:/-]+$/.test(model)) return true
+  if (!model || /^[\w.-]+\/[\w.:/-]+$/.test(model)) {
+    return true
+  }
   return isZh
     ? '请填写 provider/model（不能包含空格或 shell 符号），或留空使用 OpenCode 默认模型'
     : 'Enter provider/model without spaces or shell syntax, or leave empty for the OpenCode default'

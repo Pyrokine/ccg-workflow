@@ -11,22 +11,15 @@
  * matters is everything decided before it runs.
  */
 
+import fs from 'fs-extra'
 import { execFileSync } from 'node:child_process'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
-import fs from 'fs-extra'
 import { dirname, join } from 'pathe'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-
-vi.mock('node:child_process', async (original) => ({
-  ...(await original<typeof import('node:child_process')>()),
-  execFileSync: vi.fn(),
-}))
-
-const execFileSyncMock = vi.mocked(execFileSync)
 import {
-  DSH_PLUGIN_NAME,
   defaultDshHome,
+  DSH_PLUGIN_NAME,
   dshPluginDir,
   findDshProfiles,
   hasDshHome,
@@ -34,6 +27,13 @@ import {
   profileLinkCommand,
   uninstallDshPlugin,
 } from '../installer-dsh'
+
+vi.mock('node:child_process', async (original) => ({
+  ...(await original<typeof import('node:child_process')>()),
+  execFileSync: vi.fn(),
+}))
+
+const execFileSyncMock = vi.mocked(execFileSync)
 
 let dshHome: string
 
@@ -484,15 +484,18 @@ describe('uninstallDshPlugin', () => {
  *
  * `DSH_HOME` is the harness's own way of being pointed somewhere else, and a
  * user who sets it has no `~/.dsh` for this to quietly fall back to: the
- * install would report success into a home nothing boots from, and the plugin
+ * installation would report success into a home nothing boots from, and the plugin
  * would simply never appear.
  */
 describe('the harness home it defaults to', () => {
   const saved = process.env.DSH_HOME
 
   afterEach(() => {
-    if (saved === undefined) delete process.env.DSH_HOME
-    else process.env.DSH_HOME = saved
+    if (saved === undefined) {
+      delete process.env.DSH_HOME
+    } else {
+      process.env.DSH_HOME = saved
+    }
   })
 
   it('follows DSH_HOME when the harness has been pointed elsewhere', () => {

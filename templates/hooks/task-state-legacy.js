@@ -68,7 +68,9 @@ function validateLegacyReturnChains(taskResults) {
     if (!isValidTaskId(rawValue) || rawValue === result.task.id) {
       fail('RETURN_CHAIN_INVALID', `Legacy task has an invalid return target: ${result.task.id}`);
     }
-    if (!ids.has(rawValue)) fail('RETURN_CHAIN_MISSING', `Legacy return target is missing: ${rawValue}`);
+    if (!ids.has(rawValue)) {
+      fail('RETURN_CHAIN_MISSING', `Legacy return target is missing: ${rawValue}`);
+    }
     returnMap.set(result.task.id, rawValue);
   }
   validateReturnMap(ids, returnMap);
@@ -77,18 +79,25 @@ function validateLegacyReturnChains(taskResults) {
 
 function preflightLegacy(projectRoot) {
   const listed = listTasks(projectRoot, { allowLegacy: true });
-  if (!listed.ok) fail(listed.code, listed.message);
+  if (!listed.ok) {
+    fail(listed.code, listed.message);
+  }
   const taskResults = listed.tasks.map((task) => {
     const result = readTask(projectRoot, task.id, { allowLegacy: true });
-    if (!result.ok) fail(result.code, result.message);
+    if (!result.ok) {
+      fail(result.code, result.message);
+    }
     return result;
   });
   validateLegacyReturnChains(taskResults);
   const tasks = taskResults.map((result) => {
     const requirements = readFileBounded(path.join(result.taskDir, 'requirements.md'), REQUIREMENTS_LIMIT);
     let contract = 'valid';
-    if (!requirements.ok && requirements.code === 'NOT_FOUND') contract = 'missing';
-    else if (!requirements.ok || requirements.truncated || !requirements.content.trim()) contract = 'blocked';
+    if (!requirements.ok && requirements.code === 'NOT_FOUND') {
+      contract = 'missing';
+    } else if (!requirements.ok || requirements.truncated || !requirements.content.trim()) {
+      contract = 'blocked';
+    }
     return {
       id: result.task.id,
       legacy: result.legacy,
@@ -100,11 +109,15 @@ function preflightLegacy(projectRoot) {
 }
 
 function migrateOneTask(projectRoot, taskResult, diagnostics) {
-  if (!taskResult.legacy) return taskResult.task;
+  if (!taskResult.legacy) {
+    return taskResult.task;
+  }
   backupLegacyTask(projectRoot, taskResult);
   const task = canonicalizeLegacyTask(projectRoot, taskResult, diagnostics);
   const canonicalError = validateCanonicalTask(task, task.id);
-  if (canonicalError) fail('TASK_INVALID', `${canonicalError}: ${task.id}`);
+  if (canonicalError) {
+    fail('TASK_INVALID', `${canonicalError}: ${task.id}`);
+  }
   prepareLegacyArtifacts(taskResult, task);
   writeTask(projectRoot, task);
   return task;
@@ -127,8 +140,9 @@ function operationMigrateLegacy(projectRoot, sessionKey, request) {
     const stateResult = assertStateReadable(readState(projectRoot));
     assertExpectedState(stateResult, expected);
     const bindingResult = assertStateReadable(readBinding(projectRoot, sessionKey, stateResult.state.stateId));
-    if (!stateResult.exists && bindingResult.exists)
+    if (!stateResult.exists && bindingResult.exists) {
       fail('BINDING_INVALID', 'A session binding exists without task state');
+    }
     assertExpectedBinding(bindingResult, expected, stateResult.state);
     const preflight = preflightLegacy(projectRoot);
     if (preflight.orphans.length > 0) {
@@ -161,7 +175,9 @@ function canonicalizeLegacyTask(projectRoot, taskResult, diagnostics) {
   const now = new Date().toISOString();
   const git = getGitInfo(projectRoot);
   const status = normalizeLegacyTaskStatus(raw.status);
-  if (!status) fail('TASK_INVALID', `Legacy task status is invalid: ${taskResult.task.id}`);
+  if (!status) {
+    fail('TASK_INVALID', `Legacy task status is invalid: ${taskResult.task.id}`);
+  }
   const title = legacyText(raw.title, 240, taskResult.task.id);
   return {
     schemaVersion: TASK_SCHEMA_VERSION,
@@ -191,7 +207,9 @@ function prepareLegacyArtifacts(taskResult, task) {
     fail('TASK_CONTRACT_INVALID', `Legacy requirements.md is invalid: ${task.id}`);
   }
   const progressPath = path.join(taskResult.taskDir, 'progress.md');
-  if (!fs.existsSync(progressPath)) atomicWriteFile(progressPath, generatedProgress(task, 'Legacy task migrated'));
+  if (!fs.existsSync(progressPath)) {
+    atomicWriteFile(progressPath, generatedProgress(task, 'Legacy task migrated'));
+  }
 }
 
 function collectLegacyContextRefs(projectRoot, taskResult, diagnostics, refs) {
@@ -208,7 +226,9 @@ function collectLegacyContextRefs(projectRoot, taskResult, diagnostics, refs) {
       diagnostics.push(`LEGACY_CONTEXT_SKIPPED:${taskResult.task.id}:${entry.line}:${validated.code}`);
       continue;
     }
-    if (refs.some((ref) => ref.path === validated.ref.path && ref.section === validated.ref.section)) continue;
+    if (refs.some((ref) => ref.path === validated.ref.path && ref.section === validated.ref.section)) {
+      continue;
+    }
     const collected = collectSpecContext(projectRoot, [...refs, validated.ref], 'all');
     if (!collected.ok) {
       diagnostics.push(`LEGACY_CONTEXT_SKIPPED:${taskResult.task.id}:${entry.line}:${collected.code}`);
@@ -232,8 +252,12 @@ function validateReturnMap(ids, returnMap) {
     const visited = new Set();
     let current = id;
     for (let depth = 0; current !== null; depth += 1) {
-      if (depth >= 32) fail('RETURN_CHAIN_TOO_DEEP', `Task return chain exceeds 32 entries: ${id}`);
-      if (visited.has(current)) fail('RETURN_CHAIN_CYCLE', `Task return chain cycles at ${current}`);
+      if (depth >= 32) {
+        fail('RETURN_CHAIN_TOO_DEEP', `Task return chain exceeds 32 entries: ${id}`);
+      }
+      if (visited.has(current)) {
+        fail('RETURN_CHAIN_CYCLE', `Task return chain cycles at ${current}`);
+      }
       visited.add(current);
       current = returnMap.get(current) || null;
     }
@@ -244,7 +268,9 @@ function assertLegacyContracts(projectRoot, blocked, legacyResults) {
   if (blocked.length > 0) {
     for (const task of blocked) {
       const result = legacyResults.find((candidate) => candidate.task.id === task.id);
-      if (result) backupLegacyTask(projectRoot, result);
+      if (result) {
+        backupLegacyTask(projectRoot, result);
+      }
     }
     fail(
       'TASK_CONTRACT_INVALID',
@@ -257,7 +283,9 @@ function migrateManifestTasks(projectRoot, prepared, diagnostics) {
   const migratedTaskIds = [];
   for (const entry of prepared.manifest.tasks) {
     const result = readTask(projectRoot, entry.id, { allowLegacy: true });
-    if (!result.ok) fail(result.code, result.message);
+    if (!result.ok) {
+      fail(result.code, result.message);
+    }
     if (!result.legacy) {
       entry.status = 'applied';
       continue;
@@ -287,7 +315,9 @@ function legacyBranchAtCreation(task, git) {
 }
 
 function legacyFinishedAt(raw, status, now) {
-  if (status === 'open') return null;
+  if (status === 'open') {
+    return null;
+  }
   return Number.isFinite(Date.parse(raw.finishedAt || raw.completedAt)) ? raw.finishedAt || raw.completedAt : now;
 }
 

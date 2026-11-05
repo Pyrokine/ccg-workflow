@@ -22,13 +22,13 @@ $ARGUMENTS
 
 **与 `/ccg:execute` 的区别**：
 
-| 维度           | `/ccg:execute`                                            | `/ccg:codex-exec`              |
-|--------------|-----------------------------------------------------------|--------------------------------|
-| 代码实现         | Claude 重构 {{BACKEND_PRIMARY}}/{{FRONTEND_PRIMARY}} 的 Diff | **{{BACKEND_PRIMARY}} 直接实现**   |
-| MCP 搜索       | Claude 调用 MCP                                             | **{{BACKEND_PRIMARY}} 调用 MCP** |
-| Claude 上下文   | 高（搜索结果 + 代码全进来）                                           | **极低（只看摘要 + diff）**            |
-| Claude token | 大量消耗                                                      | **极少消耗**                       |
-| 审核           | 多模型审查                                                     | **多模型审查（不变）**                  |
+| 维度          | `/ccg:execute`                                               | `/ccg:codex-exec`                |
+|---------------|--------------------------------------------------------------|----------------------------------|
+| 代码实现      | Claude 重构 {{BACKEND_PRIMARY}}/{{FRONTEND_PRIMARY}} 的 Diff | **{{BACKEND_PRIMARY}} 直接实现** |
+| MCP 搜索      | Claude 调用 MCP                                              | **{{BACKEND_PRIMARY}} 调用 MCP** |
+| Claude 上下文 | 高（搜索结果 + 代码全进来）                                  | **极低（只看摘要 + diff）**      |
+| Claude token  | 大量消耗                                                     | **极少消耗**                     |
+| 审核          | 多模型审查                                                   | **多模型审查（不变）**           |
 
 ---
 
@@ -43,7 +43,8 @@ $ARGUMENTS
 
 **工作目录**：
 
-- `{{WORKDIR}}`：**必须通过 Bash 执行 `pwd`（Unix）或 `cd`（Windows CMD）获取当前工作目录的绝对路径**，禁止从 `$HOME` 或环境变量推断
+- `{{WORKDIR}}`： **必须通过 Bash 执行 `pwd`（Unix）或 `cd`（Windows CMD）获取当前工作目录的绝对路径**，禁止从 `$HOME`
+  或环境变量推断
 - 如果用户通过 `/add-dir` 添加了多个工作区，先用 Glob/Grep 确定任务相关的工作区
 - 如果无法确定，用 `AskUserQuestion` 询问用户选择目标工作区
 
@@ -81,17 +82,20 @@ EXEC_EOF",
 
 在同一条消息中启动 GPT、Grok 两个 `Bash` 调用，每个调用接收完整 git diff、计划文件和相关完整文件：
 
-| reviewer | wrapper 参数 | 审查重点 |
-|---|---|---|
-| GPT | `--backend claude --no-session-persistence --claude-model {{REVIEW_GPT_MODEL}} --claude-effort {{REVIEW_GPT_EFFORT}}` | 后端逻辑、正确性、安全、回归与测试缺口 |
-| Grok | `--backend claude --no-session-persistence --claude-model {{REVIEW_GROK_MODEL}} --claude-effort {{REVIEW_GROK_EFFORT}}` | 前端交互、可访问性、设计一致性与前端安全 |
+| reviewer | wrapper 参数                                                                                                            | 审查重点                                 |
+|----------|-------------------------------------------------------------------------------------------------------------------------|------------------------------------------|
+| GPT      | `--backend claude --no-session-persistence --claude-model {{REVIEW_GPT_MODEL}} --claude-effort {{REVIEW_GPT_EFFORT}}`   | 后端逻辑、正确性、安全、回归与测试缺口   |
+| Grok     | `--backend claude --no-session-persistence --claude-model {{REVIEW_GROK_MODEL}} --claude-effort {{REVIEW_GROK_EFFORT}}` | 前端交互、可访问性、设计一致性与前端安全 |
 
-两个外部调用使用 `~/.claude/.ccg/prompts/claude/reviewer.md`，不得修改文件，输出按 Critical/Warning/Info 分级的问题、位置、依据与修复建议。外部 reviewer 不使用 `resume` 或保存 `SESSION_ID`。
+两个外部调用使用
+`~/.claude/.ccg/prompts/claude/reviewer.md`，不得修改文件，输出按 Critical/Warning/Info 分级的问题、位置、依据与修复建议。外部
+reviewer 不使用
+`resume` 或保存 `SESSION_ID`。
 
 **角色提示词**：
 
-| 阶段 | reviewer |
-|---|---|
+| 阶段 | reviewer                                                                        |
+|------|---------------------------------------------------------------------------------|
 | 审查 | `~/.claude/.ccg/prompts/claude/reviewer.md`，供 GPT、Grok 两个外部 profile 共用 |
 
 **等待后台任务**（最大超时 600000ms = 10 分钟）：
@@ -103,12 +107,12 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 **重要**：
 
 - 必须指定 `timeout: 600000`，否则默认只有 30 秒会导致提前超时
-- 若 10 分钟后仍未完成，继续用 `TaskOutput` 轮询，**绝对不要 Kill 进程**
-- 若因等待时间过长跳过了等待，**必须调用 `AskUserQuestion` 询问用户选择继续等待还是 Kill Task**
+- 若 10 分钟后仍未完成，继续用 `TaskOutput` 轮询， **绝对不要 Kill 进程**
+- 若因等待时间过长跳过了等待， **必须调用 `AskUserQuestion` 询问用户选择继续等待还是 Kill Task**
 - ⛔ **前端模型失败必须重试**：若前端模型调用失败（非零退出码或输出包含错误信息），最多重试 2 次（间隔 5 秒）。仅当 3
   次全部失败时才跳过前端模型结果并使用单模型结果继续。
 - ⛔ **后端模型结果必须等待**：后端模型执行时间较长（5-15 分钟）属于正常。TaskOutput 超时后必须继续用 TaskOutput 轮询，*
-  *绝对禁止在后端模型未返回结果时直接跳过或继续下一阶段**。已启动的后端任务若被跳过 = 浪费 token + 丢失结果。
+  _绝对禁止在后端模型未返回结果时直接跳过或继续下一阶段_*。已启动的后端任务若被跳过 = 浪费 token + 丢失结果。
 
 ---
 
@@ -131,8 +135,7 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
     - 关键文件列表
     - SESSION_ID（`CODEX_SESSION` / `FRONTEND_SESSION`）
 
-3. **执行前确认**：
-   向用户展示计划摘要，确认后执行：
+3. **执行前确认**：向用户展示计划摘要，确认后执行：
 
    ```markdown
    ## 即将执行
@@ -271,7 +274,7 @@ FIXEOF",
 })
 ```
 
-等待完成后重新进入 Phase 3。**最多 2 轮返工**，超过后将未解决问题报告给用户。
+等待完成后重新进入 Phase 3。 **最多 2 轮返工**，超过后将未解决问题报告给用户。
 
 ---
 
@@ -289,10 +292,15 @@ FIXEOF",
 
 2. **并行调用 GPT、Grok reviewer**（`run_in_background: true`）：
 
-    - **GPT**：`--backend claude --no-session-persistence --claude-model {{REVIEW_GPT_MODEL}} --claude-effort {{REVIEW_GPT_EFFORT}}`，关注后端逻辑、正确性、安全、回归与测试缺口
-    - **Grok**：`--backend claude --no-session-persistence --claude-model {{REVIEW_GROK_MODEL}} --claude-effort {{REVIEW_GROK_EFFORT}}`，关注前端交互、可访问性、设计一致性与前端安全
+    - **GPT**：
+      `--backend claude --no-session-persistence --claude-model {{REVIEW_GPT_MODEL}} --claude-effort {{REVIEW_GPT_EFFORT}}`
+      ，关注后端逻辑、正确性、安全、回归与测试缺口
+    - **Grok**：
+      `--backend claude --no-session-persistence --claude-model {{REVIEW_GROK_MODEL}} --claude-effort {{REVIEW_GROK_EFFORT}}`
+      ，关注前端交互、可访问性、设计一致性与前端安全
 
-   GPT、Grok 使用 `~/.claude/.ccg/prompts/claude/reviewer.md`，输入变更完整 diff、计划文件和相关完整文件。用 `TaskOutput` 等待两个结果，不得 `resume` 或保存 reviewer `SESSION_ID`。
+   GPT、Grok 使用 `~/.claude/.ccg/prompts/claude/reviewer.md`，输入变更完整 diff、计划文件和相关完整文件。用
+   `TaskOutput` 等待两个结果，不得 `resume` 或保存 reviewer `SESSION_ID`。
 
 3. **整合审查意见**：
     - 合并 GPT、Grok 两份报告并去重，每项回到当前源码确认

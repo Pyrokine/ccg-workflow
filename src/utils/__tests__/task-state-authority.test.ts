@@ -1,18 +1,17 @@
+import { describe, expect, it } from 'vitest'
+import type { JsonObject } from './task-state-fixtures'
 import {
-  writeArtifact,
-  linkSpec,
-  DEFAULT_SESSION_ID,
   createProject,
+  currentExpected,
+  DEFAULT_SESSION_ID,
+  expectSuccess,
+  hookOutput,
+  linkSpec,
   runController,
   runHook,
-  expectSuccess,
-  currentExpected,
   startTask,
-  hookOutput,
+  writeArtifact,
 } from './task-state-fixtures'
-import { describe, expect, it } from 'vitest'
-
-import type { JsonObject } from './task-state-fixtures'
 
 function foregroundResults(wrapperCommand: string) {
   return [
@@ -224,6 +223,40 @@ describe('session and sub-agent Hooks', () => {
         'Reject any plan that merges module-alpha, module-beta, or module-gamma'
       )
     }
+  })
+
+  it.each(['Bash', 'Edit', 'Write'])(
+    'provides current authority before ordinary %s without changing its input',
+    async (toolName) => {
+      const root = await createProject()
+      startTask(root, 'ordinary-authority-task')
+      preparePromptArtifacts(root)
+      const toolInput = { command: 'printf unchanged', file_path: 'source.txt', content: 'preserve' }
+      const input = { cwd: root, tool_name: toolName, tool_input: toolInput }
+      const first = hookOutput(runHook(root, 'subagent-context.js', input))
+      expect(first.additionalContext).toContain('<ccg-authority>')
+      expect(first.additionalContext).toContain('Complete ordinary-authority-task')
+      expect(first.additionalContext).not.toContain('STALE_PLAN_SENTINEL')
+      expect(first.updatedInput).toBeUndefined()
+      expect(first.permissionDecision).toBeUndefined()
+      expectSuccess(
+        runController(root, 'update-requirements', {
+          expected: currentExpected(root, true),
+          content: '# Requirements\n\nPRESERVE_SOURCE_AND_DELIVERIES\n',
+        })
+      )
+      const latest = hookOutput(runHook(root, 'subagent-context.js', input))
+      expect(latest.additionalContext).toContain('PRESERVE_SOURCE_AND_DELIVERIES')
+      expect(latest.additionalContext).not.toContain('Complete ordinary-authority-task')
+      expect(input.tool_input).toEqual(toolInput)
+    }
+  )
+
+  it.each(['Bash', 'Edit', 'Write'])('preserves ordinary %s with no active task', async (toolName) => {
+    const root = await createProject()
+    const result = runHook(root, 'subagent-context.js', { cwd: root, tool_name: toolName, tool_input: {} })
+    expect(result.status).toBe(0)
+    expect(result.stdout).toBe('')
   })
 
   it('skips authority refresh for ordinary tools and background launch acknowledgements', async () => {

@@ -27,7 +27,9 @@ function findPackageRoot(startDir: string): string {
       // Continue searching upward
     }
     const parent = dirname(dir)
-    if (parent === dir) break // Reached filesystem root
+    if (parent === dir) {
+      break
+    } // Reached filesystem root
     dir = parent
   }
 
@@ -121,7 +123,9 @@ export function injectHookConfig(
     liteMode: config.liteMode ?? true,
     nativeSkills: config.skillsProfile !== undefined,
   }
-  return content.replace(/"\{\{HOOK_CONFIG_JSON\}\}"/g, () => JSON.stringify(JSON.stringify(snapshot)))
+  return content.replace(/(?<quote>['"])\{\{HOOK_CONFIG_JSON}}\k<quote>/g, () =>
+    JSON.stringify(JSON.stringify(snapshot))
+  )
 }
 
 type TemplateConfig = {
@@ -147,10 +151,10 @@ function injectRoutingVariables(content: string, routing: TemplateRouting): stri
   const frontendModels = routing.frontend?.models || ['claude']
   const backendModels = routing.backend?.models || ['claude']
   return content
-    .replace(/\{\{FRONTEND_MODELS\}\}/g, JSON.stringify(frontendModels))
-    .replace(/\{\{FRONTEND_PRIMARY\}\}/g, routing.frontend?.primary || 'claude')
-    .replace(/\{\{BACKEND_MODELS\}\}/g, JSON.stringify(backendModels))
-    .replace(/\{\{BACKEND_PRIMARY\}\}/g, routing.backend?.primary || 'claude')
+    .replace(/\{\{FRONTEND_MODELS}}/g, JSON.stringify(frontendModels))
+    .replace(/\{\{FRONTEND_PRIMARY}}/g, routing.frontend?.primary || 'claude')
+    .replace(/\{\{BACKEND_MODELS}}/g, JSON.stringify(backendModels))
+    .replace(/\{\{BACKEND_PRIMARY}}/g, routing.backend?.primary || 'claude')
 }
 
 function injectReviewProfiles(content: string, routing: TemplateRouting): string {
@@ -159,27 +163,33 @@ function injectReviewProfiles(content: string, routing: TemplateRouting): string
   const reviewGpt = reviewProfileById.get('gpt')
   const reviewGrok = reviewProfileById.get('grok')
   return content
-    .replace(/\{\{REVIEW_PROFILES\}\}/g, JSON.stringify(reviewProfiles))
-    .replace(/\{\{REVIEW_GPT_MODEL\}\}/g, reviewGpt?.model || '')
-    .replace(/\{\{REVIEW_GPT_EFFORT\}\}/g, reviewGpt?.effort || '')
-    .replace(/\{\{REVIEW_GROK_MODEL\}\}/g, reviewGrok?.model || '')
-    .replace(/\{\{REVIEW_GROK_EFFORT\}\}/g, reviewGrok?.effort || '')
+    .replace(/\{\{REVIEW_PROFILES}}/g, JSON.stringify(reviewProfiles))
+    .replace(/\{\{REVIEW_GPT_MODEL}}/g, reviewGpt?.model || '')
+    .replace(/\{\{REVIEW_GPT_EFFORT}}/g, reviewGpt?.effort || '')
+    .replace(/\{\{REVIEW_GROK_MODEL}}/g, reviewGrok?.model || '')
+    .replace(/\{\{REVIEW_GROK_EFFORT}}/g, reviewGrok?.effort || '')
 }
 
 function replaceModelFlag(content: string, modelFlag: ModelFlag, configuredModels: Set<string>): string {
   const { placeholder, model, backend, flag } = modelFlag
-  const pattern = new RegExp(`\\{\\{${placeholder}\\}\\}`, 'g')
+  const pattern = new RegExp(`\\{\\{${placeholder}}}`, 'g')
   const modelName = model?.trim()
-  if (!configuredModels.has(backend) || !modelName) return content.replace(pattern, '')
+  if (!configuredModels.has(backend) || !modelName) {
+    return content.replace(pattern, '')
+  }
 
-  const hardCodedBackend = /--backend\s+([a-z0-9-]+)(?:\s|$)/
+  const hardCodedBackend = /--backend\s+(?<backend>[a-z0-9-]+)(?:\s|$)/
   return content
     .split('\n')
     .map((line) => {
-      if (!line.includes(`{{${placeholder}}}`)) return line
+      if (!line.includes(`{{${placeholder}}}`)) {
+        return line
+      }
       const matchedBackend = line.match(hardCodedBackend)?.[1]
-      if (matchedBackend && matchedBackend !== backend) return line.replace(pattern, '')
-      const conditionalBackends = line.match(/--backend\s+<([^>]+)>/)?.[1].split('|') || []
+      if (matchedBackend && matchedBackend !== backend) {
+        return line.replace(pattern, '')
+      }
+      const conditionalBackends = line.match(/--backend\s+<(?<backends>[^>]+)>/)?.[1].split('|') || []
       if (conditionalBackends.some((route) => route.trim().split(/\s+/, 1)[0] === backend)) {
         return line.replace(pattern, '')
       }
@@ -191,12 +201,16 @@ function replaceModelFlag(content: string, modelFlag: ModelFlag, configuredModel
 function addModelFlagToWrapperCalls(content: string, modelFlag: ModelFlag, configuredModels: Set<string>): string {
   const { backend, model, flag } = modelFlag
   const modelName = model?.trim()
-  if (!configuredModels.has(backend) || !modelName) return content
-  const wrapperBackend = new RegExp(`(codeagent-wrapper.*?--backend\\s+${backend})(?=\\s|$)`)
+  if (!configuredModels.has(backend) || !modelName) {
+    return content
+  }
+  const wrapperBackend = new RegExp(`(?<command>codeagent-wrapper.*?--backend\\s+${backend})(?=\\s|$)`)
   return content
     .split('\n')
     .map((line) => {
-      if (!line.includes('codeagent-wrapper') || line.includes(flag)) return line
+      if (!line.includes('codeagent-wrapper') || line.includes(flag)) {
+        return line
+      }
       return line.replace(wrapperBackend, `$1 ${flag} ${modelName}`)
     })
     .join('\n')
@@ -214,9 +228,13 @@ function injectModelFlags(content: string, routing: TemplateRouting): string {
     { backend: 'kimi', model: routing.kimiModel, flag: '--kimi-model', placeholder: 'KIMI_MODEL_FLAG' },
     { backend: 'opencode', model: routing.opencodeModel, flag: '--opencode-model', placeholder: 'OPENCODE_MODEL_FLAG' },
   ]
-  let processed = content.replace(/\{\{GEMINI_MODEL_FLAG\}\}/g, '')
-  for (const modelFlag of modelFlags) processed = replaceModelFlag(processed, modelFlag, configuredModels)
-  for (const modelFlag of modelFlags) processed = addModelFlagToWrapperCalls(processed, modelFlag, configuredModels)
+  let processed = content.replace(/\{\{GEMINI_MODEL_FLAG}}/g, '')
+  for (const modelFlag of modelFlags) {
+    processed = replaceModelFlag(processed, modelFlag, configuredModels)
+  }
+  for (const modelFlag of modelFlags) {
+    processed = addModelFlagToWrapperCalls(processed, modelFlag, configuredModels)
+  }
   return injectConditionalModelRoutes(processed, routing, modelFlags)
 }
 
@@ -249,32 +267,34 @@ function injectPureClaudeDirective(content: string): string {
 
 function injectMcpProvider(content: string, mcpProvider: string): string {
   if (mcpProvider === 'skip') {
-    // MCP skipped: multi-step fallback replacement (unique logic, not in registry)
+    // MCP skipped: replacement uses several steps outside the registry
     return content
-      .replace(/,\s*\{\{MCP_SEARCH_TOOL\}\}/g, '')
+      .replace(/,\s*\{\{MCP_SEARCH_TOOL}}/g, '')
       .replace(
-        /```\n\{\{MCP_SEARCH_TOOL\}\}[\s\S]*?\n```/g,
+        /```\n\{\{MCP_SEARCH_TOOL}}[\s\S]*?\n```/g,
         '> MCP 未配置。使用 `Glob` 定位文件 + `Grep` 搜索关键符号 + `Read` 读取文件内容。'
       )
-      .replace(/`\{\{MCP_SEARCH_TOOL\}\}`/g, '`Glob + Grep`（MCP 未配置）')
-      .replace(/\{\{MCP_SEARCH_TOOL\}\}/g, 'Glob + Grep')
-      .replace(/\{\{MCP_SEARCH_PARAM\}\}/g, '')
+      .replace(/`\{\{MCP_SEARCH_TOOL}}`/g, '`Glob + Grep`（MCP 未配置）')
+      .replace(/\{\{MCP_SEARCH_TOOL}}/g, 'Glob + Grep')
+      .replace(/\{\{MCP_SEARCH_PARAM}}/g, '')
   }
   const provider = MCP_PROVIDERS[mcpProvider] ?? MCP_PROVIDERS['ace-tool']
-  return content.replace(/\{\{MCP_SEARCH_TOOL\}\}/g, provider.tool).replace(/\{\{MCP_SEARCH_PARAM\}\}/g, provider.param)
+  return content.replace(/\{\{MCP_SEARCH_TOOL}}/g, provider.tool).replace(/\{\{MCP_SEARCH_PARAM}}/g, provider.param)
 }
 
 export function injectConfigVariables(content: string, config: TemplateConfig): string {
   const routing = config.routing || {}
   let processed = injectRoutingVariables(content, routing)
   processed = injectReviewProfiles(processed, routing)
-  processed = processed.replace(/\{\{ROUTING_MODE\}\}/g, routing.mode || 'smart')
+  processed = processed.replace(/\{\{ROUTING_MODE}}/g, routing.mode || 'smart')
   processed = injectModelFlags(processed, routing)
   const pureClaudeCodeMode = routing.frontend?.primary === 'claude' && routing.backend?.primary === 'claude'
-  if (pureClaudeCodeMode) processed = injectPureClaudeDirective(processed)
+  if (pureClaudeCodeMode) {
+    processed = injectPureClaudeDirective(processed)
+  }
   // Lite mode flag for codeagent-wrapper
   const liteModeFlag = (config.liteMode ?? true) ? '--lite ' : ''
-  processed = processed.replace(/\{\{LITE_MODE_FLAG\}\}/g, liteModeFlag)
+  processed = processed.replace(/\{\{LITE_MODE_FLAG}}/g, liteModeFlag)
   return injectMcpProvider(processed, config.mcpProvider || 'ace-tool')
 }
 

@@ -13,7 +13,9 @@ function filesHaveSameBytes(leftPath, rightPath, size) {
     const flags = fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0);
     left = fs.openSync(leftPath, flags);
     right = fs.openSync(rightPath, flags);
-    if (!fs.fstatSync(left).isFile() || !fs.fstatSync(right).isFile()) return false;
+    if (!fs.fstatSync(left).isFile() || !fs.fstatSync(right).isFile()) {
+      return false;
+    }
     const leftBuffer = Buffer.alloc(64 * 1024);
     const rightBuffer = Buffer.alloc(64 * 1024);
     for (let offset = 0; offset < size;) {
@@ -37,7 +39,9 @@ function filesHaveSameBytes(leftPath, rightPath, size) {
 
 function copyFileBackup(projectRoot, sourcePath, destinationPath) {
   const sourceStat = inspectMigrationSource(sourcePath);
-  if (!sourceStat) return false;
+  if (!sourceStat) {
+    return false;
+  }
   const relativeDestination = path.relative(projectRoot, destinationPath).replace(/\\/g, '/');
   assertRuntimePath(projectRoot, relativeDestination, { allowMissing: true, kind: 'file' });
   if (fs.existsSync(destinationPath)) {
@@ -73,7 +77,9 @@ function backupLegacyTask(projectRoot, taskResult) {
 
 function closeBackupFiles(descriptors) {
   for (const descriptor of descriptors) {
-    if (descriptor === undefined) continue;
+    if (descriptor === undefined) {
+      continue;
+    }
     try {
       fs.closeSync(descriptor);
     } catch {
@@ -87,11 +93,14 @@ function inspectMigrationSource(sourcePath) {
   try {
     stat = fs.lstatSync(sourcePath);
   } catch (error) {
-    if (error && error.code === 'ENOENT') return null;
+    if (error && error.code === 'ENOENT') {
+      return null;
+    }
     fail('MIGRATION_BACKUP_FAILED', `Cannot inspect migration source: ${sourcePath}`, null, 3);
   }
-  if (stat.isSymbolicLink() || !stat.isFile())
+  if (stat.isSymbolicLink() || !stat.isFile()) {
     fail('MIGRATION_BACKUP_FAILED', `Migration source is not a regular file: ${sourcePath}`, null, 3);
+  }
   return stat;
 }
 

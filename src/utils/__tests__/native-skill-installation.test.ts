@@ -1,8 +1,8 @@
+import fs from 'fs-extra'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'pathe'
-import fs from 'fs-extra'
 import { afterEach, describe, expect, it } from 'vitest'
 import { installWorkflows, syncRoutingTemplates, uninstallWorkflows } from '../installer'
 import { installedNames, listSkills } from '../skill-manager'
@@ -17,7 +17,7 @@ async function setup() {
   directories.push(root)
   await fs.ensureDir(join(root, 'bin'))
   const binary = join(root, 'bin', 'codeagent-wrapper')
-  await fs.writeFile(binary, '#!/usr/bin/env node\nconsole.log("codeagent-wrapper version 5.15.0-aug.1")\n', {
+  await fs.writeFile(binary, '#!/usr/bin/env node\nconsole.log("codeagent-wrapper version 5.16.0-aug.1")\n', {
     mode: 0o755,
   })
   return root
@@ -48,7 +48,7 @@ describe('native skill integration', () => {
         opencodeModel: 'deepseek/model-example',
       },
     })
-    expect(result.success).toBe(true)
+    expect(result.success, result.errors.join('\n')).toBe(true)
     expect(result.installedSkills).toBe(1)
     expect(await installedNames(paths(root))).toEqual(['verify-quality'])
     expect((await listSkills(paths(root))).filter((s) => s.installed)).toMatchObject([
@@ -96,8 +96,10 @@ describe('native skill integration', () => {
     expect(installed.success).toBe(true)
     const entry = await fs.readFile(join(root, 'skills', 'ccg-verify-quality', 'SKILL.md'), 'utf8')
     expect(entry).toContain('--language-checks')
-    const resource = /resources for this skill are in `([^`]+)`/.exec(entry)?.[1]
-    if (!resource) throw new Error('Installed skill does not identify its resource directory')
+    const resource = /resources for this skill are in `(?<directory>[^`]+)`/.exec(entry)?.[1]
+    if (!resource) {
+      throw new Error('Installed skill does not identify its resource directory')
+    }
     const script = join(resource, 'scripts', 'quality_checker.js')
     expect(await fs.pathExists(join(resource, '..', 'lib', 'language-checks.js'))).toBe(true)
     expect(await fs.pathExists(join(resource, '..', 'lib', 'git-baseline.js'))).toBe(true)
@@ -153,7 +155,9 @@ describe('native skill integration', () => {
   it('preserves custom rule text when native mode is installed and refreshed', async () => {
     const root = await setup()
     const rules = ['ccg-skills.md', 'ccg-skill-routing.md'].map((name) => join(root, 'rules', name))
-    for (const path of rules) await fs.outputFile(path, 'USER_RULE: keep this instruction\n')
+    for (const path of rules) {
+      await fs.outputFile(path, 'USER_RULE: keep this instruction\n')
+    }
     for (let attempt = 0; attempt < 2; attempt++) {
       const result = await installWorkflows(['go'], root, true, {
         skillsProfile: [],

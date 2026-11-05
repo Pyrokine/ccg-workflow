@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 bt_client.py — 宝塔面板 (BT Panel) API 客户端与通用 CLI
 
@@ -36,7 +35,6 @@ bt_client.py — 宝塔面板 (BT Panel) API 客户端与通用 CLI
 from __future__ import annotations
 
 import argparse
-import base64
 import hashlib
 import json
 import mimetypes
@@ -136,8 +134,10 @@ class BtClient:
                 info["os"] = "windows"
                 info["mysql_bin"] = r"C:\BtSoft\WebSoft\mysql\MySQL*\bin\mysql.exe"
                 info["shell"] = "cmd"
-            elif any(k in sl for k in ("linux", "debian", "ubuntu", "centos", "rhel",
-                                       "fedora", "alma", "rocky", "opensuse", "gnu")):
+            elif any(
+                k in sl
+                for k in ("linux", "debian", "ubuntu", "centos", "rhel", "fedora", "alma", "rocky", "opensuse", "gnu")
+            ):
                 info["os"] = "linux"
             # 变体判定 — aaPanel 的 system 字段通常不含中文，消息也是英文
             # 这里粗略判定，真正依据是后续请求返回的错误消息语言
@@ -216,16 +216,12 @@ class BtClient:
             body = self._build_multipart(payload, files, boundary)
             headers["Content-Type"] = f"multipart/form-data; boundary={boundary}"
         else:
-            body = urllib.parse.urlencode(
-                {k: ("" if v is None else v) for k, v in payload.items()}
-            ).encode()
+            body = urllib.parse.urlencode({k: ("" if v is None else v) for k, v in payload.items()}).encode()
             headers["Content-Type"] = "application/x-www-form-urlencoded"
 
         req = urllib.request.Request(url, data=body, headers=headers, method="POST")
         try:
-            with urllib.request.urlopen(
-                req, timeout=timeout or self.timeout, context=self.ssl_ctx
-            ) as resp:
+            with urllib.request.urlopen(req, timeout=timeout or self.timeout, context=self.ssl_ctx) as resp:
                 self._update_cookies(resp)
                 content = resp.read()
         except urllib.error.HTTPError as e:
@@ -252,19 +248,12 @@ class BtClient:
         crlf = b"\r\n"
         for k, v in fields.items():
             parts.append(f"--{boundary}".encode())
-            parts.append(
-                f'Content-Disposition: form-data; name="{k}"'.encode()
-            )
+            parts.append(f'Content-Disposition: form-data; name="{k}"'.encode())
             parts.append(b"")
             parts.append(str("" if v is None else v).encode())
         for field_name, (filename, content, content_type) in files.items():
             parts.append(f"--{boundary}".encode())
-            parts.append(
-                (
-                    f'Content-Disposition: form-data; name="{field_name}"; '
-                    f'filename="{filename}"'
-                ).encode()
-            )
+            parts.append((f'Content-Disposition: form-data; name="{field_name}"; filename="{filename}"').encode())
             parts.append(f"Content-Type: {content_type}".encode())
             parts.append(b"")
             parts.append(content)
@@ -297,7 +286,7 @@ class BtClient:
     def site_set_status(self, site_id: int, name: str, status: bool) -> Any:
         action = "SiteStart" if status else "SiteStop"
         return self.request(
-            "/site?action=SiteStart" if status else "/site?action=SiteStop",
+            f"/site?action={action}",
             {"id": site_id, "name": name},
         )
 
@@ -320,6 +309,7 @@ class BtClient:
         - `/tmp` sticky bit 冲突（中文："权限" / 英文："Permission denied" / "FILE_SAVE_ERR"）
             → 先 DeleteFile 再 CreateFile 再重试
         """
+
         def _save() -> Any:
             return self.request(
                 "/files?action=SaveFileBody",
@@ -334,7 +324,10 @@ class BtClient:
                 r = _save()
             elif self._err_is(
                 msg,
-                "Permission denied", "FILE_SAVE_ERR", "权限不足", "没有权限",
+                "Permission denied",
+                "FILE_SAVE_ERR",
+                "权限不足",
+                "没有权限",
                 "权限拒绝",
             ):
                 # sticky bit 或跨用户写冲突：删掉旧文件后重建
@@ -356,14 +349,10 @@ class BtClient:
         return self.request("/files?action=DeleteDir", {"path": path})
 
     def move(self, sfile: str, dfile: str) -> Any:
-        return self.request(
-            "/files?action=MvFile", {"sfile": sfile, "dfile": dfile}
-        )
+        return self.request("/files?action=MvFile", {"sfile": sfile, "dfile": dfile})
 
     def copy(self, sfile: str, dfile: str) -> Any:
-        return self.request(
-            "/files?action=CopyFile", {"sfile": sfile, "dfile": dfile}
-        )
+        return self.request("/files?action=CopyFile", {"sfile": sfile, "dfile": dfile})
 
     def upload(
         self,
@@ -426,9 +415,7 @@ class BtClient:
         qs = urllib.parse.urlencode({"filename": remote_path, **sign})
         url = f"{self.panel_url}/files?action=download&{qs}"
         req = urllib.request.Request(url, method="GET")
-        with urllib.request.urlopen(
-            req, timeout=self.timeout, context=self.ssl_ctx
-        ) as resp:
+        with urllib.request.urlopen(req, timeout=self.timeout, context=self.ssl_ctx) as resp:
             data = resp.read()
         local_path = Path(local_path)
         local_path.parent.mkdir(parents=True, exist_ok=True)
@@ -594,9 +581,13 @@ class BtClient:
             self.write_file(tmp.replace("/", "\\"), sql_body)
             # mysql.exe 路径由面板安装决定，这里用通配（shell 会展开）
             cmd = (
-                r'for /f "delims=" %i in (\'dir /b /s "C:\BtSoft\WebSoft\mysql\MySQL*\bin\mysql.exe" 2^>nul\') do set MBIN=%i' "\r\n"
-                f'set MYSQL_PWD={password}' "\r\n"
-                f'"%MBIN%" -u{user} {db_name} < "{tmp.replace("/", chr(92))}"' "\r\n"
+                r'for /f "delims=" %i in (\'dir /b /s '
+                r'"C:\BtSoft\WebSoft\mysql\MySQL*\bin\mysql.exe" 2^>nul\') do set MBIN=%i'
+                "\r\n"
+                f"set MYSQL_PWD={password}"
+                "\r\n"
+                f'"%MBIN%" -u{user} {db_name} < "{tmp.replace("/", chr(92))}"'
+                "\r\n"
                 f'del /q "{tmp.replace("/", chr(92))}"'
             )
             r2 = self.exec_shell(cmd, cwd="C:\\BtSoft", wait=180)
@@ -607,19 +598,19 @@ class BtClient:
                 delim = f"__BT_SQL_{uuid.uuid4().hex[:12]}__"
             # 常见 mysql 路径候选（宝塔 / aaPanel / 系统）
             candidates = [
-                "/www/server/mysql/bin/mysql",      # 宝塔 Linux / aaPanel 默认
-                "/www/server/mariadb/bin/mysql",    # 宝塔装的是 MariaDB
-                "/usr/local/mysql/bin/mysql",       # 某些 aaPanel 版本
+                "/www/server/mysql/bin/mysql",  # 宝塔 Linux / aaPanel 默认
+                "/www/server/mariadb/bin/mysql",  # 宝塔装的是 MariaDB
+                "/usr/local/mysql/bin/mysql",  # 某些 aaPanel 版本
             ]
             # for 循环 + break 保证真 if-elif-else 语义
             cand_list = " ".join(f'"{c}"' for c in candidates)
             cmd = (
                 f'BIN=""; for c in {cand_list}; do '
                 f'  if [ -x "$c" ]; then BIN="$c"; break; fi; '
-                f'done; '
+                f"done; "
                 f'[ -z "$BIN" ] && BIN=$(command -v mysql 2>/dev/null) || true; '
                 f'[ -z "$BIN" ] && BIN=mysql; '
-                f"MYSQL_PWD={shlex_quote(password)} \"$BIN\" "
+                f'MYSQL_PWD={shlex_quote(password)} "$BIN" '
                 f"-u{shlex_quote(user)} {shlex_quote(db_name)} 2>&1 <<'{delim}'\n"
                 f"{sql_body}\n"
                 f"{delim}"
@@ -644,8 +635,8 @@ class BtClient:
             user, password = self._lookup_db_credentials(db_name)
         cmd = (
             f"BIN=/www/server/mysql/bin/mysql; "
-            f"[ -x \"$BIN\" ] || BIN=mysql; "
-            f"MYSQL_PWD={shlex_quote(password)} \"$BIN\" "
+            f'[ -x "$BIN" ] || BIN=mysql; '
+            f'MYSQL_PWD={shlex_quote(password)} "$BIN" '
             f"-u{shlex_quote(user)} {shlex_quote(db_name)} "
             f"< {shlex_quote(sql_file_remote)} 2>&1"
         )
@@ -678,10 +669,7 @@ def build_client(args: argparse.Namespace) -> BtClient:
         panel = panel or cfg.get("panel")
         key = key or cfg.get("key")
     if not panel or not key:
-        raise BtError(
-            "缺少 panel / key。请通过 --panel / --key / 环境变量 BT_URL,BT_KEY "
-            "或 --alias 指定站点别名。"
-        )
+        raise BtError("缺少 panel / key。请通过 --panel / --key / 环境变量 BT_URL,BT_KEY 或 --alias 指定站点别名。")
     return BtClient(panel, key, verify_ssl=not args.insecure, timeout=args.timeout)
 
 

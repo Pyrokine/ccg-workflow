@@ -10,13 +10,13 @@ disable-model-invocation: false
 
 ## 能力矩阵
 
-| Skill                             | 定位     | 核心能力                    |
-|-----------------------------------|--------|-------------------------|
-| [api-design](api-design.md)       | API 设计 | RESTful、GraphQL、OpenAPI |
-| [security-arch](security-arch.md) | 安全架构   | 零信任、IAM、威胁建模、数据安全、合规审计  |
-| [cloud-native](cloud-native.md)   | 云原生    | 容器、K8s、Serverless       |
-| [message-queue](message-queue.md) | 消息队列   | Kafka、RabbitMQ、事件驱动     |
-| [caching](caching.md)             | 缓存策略   | Redis、CDN、缓存一致性         |
+| Skill                             | 定位     | 核心能力                                  |
+|-----------------------------------|----------|-------------------------------------------|
+| [api-design](api-design.md)       | API 设计 | RESTful、GraphQL、OpenAPI                 |
+| [security-arch](security-arch.md) | 安全架构 | 零信任、IAM、威胁建模、数据安全、合规审计 |
+| [cloud-native](cloud-native.md)   | 云原生   | 容器、K8s、Serverless                     |
+| [message-queue](message-queue.md) | 消息队列 | Kafka、RabbitMQ、事件驱动                 |
+| [caching](caching.md)             | 缓存策略 | Redis、CDN、缓存一致性                    |
 
 ## 架构原则
 
@@ -38,4 +38,3 @@ SOLID:
   - 最小权限
   - 零信任
 ```
-

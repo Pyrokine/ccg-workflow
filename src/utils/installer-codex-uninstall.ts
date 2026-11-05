@@ -1,24 +1,24 @@
-import { homedir } from 'node:os'
 import fs from 'fs-extra'
+import { homedir } from 'node:os'
 import { join } from 'pathe'
 import { removeSponsorsFromCodex } from './installer-codex-api'
+import { parseCodexConfig, removeCodexHookRegistration, removeCodexManagedBlock } from './installer-codex-content'
 import {
+  assertCodexPathLayout,
+  assertSafeCodexDirectory,
   CODEX_MANAGED_FILES,
   CODEX_MODE_MANIFEST,
-  assertSafeCodexDirectory,
-  assertCodexPathLayout,
-  readOptionalCodexFile,
-  readCodexOriginalFile,
-  ensureCodexPathLayout,
-  createCodexBackup,
-  writeCodexFileAtomic,
-  removeRegularCodexFile,
-  removeOrRestoreCodexManagedFile,
-  restoreCodexBackup,
-  type CodexModeManifest,
   type CodexBackup,
+  type CodexModeManifest,
+  createCodexBackup,
+  ensureCodexPathLayout,
+  readCodexOriginalFile,
+  readOptionalCodexFile,
+  removeOrRestoreCodexManagedFile,
+  removeRegularCodexFile,
+  restoreCodexBackup,
+  writeCodexFileAtomic,
 } from './installer-codex-files'
-import { removeCodexManagedBlock, removeCodexHookRegistration, parseCodexConfig } from './installer-codex-content'
 import { parseCodexModeManifest } from './installer-codex-manifest'
 
 type Changes = { removed: string[]; skipped: string[] }
@@ -47,14 +47,18 @@ async function validateUninstallOwnership(
 ): Promise<void> {
   const existingRuntimeFiles: string[] = []
   for (const relativePath of CODEX_MANAGED_FILES) {
-    if (await readOptionalCodexFile(join(codexHome, relativePath))) existingRuntimeFiles.push(relativePath)
+    if (await readOptionalCodexFile(join(codexHome, relativePath))) {
+      existingRuntimeFiles.push(relativePath)
+    }
   }
   if (!manifest && (existingRuntimeFiles.length > 0 || hasInstructions)) {
     throw new Error('Codex mode ownership manifest is missing; reinstall Codex mode before uninstalling')
   }
   if (manifest) {
     for (const managedFile of manifest.files) {
-      if (managedFile.original) await readCodexOriginalFile(codexHome, managedFile)
+      if (managedFile.original) {
+        await readCodexOriginalFile(codexHome, managedFile)
+      }
     }
   }
 }
@@ -97,9 +101,11 @@ async function removeCodexRuntime(codexHome: string, plan: UninstallPlan, change
   if (manifest) {
     for (const managedFile of manifest.files) {
       const action = await removeOrRestoreCodexManagedFile(codexHome, managedFile)
-      if (action === 'removed') removed.push(`~/.codex/${managedFile.relativePath}`)
-      else if (action === 'restored') removed.push(`~/.codex/${managedFile.relativePath} (original restored)`)
-      else if (action === 'preserved') {
+      if (action === 'removed') {
+        removed.push(`~/.codex/${managedFile.relativePath}`)
+      } else if (action === 'restored') {
+        removed.push(`~/.codex/${managedFile.relativePath} (original restored)`)
+      } else if (action === 'preserved') {
         skipped.push(`~/.codex/${managedFile.relativePath} (modified after installation; preserved)`)
       }
     }
@@ -110,7 +116,9 @@ async function removeCodexSponsors(plan: UninstallPlan, changes: Changes): Promi
   const { manifest } = plan
   const { removed, skipped } = changes
   const sponsorApis = await removeSponsorsFromCodex(manifest?.sponsorProviderIds || [])
-  if (!sponsorApis.success) throw new Error(sponsorApis.message)
+  if (!sponsorApis.success) {
+    throw new Error(sponsorApis.message)
+  }
   for (const result of sponsorApis.results) {
     if (result.status === 'removed') {
       removed.push(`~/.codex/config.toml [model_providers.${result.id}]`)
@@ -150,7 +158,9 @@ async function recoverCodexUninstall(
   error: unknown
 ): Promise<{ success: boolean; removed: string[]; skipped: string[] }> {
   const { removed, skipped } = changes
-  if (!backup) return { success: false, removed, skipped: [...skipped, `Error: ${error}`] }
+  if (!backup) {
+    return { success: false, removed, skipped: [...skipped, `Error: ${error}`] }
+  }
   try {
     await ensureCodexPathLayout(codexHome)
     await restoreCodexBackup(codexHome, backup)

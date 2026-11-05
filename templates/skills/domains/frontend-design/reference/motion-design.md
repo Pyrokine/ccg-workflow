@@ -27,14 +27,16 @@ Timing matters more than easing. These durations feel right for most UI:
 deceleration):
 
 ```css
-/* Quart out - smooth, refined (recommended default) */
---ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+:root {
+  /* Quart out - smooth, refined (recommended default) */
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
 
-/* Quint out - slightly more dramatic */
---ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+  /* Quint out - slightly more dramatic */
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
 
-/* Expo out - snappy, confident */
---ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  /* Expo out - snappy, confident */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}
 ```
 
 **Avoid bounce and elastic curves.** They were trendy in 2015 but now feel tacky and amateurish. Real objects don't
@@ -65,13 +67,15 @@ This is not optional. Vestibular disorders affect ~35% of adults over 40.
 /* Provide alternative for reduced motion */
 @media (prefers-reduced-motion: reduce) {
   .card {
-    animation: fade-in 200ms ease-out;  /* Crossfade instead of motion */
+    animation: fade-in 200ms ease-out; /* Crossfade instead of motion */
   }
 }
 
 /* Or disable entirely */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
+  *,
+  *::before,
+  *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
@@ -102,8 +106,8 @@ shift the balance:
 peak-end effect weights final moments heavily. Ease-out feels satisfying for entrances, but ease-in toward a task's end
 compresses perceived time.
 
-**Caution**: Too-fast responses can decrease perceived value. Users may distrust instant results for complex
-operations (search, analysis). Sometimes a brief delay signals "real work" is happening.
+**Caution**: Too-fast responses can decrease perceived value. Users may distrust instant results for complex operations
+(search, analysis). Sometimes a brief delay signals "real work" is happening.
 
 ## Performance
 

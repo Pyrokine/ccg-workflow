@@ -1,5 +1,5 @@
-import { createHash } from 'node:crypto'
 import fs from 'fs-extra'
+import { createHash } from 'node:crypto'
 import { dirname, join } from 'pathe'
 import type { WorkflowConfig } from '../types'
 import type { InstallContext } from './installer-context'
@@ -80,12 +80,16 @@ export async function copyMdTemplates(
   await fs.ensureDir(destDir)
   const files = await fs.readdir(srcDir)
   for (const file of files) {
-    if (!file.endsWith('.md')) continue
+    if (!file.endsWith('.md')) {
+      continue
+    }
     const sourceFile = join(srcDir, file)
     const destFile = join(destDir, file)
     if (ctx.force || !(await fs.pathExists(destFile))) {
       let content = await fs.readFile(sourceFile, 'utf-8')
-      if (options.inject) content = injectConfigVariables(content, ctx.config)
+      if (options.inject) {
+        content = injectConfigVariables(content, ctx.config)
+      }
       content = replaceHomePathsInTemplate(content, ctx.installDir)
 
       if (options.backupExisting) {
@@ -225,7 +229,9 @@ export async function installEngineFiles(
   options: { backupExisting?: boolean } = {}
 ): Promise<void> {
   const engineSrcDir = join(ctx.templateDir, 'engine')
-  if (!(await fs.pathExists(engineSrcDir))) return
+  if (!(await fs.pathExists(engineSrcDir))) {
+    return
+  }
 
   const engineDestDir = join(ctx.installDir, '.ccg', 'engine')
 

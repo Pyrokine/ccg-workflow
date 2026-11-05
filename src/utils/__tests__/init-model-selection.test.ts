@@ -1,10 +1,10 @@
+import { resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { init } from '../../commands/init'
+import type { CcgConfig } from '../../types'
 import { createDefaultConfig, createDefaultRouting } from '../config'
 import { injectConfigVariables } from '../installer-template'
 import { promptOpencodeModel, validateOpencodeModel } from '../model-selection'
-import type { CcgConfig } from '../../types'
-import { resolve } from 'node:path'
 
 const mocks = vi.hoisted(() => ({
   existing: {} as CcgConfig,
@@ -117,7 +117,9 @@ function answerInitQuestions(overrides: Record<string, unknown> = {}) {
       action: 'confirm',
       ...overrides,
     }
-    if (!(name in answers)) throw new Error(`Unexpected prompt: ${name}`)
+    if (!(name in answers)) {
+      throw new Error(`Unexpected prompt: ${name}`)
+    }
     return { [name]: answers[name] }
   })
 }

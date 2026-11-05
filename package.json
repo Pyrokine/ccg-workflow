@@ -1,10 +1,10 @@
 {
   "name": "ccg-workflow",
-  "version": "3.7.3-aug.2",
+  "version": "3.7.4-aug.1",
   "description": "Multi-model collaboration for Claude Code, Codex, Antigravity, Grok, Kimi Code, and OpenCode",
   "type": "module",
   "private": true,
-  "packageManager": "pnpm@11.21.0",
+  "packageManager": "pnpm@12.16.1",
   "engines": {
     "node": "^22.13.0 || >=24.19.0"
   },
@@ -91,13 +91,13 @@
     "docs:preview": "vitepress preview docs"
   },
   "dependencies": {
-    "ansis": "^4.4.0",
+    "ansis": "^4.5.0",
     "cac": "^7.1.0",
     "fs-extra": "^11.4.1",
-    "i18next": "^26.5.11",
-    "i18next-fs-backend": "^2.6.9",
-    "inquirer": "^14.2.4",
-    "ora": "^9.4.1",
+    "i18next": "^26.7.1",
+    "i18next-fs-backend": "^2.6.10",
+    "inquirer": "^14.2.5",
+    "ora": "^10.0.0",
     "pathe": "^2.0.3",
     "smol-toml": "^1.9.1"
   },
@@ -105,11 +105,11 @@
     "@eslint/js": "^10.0.1",
     "@types/fs-extra": "^11.0.4",
     "@types/node": "^22.20.5",
-    "eslint": "^10.13.0",
+    "eslint": "^10.14.0",
     "prettier": "^3.9.10",
     "tsx": "^4.23.15",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.72.0",
+    "typescript-eslint": "^8.72.1",
     "unbuild": "^3.6.1",
     "vitepress": "^1.6.4",
     "vitest": "^4.1.12"

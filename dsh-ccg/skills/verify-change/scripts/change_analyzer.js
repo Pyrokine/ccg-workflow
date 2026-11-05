@@ -5,7 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const { identifyInlineTests } = require('../../lib/change-tests.js');
 const { parseCliArgs, runCli, buildReport, DASH } = require(path.join(__dirname, '..', '..', 'lib', 'shared.js'));
-const { git, targetRepositories, readNameStatus } = require(path.join(__dirname, '..', '..', 'lib', 'git-baseline.js'));
+const { git, targetRepositories, readNameStatus, gitFileView } = require('../../lib/git-baseline.js');
 
 const CODE_EXT = new Set([
   '.py',
@@ -47,9 +47,15 @@ const CONFIG_FILES = new Set([
 const CONFIG_EXT = new Set(['.yaml', '.yml', '.json', '.toml', '.ini']);
 
 function porcelainType(status) {
-  if (/[?A]/u.test(status)) return 'added';
-  if (status.includes('R')) return 'renamed';
-  if (status.includes('M')) return 'modified';
+  if (/[?A]/u.test(status)) {
+    return 'added';
+  }
+  if (status.includes('R')) {
+    return 'renamed';
+  }
+  if (status.includes('M')) {
+    return 'modified';
+  }
   return status.includes('D') ? 'deleted' : 'modified';
 }
 
@@ -59,7 +65,9 @@ function numstatEntries(parts) {
     const entry = parts[index++];
     const first = entry.indexOf('\t');
     const second = entry.indexOf('\t', first + 1);
-    if (first < 0 || second < 0) throw new Error('Invalid git numstat output');
+    if (first < 0 || second < 0) {
+      throw new Error('Invalid git numstat output');
+    }
     let name = entry.slice(second + 1);
     if (!name) {
       index++;
@@ -70,25 +78,41 @@ function numstatEntries(parts) {
   return stats;
 }
 
-function addDocument(root, docs, candidate) {
+function addDocument(root, docs, candidate, view) {
   const relative = path.relative(root, candidate);
-  if (relative === '..' || relative.startsWith('..' + path.sep) || path.isAbsolute(relative)) return;
+  if (relative === '..' || relative.startsWith('..' + path.sep) || path.isAbsolute(relative)) {
+    return;
+  }
+  const name = relative.split(path.sep).join('/');
+  if (view) {
+    if (view.isFile(name)) {
+      docs.add(name);
+    }
+    return;
+  }
   try {
-    if (fs.lstatSync(candidate).isFile()) docs.add(relative.split(path.sep).join('/'));
+    if (fs.lstatSync(candidate).isFile()) {
+      docs.add(name);
+    }
   } catch (error) {
-    if (error.code !== 'ENOENT' && error.code !== 'ENOTDIR') throw error;
+    if (error.code !== 'ENOENT' && error.code !== 'ENOTDIR') {
+      throw error;
+    }
   }
 }
 
-function readModuleDocuments(root, directory, docs) {
-  for (const entry of directoryEntries(directory)) {
-    if (!entry.isFile() || !MODULE_DOC.test(entry.name)) continue;
+function readModuleDocuments(root, directory, docs, view) {
+  for (const entry of directoryEntries(directory, view)) {
+    if (!entry.isFile() || !MODULE_DOC.test(entry.name)) {
+      continue;
+    }
     const file = path.join(directory, entry.name);
-    addDocument(root, docs, file);
-    const content = fs.readFileSync(file, 'utf8');
-    for (const match of content.matchAll(/\[[^\]\n]*\]\(([^\s)#?]+)(?:#[^\s)]*)?\)/g)) {
+    addDocument(root, docs, file, view);
+    const name = path.relative(root, file).split(path.sep).join('/');
+    const content = view ? view.read(name) : fs.readFileSync(file, 'utf8');
+    for (const match of content.matchAll(/\[[^\]\n]*]\((?<target>[^\s)#?]+)(?:#[^\s)]*)?\)/g)) {
       if (!/^[\w+.-]+:|^\/\//.test(match[1]) && DOC_EXT.has(path.extname(match[1]).toLowerCase())) {
-        addDocument(root, docs, path.resolve(directory, match[1]));
+        addDocument(root, docs, path.resolve(directory, match[1]), view);
       }
     }
   }
@@ -96,7 +120,9 @@ function readModuleDocuments(root, directory, docs) {
 
 function moduleDocumentationIssue(mod, changes, docs, updated) {
   const total = changes.reduce((sum, change) => sum + change.additions + change.deletions, 0);
-  if (total <= 50 || docs.some((doc) => updated.has(doc))) return null;
+  if (total <= 50 || docs.some((doc) => updated.has(doc))) {
+    return null;
+  }
   return {
     severity: docs.length ? 'warning' : 'info',
     message: docs.length
@@ -135,23 +161,56 @@ function formatChanges(changes) {
   return lines.join('\n');
 }
 
-function assertRequestedChange(group, changes, requested) {
-  if (fs.existsSync(requested)) return;
+function assertRequestedChange(group, changes, requested, view) {
   const relative = path.relative(group.root, requested).split(path.sep).join('/');
   const found = changes.some((change) =>
     [change.path, change.old_path].some((name) => name && (name === relative || name.startsWith(relative + '/')))
   );
-  if (!found && !git(group.root, 'ls-files', '-z', '--', relative)) {
+  if (found) {
+    return;
+  }
+  if (view) {
+    if (view.has(relative)) {
+      return;
+    }
+    throw new Error('Target does not exist in the selected Git tree or changes: ' + requested);
+  }
+  if (fs.existsSync(requested)) {
+    if (relative) {
+      try {
+        if (git(group.root, '--no-literal-pathspecs', 'check-ignore', '--', relative)) {
+          throw new Error('Target is ignored by Git and excluded from change analysis: ' + requested);
+        }
+      } catch (error) {
+        if (error.status !== 1) {
+          throw error;
+        }
+      }
+    }
+    return;
+  }
+  if (!git(group.root, 'ls-files', '-z', '--', relative)) {
     throw new Error('Target does not exist in the repository or selected changes: ' + requested);
   }
 }
 
-function analyzeRepository(group, mode) {
-  const result = analyzeChanges(mode, group.root, group.pathspecs);
-  for (const requested of group.requested) assertRequestedChange(group, result.changes, requested);
+function commitComparison(root, refs) {
+  const resolve = (ref) => git(root, 'rev-parse', '--verify', '--end-of-options', ref + '^{commit}').trim();
+  const base = resolve(refs.base ?? 'HEAD~1');
+  const target = resolve(refs.targetRef ?? 'HEAD');
+  return { base, target, view: gitFileView(root, target) };
+}
+
+function analyzeRepository(group, mode, refs) {
+  const comparison = mode === 'committed' ? commitComparison(group.root, refs) : undefined;
+  const result = analyzeChanges(mode, group.root, group.pathspecs, comparison);
+  for (const requested of group.requested) {
+    assertRequestedChange(group, result.changes, requested, comparison?.view);
+  }
   return {
     repository_root: group.root,
     requested_paths: group.requested,
+    ...(comparison ? { comparison: { base: comparison.base, target: comparison.target } } : {}),
     complete: true,
     passed: result.passed,
     total_additions: result.totalAdd,
@@ -170,7 +229,9 @@ function normalizePath(p) {
   if (s.startsWith('"') && s.endsWith('"') && s.length >= 2) {
     s = s.slice(1, -1).replace(/\\"/g, '"').replace(/\\\\/g, '\\');
   }
-  if (s.startsWith('./')) s = s.slice(2);
+  if (s.startsWith('./')) {
+    s = s.slice(2);
+  }
   return s;
 }
 
@@ -192,32 +253,48 @@ function classifyFile(filePath) {
 
 function parseNameStatusLine(line) {
   const parts = Array.isArray(line) ? line : line.split('\t');
-  if (parts.length < 2) return null;
+  if (parts.length < 2) {
+    return null;
+  }
   const status = parts[0][0];
   const p = Array.isArray(line) ? parts[parts.length - 1] : normalizePath(parts[parts.length - 1]);
-  if (!p) return null;
+  if (!p) {
+    return null;
+  }
   const c = classifyFile(p);
   const map = { A: 'added', M: 'modified', D: 'deleted', R: 'renamed' };
-  if (map[status]) c.type = map[status];
+  if (map[status]) {
+    c.type = map[status];
+  }
   return c;
 }
 
 function parsePorcelainLine(line) {
   const array = Array.isArray(line);
-  if (!array && line.length < 3) return null;
+  if (!array && line.length < 3) {
+    return null;
+  }
   const status = array ? line[0] : line.slice(0, 2);
   const raw = array ? line[1] : line.slice(3);
-  if (!raw) return null;
+  if (!raw) {
+    return null;
+  }
   const name = array ? raw : normalizePath(raw.includes(' -> ') ? raw.split(' -> ')[1] : raw);
-  if (!name) return null;
+  if (!name) {
+    return null;
+  }
   return { ...classifyFile(name), type: porcelainType(status) };
 }
 
 function readGitChanges(root, args, pathspecs) {
   const changes = readNameStatus(root, args, pathspecs).map((entry) => {
     const change = parseNameStatusLine([entry.status, entry.path]);
-    if (!change) throw new Error('Invalid git name-status output');
-    if (entry.old_path) change.old_path = entry.old_path;
+    if (!change) {
+      throw new Error('Invalid git name-status output');
+    }
+    if (entry.old_path) {
+      change.old_path = entry.old_path;
+    }
     return change;
   });
   applyNumstat(changes, args, root, pathspecs);
@@ -232,15 +309,21 @@ function applyNumstat(changes, args, root = process.cwd(), pathspecs = []) {
   const parts = git(root, 'diff', '--no-ext-diff', '--numstat', '-z', ...args, '--', ...pathspecs).split('\0');
   const stats = numstatEntries(parts);
   for (const change of changes) {
-    if (stats.has(change.path)) [change.additions, change.deletions] = stats.get(change.path);
+    if (stats.has(change.path)) {
+      [change.additions, change.deletions] = stats.get(change.path);
+    }
   }
 }
 
 function countFileLines(filePath) {
   const stat = fs.lstatSync(filePath);
-  if (stat.isDirectory()) return 0;
+  if (stat.isDirectory()) {
+    return 0;
+  }
   const content = stat.isSymbolicLink() ? fs.readlinkSync(filePath) : fs.readFileSync(filePath, 'utf8');
-  if (!content) return 0;
+  if (!content) {
+    return 0;
+  }
   const newlines = (content.match(/\n/g) || []).length;
   return content.endsWith('\n') ? newlines : newlines + 1;
 }
@@ -257,9 +340,15 @@ function getWorkingChanges(root = process.cwd(), pathspecs = []) {
     const entry = parts[i++];
     const status = entry.slice(0, 2);
     const change = parsePorcelainLine([status, entry.slice(3)]);
-    if (!change) throw new Error('Invalid git status output');
-    if (/[RC]/.test(status)) change.old_path = parts[i++];
-    if (status === '??') untracked.add(change.path);
+    if (!change) {
+      throw new Error('Invalid git status output');
+    }
+    if (/[RC]/.test(status)) {
+      change.old_path = parts[i++];
+    }
+    if (status === '??') {
+      untracked.add(change.path);
+    }
     changes.push(change);
   }
   const staged = changes.map((change) => ({ ...change, additions: 0, deletions: 0 }));
@@ -279,73 +368,94 @@ function getWorkingChanges(root = process.cwd(), pathspecs = []) {
 
 const MODULE_DOC = /^(?:(?:README|DESIGN)(?:[._-][\w-]+)?\.(?:md|rst|txt|adoc)|SKILL\.md)$/i;
 
-function directoryEntries(directory) {
+function directoryEntries(directory, view) {
+  if (view) {
+    return view.entries(path.relative(view.root, directory).split(path.sep).join('/'));
+  }
   try {
-    if (!fs.lstatSync(directory).isDirectory()) return [];
+    if (!fs.lstatSync(directory).isDirectory()) {
+      return [];
+    }
     return fs.readdirSync(directory, { withFileTypes: true });
   } catch (error) {
-    if (error.code === 'ENOENT' || error.code === 'ENOTDIR') return [];
+    if (error.code === 'ENOENT' || error.code === 'ENOTDIR') {
+      return [];
+    }
     throw error;
   }
 }
 
-function moduleForPath(filePath, root) {
+function moduleForPath(filePath, root, view) {
   let directory = path.posix.dirname(filePath);
   while (true) {
-    if (directoryEntries(path.join(root, directory)).some((entry) => entry.isFile() && MODULE_DOC.test(entry.name))) {
+    if (
+      directoryEntries(path.join(root, directory), view).some((entry) => entry.isFile() && MODULE_DOC.test(entry.name))
+    ) {
       return directory;
     }
-    if (directory === '.') break;
+    if (directory === '.') {
+      break;
+    }
     directory = path.posix.dirname(directory);
   }
   return filePath.includes('/') ? filePath.split('/')[0] : '.';
 }
 
-function identifyModules(changes, root = process.cwd()) {
-  return new Set(changes.map((change) => moduleForPath(change.path, root)));
+function identifyModules(changes, root = process.cwd(), view) {
+  return new Set(changes.map((change) => moduleForPath(change.path, root, view)));
 }
 
-function relatedDocuments(root, mod, changes) {
+function relatedDocuments(root, mod, changes, view) {
   const directory = path.join(root, mod);
   const docs = new Set();
-  readModuleDocuments(root, directory, docs);
+  readModuleDocuments(root, directory, docs, view);
   const names = new Set(['readme', 'design', 'index', path.basename(directory).toLowerCase()]);
-  for (const change of changes) names.add(path.basename(change.path, path.extname(change.path)).toLowerCase());
-  for (const entry of directoryEntries(path.join(directory, 'docs'))) {
+  for (const change of changes) {
+    names.add(path.basename(change.path, path.extname(change.path)).toLowerCase());
+  }
+  for (const entry of directoryEntries(path.join(directory, 'docs'), view)) {
     if (
       entry.isFile() &&
       DOC_EXT.has(path.extname(entry.name).toLowerCase()) &&
       names.has(path.basename(entry.name, path.extname(entry.name)).toLowerCase())
     ) {
-      addDocument(root, docs, path.join(directory, 'docs', entry.name));
+      addDocument(root, docs, path.join(directory, 'docs', entry.name), view);
     }
   }
   return [...docs].sort();
 }
 
-function selectedChanges(mode, root, pathspecs) {
-  if (mode === 'staged') return getStagedChanges(root, pathspecs);
-  if (mode === 'committed') return getGitChanges('HEAD~1', 'HEAD', root, pathspecs);
+function selectedChanges(mode, root, pathspecs, comparison) {
+  if (mode === 'staged') {
+    return getStagedChanges(root, pathspecs);
+  }
+  if (mode === 'committed') {
+    return getGitChanges(comparison.base, comparison.target, root, pathspecs);
+  }
   return getWorkingChanges(root, pathspecs);
 }
 
-function checkDocSync(changes, modules, root = process.cwd(), mode = 'working') {
+function checkDocSync(changes, modules, root = process.cwd(), mode = 'working', comparison) {
   const docStatus = {},
     docSync = {},
     issues = [];
   const codeChanges = changes.filter((change) => change.is_code && !change.is_test && !change.test_only);
   for (const mod of modules) {
-    const modCode = codeChanges.filter((change) => moduleForPath(change.path, root) === mod);
-    if (!modCode.length) continue;
-    const docs = relatedDocuments(root, mod, modCode);
-    const docChanges = docs.length ? selectedChanges(mode, root, docs) : [];
+    const modCode = codeChanges.filter((change) => moduleForPath(change.path, root, comparison?.view) === mod);
+    if (!modCode.length) {
+      continue;
+    }
+    const docs = relatedDocuments(root, mod, modCode, comparison?.view);
+    const docChanges = docs.length ? selectedChanges(mode, root, docs, comparison) : [];
     const docPaths = new Set(docChanges.filter((change) => change.type !== 'deleted').map((change) => change.path));
     for (const doc of docs) {
       docStatus[doc] = docPaths.has(doc);
       docSync[doc] = { exists: true, updated: docPaths.has(doc) };
     }
     const issue = moduleDocumentationIssue(mod, modCode, docs, docPaths);
-    if (issue) issues.push(issue);
+    if (issue) {
+      issues.push(issue);
+    }
   }
   return { docStatus, docSync, issues };
 }
@@ -383,17 +493,17 @@ function analyzeImpact(changes) {
   return issues;
 }
 
-function analyzeChanges(mode, root, pathspecs) {
-  const changes = selectedChanges(mode, root, pathspecs);
-  identifyInlineTests(changes, mode, root);
+function analyzeChanges(mode, root, pathspecs, comparison) {
+  const changes = selectedChanges(mode, root, pathspecs, comparison);
+  identifyInlineTests(changes, mode, root, comparison);
 
   const issues = [];
   let modules = new Set(),
     docStatus = {},
     docSync = {};
   if (changes.length) {
-    modules = identifyModules(changes, root);
-    const ds = checkDocSync(changes, modules, root, mode);
+    modules = identifyModules(changes, root, comparison?.view);
+    const ds = checkDocSync(changes, modules, root, mode, comparison);
     docStatus = ds.docStatus;
     docSync = ds.docSync;
     issues.push(...ds.issues, ...analyzeImpact(changes));
@@ -413,7 +523,9 @@ function formatReport(result, verbose) {
     分析结果: result.passed ? '✓ 通过' : '✗ 需要关注',
   };
   let report = buildReport('变更分析报告', fields, result.issues, verbose);
-  if (result.changes.length && verbose) report += '\n' + formatChanges(result.changes);
+  if (result.changes.length && verbose) {
+    report += '\n' + formatChanges(result.changes);
+  }
   if (verbose && Object.keys(result.docStatus).length) {
     const lines = ['\n' + DASH, '文档变更状态:', DASH];
     for (const [doc, updated] of Object.entries(result.docStatus)) {
@@ -426,15 +538,26 @@ function formatReport(result, verbose) {
 
 // CLI
 function main() {
-  const opts = parseCliArgs(process.argv);
+  const opts = parseCliArgs(process.argv, { base: undefined, targetRef: undefined });
   if (opts.help) {
-    console.log('Usage: change_analyzer.js [paths...] [--mode working|staged|committed] [-v] [--json]');
+    console.log('Usage: change_analyzer.js [paths...] [--mode working|staged|committed]');
+    console.log('  [--base <revision> --target-ref <revision>] [-v] [--json]');
     return;
   }
   const mode = opts.mode || 'working';
-  if (!['working', 'staged', 'committed'].includes(mode)) throw new Error('Unknown change mode: ' + mode);
-  if (opts.exclude) throw new Error('verify-change uses target path scopes, not --exclude');
-  const results = targetRepositories(opts.targets).map((group) => analyzeRepository(group, mode));
+  if (!['working', 'staged', 'committed'].includes(mode)) {
+    throw new Error('Unknown change mode: ' + mode);
+  }
+  if (opts.exclude) {
+    throw new Error('verify-change uses target path scopes, not --exclude');
+  }
+  if ((opts.base === undefined) !== (opts.targetRef === undefined)) {
+    throw new Error('--base and --target-ref must be supplied together');
+  }
+  if (opts.base !== undefined && mode !== 'committed') {
+    throw new Error('--base and --target-ref require --mode committed');
+  }
+  const results = targetRepositories(opts.targets).map((group) => analyzeRepository(group, mode, opts));
   const passed = results.every((result) => result.passed);
   if (opts.json) {
     const clean = results.map(({ report: _report, ...result }) => result);
@@ -451,15 +574,11 @@ function main() {
   process.exitCode = passed ? 0 : 1;
 }
 
-if (require.main === module) runCli(main);
+if (require.main === module) {
+  runCli(main);
+}
 
 module.exports = {
-  normalizePath,
   classifyFile,
-  parsePorcelainLine,
-  parseNameStatusLine,
   getGitChanges,
-  getStagedChanges,
-  getWorkingChanges,
-  identifyModules,
 };

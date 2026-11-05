@@ -1,5 +1,5 @@
-import { execFileSync } from 'node:child_process'
 import fs from 'fs-extra'
+import { execFileSync } from 'node:child_process'
 import { join } from 'pathe'
 import { describe, expect, it } from 'vitest'
 import { collectSkills } from '../skill-registry'
@@ -42,7 +42,7 @@ describe('plugin manifests — native marketplace install', () => {
   })
 
   it('keeps the private package and plugin versions in sync', () => {
-    expect(pkg.version).toBe('3.7.3-aug.2')
+    expect(pkg.version).toBe('3.7.4-aug.1')
     expect(pkg.private).toBe(true)
     expect(plugin.version).toBe(pkg.version)
     expect(marketplace.metadata.version).toBe(pkg.version)
@@ -164,7 +164,9 @@ describe('impeccable is collapsed into a single frontend-design entry', () => {
       // not the description slash-list (`audit/critique/polish`) or a path
       // segment (`impeccable/teach-impeccable`).
       const re = new RegExp(`(?<![\\w/])/(?:ccg:)?${name}\\b`, 'g')
-      if (re.test(text)) dead.push(name)
+      if (re.test(text)) {
+        dead.push(name)
+      }
     }
     expect(dead).toEqual([])
   })
@@ -175,7 +177,9 @@ describe('impeccable is collapsed into a single frontend-design entry', () => {
       const text = fs.readFileSync(skill.skillPath, 'utf-8')
       for (const candidate of impeccable) {
         const re = new RegExp(`(?<![\\w/])/(?:ccg:)?${candidate.name}\\b`, 'g')
-        if (re.test(text)) dead.push(`${skill.name}:/${candidate.name}`)
+        if (re.test(text)) {
+          dead.push(`${skill.name}:/${candidate.name}`)
+        }
       }
     }
     expect(dead).toEqual([])

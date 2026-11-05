@@ -43,7 +43,13 @@ func (f *filteringWriter) Write(p []byte) (n int, err error) {
 			break
 		}
 		if !f.shouldFilter(line) {
-			f.w.Write([]byte(line))
+			written, err := io.WriteString(f.w, line)
+			if err != nil {
+				return len(p), err
+			}
+			if written != len(line) {
+				return len(p), io.ErrShortWrite
+			}
 		}
 	}
 	return len(p), nil
@@ -59,12 +65,20 @@ func (f *filteringWriter) shouldFilter(line string) bool {
 }
 
 // Flush writes any remaining buffered content
-func (f *filteringWriter) Flush() {
-	if f.buf.Len() > 0 {
-		remaining := f.buf.String()
-		if !f.shouldFilter(remaining) {
-			f.w.Write([]byte(remaining))
-		}
-		f.buf.Reset()
+func (f *filteringWriter) Flush() error {
+	if f.buf.Len() == 0 {
+		return nil
 	}
+	remaining := f.buf.String()
+	if !f.shouldFilter(remaining) {
+		written, err := io.WriteString(f.w, remaining)
+		if err != nil {
+			return err
+		}
+		if written != len(remaining) {
+			return io.ErrShortWrite
+		}
+	}
+	f.buf.Reset()
+	return nil
 }

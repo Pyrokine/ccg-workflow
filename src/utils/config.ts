@@ -144,7 +144,7 @@ const routingStrategies = new Set(['parallel', 'fallback', 'round-robin'])
 const reviewStrategies = new Set(['parallel', 'fallback', 'single'])
 const collaborationModes = new Set(['parallel', 'smart', 'sequential'])
 
-export function normalizeModelName(value: unknown): ModelType | null {
+function normalizeModelName(value: unknown): ModelType | null {
   if (typeof value !== 'string') {
     return null
   }
@@ -217,9 +217,13 @@ function normalizeGrokModel(model: string): string {
 }
 
 function normalizeReviewProfile(value: unknown): ReviewProfile | null {
-  if (typeof value !== 'object' || value === null) return null
+  if (typeof value !== 'object' || value === null) {
+    return null
+  }
   const profile = value as { id?: unknown; model?: unknown; effort?: unknown }
-  if (typeof profile.id !== 'string' || !reviewProfileIds.has(profile.id as ReviewProfileId)) return null
+  if (typeof profile.id !== 'string' || !reviewProfileIds.has(profile.id as ReviewProfileId)) {
+    return null
+  }
 
   const normalized: ReviewProfile = { id: profile.id as ReviewProfileId }
   if (typeof profile.model === 'string' && profile.model.trim()) {
@@ -233,12 +237,16 @@ function normalizeReviewProfile(value: unknown): ReviewProfile | null {
 }
 
 function normalizeReviewProfiles(value: unknown, fallback: ReviewProfile[]): ReviewProfile[] {
-  if (!Array.isArray(value)) return cloneReviewProfiles(fallback)
+  if (!Array.isArray(value)) {
+    return cloneReviewProfiles(fallback)
+  }
 
   const configured = new Map<ReviewProfileId, ReviewProfile>()
   for (const rawProfile of value) {
     const profile = normalizeReviewProfile(rawProfile)
-    if (profile && !configured.has(profile.id)) configured.set(profile.id, profile)
+    if (profile && !configured.has(profile.id)) {
+      configured.set(profile.id, profile)
+    }
   }
   return fallback.map((defaultProfile) => ({ ...defaultProfile, ...configured.get(defaultProfile.id) }))
 }
@@ -313,6 +321,8 @@ export function normalizeRoutingForInstall(routing?: unknown): ModelRouting {
     ...normalizeModelOverrides(source),
   }
   const proxy = normalizeRoutingProxy(source?.proxy)
-  if (proxy) normalized.proxy = proxy
+  if (proxy) {
+    normalized.proxy = proxy
+  }
   return normalized
 }

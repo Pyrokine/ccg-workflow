@@ -24,7 +24,7 @@ decisions.
 
 ### 1. Problem Decomposition
 
-- Break down into sub-components
+- Break down into subcomponents
 - Identify dependencies and relationships
 - Map data flows and system boundaries
 

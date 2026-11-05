@@ -6,6 +6,7 @@ export default tseslint.config(
     extends: [eslint.configs.recommended, ...tseslint.configs.recommended],
     ignores: ['dist/', 'node_modules/'],
     rules: {
+      curly: ['error', 'all'],
       'no-constant-condition': ['warn', { checkLoops: false }],
       'prefer-const': 'warn',
       'no-control-regex': 'warn',
@@ -45,10 +46,19 @@ export default tseslint.config(
     },
   },
   {
-    files: ['templates/hooks/**/*.js', 'templates/skills/**/*.js', 'dsh-ccg/skills/**/*.js'],
+    files: [
+      'src/**/*.ts',
+      'templates/hooks/**/*.js',
+      'templates/skills/**/*.js',
+      'dsh-ccg/src/**/*.js',
+      'dsh-ccg/test/**/*.mjs',
+      'dsh-ccg/skills/**/*.js',
+    ],
+    ignores: ['dsh-ccg/src/client.js'],
     languageOptions: {
-      sourceType: 'commonjs',
       globals: {
+        AbortController: 'readonly',
+        AbortSignal: 'readonly',
         Buffer: 'readonly',
         TextDecoder: 'readonly',
         TextEncoder: 'readonly',
@@ -56,20 +66,40 @@ export default tseslint.config(
         URLSearchParams: 'readonly',
         __dirname: 'readonly',
         __filename: 'readonly',
+        clearImmediate: 'readonly',
         clearInterval: 'readonly',
         clearTimeout: 'readonly',
         console: 'readonly',
+        fetch: 'readonly',
         global: 'readonly',
         performance: 'readonly',
         process: 'readonly',
+        queueMicrotask: 'readonly',
         setImmediate: 'readonly',
         setInterval: 'readonly',
         setTimeout: 'readonly',
         structuredClone: 'readonly',
       },
     },
-    rules: {
-      '@typescript-eslint/no-require-imports': 'off',
+  },
+  {
+    files: ['templates/hooks/**/*.js', 'templates/skills/**/*.js', 'dsh-ccg/skills/**/*.js'],
+    languageOptions: { sourceType: 'commonjs' },
+    rules: { '@typescript-eslint/no-require-imports': 'off' },
+  },
+  {
+    files: ['dsh-ccg/src/client.js'],
+    languageOptions: {
+      globals: {
+        clearInterval: 'readonly',
+        clearTimeout: 'readonly',
+        console: 'readonly',
+        document: 'readonly',
+        fetch: 'readonly',
+        setInterval: 'readonly',
+        setTimeout: 'readonly',
+        window: 'readonly',
+      },
     },
   }
 );

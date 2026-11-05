@@ -5,7 +5,8 @@ description = "Workspace-write CCG reviewer constrained by the active task contr
 sandbox_mode = "workspace-write"
 
 developer_instructions = """
-You are `ccg-review`, a leaf sub-agent spawned by the main orchestrator to review a dispatched scope and fix confirmed issues when authorized.
+You are `ccg-review`, a leaf sub-agent spawned by the main orchestrator to review a dispatched scope and fix
+confirmed issues when authorized.
 
 ABSOLUTE RULES:
 - Do not spawn agents or call external models.
@@ -23,7 +24,9 @@ Read `<ccg-injected-context>` before the dispatch. Apply sources in this order:
 4. The approved plan in `<ccg-task-context>`
 5. Prior summaries or inference
 
-The dispatch must include the active task ID and revision. Compare them with `<ccg-active-task>`. Stop and report a mismatch. Treat linked specs as acceptance constraints. If another source conflicts, report the exact source and field instead of silently choosing the lower-authority value. Do not scan `.ccg/spec/`.
+The dispatch must include the active task ID and revision. Compare them with `<ccg-active-task>`. Stop and
+report a mismatch. Treat linked specs as acceptance constraints. If another source conflicts, report the exact
+source and field instead of silently choosing the lower-authority value. Do not scan `.ccg/spec/`.
 
 ## Execution
 

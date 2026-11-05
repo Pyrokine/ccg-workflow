@@ -21,12 +21,12 @@ CDN 缓存 (边缘节点)
 数据库
 ```
 
-| 层级       | 延迟        | 容量  | 一致性   |
-|----------|-----------|-----|-------|
-| L1 本地内存  | ~ns       | MB级 | 进程内一致 |
-| L2 分布式缓存 | ~ms       | GB级 | 最终一致  |
-| L3 CDN   | ~10ms     | TB级 | TTL控制 |
-| DB       | ~10-100ms | PB级 | 强一致   |
+| 层级          | 延迟      | 容量 | 一致性     |
+|---------------|-----------|------|------------|
+| L1 本地内存   | ~ns       | MB级 | 进程内一致 |
+| L2 分布式缓存 | ~ms       | GB级 | 最终一致   |
+| L3 CDN        | ~10ms     | TB级 | TTL控制    |
+| DB            | ~10-100ms | PB级 | 强一致     |
 
 ---
 
@@ -106,14 +106,14 @@ def update_user(user_id: str, data: dict):
 
 ### 数据结构选型
 
-| 结构         | 场景       | 示例           |
-|------------|----------|--------------|
-| String     | 简单KV、计数器 | 用户信息、页面PV    |
-| Hash       | 对象属性     | 用户Profile各字段 |
-| List       | 队列、最新列表  | 消息队列、最新动态    |
-| Set        | 去重、交集    | 标签、共同好友      |
-| Sorted Set | 排行榜、延迟队列 | 积分排名、定时任务    |
-| Stream     | 消息流      | 事件日志         |
+| 结构       | 场景             | 示例               |
+|------------|------------------|--------------------|
+| String     | 简单KV、计数器   | 用户信息、页面PV   |
+| Hash       | 对象属性         | 用户Profile各字段  |
+| List       | 队列、最新列表   | 消息队列、最新动态 |
+| Set        | 去重、交集       | 标签、共同好友     |
+| Sorted Set | 排行榜、延迟队列 | 积分排名、定时任务 |
+| Stream     | 消息流           | 事件日志           |
 
 ### 过期策略
 
@@ -124,10 +124,10 @@ def update_user(user_id: str, data: dict):
   内存淘汰: 内存满时触发
 
 淘汰策略 (maxmemory-policy):
-  volatile-lru:   有过期时间的 key 中 LRU
-  allkeys-lru:    所有 key 中 LRU (推荐)
-  volatile-ttl:   有过期时间的 key 中 TTL 最小
-  noeviction:     不淘汰，写入报错
+  volatile-lru: 有过期时间的 key 中 LRU
+  allkeys-lru: 所有 key 中 LRU (推荐)
+  volatile-ttl: 有过期时间的 key 中 TTL 最小
+  noeviction: 不淘汰，写入报错
 ```
 
 ### 分布式锁
@@ -228,7 +228,7 @@ API 响应:
 
 不缓存:
   Cache-Control: no-store
-  Set-Cookie 响应
+  条件: Set-Cookie 响应
 ```
 
 ### 缓存失效
@@ -266,11 +266,11 @@ aws cloudfront create-invalidation \
 
 ### 一致性级别选择
 
-| 级别       | 方案               | 延迟 | 复杂度 |
-|----------|------------------|----|-----|
-| 强一致      | Write-Through    | 高  | 中   |
-| 最终一致     | Cache-Aside + 删除 | 低  | 低   |
-| 最终一致(可靠) | Binlog 订阅        | 中  | 高   |
+| 级别           | 方案               | 延迟 | 复杂度 |
+|----------------|--------------------|------|--------|
+| 强一致         | Write-Through      | 高   | 中     |
+| 最终一致       | Cache-Aside + 删除 | 低   | 低     |
+| 最终一致(可靠) | Binlog 订阅        | 中   | 高     |
 
 ---
 
@@ -278,7 +278,7 @@ aws cloudfront create-invalidation \
 
 ```yaml
 设计:
-  - 缓存 key 规范: {业务}:{实体}:{ID}
+  - 缓存 key 规范: '{业务}:{实体}:{ID}'
   - 合理 TTL: 热数据短(分钟)，冷数据长(小时)
   - 大 value 拆分: 单 value < 10KB
   - 避免 Big Key: 集合类型 < 5000 元素
@@ -295,4 +295,3 @@ aws cloudfront create-invalidation \
   - 禁用危险命令 (KEYS/FLUSHALL)
   - 定期备份 (RDB + AOF)
 ```
-

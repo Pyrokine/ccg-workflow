@@ -1,7 +1,7 @@
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { dependency, distributions, fixture, loadModule, root, write } from './language-checks-fixtures'
 import type { Analyze } from './language-checks-fixtures'
+import { dependency, distributions, fixture, loadModule, root, write } from './language-checks-fixtures'
 
 const thresholds = { maxComplexity: 10, maxFunctionLength: 50, maxParameters: 5 }
 const longBody = '  work();\n'.repeat(55)

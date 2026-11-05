@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { afterEach, expect } from 'vitest'
@@ -131,6 +131,8 @@ export function completeModule(root: string, name: string): string {
 }
 
 afterEach(() => {
-  for (const root of cleanup) rmSync(root, { recursive: true, force: true })
+  for (const root of cleanup) {
+    rmSync(root, { recursive: true, force: true })
+  }
   cleanup.clear()
 })

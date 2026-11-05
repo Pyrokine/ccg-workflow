@@ -50,23 +50,32 @@ function operationResolve(projectRoot, sessionKey) {
 
 function operationSnapshot(projectRoot, sessionKey, options) {
   const mode = options.mode || 'session';
-  if (!['breadcrumb', 'authority', 'session', 'agent'].includes(mode))
+  if (!['breadcrumb', 'authority', 'session', 'agent'].includes(mode)) {
     fail('INVALID_REQUEST', `Unsupported snapshot mode: ${mode}`);
+  }
   return buildTaskSnapshot(projectRoot, { mode, role: options.role || 'unknown', sessionKey });
 }
 
 function operationList(projectRoot, sessionKey) {
   const pending = readPendingTransaction(projectRoot);
-  if (!pending.ok) fail(pending.code, pending.message);
-  if (pending.exists)
+  if (!pending.ok) {
+    fail(pending.code, pending.message);
+  }
+  if (pending.exists) {
     fail('RECOVERY_REQUIRED', 'An incomplete task transaction must be recovered before listing tasks');
+  }
   const stateResult = assertStateReadable(readState(projectRoot));
-  if (!stateResult.exists) fail('TASK_MIGRATION_REQUIRED', 'Initialize task state before listing tasks');
+  if (!stateResult.exists) {
+    fail('TASK_MIGRATION_REQUIRED', 'Initialize task state before listing tasks');
+  }
   const bindingResult = assertStateReadable(readBinding(projectRoot, sessionKey, stateResult.state.stateId));
   const tasks = listTasks(projectRoot);
-  if (!tasks.ok) fail(tasks.code, tasks.message);
-  if (tasks.orphans.length > 0)
+  if (!tasks.ok) {
+    fail(tasks.code, tasks.message);
+  }
+  if (tasks.orphans.length > 0) {
     fail('ORPHAN_TASK_DIR', `Task directories without task.json: ${tasks.orphans.join(', ')}`);
+  }
   const { claims } = currentClaims(projectRoot, stateResult.state);
   return {
     state: stateResult.state,
@@ -91,8 +100,9 @@ function operationList(projectRoot, sessionKey) {
 function operationRecordTurn(projectRoot, sessionKey, request) {
   const expected = requireExpected(request, true);
   const resolution = resolveTaskState(projectRoot, sessionKey);
-  if (resolution.kind !== 'active')
+  if (resolution.kind !== 'active') {
     fail(resolution.code || 'ACTIVE_TASK_CONFLICT', resolution.message || 'No active task');
+  }
   if (
     resolution.stateId !== expected.stateId ||
     resolution.stateRevision !== expected.stateRevision ||
@@ -109,7 +119,9 @@ function operationRecordTurn(projectRoot, sessionKey, request) {
     resolution.task.nextAction,
     resolution.task.revision
   );
-  if (!tracked.ok) fail(tracked.code, 'Cannot record session turn', null, 3);
+  if (!tracked.ok) {
+    fail(tracked.code, 'Cannot record session turn', null, 3);
+  }
   return {
     state: resolution.state,
     binding: resolution.binding,
@@ -122,10 +134,16 @@ function operationRecordTurn(projectRoot, sessionKey, request) {
 function execute(operation, options, request) {
   const projectRoot = resolveRoot(options);
   const sessionKey = resolveSessionKey(options);
-  if (operation === 'snapshot') return operationSnapshot(projectRoot, sessionKey, options);
-  if (operation === 'migrate-state') return operationMigrateState(projectRoot, request);
+  if (operation === 'snapshot') {
+    return operationSnapshot(projectRoot, sessionKey, options);
+  }
+  if (operation === 'migrate-state') {
+    return operationMigrateState(projectRoot, request);
+  }
   const handler = OPERATIONS[operation];
-  if (!handler) fail('INVALID_REQUEST', `Unknown operation: ${operation}`);
+  if (!handler) {
+    fail('INVALID_REQUEST', `Unknown operation: ${operation}`);
+  }
   return handler(projectRoot, sessionKey, request);
 }
 
@@ -135,7 +153,9 @@ function operationRequiresRequest(operation) {
 
 function outputSuccess(operation, result) {
   const output = result && typeof result === 'object' ? { ...result } : { value: result };
-  if (output.task) output.task = taskForWrite(output.task);
+  if (output.task) {
+    output.task = taskForWrite(output.task);
+  }
   output.diagnostics = Array.isArray(output.diagnostics) ? output.diagnostics : [];
   process.stdout.write(`${JSON.stringify({ ok: true, operation, ...output })}\n`);
 }
@@ -205,7 +225,9 @@ const OPERATIONS = Object.assign(Object.create(null), {
   'record-turn': operationRecordTurn,
 });
 
-if (require.main === module) main();
+if (require.main === module) {
+  main();
+}
 
 module.exports = {
   TaskStateError,

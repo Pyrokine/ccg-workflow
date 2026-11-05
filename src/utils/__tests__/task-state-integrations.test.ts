@@ -1,22 +1,22 @@
+import fs from 'fs-extra'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import fs from 'fs-extra'
 import { describe, expect, it } from 'vitest'
 import {
-  packageRoot,
-  hooksDir,
   CODEX_SESSION_ID,
   CODEX_SESSION_KEY,
   createProject,
-  runScript,
+  currentExpected,
+  expectSuccess,
+  hookOutput,
+  hooksDir,
+  installCodexHookRuntime,
+  packageRoot,
+  runCodexHook,
   runController,
   runHook,
-  expectSuccess,
-  currentExpected,
+  runScript,
   startTask,
-  hookOutput,
-  installCodexHookRuntime,
-  runCodexHook,
 } from './task-state-fixtures'
 
 describe('default OpenSpec task authority', () => {
@@ -146,7 +146,9 @@ describe('skill router Hook', () => {
       'SKILL_CONTEXT_TRUNCATED:domains/architecture/caching.md:16KiB/120-lines'
     )
     expect(output.additionalContext).not.toContain(omitted)
-    if (content.startsWith('XML')) expect(output.additionalContext).toContain('XML &lt;example&gt;')
+    if (content.startsWith('XML')) {
+      expect(output.additionalContext).toContain('XML &lt;example&gt;')
+    }
   })
 
   it('requires an explicit external-review request before starting a reviewer CLI', () => {

@@ -14,8 +14,7 @@ import (
 )
 
 func TestIsolateProcessGroup(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	cmd := exec.CommandContext(ctx, "true")
 	isolateProcessGroup(cmd)
 

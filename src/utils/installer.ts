@@ -1,18 +1,18 @@
 import fs from 'fs-extra'
 import { join } from 'pathe'
 import type { InstallResult } from '../types'
+import { installBinaryFile } from './installer-binary'
 import {
   createInstallContext,
-  workflowInstallConfig,
   type InstallConfig,
   type InstallContext,
   type InstallOptions,
+  workflowInstallConfig,
 } from './installer-context'
-import { PACKAGE_ROOT } from './installer-template'
-import { installCommandFiles, installEngineFiles, installAgentFiles, installPromptFiles } from './installer-files'
-import { installSkillFiles, installRuleFiles, installSkillGeneratedCommands } from './installer-skills'
+import { installAgentFiles, installCommandFiles, installEngineFiles, installPromptFiles } from './installer-files'
 import { installHookScripts, readHookSettings, registerHooksInSettings } from './installer-hooks'
-import { installBinaryFile } from './installer-binary'
+import { installRuleFiles, installSkillFiles, installSkillGeneratedCommands } from './installer-skills'
+import { PACKAGE_ROOT } from './installer-template'
 
 export { verifyBinary, verifyBinaryVersion, showBinaryDownloadWarning } from './installer-binary'
 export { installCodexMode, uninstallCodexMode } from './installer-codex'
@@ -125,7 +125,9 @@ export async function installWorkflows(
   await installPromptFiles(ctx)
   await installSkillFiles(ctx)
   await installRuleFiles(ctx)
-  if (ctx.result.errors.length > 0) ctx.result.success = false
+  if (ctx.result.errors.length > 0) {
+    ctx.result.success = false
+  }
   await installSkillGeneratedCommands(ctx)
   if (!ctx.config.skipBinary) {
     await installBinaryFile(ctx)
@@ -191,14 +193,22 @@ export async function syncRoutingTemplates(
   await fs.ensureDir(join(installDir, '.ccg', 'prompts'))
   await fs.ensureDir(join(installDir, '.ccg', 'engine', 'strategies'))
 
-  if (!(await readHookSettings(ctx))) return ctx.result
-  if (!(await installHookScripts(ctx))) return ctx.result
+  if (!(await readHookSettings(ctx))) {
+    return ctx.result
+  }
+  if (!(await installHookScripts(ctx))) {
+    return ctx.result
+  }
   await registerHooksInSettings(ctx)
-  if (!ctx.result.success) return ctx.result
+  if (!ctx.result.success) {
+    return ctx.result
+  }
 
   await installCommandFiles(ctx, workflowIds, { backupExisting: true })
   await installEngineFiles(ctx, { backupExisting: true })
   await installPromptFiles(ctx)
-  if (ctx.result.errors.length > 0) ctx.result.success = false
+  if (ctx.result.errors.length > 0) {
+    ctx.result.success = false
+  }
   return ctx.result
 }

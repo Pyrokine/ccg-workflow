@@ -9,10 +9,10 @@ import {
   promptSponsorInit,
   sponsorInquirerChoices,
 } from '../utils/installer'
-import { modelChoices, promptExecutionModels } from './model-prompts'
-import type { InitState } from './init-state'
-import { BACK_SENTINEL, CANCEL_SENTINEL, navSentinels } from './init-navigation'
 import type { StepReturn } from './init-navigation'
+import { BACK_SENTINEL, CANCEL_SENTINEL, navSentinels } from './init-navigation'
+import type { InitState } from './init-state'
+import { modelChoices, promptExecutionModels } from './model-prompts'
 
 export async function runApiStep(state: InitState, canGoBack: boolean): Promise<StepReturn> {
   console.log()
@@ -34,8 +34,12 @@ export async function runApiStep(state: InitState, canGoBack: boolean): Promise<
     },
   ])
 
-  if (apiProvider === BACK_SENTINEL) return 'back'
-  if (apiProvider === CANCEL_SENTINEL) return 'cancel'
+  if (apiProvider === BACK_SENTINEL) {
+    return 'back'
+  }
+  if (apiProvider === CANCEL_SENTINEL) {
+    return 'cancel'
+  }
 
   // Clear stale values before collecting fresh input
   state.apiUrl = ''
@@ -57,11 +61,19 @@ export async function runModelStep(state: InitState, canGoBack: boolean): Promis
   console.log()
 
   const selectedFrontend = await promptRouteModel('Frontend', state.frontendModels[0], canGoBack)
-  if (selectedFrontend === BACK_SENTINEL) return 'back'
-  if (selectedFrontend === CANCEL_SENTINEL) return 'cancel'
+  if (selectedFrontend === BACK_SENTINEL) {
+    return 'back'
+  }
+  if (selectedFrontend === CANCEL_SENTINEL) {
+    return 'cancel'
+  }
   const selectedBackend = await promptRouteModel('Backend', state.backendModels[0], canGoBack)
-  if (selectedBackend === BACK_SENTINEL) return 'back'
-  if (selectedBackend === CANCEL_SENTINEL) return 'cancel'
+  if (selectedBackend === BACK_SENTINEL) {
+    return 'back'
+  }
+  if (selectedBackend === CANCEL_SENTINEL) {
+    return 'cancel'
+  }
 
   const selectedModels = new Set<ModelType>([selectedFrontend as ModelType, selectedBackend as ModelType])
   await promptExecutionModels(state, selectedModels, state.language === 'zh-CN')
@@ -93,13 +105,19 @@ export async function runPerfStep(state: InitState, canGoBack: boolean): Promise
     },
   ])
 
-  if (perfMode === BACK_SENTINEL) return 'back'
-  if (perfMode === CANCEL_SENTINEL) return 'cancel'
+  if (perfMode === BACK_SENTINEL) {
+    return 'back'
+  }
+  if (perfMode === CANCEL_SENTINEL) {
+    return 'cancel'
+  }
 
   state.liteMode = perfMode === 'lite'
 
   await chooseInstallMode(state)
-  if (state.requestedSkills === undefined) await chooseNativeSkills(state)
+  if (state.requestedSkills === undefined) {
+    await chooseNativeSkills(state)
+  }
   return 'next'
 }
 
@@ -185,8 +203,9 @@ async function chooseInstallMode(state: InitState): Promise<void> {
 
 async function chooseNativeSkills(state: InitState): Promise<void> {
   const skillsMode = await promptSkillsMode(state)
-  if (skillsMode === 'legacy') state.skillsProfile = undefined
-  else if (skillsMode === 'core') {
+  if (skillsMode === 'legacy') {
+    state.skillsProfile = undefined
+  } else if (skillsMode === 'core') {
     state.skillsProfile = [
       'gen-docs',
       'verify-security',

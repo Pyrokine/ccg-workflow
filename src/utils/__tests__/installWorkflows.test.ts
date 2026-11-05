@@ -10,11 +10,16 @@ const ALL_IDS = getAllCommandIds()
 // Collect all .md files recursively
 function collectMdFiles(dir: string): string[] {
   const files: string[] = []
-  if (!fs.existsSync(dir)) return files
+  if (!fs.existsSync(dir)) {
+    return files
+  }
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const full = join(dir, entry.name)
-    if (entry.isDirectory()) files.push(...collectMdFiles(full))
-    else if (entry.name.endsWith('.md')) files.push(full)
+    if (entry.isDirectory()) {
+      files.push(...collectMdFiles(full))
+    } else if (entry.name.endsWith('.md')) {
+      files.push(full)
+    }
   }
   return files
 }

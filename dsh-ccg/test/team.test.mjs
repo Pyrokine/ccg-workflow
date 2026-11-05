@@ -17,19 +17,19 @@ import assert from 'node:assert/strict'
 
 import { resolveRoles } from '../src/roles.js'
 import {
-  HIRE_APPROVE,
-  HIRE_DECLINE,
-  HIRE_QUESTION_ID,
   buildTeammatePersona,
   buildTeammatePrompt,
   confirmHire,
   describeTeam,
   formatHireReport,
+  HIRE_APPROVE,
+  HIRE_DECLINE,
+  HIRE_QUESTION_ID,
   hireApprovalQuestion,
   readApproval,
   renderTeamPrompt,
-  teamToolDefinition,
   teammateRoute,
+  teamToolDefinition,
 } from '../src/team.js'
 import { buildModeMenu, renderTriagePrompt } from '../src/modes.js'
 
@@ -67,7 +67,9 @@ function stubQuestions(reply) {
     asked,
     async ask(request) {
       asked.push(request)
-      if (typeof reply === 'function') return reply(request)
+      if (typeof reply === 'function') {
+        return reply(request)
+      }
       return reply
     },
   }
@@ -84,29 +86,35 @@ test('the hiring definition compiles — a bad schema takes the whole tool table
   // The compiler rewrites the DSL's per-field `required` into a list; seeing it
   // here proves the schema went through the compiler rather than past it.
   // `hired` is required and `childId` is not: a declined hire is a real result
-  // with no child, and modelling it as an error would read as a malfunction.
+  // with no child, and modeling it as an error would read as a malfunction.
   assert.deepEqual(definition.output.schema.required, ['hired', 'role', 'label', 'route'])
   assert.equal(definition.output.schema.additionalProperties, false)
 
   // The render path runs on every result; a throw there is also a broken tool.
-  const [block] = definition.output.render({}, {
-    hired: true,
-    childId: 'child-42',
-    role: 'builder',
-    label: 'parser rewrite',
-    route: 'gw / fast-model',
-    owns: ['src/parse/'],
-  })
+  const [block] = definition.output.render(
+    {},
+    {
+      hired: true,
+      childId: 'child-42',
+      role: 'builder',
+      label: 'parser rewrite',
+      route: 'gw / fast-model',
+      owns: ['src/parse/'],
+    }
+  )
   assert.match(block.text, /builder teammate hired: child-42/)
 
   // Both arms render: a decline has no childId, and a report that tried to name
   // one would print `undefined` at the user.
-  const [declined] = definition.output.render({}, {
-    hired: false,
-    role: 'builder',
-    label: 'parser rewrite',
-    route: 'gw / fast-model',
-  })
+  const [declined] = definition.output.render(
+    {},
+    {
+      hired: false,
+      role: 'builder',
+      label: 'parser rewrite',
+      route: 'gw / fast-model',
+    }
+  )
   assert.match(declined.text, /Not hired: the user declined/)
   assert.doesNotMatch(declined.text, /undefined/)
 })
@@ -159,7 +167,7 @@ test('the opening message carries the assignment and the shared context, nothing
   assert.ok(!buildTeammatePrompt('Do it').includes('Shared context'))
 })
 
-test('hiring starts a continuable child on the role\'s own model, wearing its persona', async () => {
+test("hiring starts a continuable child on the role's own model, wearing its persona", async () => {
   const { definition, subagents } = hiringTool()
 
   const result = await definition.execute(
@@ -169,7 +177,7 @@ test('hiring starts a continuable child on the role\'s own model, wearing its pe
       prompt: 'Rewrite the tokenizer to be streaming.',
       owns: ['src/parse/'],
     },
-    { agent: { id: 'parent-1' }, signal: undefined },
+    { agent: { id: 'parent-1' }, signal: undefined }
   )
 
   assert.equal(subagents.calls.length, 1)
@@ -184,7 +192,7 @@ test('hiring starts a continuable child on the role\'s own model, wearing its pe
   assert.match(spec.request.prompt[0].text, /Rewrite the tokenizer to be streaming\./)
   assert.equal(spec.request.parent.id, 'parent-1')
 
-  // `owns` comes back normalised — the trailing slash is dropped so that
+  // `owns` comes back normalized — the trailing slash is dropped so that
   // `src/parse/` and `src/parse` cannot be handed to two different teammates.
   assert.deepEqual(result, {
     hired: true,
@@ -199,18 +207,37 @@ test('hiring starts a continuable child on the role\'s own model, wearing its pe
 test('alpha hiring returns the stable child id with parent delivery and automatic-report persona', async () => {
   const calls = []
   const rows = new Map()
-  const subagents = { async startActivation(spec) {
-    calls.push(spec)
-    return { childId: 'alpha-child', messageId: 'first-message', result: Promise.resolve({ stopReason: 'completed' }) }
-  } }
+  const subagents = {
+    async startActivation(spec) {
+      calls.push(spec)
+      return {
+        childId: 'alpha-child',
+        messageId: 'first-message',
+        result: Promise.resolve({ stopReason: 'completed' }),
+      }
+    },
+  }
   const { definition } = hiringTool(TIERS, subagents, {
-    confirm: false, getTable: () => ({ entries: () => rows.entries(), put: async (id, row) => { rows.set(id, row) } }),
-    maxDepth: 2, toolFilter: { deny: ['ccg_team'] },
+    confirm: false,
+    getTable: () => ({
+      entries: () => rows.entries(),
+      put: async (id, row) => {
+        rows.set(id, row)
+      },
+    }),
+    maxDepth: 2,
+    toolFilter: { deny: ['ccg_team'] },
   })
   const signal = new AbortController().signal
-  const result = await definition.execute({
-    role: 'builder', description: 'parser', prompt: 'Implement parser', owns: ['./src/parser.js'],
-  }, { agent: { id: 'parent-1', session: { header: { cwd: '/workspace' } } }, signal })
+  const result = await definition.execute(
+    {
+      role: 'builder',
+      description: 'parser',
+      prompt: 'Implement parser',
+      owns: ['./src/parser.js'],
+    },
+    { agent: { id: 'parent-1', session: { header: { cwd: '/workspace' } } }, signal }
+  )
   assert.equal(result.childId, 'alpha-child')
   assert.equal(calls.length, 1)
   const [spec] = calls
@@ -228,13 +255,30 @@ test('alpha hiring returns the stable child id with parent delivery and automati
 })
 
 test('an alpha activation failing to start creates no ghost owner', async () => {
-  const subagents = { async startActivation() { throw new Error('publication cancelled') } }
+  const subagents = {
+    async startActivation() {
+      throw new Error('publication cancelled')
+    },
+  }
   const { definition } = hiringTool(TIERS, subagents, {
-    confirm: false, getTable: () => ({ entries: () => [], async put() { assert.fail('ghost owner') } }),
+    confirm: false,
+    getTable: () => ({
+      entries: () => [],
+      async put() {
+        assert.fail('ghost owner')
+      },
+    }),
   })
-  await assert.rejects(definition.execute({ role: 'builder', description: 'parser', prompt: 'Implement parser', owns: ['src/parser.js'] }, {
-    agent: { id: 'parent-1' }, signal: new AbortController().signal,
-  }), /publication cancelled/)
+  await assert.rejects(
+    definition.execute(
+      { role: 'builder', description: 'parser', prompt: 'Implement parser', owns: ['src/parser.js'] },
+      {
+        agent: { id: 'parent-1' },
+        signal: new AbortController().signal,
+      }
+    ),
+    /publication cancelled/
+  )
 })
 
 test('the alpha team convention waits for completion notifications and accepts earlier messages', () => {
@@ -249,14 +293,17 @@ test('a role holding a panel hires its first model, and the report says which', 
     ...TIERS,
     roles: {
       analyzer: {
-        models: [{ provider: 'gw', model: 'big-model' }, { provider: 'rival', model: 'other' }],
+        models: [
+          { provider: 'gw', model: 'big-model' },
+          { provider: 'rival', model: 'other' },
+        ],
       },
     },
   })
 
   const result = await definition.execute(
     { role: 'analyzer', description: 'survey', prompt: 'Map the call graph.' },
-    { agent: { id: 'parent-1' } },
+    { agent: { id: 'parent-1' } }
   )
 
   // A teammate is one agent; a panel role cannot hire all its models at once,
@@ -270,7 +317,7 @@ test('hiring refuses what it cannot deliver instead of failing halfway', async (
   const noService = teamToolDefinition({ resolved: resolveRoles(TIERS), getSubagents: () => undefined })
   await assert.rejects(
     () => noService.execute({ role: 'builder', description: 'x', prompt: 'y' }, { agent: {} }),
-    /subagents service is not available/,
+    /subagents service is not available/
   )
 
   // A deployment whose provider cannot keep children alive must say so, not
@@ -281,13 +328,13 @@ test('hiring refuses what it cannot deliver instead of failing halfway', async (
   })
   await assert.rejects(
     () => oneShotOnly.execute({ role: 'builder', description: 'x', prompt: 'y' }, { agent: {} }),
-    /cannot keep children alive/,
+    /cannot keep children alive/
   )
 
   const { definition } = hiringTool()
   await assert.rejects(
     () => definition.execute({ role: 'builder', description: 'x', prompt: '  ' }, { agent: {} }),
-    /a teammate needs an assignment/,
+    /a teammate needs an assignment/
   )
 
   // A misspelt role never reaches `execute`: the framework validates the enum
@@ -296,7 +343,7 @@ test('hiring refuses what it cannot deliver instead of failing halfway', async (
   // message the model actually sees.
   await assert.rejects(
     () => definition.execute({ role: 'buidler', description: 'x', prompt: 'y' }, { agent: {} }),
-    /"role" must be one of .*builder/,
+    /"role" must be one of .*builder/
   )
 })
 
@@ -353,7 +400,10 @@ test('the tool description names every hirable role and what it runs on', () => 
 test('triage offers the team as a fourth gear', () => {
   const resolved = resolveRoles(TIERS)
   const menu = buildModeMenu(resolved)
-  assert.deepEqual(menu.map((entry) => entry.mode), ['direct', 'standard', 'deep', 'team'])
+  assert.deepEqual(
+    menu.map((entry) => entry.mode),
+    ['direct', 'standard', 'deep', 'team']
+  )
 
   const text = renderTriagePrompt(resolved, { team: true })
   assert.match(text, /\*\*Team\*\*/)
@@ -365,10 +415,18 @@ test('triage offers the team as a fourth gear', () => {
   // And with a panel role in the mix, the sequential total counts every member
   // — the gear that costs more than its phase count must say so.
   const panelled = renderTriagePrompt(
-    resolveRoles({ ...TIERS, roles: { reviewer: { models: [
-      { provider: 'gw', model: 'big-model' }, { provider: 'rival', model: 'other' },
-    ] } } }),
-    { team: true },
+    resolveRoles({
+      ...TIERS,
+      roles: {
+        reviewer: {
+          models: [
+            { provider: 'gw', model: 'big-model' },
+            { provider: 'rival', model: 'other' },
+          ],
+        },
+      },
+    }),
+    { team: true }
   )
   assert.match(panelled, /Cost: 3 delegations, 4 model calls\./)
   assert.match(text, /Deep and Team are not a ranking/)
@@ -378,7 +436,7 @@ test('a deployment that cannot hire is never offered the team gear', () => {
   const resolved = resolveRoles(TIERS)
   assert.deepEqual(
     buildModeMenu(resolved, { team: false }).map((entry) => entry.mode),
-    ['direct', 'standard', 'deep'],
+    ['direct', 'standard', 'deep']
   )
 
   const text = renderTriagePrompt(resolved, { team: false })
@@ -388,7 +446,7 @@ test('a deployment that cannot hire is never offered the team gear', () => {
   assert.match(text, /\*\*Standard\*\*/)
 })
 
-test('a teammate is started without this plugin\'s own tools', async () => {
+test("a teammate is started without this plugin's own tools", async () => {
   const { definition, subagents } = hiringTool()
   const filtered = teamToolDefinition({
     resolved: resolveRoles(TIERS),
@@ -396,10 +454,7 @@ test('a teammate is started without this plugin\'s own tools', async () => {
     toolFilter: { deny: ['ccg_team', 'ccg_roster', 'ccg_build'] },
   })
 
-  await filtered.execute(
-    { role: 'builder', description: 'x', prompt: 'y' },
-    { agent: { id: 'p' } },
-  )
+  await filtered.execute({ role: 'builder', description: 'x', prompt: 'y' }, { agent: { id: 'p' } })
   // Suppressing the convention removed the invitation, not the capability: a
   // teammate that can still call the hiring tool can start a team nobody
   // approved, inside the depth cap.
@@ -433,7 +488,7 @@ test('the convention forbids reviewing work that does not exist yet', () => {
 test('the convention says when to interrupt, not just that it exists', () => {
   const text = renderTeamPrompt(resolveRoles(TIERS))
   assert.match(text, /`interrupt_agent` stops the turn it is in the middle of, and only that/)
-  // The judgement, not just the mechanism: a teammate works from a brief you
+  // The judgment, not just the mechanism: a teammate works from a brief you
   // wrote, so a misread costs the whole assignment if it runs to completion.
   assert.match(text, /building the wrong thing/)
   assert.match(text, /Interrupting is cheap; a wrong deliverable is not/)
@@ -445,17 +500,41 @@ test('hiring retires dead rows before it checks for a collision', async () => {
   const calls = []
   const subagents = {
     calls: [],
-    listChildren: async (id) => { calls.push(id); return [] },
-    async startContinuable(spec) { subagents.calls.push(spec); return { childId: 'new', messageId: 'm' } },
+    listChildren: async (id) => {
+      calls.push(id)
+      return []
+    },
+    async startContinuable(spec) {
+      subagents.calls.push(spec)
+      return { childId: 'new', messageId: 'm' }
+    },
   }
   const table = {
-    rows: new Map([['dead', {
-      childId: 'dead', hiredBy: 'p', role: 'builder', label: 'x', owns: ['src/a.js'], hiredAt: 0,
-    }]]),
-    get(k) { return this.rows.get(k) },
-    entries() { return this.rows.entries() },
-    async put(k, v) { this.rows.set(k, v) },
-    async delete(k) { return this.rows.delete(k) },
+    rows: new Map([
+      [
+        'dead',
+        {
+          childId: 'dead',
+          hiredBy: 'p',
+          role: 'builder',
+          label: 'x',
+          owns: ['src/a.js'],
+          hiredAt: 0,
+        },
+      ],
+    ]),
+    get(k) {
+      return this.rows.get(k)
+    },
+    entries() {
+      return this.rows.entries()
+    },
+    async put(k, v) {
+      this.rows.set(k, v)
+    },
+    async delete(k) {
+      return this.rows.delete(k)
+    },
   }
   const definition = teamToolDefinition({
     resolved: resolveRoles(TIERS),
@@ -466,7 +545,7 @@ test('hiring retires dead rows before it checks for a collision', async () => {
 
   const result = await definition.execute(
     { role: 'builder', description: 'x', prompt: 'y', owns: ['src/a.js'] },
-    { agent: { id: 'p' } },
+    { agent: { id: 'p' } }
   )
   assert.deepEqual(calls, ['p'])
   assert.equal(result.childId, 'new')
@@ -482,7 +561,7 @@ test('hiring asks first, and a decline starts nobody', async () => {
 
   const result = await definition.execute(
     { role: 'builder', description: 'parser rewrite', prompt: 'Rewrite it.', owns: ['src/parse.js'] },
-    { agent: { id: 'parent-1' } },
+    { agent: { id: 'parent-1' } }
   )
 
   // Nothing was started. A gate that asked and then hired anyway is worse than
@@ -512,7 +591,7 @@ test('an approval hires exactly once, and asking is skippable by configuration',
 
   const result = await definition.execute(
     { role: 'builder', description: 'parser rewrite', prompt: 'Rewrite it.' },
-    { agent: { id: 'parent-1' } },
+    { agent: { id: 'parent-1' } }
   )
   assert.equal(result.hired, true)
   assert.equal(subagents.calls.length, 1)
@@ -523,10 +602,7 @@ test('an approval hires exactly once, and asking is skippable by configuration',
     confirm: false,
     getUserQuestions: () => silent,
   })
-  await off.definition.execute(
-    { role: 'builder', description: 'x', prompt: 'y' },
-    { agent: { id: 'parent-1' } },
-  )
+  await off.definition.execute({ role: 'builder', description: 'x', prompt: 'y' }, { agent: { id: 'parent-1' } })
   assert.equal(silent.asked.length, 0)
   assert.equal(off.subagents.calls.length, 1)
 })
@@ -545,7 +621,11 @@ test('the gate fails closed on an answer it cannot read', () => {
 
 test('a deployment where nobody can answer hires rather than deadlocks', async () => {
   const question = hireApprovalQuestion({
-    role: 'builder', label: 'x', route: 'gw / m', owns: [], brief: 'do it',
+    role: 'builder',
+    label: 'x',
+    route: 'gw / m',
+    owns: [],
+    brief: 'do it',
   })
 
   // No service at all (a deployment that mounts none).
@@ -555,16 +635,30 @@ test('a deployment where nobody can answer hires rather than deadlocks', async (
   // caller: both mean there is no human at the other end. A gate nobody can
   // answer is a deadlock, not a guard.
   for (const code of ['NO_PROVIDER', 'DELEGATED_CALLER', 'CALLER_NOT_LIVE']) {
-    const failing = { ask: async () => { const error = new Error(code); error.code = code; throw error } }
+    const failing = {
+      ask: async () => {
+        const error = new Error(code)
+        error.code = code
+        throw error
+      },
+    }
     assert.deepEqual(await confirmHire(failing, question, {}), { approved: true })
   }
 })
 
 test('an unexpected failure hires but says so; a cancelled turn just ends', async () => {
   const question = hireApprovalQuestion({
-    role: 'builder', label: 'x', route: 'gw / m', owns: [], brief: 'do it',
+    role: 'builder',
+    label: 'x',
+    route: 'gw / m',
+    owns: [],
+    brief: 'do it',
   })
-  const broken = { ask: async () => { throw new Error('the panel exploded') } }
+  const broken = {
+    ask: async () => {
+      throw new Error('the panel exploded')
+    },
+  }
 
   // Never silently: a confirmation that did not happen is reported, so it
   // cannot be mistaken for one that was given.
@@ -572,13 +666,13 @@ test('an unexpected failure hires but says so; a cancelled turn just ends', asyn
   assert.equal(outcome.approved, true)
   assert.match(outcome.note, /without a confirmation/)
   assert.match(outcome.note, /the panel exploded/)
-  assert.match(formatHireReport({ hired: true, ...outcome, childId: 'c', role: 'r', label: 'l', route: 'gw / m' }), /without a confirmation/)
+  assert.match(
+    formatHireReport({ hired: true, ...outcome, childId: 'c', role: 'r', label: 'l', route: 'gw / m' }),
+    /without a confirmation/
+  )
 
   // An aborted turn is not a verdict on the hire; it ends the call.
-  await assert.rejects(
-    () => confirmHire(broken, question, { signal: { aborted: true } }),
-    /the panel exploded/,
-  )
+  await assert.rejects(() => confirmHire(broken, question, { signal: { aborted: true } }), /the panel exploded/)
 })
 
 test('the convention tells the coordinator not to ask the same thing twice', () => {

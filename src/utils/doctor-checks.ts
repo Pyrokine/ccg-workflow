@@ -3,28 +3,30 @@ import { homedir } from 'node:os'
 import { join } from 'pathe'
 import { parse } from 'smol-toml'
 import { version } from '../../package.json'
-import { listSkills, SKILL_MANIFEST_FILE } from './skill-manager'
-import { compareVersions } from './version'
-import { check, readText, record } from './doctor-common'
 import type { DoctorCheck, DoctorDependencies, DoctorReport, RecordValue } from './doctor-common'
+import { check, readText, record } from './doctor-common'
 import { claudeChecks, codexChecks, modeChecks } from './doctor-hosts'
 import {
-  BACKENDS,
   backendChecks,
+  BACKENDS,
   executeVersion,
   readWrapperVersion,
   standaloneDelegationChecks,
   taskCheck,
   versionDetail,
 } from './doctor-runtime'
+import { listSkills, SKILL_MANIFEST_FILE } from './skill-manager'
+import { compareVersions } from './version'
 
 export type { DoctorStatus, DoctorCheck, DoctorReport, DoctorDependencies } from './doctor-common'
 export { readCodexModeStatus } from './doctor-hosts'
 export { executeVersion, readTaskStatus } from './doctor-runtime'
 
 function supportsCurrentNode(version: string): boolean {
-  const match = version.match(/^v(\d+)\.(\d+)\./)
-  if (!match) return false
+  const match = version.match(/^v(?<major>\d+)\.(?<minor>\d+)\./)
+  if (!match) {
+    return false
+  }
   const major = Number(match[1])
   const minor = Number(match[2])
   return (major === 22 && minor >= 13) || major > 24 || (major === 24 && minor >= 19)
@@ -76,8 +78,11 @@ function collectRouteBackends(route: RecordValue, names: Set<string>): boolean {
   let invalid = typeof route.primary !== 'string' || !models
   const values = [route.primary, ...(models || [])].filter((v) => v !== undefined)
   for (const value of values) {
-    if (typeof value !== 'string' || !Object.hasOwn(BACKENDS, value)) invalid = true
-    else names.add(value)
+    if (typeof value !== 'string' || !Object.hasOwn(BACKENDS, value)) {
+      invalid = true
+    } else {
+      names.add(value)
+    }
   }
   return invalid || models?.length === 0
 }
@@ -116,7 +121,9 @@ function modeBackends(config: RecordValue, mode: DoctorReport['mode']) {
 type McpFormat = 'json' | 'toml'
 async function mcpServerCount(path: string, format: McpFormat) {
   const text = await readText(path)
-  if (!text) return { count: 0, invalid: false }
+  if (!text) {
+    return { count: 0, invalid: false }
+  }
   try {
     const parsed = record(format === 'json' ? JSON.parse(text) : parse(text))
     return {
@@ -130,8 +137,12 @@ async function mcpServerCount(path: string, format: McpFormat) {
 
 async function mcpCheck(home: string, codexDir: string, mode: DoctorReport['mode']): Promise<DoctorCheck> {
   const sources: [string, McpFormat][] = []
-  if (mode !== 'codex') sources.push([join(home, '.claude.json'), 'json'])
-  if (mode !== 'claude') sources.push([join(codexDir, 'config.toml'), 'toml'])
+  if (mode !== 'codex') {
+    sources.push([join(home, '.claude.json'), 'json'])
+  }
+  if (mode !== 'claude') {
+    sources.push([join(codexDir, 'config.toml'), 'toml'])
+  }
   let count = 0
   let invalid = false
   for (const [path, format] of sources) {
@@ -164,8 +175,9 @@ async function skillChecks(
   const targets: ('claude' | 'codex')[] = []
   for (const target of ['claude', 'codex'] as const) {
     const paths = nativeSkillPaths(home, installDir, target, deps)
-    if (required.includes(target) || (await fs.pathExists(join(paths.storeDir, SKILL_MANIFEST_FILE))))
+    if (required.includes(target) || (await fs.pathExists(join(paths.storeDir, SKILL_MANIFEST_FILE)))) {
       targets.push(target)
+    }
   }
   return Promise.all(
     targets.map(async (target) => {
@@ -222,13 +234,17 @@ type DoctorEnvironment = ReturnType<typeof doctorEnvironment>
 function adjustConfigCheck(result: DoctorCheck, mode: DoctorReport['mode']): void {
   if (mode === 'codex') {
     result.status = result.status === 'warn' ? 'skip' : result.status === 'fail' ? 'warn' : 'pass'
-    if (result.status === 'skip') result.detail = 'Claude routing config is optional for standalone Codex mode'
+    if (result.status === 'skip') {
+      result.detail = 'Claude routing config is optional for standalone Codex mode'
+    }
     result.remediation =
       result.status === 'warn'
         ? 'Repair optional Claude routing config before enabling external model delegation.'
         : null
   }
-  if (['claude', 'both'].includes(mode) && result.status === 'warn') result.status = 'fail'
+  if (['claude', 'both'].includes(mode) && result.status === 'warn') {
+    result.status = 'fail'
+  }
   if (mode === 'skills' && result.status === 'warn') {
     result.status = 'skip'
     result.detail = 'Workflow routing is optional for standalone native skills'
@@ -284,7 +300,7 @@ async function workflowChecks(
 ): Promise<DoctorCheck[]> {
   const checks: DoctorCheck[] = []
   const { names, invalid, invalidProfiles } = selection
-  if (Object.keys(config).length > 0)
+  if (Object.keys(config).length > 0) {
     checks.push(
       check(
         'routing.backends',
@@ -294,6 +310,7 @@ async function workflowChecks(
         'Reconfigure frontend, backend and review routing with npx ccg-workflow.'
       )
     )
+  }
   checks.push(installedVersionCheck(config))
   checks.push(...(await claudeChecks(installDir, commandFiles)))
   checks.push(
@@ -318,7 +335,9 @@ async function modelRuntimeChecks(
 ): Promise<DoctorCheck[]> {
   const { installDir, codexDir, home, platform, exec } = env
   const checks: DoctorCheck[] = []
-  if (mode === 'codex') checks.push(...(await standaloneDelegationChecks(installDir, codexDir, home, platform, exec)))
+  if (mode === 'codex') {
+    checks.push(...(await standaloneDelegationChecks(installDir, codexDir, home, platform, exec)))
+  }
   if (!pureClaude && ['claude', 'both'].includes(mode)) {
     const raw = await readWrapperVersion(installDir, platform, exec)
     checks.push(
@@ -349,9 +368,14 @@ export async function collectDoctorReport(deps: DoctorDependencies = {}): Promis
   const selection = modeBackends(config, mode)
   const { names, pureClaude } = selection
   const checks = initialChecks(nodeVersion, result, mode)
-  if (workflowInstalled) checks.push(...(await workflowChecks(config, selection, installDir, commandFiles)))
-  if (mode === 'codex' || mode === 'both') checks.push(...(await codexChecks(codexDir, codexStatus)))
-  else if (workflowInstalled) checks.push(check('codex.agents', 'Codex mode', 'skip', codexStatus.detail))
+  if (workflowInstalled) {
+    checks.push(...(await workflowChecks(config, selection, installDir, commandFiles)))
+  }
+  if (mode === 'codex' || mode === 'both') {
+    checks.push(...(await codexChecks(codexDir, codexStatus)))
+  } else if (workflowInstalled) {
+    checks.push(check('codex.agents', 'Codex mode', 'skip', codexStatus.detail))
+  }
   checks.push(...(await modelRuntimeChecks(env, mode, names, pureClaude)))
   if (workflowInstalled || mode === 'codex') {
     checks.push(await taskCheck(deps.root || process.cwd(), mode === 'codex' ? codexDir : installDir, exec))

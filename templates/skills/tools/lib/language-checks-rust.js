@@ -5,17 +5,23 @@ const path = require('node:path');
 const { AnalysisError, canonical, checked, issue, runNative } = require('./language-checks-runtime.js');
 
 function rustDiagnostic(diagnostic, root) {
-  if (!diagnostic || !Array.isArray(diagnostic.spans)) throw new Error();
+  if (!diagnostic || !Array.isArray(diagnostic.spans)) {
+    throw new Error();
+  }
   const severity = { error: 'error', warning: 'warning', note: 'info', help: 'info', 'failure-note': 'info' }[
     diagnostic.level
   ];
-  if (!severity) throw new Error();
+  if (!severity) {
+    throw new Error();
+  }
   const spans = diagnostic.spans.filter((span) => span.is_primary);
   if (!spans.length && severity === 'error') {
     throw new AnalysisError('Rust reported an error without an analyzable source location');
   }
   return spans.map((span) => {
-    if (typeof span.file_name !== 'string' || !Number.isInteger(span.line_start)) throw new Error();
+    if (typeof span.file_name !== 'string' || !Number.isInteger(span.line_start)) {
+      throw new Error();
+    }
     const file = canonical(path.resolve(root, span.file_name));
     return issue('clippy', severity, file, span.line_start, diagnostic.code?.code || 'rustc');
   });
@@ -24,18 +30,23 @@ function rustDiagnostic(diagnostic, root) {
 function cargoProject(context, job) {
   const options = ['--manifest-path', job.config, '--frozen', '--offline'];
   const result = context.run(['metadata', '--format-version', '1', '--no-deps', ...options], job.root, [0, 101]);
-  if (result.status !== 0)
+  if (result.status !== 0) {
     throw new AnalysisError('Cargo metadata requires an existing lockfile, cached dependencies and toolchain');
+  }
+  context.phase('project');
   const project = JSON.parse(result.stdout);
-  if (typeof project.workspace_root !== 'string' || !Array.isArray(project.packages)) throw new Error();
+  if (typeof project.workspace_root !== 'string' || !Array.isArray(project.packages)) {
+    throw new Error();
+  }
   if (!fs.existsSync(path.join(project.workspace_root, 'Cargo.lock'))) {
     throw new AnalysisError('Cargo.lock is required for offline locked analysis');
   }
   if (
     !project.packages.length ||
     project.packages.some((entry) => typeof entry.id !== 'string' || typeof entry.manifest_path !== 'string')
-  )
+  ) {
     throw new Error();
+  }
   return { ...project, options };
 }
 
@@ -44,9 +55,13 @@ function cargoRecords(text) {
     .split(/\r?\n/u)
     .filter((line) => line.trim())
     .map((line) => JSON.parse(line));
-  if (!records.length || records.some((entry) => !entry || typeof entry.reason !== 'string')) throw new Error();
+  if (!records.length || records.some((entry) => !entry || typeof entry.reason !== 'string')) {
+    throw new Error();
+  }
   const allowed = ['compiler-message', 'compiler-artifact', 'build-script-executed', 'build-finished'];
-  if (records.some((entry) => !allowed.includes(entry.reason))) throw new Error();
+  if (records.some((entry) => !allowed.includes(entry.reason))) {
+    throw new Error();
+  }
   return records;
 }
 
@@ -54,7 +69,9 @@ function rustIssues(records, project) {
   const issues = [];
   const packages = new Set(project.packages.map((entry) => entry.id));
   for (const record of records.filter((entry) => entry.reason === 'compiler-message')) {
-    if (!packages.has(record.package_id)) throw new Error();
+    if (!packages.has(record.package_id)) {
+      throw new Error();
+    }
     issues.push(...rustDiagnostic(record.message, project.workspace_root));
   }
   return issues;
@@ -63,27 +80,37 @@ function rustIssues(records, project) {
 function depInfoSources(content, root) {
   const text = content.replace(/\\\r?\n/gu, ' ');
   const separator = text.indexOf(': ');
-  if (separator < 0) throw new AnalysisError('Rust dependency inventory could not be read');
+  if (separator < 0) {
+    throw new AnalysisError('Rust dependency inventory could not be read');
+  }
   const dependencies = text.slice(separator + 2).split('\n', 1)[0];
   const tokens = dependencies.match(/(?:\\[\s\S]|[^\s\\])+/gu) || [];
   return tokens.map((token) => {
-    const name = token.replace(/\\([\\\s#:$])/gu, '$1').replace(/\$\$/gu, '$');
+    const name = token.replace(/\\(?<character>[\\\s#:$])/gu, '$1').replace(/\$\$/gu, '$');
     return canonical(path.resolve(root, name));
   });
 }
 
-function rustInventory(target, root) {
+function rustInventory(target, root, checkDeadline) {
   const files = new Set();
   function visit(directory) {
+    checkDeadline();
     for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      checkDeadline();
       const file = path.join(directory, entry.name);
-      if (entry.isDirectory()) visit(file);
-      else if (entry.isFile() && entry.name.endsWith('.d')) {
-        for (const source of depInfoSources(fs.readFileSync(file, 'utf8'), root)) files.add(source);
+      if (entry.isDirectory()) {
+        visit(file);
+      } else if (entry.isFile() && entry.name.endsWith('.d')) {
+        for (const source of depInfoSources(fs.readFileSync(file, 'utf8'), root)) {
+          files.add(source);
+        }
       }
     }
   }
-  if (fs.existsSync(target)) visit(target);
+  if (fs.existsSync(target)) {
+    visit(target);
+  }
+  checkDeadline();
   return files;
 }
 
@@ -106,6 +133,7 @@ function clippy(job) {
     if (result.status !== 0 && !result.stdout.trim()) {
       throw new AnalysisError('Cargo could not complete offline locked analysis; check dependency cache and toolchain');
     }
+    context.phase('diagnostics');
     const records = cargoRecords(result.stdout);
     const issues = rustIssues(records, project);
     const completed = records.filter((entry) => entry.reason === 'build-finished');
@@ -113,12 +141,14 @@ function clippy(job) {
       completed.length !== 1 ||
       typeof completed[0].success !== 'boolean' ||
       completed[0].success !== (result.status === 0)
-    )
+    ) {
       throw new Error();
+    }
     if (result.status !== 0 && !issues.some((entry) => entry.severity === 'error')) {
       throw new AnalysisError('Cargo could not complete offline locked analysis; check dependency cache and toolchain');
     }
-    const sources = rustInventory(target, project.workspace_root);
+    context.phase('inventory');
+    const sources = rustInventory(target, project.workspace_root, context.checkDeadline);
     return checked(job.tool, project.workspace_root, {
       requested: job.files,
       covered: job.files.filter((file) => sources.has(canonical(file))),

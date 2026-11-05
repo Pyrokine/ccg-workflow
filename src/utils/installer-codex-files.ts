@@ -1,5 +1,5 @@
-import { createHash, randomUUID } from 'node:crypto'
 import fs from 'fs-extra'
+import { createHash, randomUUID } from 'node:crypto'
 import { dirname, join } from 'pathe'
 
 import { TASK_STATE_RUNTIME_FILES } from './installer-data'
@@ -76,27 +76,35 @@ export function codexFileSha256(content: string | Buffer): string {
 
 export async function lstatOptional(path: string): Promise<import('node:fs').Stats | undefined> {
   return fs.lstat(path).catch((error: unknown) => {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return undefined
+    }
     throw error
   })
 }
 
 export async function assertSafeCodexDirectory(path: string): Promise<boolean> {
   const current = await lstatOptional(path)
-  if (!current) return false
+  if (!current) {
+    return false
+  }
   if (!current.isDirectory() || current.isSymbolicLink()) {
     throw new Error(`Refusing to use non-regular Codex directory: ${path}`)
   }
   return true
 }
 
-export async function ensureSafeCodexDirectory(path: string): Promise<void> {
-  if (await assertSafeCodexDirectory(path)) return
+async function ensureSafeCodexDirectory(path: string): Promise<void> {
+  if (await assertSafeCodexDirectory(path)) {
+    return
+  }
   await fs.mkdir(path, { mode: 0o700 })
 }
 
 export async function assertCodexPathLayout(codexHome: string): Promise<void> {
-  if (!(await assertSafeCodexDirectory(codexHome))) return
+  if (!(await assertSafeCodexDirectory(codexHome))) {
+    return
+  }
   for (const relativePath of ['agents', 'hooks', 'hooks/ccg', '.ccg', '.ccg/backups']) {
     const path = join(codexHome, relativePath)
     const current = await lstatOptional(path)
@@ -119,7 +127,9 @@ export async function ensureCodexPathLayout(codexHome: string): Promise<void> {
 
 export async function readOptionalCodexFile(path: string): Promise<{ content: string; mode: number } | null> {
   const current = await lstatOptional(path)
-  if (!current) return null
+  if (!current) {
+    return null
+  }
   if (!current.isFile() || current.isSymbolicLink()) {
     throw new Error(`Refusing to read non-regular Codex file: ${path}`)
   }
@@ -153,7 +163,9 @@ export async function writeCodexFileAtomic(path: string, content: string | Buffe
 
 export async function removeRegularCodexFile(path: string): Promise<boolean> {
   const current = await lstatOptional(path)
-  if (!current) return false
+  if (!current) {
+    return false
+  }
   if (!current.isFile() || current.isSymbolicLink()) {
     throw new Error(`Refusing to remove non-regular Codex file: ${path}`)
   }
@@ -233,7 +245,9 @@ async function originalBackupPath(codexHome: string, backupName: string, relativ
 
   let parent = filesDir
   for (const segment of dirname(relativePath).split('/')) {
-    if (segment === '.') continue
+    if (segment === '.') {
+      continue
+    }
     parent = join(parent, segment)
     if (!(await assertSafeCodexDirectory(parent))) {
       throw new Error(`Codex original-file backup directory is unavailable: ${relativePath}`)
@@ -248,7 +262,9 @@ export async function readCodexOriginalFile(
   managedFile: CodexManagedFile
 ): Promise<{ content: Buffer; mode: number } | null> {
   const original = managedFile.original
-  if (!original) return null
+  if (!original) {
+    return null
+  }
 
   const sourcePath = await originalBackupPath(codexHome, original.backupName, managedFile.relativePath)
   const source = await lstatOptional(sourcePath)
@@ -268,14 +284,18 @@ export async function removeOrRestoreCodexManagedFile(
 ): Promise<'removed' | 'restored' | 'missing' | 'preserved'> {
   const targetPath = join(codexHome, managedFile.relativePath)
   const current = await readOptionalCodexFile(targetPath)
-  if (current && codexFileSha256(current.content) !== managedFile.installedSha256) return 'preserved'
+  if (current && codexFileSha256(current.content) !== managedFile.installedSha256) {
+    return 'preserved'
+  }
 
   const original = await readCodexOriginalFile(codexHome, managedFile)
   if (original) {
     await writeCodexFileAtomic(targetPath, original.content, original.mode)
     return 'restored'
   }
-  if (!current) return 'missing'
+  if (!current) {
+    return 'missing'
+  }
   await removeRegularCodexFile(targetPath)
   return 'removed'
 }

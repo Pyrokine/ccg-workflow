@@ -1,10 +1,10 @@
+import { cac } from 'cac'
 import fs from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { cac } from 'cac'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { registerSkillCommands, runSkillsCommand } from '../../commands/skills'
 import type { SkillCommandOptions } from '../../commands/skills'
+import { registerSkillCommands, runSkillsCommand } from '../../commands/skills'
 
 let root: string
 let options: SkillCommandOptions

@@ -11,37 +11,6 @@ import (
 	"strings"
 )
 
-// JSONEvent represents a Codex JSON output event
-type JSONEvent struct {
-	Type     string     `json:"type"`
-	ThreadID string     `json:"thread_id,omitempty"`
-	Item     *EventItem `json:"item,omitempty"`
-}
-
-// EventItem represents the item field in a JSON event
-type EventItem struct {
-	Type string      `json:"type"`
-	Text interface{} `json:"text"`
-}
-
-// ClaudeEvent for Claude stream-json format
-type ClaudeEvent struct {
-	Type      string `json:"type"`
-	Subtype   string `json:"subtype,omitempty"`
-	SessionID string `json:"session_id,omitempty"`
-	Result    string `json:"result,omitempty"`
-}
-
-// ContentStreamEvent represents role/content JSON stream events.
-type ContentStreamEvent struct {
-	Type      string `json:"type"`
-	SessionID string `json:"session_id,omitempty"`
-	Role      string `json:"role,omitempty"`
-	Content   string `json:"content,omitempty"`
-	Delta     bool   `json:"delta,omitempty"`
-	Status    string `json:"status,omitempty"`
-}
-
 func parseJSONStream(r io.Reader) (message, threadID string) {
 	return parseJSONStreamWithLog(r, logWarn, logInfo)
 }
@@ -60,17 +29,9 @@ const (
 	jsonLinePreviewBytes = 256
 )
 
-type codexHeader struct {
-	Type     string `json:"type"`
-	ThreadID string `json:"thread_id,omitempty"`
-	Item     *struct {
-		Type string `json:"type"`
-	} `json:"item,omitempty"`
-}
-
 // UnifiedEvent combines all backend event formats into a single structure
 // to avoid multiple JSON unmarshal operations per event
-type UnifiedEvent struct {
+type unifiedEvent struct {
 	// Common fields
 	Type string `json:"type"`
 
@@ -98,14 +59,14 @@ type UnifiedEvent struct {
 	Part              json.RawMessage `json:"part,omitempty"`
 }
 
-type OpencodePart struct {
+type opencodePart struct {
 	Type   string `json:"type"`
 	Text   string `json:"text,omitempty"`
 	Reason string `json:"reason,omitempty"`
 }
 
-// GetSessionID returns the session ID from either snake_case or camelCase field.
-func (e *UnifiedEvent) GetSessionID() string {
+// getSessionID returns the session ID from either snake_case or camelCase field.
+func (e *unifiedEvent) getSessionID() string {
 	if e.SessionID != "" {
 		return e.SessionID
 	}
@@ -113,9 +74,9 @@ func (e *UnifiedEvent) GetSessionID() string {
 }
 
 // ItemContent represents the parsed item.text field for Codex events
-type ItemContent struct {
-	Type string      `json:"type"`
-	Text interface{} `json:"text"`
+type itemContent struct {
+	Type string `json:"type"`
+	Text any    `json:"text"`
 }
 
 func parseJSONStreamInternal(
@@ -203,10 +164,10 @@ func parseJSONStreamInternalWithContent(
 		}
 
 		// Single unmarshal for all backend types
-		var event UnifiedEvent
+		var event unifiedEvent
 		if err := json.Unmarshal(line, &event); err != nil {
 			// Some CLIs prepend non-JSON text to an init event line
-			// e.g. "MCP issues detected. Run /mcp list for status.{"type":"init",...}"
+			// e.g. `MCP issues detected. Run /mcp list for status.{"type":"init",...}`
 			// Try to extract JSON from the first '{' character
 			if idx := bytes.IndexByte(line, '{'); idx > 0 {
 				if err2 := json.Unmarshal(line[idx:], &event); err2 == nil {
@@ -219,8 +180,8 @@ func parseJSONStreamInternalWithContent(
 	parsed:
 
 		// Extract session_id early (works for all backends)
-		if event.GetSessionID() != "" && threadID == "" {
-			threadID = event.GetSessionID()
+		if event.getSessionID() != "" && threadID == "" {
+			threadID = event.getSessionID()
 			if onSessionStarted != nil {
 				onSessionStarted(threadID)
 			}
@@ -237,14 +198,14 @@ func parseJSONStreamInternalWithContent(
 			}
 		}
 		isClaude := event.Subtype != "" || event.Result != ""
-		if !isClaude && event.Type == "result" && event.GetSessionID() != "" && event.Status == "" {
+		if !isClaude && event.Type == "result" && event.getSessionID() != "" && event.Status == "" {
 			isClaude = true
 		}
 		isOpencode := event.OpencodeSessionID != "" && len(event.Part) > 0
 		isKimi := !isCodex && !isClaude && !isOpencode &&
 			(event.Role == "meta" || (event.Type == "" && (event.Role == "assistant" || event.Role == "tool")))
 		isContentStream := !isKimi && !isOpencode && (event.Role != "" || event.Delta != nil || event.Status != "" ||
-			(event.Type == "init" && event.GetSessionID() != ""))
+			(event.Type == "init" && event.getSessionID() != ""))
 		isGrok := !isCodex && !isClaude && !isContentStream && !isOpencode &&
 			(((event.Type == "thought" || event.Type == "text") && event.Data != "") ||
 				(event.Type == "end" && (event.StopReason != "" || event.SessionIDCamel != "")))
@@ -308,7 +269,7 @@ func parseJSONStreamInternalWithContent(
 				switch itemType {
 				case "agent_message", "reasoning":
 					// Parse text content
-					var item ItemContent
+					var item itemContent
 					if err := json.Unmarshal(event.Item, &item); err == nil {
 						normalized := normalizeText(item.Text)
 						infoFn(
@@ -386,8 +347,8 @@ func parseJSONStreamInternalWithContent(
 
 		// Handle Claude events
 		if isClaude {
-			if event.GetSessionID() != "" && threadID == "" {
-				threadID = event.GetSessionID()
+			if event.getSessionID() != "" && threadID == "" {
+				threadID = event.getSessionID()
 			}
 
 			infoFn(
@@ -420,7 +381,7 @@ func parseJSONStreamInternalWithContent(
 				}
 			}
 
-			var part OpencodePart
+			var part opencodePart
 			if err := json.Unmarshal(event.Part, &part); err != nil {
 				warnFn(fmt.Sprintf("Failed to parse opencode part: %s", err.Error()))
 				continue
@@ -474,8 +435,8 @@ func parseJSONStreamInternalWithContent(
 
 		// Handle role/content stream events
 		if isContentStream {
-			if event.GetSessionID() != "" && threadID == "" {
-				threadID = event.GetSessionID()
+			if event.getSessionID() != "" && threadID == "" {
+				threadID = event.getSessionID()
 			}
 
 			if event.Content != "" {
@@ -489,7 +450,8 @@ func parseJSONStreamInternalWithContent(
 			if event.Status != "" {
 				notifyMessage()
 
-				if event.Type == "result" && (event.Status == "success" || event.Status == "error" || event.Status == "complete" || event.Status == "failed") {
+				if event.Type == "result" &&
+					(event.Status == "success" || event.Status == "error" || event.Status == "complete" || event.Status == "failed") {
 					notifyComplete()
 				}
 			}
@@ -580,12 +542,12 @@ func discardInvalidJSON(decoder *json.Decoder, reader *bufio.Reader) (*bufio.Rea
 	buffered.Write(line)
 
 	data := buffered.Bytes()
-	newline := bytes.IndexByte(data, '\n')
-	if newline == -1 {
+	_, after, ok := bytes.Cut(data, []byte{'\n'})
+	if !ok {
 		return reader, err
 	}
 
-	remaining := data[newline+1:]
+	remaining := after
 	if len(remaining) == 0 {
 		return reader, err
 	}
@@ -666,11 +628,11 @@ func truncateBytes(b []byte, maxLen int) string {
 	return string(b[:maxLen]) + "..."
 }
 
-func normalizeText(text interface{}) string {
+func normalizeText(text any) string {
 	switch v := text.(type) {
 	case string:
 		return v
-	case []interface{}:
+	case []any:
 		var sb strings.Builder
 		for _, item := range v {
 			if s, ok := item.(string); ok {

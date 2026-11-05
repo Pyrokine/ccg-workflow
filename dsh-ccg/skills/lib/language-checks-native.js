@@ -6,7 +6,9 @@ const { canonical, executable, execute, issue, unavailable, checked } = require(
 
 function ruffIssues(result, covered) {
   const diagnostics = JSON.parse(result.stdout);
-  if (!Array.isArray(diagnostics)) throw new Error();
+  if (!Array.isArray(diagnostics)) {
+    throw new Error();
+  }
   const issues = diagnostics.map((diagnostic) => {
     if (
       !diagnostic ||
@@ -17,24 +19,36 @@ function ruffIssues(result, covered) {
       throw new Error();
     }
     const file = covered.find((entry) => canonical(entry) === canonical(diagnostic.filename));
-    if (!file) throw new Error();
+    if (!file) {
+      throw new Error();
+    }
     return issue('ruff', 'error', file, diagnostic.location.row, diagnostic.code);
   });
-  if ((result.status === 1) !== issues.length > 0) throw new Error();
+  if ((result.status === 1) !== issues.length > 0) {
+    throw new Error();
+  }
   return issues;
 }
 
 function ruff(root, files, targetVersion) {
   const command = executable('ruff');
-  if (!command) return unavailable('ruff', root, files, 'Ruff is not installed');
+  if (!command) {
+    return unavailable('ruff', root, files, 'Ruff is not installed');
+  }
   const flags = ['check', '--no-cache', '--no-fix', '--no-fix-only', '--force-exclude'];
-  if (targetVersion !== undefined) flags.push('--target-version', targetVersion);
+  if (targetVersion !== undefined) {
+    flags.push('--target-version', targetVersion);
+  }
   const env = { ...process.env };
   delete env.RUFF_OUTPUT_FILE;
   // Ruff 诊断 JSON 不包含无问题文件，单独枚举覆盖范围以避免重复分析
   const inventory = execute(command, [...flags, '--show-files', '--', ...files], root, undefined, { env });
-  if (inventory.reason) return unavailable('ruff', root, files, inventory.reason);
-  if (inventory.status !== 0) return unavailable('ruff', root, files, 'Ruff could not enumerate project files');
+  if (inventory.reason) {
+    return unavailable('ruff', root, files, inventory.reason);
+  }
+  if (inventory.status !== 0) {
+    return unavailable('ruff', root, files, 'Ruff could not enumerate project files');
+  }
   const listed = new Set(
     inventory.stdout
       .split(/\r?\n/u)
@@ -42,10 +56,13 @@ function ruff(root, files, targetVersion) {
       .map((file) => canonical(path.resolve(root, file)))
   );
   const covered = files.filter((file) => listed.has(canonical(file)));
-  if (!covered.length)
+  if (!covered.length) {
     return checked('ruff', root, { requested: files, covered: [], issues: [], reason: 'Ruff CLI; no cache or fixes' });
+  }
   const result = execute(command, [...flags, '--output-format', 'json', '--', ...covered], root, undefined, { env });
-  if (result.reason) return unavailable('ruff', root, files, result.reason);
+  if (result.reason) {
+    return unavailable('ruff', root, files, result.reason);
+  }
   try {
     return checked('ruff', root, {
       requested: files,
@@ -61,15 +78,18 @@ function ruff(root, files, targetVersion) {
 function compilationFiles(database, files) {
   const root = path.dirname(database);
   const entries = JSON.parse(fs.readFileSync(database, 'utf8'));
-  if (!Array.isArray(entries)) throw new Error();
+  if (!Array.isArray(entries)) {
+    throw new Error();
+  }
   const recorded = new Set(
     entries.map((entry) => {
       if (
         typeof entry.directory !== 'string' ||
         typeof entry.file !== 'string' ||
         (!Array.isArray(entry.arguments) && typeof entry.command !== 'string')
-      )
+      ) {
         throw new Error();
+      }
       return canonical(path.resolve(root, entry.directory, entry.file));
     })
   );
@@ -77,12 +97,17 @@ function compilationFiles(database, files) {
 }
 
 function clangSeverity(kind, rule) {
-  if (rule?.includes('-warnings-as-errors')) return 'error';
+  if (rule?.includes('-warnings-as-errors')) {
+    return 'error';
+  }
   return { warning: 'warning', note: 'info' }[kind] || 'error';
 }
 
 function clangDiagnostic(line, root) {
-  const match = /^(.*):(\d+):(\d+): (warning|error|fatal error|note): .*?(?: \[([\w.,-]+)\])?$/u.exec(line);
+  const match =
+    /^(?<file>.*):(?<line>\d+):(?<column>\d+): (?<severity>warning|error|fatal error|note): .*?(?: \[(?<rule>[\w.,-]+)\])?$/u.exec(
+      line
+    );
   if (!match) {
     return {
       invalid:
@@ -95,7 +120,9 @@ function clangDiagnostic(line, root) {
     };
   }
   const file = path.resolve(root, match[1]);
-  if (!fs.existsSync(file)) return { invalid: true };
+  if (!fs.existsSync(file)) {
+    return { invalid: true };
+  }
   const rule = match[5] ? match[5].split(',')[0] : 'clang-diagnostic';
   return { finding: issue('clang-tidy', clangSeverity(match[4], match[5]), file, Number(match[2]), rule) };
 }
@@ -106,29 +133,38 @@ function clangResults(result, root) {
   let unknown = false;
   for (const line of `${result.stdout}\n${result.stderr}`.split(/\r?\n/u)) {
     const diagnostic = clangDiagnostic(line, root);
-    if (diagnostic.finding) issues.push(diagnostic.finding);
+    if (diagnostic.finding) {
+      issues.push(diagnostic.finding);
+    }
     invalid ||= diagnostic.invalid;
     unknown ||= diagnostic.unknown;
   }
   const failedWithoutError = result.status === 1 && !issues.some((entry) => entry.severity === 'error');
-  if (invalid || (unknown && !issues.length) || failedWithoutError) throw new Error();
+  if (invalid || (unknown && !issues.length) || failedWithoutError) {
+    throw new Error();
+  }
   return issues;
 }
 
 function clangTidy(database, files) {
   const root = path.dirname(database);
   const command = executable('clang-tidy');
-  if (!command) return unavailable('clang-tidy', root, files, 'clang-tidy is not installed');
+  if (!command) {
+    return unavailable('clang-tidy', root, files, 'clang-tidy is not installed');
+  }
   let covered;
   try {
     covered = compilationFiles(database, files);
   } catch {
     return unavailable('clang-tidy', root, files, 'Compilation database could not be read');
   }
-  if (!covered.length)
+  if (!covered.length) {
     return unavailable('clang-tidy', root, files, 'No requested file has a compilation database entry');
+  }
   const result = execute(command, ['-p', root, '--quiet', ...covered], root);
-  if (result.reason) return unavailable('clang-tidy', root, files, result.reason);
+  if (result.reason) {
+    return unavailable('clang-tidy', root, files, result.reason);
+  }
   try {
     return checked('clang-tidy', root, {
       requested: files,

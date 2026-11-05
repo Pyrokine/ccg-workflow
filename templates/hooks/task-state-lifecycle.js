@@ -56,7 +56,9 @@ const {
 function operationStart(projectRoot, sessionKey, request) {
   const expected = requireExpected(request, false);
   const mode = requireString(request, 'mode', 16);
-  if (!VALID_START_MODES.has(mode)) fail('INVALID_REQUEST', 'mode must be activate, interrupt, replace, or inactive');
+  if (!VALID_START_MODES.has(mode)) {
+    fail('INVALID_REQUEST', 'mode must be activate, interrupt, replace, or inactive');
+  }
   const taskInput = validateTaskInput(request.task);
   const requirements = validateTextContent(request.requirements, 'requirements', REQUIREMENTS_LIMIT, true);
   return withStateLock(projectRoot, () => {
@@ -87,7 +89,9 @@ function operationStart(projectRoot, sessionKey, request) {
 function operationActivate(projectRoot, sessionKey, request) {
   const expected = requireExpected(request, true);
   const taskId = requireString(request, 'taskId', 80);
-  if (!isValidTaskId(taskId)) fail('INVALID_REQUEST', 'taskId is invalid');
+  if (!isValidTaskId(taskId)) {
+    fail('INVALID_REQUEST', 'taskId is invalid');
+  }
   return withStateLock(projectRoot, () => {
     const { stateResult, bindingResult } = readCurrentStateAndBinding(projectRoot, sessionKey);
     assertExpectedState(stateResult, expected);
@@ -96,7 +100,9 @@ function operationActivate(projectRoot, sessionKey, request) {
     assertOpenTask(task);
     assertTaskRevision(task, expected.taskRevision);
     const chain = inspectReturnChain(projectRoot, task.returnToTaskId);
-    if (!chain.ok) fail(chain.code, chain.message);
+    if (!chain.ok) {
+      fail(chain.code, chain.message);
+    }
     assertTaskAvailableForSession(projectRoot, stateResult.state, sessionKey, task);
     if (bindingResult.binding.activeTaskId === taskId) {
       return { state: stateResult.state, binding: bindingResult.binding, task, changed: false };
@@ -110,7 +116,9 @@ function operationActivate(projectRoot, sessionKey, request) {
 function operationTakeover(projectRoot, sessionKey, request) {
   const expected = requireExpected(request, true);
   const taskId = requireString(request, 'taskId', 80);
-  if (!isValidTaskId(taskId)) fail('INVALID_REQUEST', 'taskId is invalid');
+  if (!isValidTaskId(taskId)) {
+    fail('INVALID_REQUEST', 'taskId is invalid');
+  }
   return withStateLock(projectRoot, () => {
     const { stateResult, bindingResult } = readCurrentStateAndBinding(projectRoot, sessionKey);
     assertExpectedState(stateResult, expected);
@@ -119,14 +127,18 @@ function operationTakeover(projectRoot, sessionKey, request) {
     assertOpenTask(task);
     assertTaskRevision(task, expected.taskRevision);
     const chain = inspectReturnChain(projectRoot, task.returnToTaskId);
-    if (!chain.ok) fail(chain.code, chain.message);
+    if (!chain.ok) {
+      fail(chain.code, chain.message);
+    }
 
     const { bindings, claims } = currentClaims(projectRoot, stateResult.state);
     const ownerKeys = claimOwnersForSession(projectRoot, task, claims, sessionKey);
     const writes = [];
     for (const ownerKey of ownerKeys) {
       const owner = bindings.find((binding) => binding.sessionKey === ownerKey);
-      if (!owner) continue;
+      if (!owner) {
+        continue;
+      }
       const released = makeBinding(stateResult.state, owner, null);
       writes.push({ path: getBindingPath(projectRoot, ownerKey), content: jsonContent(bindingForWrite(released)) });
     }
@@ -154,21 +166,34 @@ function operationTakeover(projectRoot, sessionKey, request) {
 
 function operationFinish(projectRoot, sessionKey, request) {
   const status = requireString(request, 'status', 16);
-  if (status !== 'completed' && status !== 'cancelled')
+  if (status !== 'completed' && status !== 'cancelled') {
     fail('INVALID_REQUEST', 'status must be completed or cancelled');
+  }
   const progress = validateTextContent(request.progress, 'progress', ARTIFACT_LIMIT, false);
+  const restorePreviousTask = request.restorePreviousTask === undefined ? true : request.restorePreviousTask;
+  if (typeof restorePreviousTask !== 'boolean') {
+    fail('INVALID_REQUEST', 'restorePreviousTask must be a boolean');
+  }
   return withStateLock(projectRoot, () => {
     const { state, binding, task } = assertActiveMutation(projectRoot, sessionKey, request);
-    if (task.gate !== null) fail('GATE_OPEN', `Task gate is still open: ${task.gate}`);
-    if (task.specEvolution === 'pending')
+    if (task.gate !== null) {
+      fail('GATE_OPEN', `Task gate is still open: ${task.gate}`);
+    }
+    if (task.specEvolution === 'pending') {
       fail('SPEC_EVOLUTION_PENDING', 'Record the spec evolution result before finishing');
+    }
     const returnTask = findReturnTarget(projectRoot, task.returnToTaskId);
-    if (returnTask) assertTaskAvailableForSession(projectRoot, state, sessionKey, returnTask.id);
+    const resumedTask = restorePreviousTask ? returnTask : null;
+    if (resumedTask) {
+      assertTaskAvailableForSession(projectRoot, state, sessionKey, resumedTask.id);
+    }
     const now = new Date().toISOString();
     const nextTask = bumpTask(task, { status, gate: null, finishedAt: now });
-    const nextBinding = makeBinding(state, binding, returnTask ? returnTask.id : null);
+    const nextBinding = makeBinding(state, binding, resumedTask ? resumedTask.id : null);
     const writes = [];
-    if (progress !== null) writes.push({ path: path.join(task.dir, 'progress.md'), content: progress });
+    if (progress !== null) {
+      writes.push({ path: path.join(task.dir, 'progress.md'), content: progress });
+    }
     writes.push(
       { path: getTaskPath(projectRoot, task.id), content: jsonContent(taskForWrite(nextTask)) },
       { path: getBindingPath(projectRoot, sessionKey), content: jsonContent(bindingForWrite(nextBinding)) }
@@ -178,7 +203,7 @@ function operationFinish(projectRoot, sessionKey, request) {
       state,
       binding: nextBinding,
       task: nextTask,
-      resumedTaskId: returnTask ? returnTask.id : null,
+      resumedTaskId: resumedTask ? resumedTask.id : null,
     };
   });
 }
@@ -187,14 +212,18 @@ function readStartState(projectRoot, sessionKey, expected) {
   const stateResult = assertStateReadable(readState(projectRoot));
   assertExpectedState(stateResult, expected);
   const bindingResult = assertStateReadable(readBinding(projectRoot, sessionKey, stateResult.state.stateId));
-  if (!stateResult.exists && bindingResult.exists)
+  if (!stateResult.exists && bindingResult.exists) {
     fail('BINDING_INVALID', 'A session binding exists without task state');
+  }
   assertExpectedBinding(bindingResult, expected, stateResult.state);
   if (!stateResult.exists) {
     const existing = listTasks(projectRoot, { allowLegacy: true });
-    if (!existing.ok) fail(existing.code, existing.message);
-    if (existing.tasks.length > 0 || existing.orphans.length > 0)
+    if (!existing.ok) {
+      fail(existing.code, existing.message);
+    }
+    if (existing.tasks.length > 0 || existing.orphans.length > 0) {
       fail('TASK_MIGRATION_REQUIRED', 'Existing task directories require explicit migration');
+    }
   }
   return { stateResult, bindingResult };
 }
@@ -205,11 +234,16 @@ function readStartActiveTask(projectRoot, binding, mode) {
     activeTask = assertTaskReadable(readTask(projectRoot, binding.activeTaskId));
     assertOpenTask(activeTask);
     const chain = inspectReturnChain(projectRoot, activeTask.returnToTaskId);
-    if (!chain.ok) fail(chain.code, chain.message);
+    if (!chain.ok) {
+      fail(chain.code, chain.message);
+    }
   }
-  if (mode === 'activate' && activeTask) fail('ACTIVE_TASK_CONFLICT', 'activate mode requires no active task');
-  if ((mode === 'interrupt' || mode === 'replace') && !activeTask)
+  if (mode === 'activate' && activeTask) {
+    fail('ACTIVE_TASK_CONFLICT', 'activate mode requires no active task');
+  }
+  if ((mode === 'interrupt' || mode === 'replace') && !activeTask) {
     fail('ACTIVE_TASK_CONFLICT', `${mode} mode requires an active task`);
+  }
   return activeTask;
 }
 
@@ -218,7 +252,9 @@ function createTask(projectRoot, taskInput, mode, activeTask) {
     allowMissing: true,
     kind: 'directory',
   });
-  if (destination.exists) fail('TASK_EXISTS', `Task already exists: ${taskInput.id}`);
+  if (destination.exists) {
+    fail('TASK_EXISTS', `Task already exists: ${taskInput.id}`);
+  }
   const now = new Date().toISOString();
   const git = getGitInfo(projectRoot);
   return {

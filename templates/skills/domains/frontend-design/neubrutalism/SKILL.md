@@ -57,7 +57,9 @@ Reference: [references/tokens.css](references/tokens.css)
   font-family: var(--nb-font);
   font-weight: var(--nb-font-weight);
   cursor: pointer;
-  transition: transform 0.1s, box-shadow 0.1s;
+  transition:
+    transform 0.1s,
+    box-shadow 0.1s;
 }
 .nb-btn:hover {
   transform: translate(-2px, -2px);
@@ -122,7 +124,9 @@ Reference: [references/tokens.css](references/tokens.css)
 - Uppercase sparingly for labels/badges
 
 ```css
-h1, h2, h3 {
+h1,
+h2,
+h3 {
   font-family: var(--nb-font-heading);
   font-weight: var(--nb-font-weight);
   letter-spacing: var(--nb-letter-spacing);
@@ -141,7 +145,8 @@ body {
 
 ```css
 @media (prefers-reduced-motion: reduce) {
-  .nb-btn:hover, .nb-btn:active {
+  .nb-btn:hover,
+  .nb-btn:active {
     transform: none;
   }
 }

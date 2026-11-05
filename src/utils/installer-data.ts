@@ -25,6 +25,10 @@ type CommandCategory = 'development' | 'init' | 'git' | 'spec'
 
 /**
  * Create a WorkflowConfig with sensible defaults.
+ * @param id - Command identifier
+ * @param order - Display order
+ * @param category - Command category
+ * @param text - Localized labels and descriptions
  * @param cmdOverride — Use when the slash command name differs from the id (e.g. 'init-project' → 'init')
  */
 function cmd(
@@ -277,7 +281,7 @@ export function getCoreCommandIds(): string[] {
   return CORE_CONFIGS.map((w) => w.id)
 }
 
-/** Legacy command IDs (optional install) */
+/** Legacy command IDs (optional installation) */
 export function getLegacyCommandIds(): string[] {
   return LEGACY_CONFIGS.map((w) => w.id)
 }

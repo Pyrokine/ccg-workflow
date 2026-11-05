@@ -25,14 +25,14 @@ disable-model-invocation: false
 
 ### 框架对比
 
-| 特性   | Airflow    | Dagster    | Prefect     |
-|------|------------|------------|-------------|
+| 特性     | Airflow    | Dagster    | Prefect     |
+|----------|------------|------------|-------------|
 | 核心模型 | DAG + Task | Asset + Op | Flow + Task |
-| 学习曲线 | 陡峭         | 中等         | 平缓          |
-| 资产管理 | 无          | 原生支持       | 无           |
-| 动态任务 | 支持         | 支持         | 支持          |
-| 本地开发 | 复杂         | 简单         | 简单          |
-| 社区生态 | 最大         | 成长中        | 成长中         |
+| 学习曲线 | 陡峭       | 中等       | 平缓        |
+| 资产管理 | 无         | 原生支持   | 无          |
+| 动态任务 | 支持       | 支持       | 支持        |
+| 本地开发 | 复杂       | 简单       | 简单        |
+| 社区生态 | 最大       | 成长中     | 成长中      |
 
 ### Airflow 核心模式
 
@@ -70,7 +70,7 @@ disable-model-invocation: false
 - [ ] 跨 DAG 依赖：ExternalTaskSensor / Asset deps
 - [ ] 幂等性：UPSERT / 分区覆盖写入
 - [ ] 增量处理：`WHERE updated_at > last_run`
-- [ ] 数据血缘：Dagster 原生 / Airflow Lineage / dbt ref()
+- [ ] 数据血缘：Dagster 原生 / Airflow Lineage / dbt ref ()
 
 ---
 
@@ -78,14 +78,14 @@ disable-model-invocation: false
 
 ### 框架对比
 
-| 特性           | Kafka Streams | Flink      | Spark Streaming |
-|--------------|---------------|------------|-----------------|
-| 部署模式         | 嵌入式(JVM)      | 独立集群       | 独立集群            |
-| 状态管理         | RocksDB       | 内存/RocksDB | 内存              |
-| Exactly-Once | 支持            | 支持         | 支持              |
-| 窗口类型         | 丰富            | 最丰富        | 基础              |
-| 学习曲线         | 平缓            | 陡峭         | 中等              |
-| Python API   | kafka-python  | PyFlink    | PySpark         |
+| 特性         | Kafka Streams | Flink        | Spark Streaming |
+|--------------|---------------|--------------|-----------------|
+| 部署模式     | 嵌入式(JVM)   | 独立集群     | 独立集群        |
+| 状态管理     | RocksDB       | 内存/RocksDB | 内存            |
+| Exactly-Once | 支持          | 支持         | 支持            |
+| 窗口类型     | 丰富          | 最丰富       | 基础            |
+| 学习曲线     | 平缓          | 陡峭         | 中等            |
+| Python API   | kafka-python  | PyFlink      | PySpark         |
 
 ### Kafka Streams 核心模式
 
@@ -136,11 +136,11 @@ disable-model-invocation: false
 
 ### 工具对比
 
-| 工具                 | 优势                        | 适用场景           |
-|--------------------|---------------------------|----------------|
+| 工具               | 优势                         | 适用场景              |
+|--------------------|------------------------------|-----------------------|
 | Great Expectations | 丰富 Expectations、Data Docs | Python 生态、复杂验证 |
-| dbt                | SQL 原生、血缘追踪               | 数据仓库、转换测试      |
-| Soda Core          | 简洁 YAML 配置                | 快速验证、CI/CD     |
+| dbt                | SQL 原生、血缘追踪           | 数据仓库、转换测试    |
+| Soda Core          | 简洁 YAML 配置               | 快速验证、CI/CD       |
 
 ### Great Expectations 核心模式
 
@@ -192,16 +192,17 @@ checks for table_name:
 
 ## 最佳实践
 
-| 实践    | 说明                                   |
-|-------|--------------------------------------|
-| 幂等性设计 | UPSERT / 分区覆盖，重跑不产生副作用               |
-| 增量处理  | 基于时间戳/CDC 增量提取，减少全量扫描                |
-| 数据血缘  | dbt ref() / Dagster Asset deps 追踪上下游 |
-| 分层验证  | 源→转换→目标每层都验证                         |
-| 监控告警  | 管道 SLA + 质量指标 + 延迟告警                 |
-| 状态管理  | 流处理状态 TTL + Checkpoint + Savepoint   |
-| 容错设计  | 重试策略 + 死信队列 + 回滚方案                   |
+| 实践       | 说明                                      |
+|------------|-------------------------------------------|
+| 幂等性设计 | UPSERT / 分区覆盖，重跑不产生副作用       |
+| 增量处理   | 基于时间戳/CDC 增量提取，减少全量扫描     |
+| 数据血缘   | dbt ref() / Dagster Asset deps 追踪上下游 |
+| 分层验证   | 源→转换→目标每层都验证                    |
+| 监控告警   | 管道 SLA + 质量指标 + 延迟告警            |
+| 状态管理   | 流处理状态 TTL + Checkpoint + Savepoint   |
+| 容错设计   | 重试策略 + 死信队列 + 回滚方案            |
 
 ## 触发词
 
-数据管道、Airflow、Dagster、Prefect、ETL、流处理、Kafka Streams、Flink、数据质量、Great Expectations、dbt、数据验证、数据血缘
+数据管道、Airflow、Dagster、Prefect、ETL、流处理、Kafka Streams、Flink、数据质量、Great
+Expectations、dbt、数据验证、数据血缘

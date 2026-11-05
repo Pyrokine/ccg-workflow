@@ -122,10 +122,12 @@ export async function needsMigration(): Promise<boolean> {
     const configPath = join(homedir(), '.claude', '.ccg', 'config.toml')
     if (await fs.pathExists(configPath)) {
       const content = await fs.readFile(configPath, 'utf-8')
-      const versionMatch = content.match(/version\s*=\s*"([^"]+)"/)
+      const versionMatch = content.match(/version\s*=\s*"(?<version>[^"]+)"/)
       if (versionMatch) {
         const major = Number.parseInt(versionMatch[1].split('.')[0], 10)
-        if (major >= 2) return false
+        if (major >= 2) {
+          return false
+        }
       }
     }
   } catch {

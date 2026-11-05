@@ -2,9 +2,9 @@ import fs from 'fs-extra'
 import { homedir } from 'node:os'
 import { join } from 'pathe'
 import { parse } from 'smol-toml'
-import { CODEX_MANAGED_FILES, TASK_STATE_RUNTIME_FILES } from './installer-codex-files'
-import { check, files, isRegularFile, readText, record } from './doctor-common'
 import type { DoctorCheck, DoctorReport, RecordValue } from './doctor-common'
+import { check, files, isRegularFile, readText, record } from './doctor-common'
+import { CODEX_MANAGED_FILES, TASK_STATE_RUNTIME_FILES } from './installer-codex-files'
 
 const REQUIRED_CODEX_MODE_FILES = ['.ccg/codex-mode.json', ...CODEX_MANAGED_FILES]
 const CODEX_MANAGED_BLOCK_START_PREFIX = '<!-- CCG:START'
@@ -31,32 +31,44 @@ type CodexModeStatus =
   | { kind: 'not-installed'; detail: string }
 
 function isCodexWorkflowHookCommand(command: unknown, expectedPath: string): boolean {
-  if (typeof command !== 'string') return false
+  if (typeof command !== 'string') {
+    return false
+  }
   const normalized = command.replace(/\\/g, '/').trim()
-  const match = /^python3\s+(?:"([^"]+)"|'([^']+)'|(\S+))$/.exec(normalized)
+  const match = /^python3\s+(?:"(?<doubleQuoted>[^"]+)"|'(?<singleQuoted>[^']+)'|(?<bare>\S+))$/.exec(normalized)
   const scriptPath = match?.[1] || match?.[2] || match?.[3]
   return scriptPath === expectedPath
 }
 
 function countCodexHookRegistrations(value: unknown, codexHome: string): number {
   const promptHooks = record(record(value).hooks).UserPromptSubmit
-  if (!Array.isArray(promptHooks)) return 0
+  if (!Array.isArray(promptHooks)) {
+    return 0
+  }
   const expectedPath = join(codexHome, 'hooks', 'ccg-workflow.py').replace(/\\/g, '/')
   let count = 0
   for (const entry of promptHooks) {
     const commands = record(entry).hooks
-    if (!Array.isArray(commands)) continue
+    if (!Array.isArray(commands)) {
+      continue
+    }
     for (const hook of commands) {
-      if (isCodexWorkflowHookCommand(record(hook).command, expectedPath)) count++
+      if (isCodexWorkflowHookCommand(record(hook).command, expectedPath)) {
+        count++
+      }
     }
   }
   return count
 }
 
 async function hasManagedAgentsBlock(path: string): Promise<boolean> {
-  if (!(await isRegularFile(path))) return false
+  if (!(await isRegularFile(path))) {
+    return false
+  }
   const content = await readText(path)
-  if (content === null) return false
+  if (content === null) {
+    return false
+  }
   const startPrefixes = content.split(CODEX_MANAGED_BLOCK_START_PREFIX).length - 1
   const starts = content.split(CODEX_MANAGED_BLOCK_START).length - 1
   const ends = content.split(CODEX_MANAGED_BLOCK_END).length - 1
@@ -70,7 +82,9 @@ async function hasManagedAgentsBlock(path: string): Promise<boolean> {
 
 async function hasRegisteredCodexHook(codexHome: string): Promise<boolean> {
   const path = join(codexHome, 'hooks.json')
-  if (!(await isRegularFile(path))) return false
+  if (!(await isRegularFile(path))) {
+    return false
+  }
   try {
     return countCodexHookRegistrations(await fs.readJson(path), codexHome) === 1
   } catch {
@@ -86,11 +100,17 @@ export async function readCodexModeStatus(codexHome = join(homedir(), '.codex'))
   )
   const hookRegistered = await hasRegisteredCodexHook(codexHome)
   const hasCcgArtifact = managedAgents || hookRegistered || fileStates.some(({ exists }) => exists)
-  if (!hasCcgArtifact) return { kind: 'not-installed', detail: 'Not installed (optional)' }
+  if (!hasCcgArtifact) {
+    return { kind: 'not-installed', detail: 'Not installed (optional)' }
+  }
 
   const missing = fileStates.filter(({ exists }) => !exists).map(({ file }) => file)
-  if (!managedAgents) missing.unshift('AGENTS.md (CCG block)')
-  if (!hookRegistered) missing.push('hooks.json (CCG registration)')
+  if (!managedAgents) {
+    missing.unshift('AGENTS.md (CCG block)')
+  }
+  if (!hookRegistered) {
+    missing.push('hooks.json (CCG registration)')
+  }
   if (missing.length > 0) {
     return { kind: 'incomplete', detail: `Incomplete; missing: ${missing.join(', ')}` }
   }
@@ -120,7 +140,9 @@ function normalized(command: string): string {
 
 function registeredCommands(settings: RecordValue, event: string): string[] {
   const entries = record(settings.hooks)[event]
-  if (!Array.isArray(entries)) return []
+  if (!Array.isArray(entries)) {
+    return []
+  }
   return entries.flatMap((entry) => {
     const handlers = record(entry).hooks
     return Array.isArray(handlers)
@@ -135,7 +157,9 @@ function references(command: string, path: string): boolean {
   const value = normalized(command)
   const expected = normalized(path)
   const start = value.indexOf(expected)
-  if (start < 0) return false
+  if (start < 0) {
+    return false
+  }
   const before = value[start - 1]
   const after = value[start + expected.length]
   return (!before || /[\s"']/.test(before)) && (!after || /[\s"']/.test(after))
@@ -153,7 +177,9 @@ async function claudeRegistrationStatus(installDir: string) {
       const commands = registeredCommands(json, event)
       const count = handlers.filter((name) => commands.some((cmd) => references(cmd, join(hookDir, name)))).length
       registered += count
-      if (count === handlers.length) registeredEvents++
+      if (count === handlers.length) {
+        registeredEvents++
+      }
     }
   } catch {
     invalidSettings = true

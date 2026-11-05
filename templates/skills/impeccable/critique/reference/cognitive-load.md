@@ -32,7 +32,7 @@ Mental effort caused by poor design choices. **Eliminate this ruthlessly** — i
 
 ### Germane Load — Learning Effort
 
-Mental effort spent building understanding. This is *good* cognitive load — it leads to mastery.
+Mental effort spent building understanding. This is _good_ cognitive load — it leads to mastery.
 
 **Support it by**:
 
@@ -86,40 +86,40 @@ simultaneously consider:
 
 ### 1. The Wall of Options
 
-**Problem**: Presenting 10+ choices at once with no hierarchy.
-**Fix**: Group into categories, highlight recommended, use progressive disclosure.
+**Problem**: Presenting 10+ choices at once with no hierarchy. **Fix**: Group into categories, highlight recommended,
+use progressive disclosure.
 
 ### 2. The Memory Bridge
 
-**Problem**: User must remember info from step 1 to complete step 3.
-**Fix**: Keep relevant context visible, or repeat it where it's needed.
+**Problem**: User must remember info from step 1 to complete step 3. **Fix**: Keep relevant context visible, or repeat
+it where it's needed.
 
 ### 3. The Hidden Navigation
 
-**Problem**: User must build a mental map of where things are.
-**Fix**: Always show current location (breadcrumbs, active states, progress indicators).
+**Problem**: User must build a mental map of where things are. **Fix**: Always show current location (breadcrumbs,
+active states, progress indicators).
 
 ### 4. The Jargon Barrier
 
-**Problem**: Technical or domain language forces translation effort.
-**Fix**: Use plain language. If domain terms are unavoidable, define them inline.
+**Problem**: Technical or domain language forces translation effort. **Fix**: Use plain language. If domain terms are
+unavoidable, define them inline.
 
 ### 5. The Visual Noise Floor
 
-**Problem**: Every element has the same visual weight — nothing stands out.
-**Fix**: Establish clear hierarchy: one primary element, 2–3 secondary, everything else muted.
+**Problem**: Every element has the same visual weight — nothing stands out. **Fix**: Establish clear hierarchy: one
+primary element, 2–3 secondary, everything else muted.
 
 ### 6. The Inconsistent Pattern
 
-**Problem**: Similar actions work differently in different places.
-**Fix**: Standardize interaction patterns. Same type of action = same type of UI.
+**Problem**: Similar actions work differently in different places. **Fix**: Standardize interaction patterns. Same type
+of action = same type of UI.
 
 ### 7. The Multi-Task Demand
 
-**Problem**: Interface requires processing multiple simultaneous inputs (reading + deciding + navigating).
-**Fix**: Sequence the steps. Let the user do one thing at a time.
+**Problem**: Interface requires processing multiple simultaneous inputs (reading + deciding + navigating). **Fix**:
+Sequence the steps. Let the user do one thing at a time.
 
 ### 8. The Context Switch
 
-**Problem**: User must jump between screens/tabs/modals to gather info for a single decision.
-**Fix**: Co-locate the information needed for each decision. Reduce back-and-forth.
+**Problem**: User must jump between screens/tabs/modals to gather info for a single decision. **Fix**: Co-locate the
+information needed for each decision. Reduce back-and-forth.

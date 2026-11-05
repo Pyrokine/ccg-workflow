@@ -5,13 +5,15 @@ import { plainDirectory, statMaybe } from './skill-manager-files'
 
 const START = '<!-- CCG_NATIVE_SKILLS_START -->'
 const END = '<!-- CCG_NATIVE_SKILLS_END -->'
-const DATA_LINE = /^(\s*const routing = JSON\.parse\()("(?:\\.|[^"\\])*")((?:\.replace\([^\r\n]*\))?\);?[^\S\r\n]*)$/gm
+const DATA_LINE =
+  /^(?<prefix>\s*const routing = JSON\.parse\()(?<config>"(?:\\.|[^"\\])*")(?<suffix>(?:\.replace\([^\r\n]*\))?\);?[^\S\r\n]*)$/gm
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 
 /** The block qualifies obsolete legacy instructions without discarding user rules. */
 export function generateNativeSkillRules(names: string[], installDir: string): string {
-  if (names.some((name) => !SLUG.test(name)) || new Set(names).size !== names.length)
+  if (names.some((name) => !SLUG.test(name)) || new Set(names).size !== names.length) {
     throw new Error('Native rule selections must be unique catalog slugs')
+  }
   return [
     START,
     '# CCG Native Skills',
@@ -40,9 +42,12 @@ export function generateNativeSkillRules(names: string[], installDir: string): s
 function patchRuleBlock(text: string, block: string): string {
   const starts = text.split(START).length - 1
   const ends = text.split(END).length - 1
-  if (!starts && !ends) return `${block}\n\n${text}`
-  if (starts !== 1 || ends !== 1 || text.indexOf(END) < text.indexOf(START))
+  if (!starts && !ends) {
+    return `${block}\n\n${text}`
+  }
+  if (starts !== 1 || ends !== 1 || text.indexOf(END) < text.indexOf(START)) {
     throw new Error('Malformed native rule block; custom text preserved')
+  }
   const start = text.indexOf(START)
   const end = text.indexOf(END) + END.length
   return `${text.slice(0, start)}${block}${text.slice(end)}`
@@ -50,11 +55,14 @@ function patchRuleBlock(text: string, block: string): string {
 
 function patchHook(text: string): string {
   const matches = [...text.matchAll(DATA_LINE)]
-  if (matches.length !== 1) throw new Error('This Hook has no unique CCG 3.7 data line; run ccg init to refresh it')
+  if (matches.length !== 1) {
+    throw new Error('This Hook has no unique CCG 3.7 data line; run ccg init to refresh it')
+  }
   const match = matches[0]
   const value = JSON.parse(JSON.parse(match[2])) as Record<string, unknown>
-  if (!value || typeof value !== 'object' || Array.isArray(value) || typeof value.installDir !== 'string')
+  if (!value || typeof value !== 'object' || Array.isArray(value) || typeof value.installDir !== 'string') {
     throw new Error('Invalid Hook data; custom body preserved. Run ccg init to refresh it')
+  }
   value.nativeSkills = true
   const line = `${match[1]}${JSON.stringify(JSON.stringify(value))}${match[3]}`
   return `${text.slice(0, match.index!)}${line}${text.slice(match.index! + match[0].length)}`
@@ -73,16 +81,21 @@ async function assertTextUnchanged(
         current.ino !== stat.ino ||
         (await fs.readFile(path, 'utf8')) !== before
       : !!current
-  )
+  ) {
     throw new Error(`Concurrent change preserved: ${path}`)
+  }
 }
 
 async function updateText(path: string, transform: (text: string) => string): Promise<void> {
   const stat = await statMaybe(path)
-  if (stat && (!stat.isFile() || stat.isSymbolicLink())) throw new Error(`Not a plain managed text file: ${path}`)
+  if (stat && (!stat.isFile() || stat.isSymbolicLink())) {
+    throw new Error(`Not a plain managed text file: ${path}`)
+  }
   const before = stat ? await fs.readFile(path, 'utf8') : ''
   const next = transform(before)
-  if (next === before) return
+  if (next === before) {
+    return
+  }
   const temp = `${path}.${randomUUID()}.tmp`
   try {
     await fs.writeFile(temp, next, { flag: 'wx', mode: stat ? stat.mode & 0o777 : 0o600 })
@@ -96,18 +109,24 @@ async function updateText(path: string, transform: (text: string) => string): Pr
 /** Refresh only the installed framework's data and managed rule blocks, never its custom Hook body. */
 export async function activateNativeSkills(options: { installDir: string; names: string[] }): Promise<string[]> {
   const { installDir, names } = options
-  if (!isAbsolute(installDir) || dirname(installDir) === installDir)
+  if (!isAbsolute(installDir) || dirname(installDir) === installDir) {
     throw new Error('Absolute framework directory required')
+  }
   const notes: string[] = []
   const hookDir = join(installDir, 'hooks', 'ccg')
   const rulesDir = join(installDir, 'rules')
   const hook = join(hookDir, 'skill-router.js')
-  if (!(await statMaybe(hook)) && !(await statMaybe(rulesDir))) return notes // Standalone skills need no framework.
+  if (!(await statMaybe(hook)) && !(await statMaybe(rulesDir))) {
+    return notes
+  } // Standalone skills need no framework.
   try {
     await plainDirectory(installDir)
     await plainDirectory(hookDir)
-    if (!(await statMaybe(hook))) notes.push('CCG skill routing Hook is absent; run ccg init to refresh it.')
-    else await updateText(hook, patchHook)
+    if (!(await statMaybe(hook))) {
+      notes.push('CCG skill routing Hook is absent; run ccg init to refresh it.')
+    } else {
+      await updateText(hook, patchHook)
+    }
   } catch (error) {
     notes.push(`CCG skill routing refresh: ${(error as Error).message}`)
   }
@@ -115,8 +134,9 @@ export async function activateNativeSkills(options: { installDir: string; names:
     const block = generateNativeSkillRules(names, installDir)
     await plainDirectory(installDir)
     await plainDirectory(rulesDir, true)
-    for (const name of ['ccg-skills.md', 'ccg-skill-routing.md'])
+    for (const name of ['ccg-skills.md', 'ccg-skill-routing.md']) {
       await updateText(join(rulesDir, name), (text) => patchRuleBlock(text, block))
+    }
   } catch (error) {
     notes.push(`CCG native rule refresh: ${(error as Error).message}`)
   }

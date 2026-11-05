@@ -5,9 +5,8 @@
  *    contributed to `settings.plugins.tab`; each page supplies its own label
  *    and editor.
  * 2. The panel view in the conversation. `tool.call.toolview` is keyed by wire
- *    tool name, so registering under `ccg_analyze` takes over how that tool's
- *    calls render — which is how a panel's answers come back side by side
- *    instead of as one blob of text in a generic card.
+ *    tool name. Registering under `ccg_analyze` renders that panel’s answers
+ *    side by side instead of combining them in a generic card.
  *
  * Both read this plugin's own `/api/ccg/config` route rather than the client
  * settings scope. Older harnesses served the browser only an allowlist of
@@ -16,14 +15,14 @@
  * this file keeps reading. The Host still owns every write — see src/api.js.
  *
  * Written as a plain module rather than a bundled one: the loader hands the
- * factory its own `require`, so hand-written `React.createElement` needs no
+ * factory its own `require`, so handwritten `React.createElement` needs no
  * build step, and what ships is what you can read.
  */
 window.__ModuleLoader__.load({
   id: 'dsh-ccg',
   factory: (require) => {
-    const module = { exports: {} }
-    const React = require('react')
+    const module = { exports: {} };
+    const React = require('react');
 
     /**
      * Borrow the harness's own component kit, if this deployment will lend it.
@@ -41,26 +40,26 @@ window.__ModuleLoader__.load({
      */
     function borrowKit() {
       try {
-        const kit = require('@deepseek-ai/dsh-client-ui-primitives')
-        return kit !== null && typeof kit === 'object' ? kit : {}
+        const kit = require('@deepseek-ai/dsh-client-ui-primitives');
+        return kit !== null && typeof kit === 'object' ? kit : {};
       } catch {
-        return {}
+        return {};
       }
     }
 
-    const kit = borrowKit()
+    const kit = borrowKit();
 
     /** Dictionary namespace owned by this plugin. */
-    const NS = 'ccg'
+    const NS = 'ccg';
 
     /** Required browser services (cordis fiber inject). */
-    const inject = ['slots', 'locale']
+    const inject = ['slots', 'locale'];
 
     /** Where the host half serves this card's section. */
-    const API = '/api/ccg/config'
+    const API = '/api/ccg/config';
 
     /** Where the host half serves one conversation's team. */
-    const TEAM_API = '/api/ccg/team'
+    const TEAM_API = '/api/ccg/team';
 
     /**
      * How often the strip re-reads the roster while anything is in flight.
@@ -72,7 +71,7 @@ window.__ModuleLoader__.load({
      * everything has settled. An idle session with a settled team makes no
      * requests at all.
      */
-    const TEAM_POLL_MS = 4000
+    const TEAM_POLL_MS = 4000;
 
     /**
      * Tag on the panel payload the host projects into the tool result's
@@ -80,28 +79,31 @@ window.__ModuleLoader__.load({
      * src/crosscheck.js — the two halves ship together, and a mismatch makes
      * this view stand down to the generic rendering rather than guess.
      */
-    const PANEL_META_KIND = 'ccg.panel/1'
+    const PANEL_META_KIND = 'ccg.panel/1';
 
-    const TIERS = ['strong', 'worker']
+    const TIERS = ['strong', 'worker'];
 
     const en = {
       title: 'CCG role matrix',
       summary:
-        'Seven roles, each delegating to the model you give it, with its own expert persona. '
-        + 'Set the two tiers as defaults, then give any single role a model of its own.',
+        'Seven roles, each delegating to the model you give it, with its own expert persona. ' +
+        'Set the two tiers as defaults, then give any single role a model of its own.',
       strong: 'Reasoning tier',
       strongHint: 'the default for analysis, design, debugging and review',
       worker: 'Fast tier',
       workerHint: 'the default for implementation, optimisation and tests',
       roles: 'Per-role model',
-      rolesHint: 'Leave a role on its tier, or give it as many models as you like — two or more answer the same brief together and come back side by side.',
+      rolesHint:
+        'Leave a role on its tier, or give it as many models as you like — ' +
+        'two or more answer the same brief together and come back side by side.',
       followTier: 'follow tier',
       addModel: '+ add a model',
       panelOf: 'answer together',
       team: 'Teams',
-      teamHint: 'Hiring lets a role be taken on as a live teammate that keeps working across turns, '
-        + 'takes more work through send_message, and reports back on its own — for a job that splits '
-        + 'across files. Each teammate runs on the model set for its role above.',
+      teamHint:
+        'Hiring lets a role be taken on as a live teammate that keeps working across turns, ' +
+        'takes more work through send_message, and reports back on its own — for a job that splits ' +
+        'across files. Each teammate runs on the model set for its role above.',
       teamOn: 'roles can be hired as teammates',
       teamOff: 'roles answer one question at a time',
       remove: 'remove',
@@ -114,7 +116,8 @@ window.__ModuleLoader__.load({
       saving: 'Saving…',
       loading: 'Loading…',
       failed: 'The harness did not accept that change.',
-      conflict: 'Settings changed elsewhere. Your edits are preserved; check the refreshed configuration before saving again.',
+      conflict:
+        'Settings changed elsewhere. Your edits are preserved; check the refreshed configuration before saving again.',
       unreachable: 'Could not reach the plugin. Is it still installed?',
       noModels: 'No provider route is configured yet — add one under Settings › Models.',
       analyzer: 'Analyze',
@@ -140,13 +143,13 @@ window.__ModuleLoader__.load({
       'dock.owns': 'owns',
       'dock.ownsNothing': 'no files of its own',
       'dock.default': 'deployment default',
-    }
+    };
 
     const zh = {
       title: 'CCG 角色矩阵',
       summary:
-        '七个角色，每个都用你指定的模型派子代理，并带着自己的专家人设。'
-        + '先把两个档位设成默认，再给任意单个角色单独指定模型。',
+        '七个角色，每个都用你指定的模型派子代理，并带着自己的专家人设。' +
+        '先把两个档位设成默认，再给任意单个角色单独指定模型。',
       strong: '推理档',
       strongHint: '分析、架构、调试、审查默认走这一档',
       worker: '快速档',
@@ -157,8 +160,9 @@ window.__ModuleLoader__.load({
       addModel: '+ 添加模型',
       panelOf: '同时作答',
       team: '团队',
-      teamHint: '开启后，任何角色都能被雇成常驻队友：跨轮次持续工作，可以用 send_message 继续派活，'
-        + '干完自己报回来 —— 适合能拆成几块并行推进的活。队友用的就是上面给该角色配的模型。',
+      teamHint:
+        '开启后，任何角色都能被雇成常驻队友：跨轮次持续工作，可以用 send_message 继续派活，' +
+        '干完自己报回来 —— 适合能拆成几块并行推进的活。队友用的就是上面给该角色配的模型。',
       teamOn: '角色可被雇为常驻队友',
       teamOff: '角色只回答单次提问',
       remove: '移除',
@@ -200,12 +204,11 @@ window.__ModuleLoader__.load({
       'dock.owns': '独占',
       'dock.ownsNothing': '无独占文件',
       'dock.default': '部署默认模型',
-    }
+    };
 
-    // Colours come from the harness design tokens (`--dsw-alias-*`, defined by
+    // Colors come from the harness design tokens (`--dsw-alias-*`, defined by
     // dsh-client-ui-theme and switched per light/dark), each with the literal
-    // that stood here before as its fallback — so a deployment whose theme does
-    // not define one degrades to the old look rather than to nothing.
+    // used when that token is unavailable. Missing tokens retain those colors.
     const styles = `
 .ccg-card { border: 1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.22)); border-radius: 10px;
   padding: 16px 18px; display: flex; flex-direction: column; gap: 13px; list-style: none; }
@@ -279,7 +282,7 @@ window.__ModuleLoader__.load({
   color: var(--dsw-alias-label-tertiary, inherit); opacity: 0.8;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ccg-pv-col-lens { font-size: 11px; color: var(--dsw-alias-label-tertiary, inherit); opacity: 0.8; }
-/* Clamped by height rather than line count: the body holds rendered markdown,
+/* Clamped by height rather than line count: the body holds rendered Markdown,
    and -webkit-line-clamp counts lines only inside a -webkit-box, which a
    document of headings and lists is not. A height cut can land mid-line, so the
    fade below says the column continues rather than pretending it ended. */
@@ -292,10 +295,10 @@ window.__ModuleLoader__.load({
 .ccg-pv[data-open] .ccg-pv-body::after { content: none; }
 .ccg-pv-body[data-error] { color: var(--dsw-alias-state-error-primary, #c0392b);
   white-space: pre-wrap; }
-/* The fallback when no markdown renderer could be borrowed: the source text,
+/* The fallback when no Markdown renderer could be borrowed: the source text,
    preserved rather than collapsed. */
 .ccg-plain { white-space: pre-wrap; }
-/* Rendered markdown inside a column. The renderer sizes its blocks for a
+/* Rendered Markdown inside a column. The renderer sizes its blocks for a
    full-width message — 16px paragraphs — which in a third-width column both
    overflows the clamp in a few lines and, left alone, ends up LARGER than the
    headings above them. So the document is rescaled as a whole, and the
@@ -353,17 +356,19 @@ window.__ModuleLoader__.load({
   color: var(--dsw-alias-label-tertiary, inherit); opacity: 0.85; }
 .ccg-td-owns { margin-left: auto; flex: none; max-width: 55%;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-`
+`;
 
     /**
-     * The app's own state dot, or a plain coloured circle.
+     * The app's own state dot, or a plain colored circle.
      *
      * @param props - `{ state: 'done' | 'ongoing' | 'error' | 'warning' }`.
      * @returns the dot.
      */
-    const Dot = kit.StateDot ?? function Dot(props) {
-      return React.createElement('span', { className: 'ccg-dot', 'data-state': props.state })
-    }
+    const Dot =
+      kit.StateDot ??
+      function Dot(props) {
+        return React.createElement('span', { className: 'ccg-dot', 'data-state': props.state });
+      };
 
     /**
      * The app's own button, or a plain one wearing this file's classes.
@@ -371,54 +376,61 @@ window.__ModuleLoader__.load({
      * @param props - `{ variant, size, ...button }`.
      * @returns the button.
      */
-    const Button = kit.Button ?? function Button(props) {
-      const { variant, size, icon, className, children, ...rest } = props
-      return React.createElement(
-        'button',
-        {
-          type: 'button',
-          className: `ccg-btn${variant === 'primary' ? ' ccg-btn-primary' : ''}`
-            + `${size === 'sm' ? ' ccg-btn-sm' : ''}${className ? ` ${className}` : ''}`,
-          ...rest,
-        },
-        children,
-      )
-    }
+    const Button =
+      kit.Button ??
+      function Button(props) {
+        const { variant, size, icon: _icon, className, children, ...rest } = props;
+        return React.createElement(
+          'button',
+          {
+            type: 'button',
+            className:
+              `ccg-btn${variant === 'primary' ? ' ccg-btn-primary' : ''}` +
+              `${size === 'sm' ? ' ccg-btn-sm' : ''}${className ? ` ${className}` : ''}`,
+            ...rest,
+          },
+          children
+        );
+      };
 
     /**
-     * Assistant markdown rendered as markdown.
+     * Assistant Markdown rendered as Markdown.
      *
      * This is the one borrowing that changes what the reader sees rather than
-     * how it looks: a model's answer IS markdown, and shown as preformatted
+     * how it looks: a model's answer IS Markdown, and shown as preformatted
      * text it arrives with its `##` and `**` intact — worst of all in the panel,
      * where the whole point is reading several answers against each other.
      *
      * @param props - `{ text }`.
      * @returns the rendered document, or the source text when there is no renderer.
      */
-    const Markdown = kit.MarkdownText ?? function Markdown(props) {
-      return React.createElement('div', { className: 'ccg-plain' }, props.text)
-    }
+    const Markdown =
+      kit.MarkdownText ??
+      function Markdown(props) {
+        return React.createElement('div', { className: 'ccg-plain' }, props.text);
+      };
 
     /** Inject the card's stylesheet; the disposer removes it. */
     function mountStyles() {
-      const el = document.createElement('style')
-      el.dataset.ccg = 'card'
-      el.textContent = styles
-      document.head.appendChild(el)
-      return () => el.remove()
+      const el = document.createElement('style');
+      el.dataset.ccg = 'card';
+      el.textContent = styles;
+      document.head.appendChild(el);
+      return () => el.remove();
     }
 
     /** Encode a provider/model pair as one option value; '' means unset. */
     function pairKey(provider, model) {
-      return provider && model ? JSON.stringify([provider, model]) : ''
+      return provider && model ? JSON.stringify([provider, model]) : '';
     }
 
     /** Decode an option value back into a pair, or null when unset. */
     function parseKey(key) {
-      if (!key) return null
-      const [provider, model] = JSON.parse(key)
-      return { provider, model }
+      if (!key) {
+        return null;
+      }
+      const [provider, model] = JSON.parse(key);
+      return { provider, model };
     }
 
     /**
@@ -429,28 +441,28 @@ window.__ModuleLoader__.load({
      * @returns the stored selection state.
      */
     function toSelection(payload) {
-      const tiers = {}
+      const tiers = {};
       for (const tier of TIERS) {
-        const entry = payload?.tiers?.[tier]
-        tiers[tier] = pairKey(entry?.provider, entry?.model)
+        const entry = payload?.tiers?.[tier];
+        tiers[tier] = pairKey(entry?.provider, entry?.model);
       }
-      const roles = {}
+      const roles = {};
       for (const entry of payload?.roles ?? []) {
         // Only a role that names its own models is edited here; one following
         // its tier shows no picks, so changing the tier keeps moving it.
         roles[entry.role] = entry.pinned
           ? (entry.members ?? []).map((member) => pairKey(member.provider, member.model))
-          : []
+          : [];
       }
       // Hiring is on unless the document turned it off. Before the payload
       // arrives, match that default so the control does not flick.
-      const team = payload?.team?.enabled !== false
-      return { tiers, roles, team }
+      const team = payload?.team?.enabled !== false;
+      return { tiers, roles, team };
     }
 
     /** Whether two lists of option keys hold the same picks in the same order. */
     function samePicks(a = [], b = []) {
-      return a.length === b.length && a.every((key, index) => key === b[index])
+      return a.length === b.length && a.every((key, index) => key === b[index]);
     }
 
     /**
@@ -458,185 +470,228 @@ window.__ModuleLoader__.load({
      * is a durable document mutation, so a control that committed as it settled
      * would store an edit the user never asked for.
      *
-     * @param props - injected localisation binding.
+     * @param props - injected localization binding.
      * @returns the card.
      */
     function CcgCard(props) {
-      const { t } = props
-      const [payload, setPayload] = React.useState(null)
-      const [draft, setDraft] = React.useState(null)
-      const [busy, setBusy] = React.useState(false)
-      const [error, setError] = React.useState(null)
+      const { t } = props;
+      const [payload, setPayload] = React.useState(null);
+      const [draft, setDraft] = React.useState(null);
+      const [busy, setBusy] = React.useState(false);
+      const [error, setError] = React.useState(null);
 
-      const load = React.useCallback(() => fetch(API, { headers: { Accept: 'application/json' } })
-        .then((response) => (response.ok ? response.json() : Promise.reject(new Error(response.status)))), [])
+      const load = React.useCallback(
+        () =>
+          fetch(API, { headers: { Accept: 'application/json' } }).then((response) =>
+            response.ok ? response.json() : Promise.reject(new Error(String(response.status)))
+          ),
+        []
+      );
 
       React.useEffect(() => {
-        let cancelled = false
+        let cancelled = false;
         load()
           .then((body) => {
-            if (cancelled) return
-            setPayload(body)
-            publishConfig(body)
+            if (cancelled) {
+              return;
+            }
+            setPayload(body);
+            publishConfig(body);
           })
-          .catch(() => { if (!cancelled) setError('unreachable') })
-        return () => { cancelled = true }
-      }, [load])
+          .catch(() => {
+            if (!cancelled) {
+              setError('unreachable');
+            }
+          });
+        return () => {
+          cancelled = true;
+        };
+      }, [load]);
 
-      const stored = React.useMemo(() => toSelection(payload), [payload])
-      const current = draft ?? stored
-      const models = payload?.models ?? []
+      const stored = React.useMemo(() => toSelection(payload), [payload]);
+      const current = draft ?? stored;
+      const models = payload?.models ?? [];
 
-      const dirty = TIERS.some((tier) => current.tiers[tier] !== stored.tiers[tier])
-        || current.team !== stored.team
-        || Object.keys(current.roles).some(
-          (role) => !samePicks(current.roles[role], stored.roles[role]),
-        )
+      const dirty =
+        TIERS.some((tier) => current.tiers[tier] !== stored.tiers[tier]) ||
+        current.team !== stored.team ||
+        Object.keys(current.roles).some((role) => !samePicks(current.roles[role], stored.roles[role]));
 
       const setTier = (tier, key) => {
-        setError(null)
-        setDraft({ ...current, tiers: { ...current.tiers, [tier]: key } })
-      }
+        setError(null);
+        setDraft({ ...current, tiers: { ...current.tiers, [tier]: key } });
+      };
       const setRolePicks = (role, picks) => {
-        setError(null)
-        setDraft({ ...current, roles: { ...current.roles, [role]: picks } })
-      }
+        setError(null);
+        setDraft({ ...current, roles: { ...current.roles, [role]: picks } });
+      };
       const addRoleModel = (role, key) => {
-        if (!key) return
-        const picks = current.roles[role] ?? []
-        if (picks.includes(key)) return
-        setRolePicks(role, [...picks, key])
-      }
+        if (!key) {
+          return;
+        }
+        const picks = current.roles[role] ?? [];
+        if (picks.includes(key)) {
+          return;
+        }
+        setRolePicks(role, [...picks, key]);
+      };
       const removeRoleModel = (role, key) => {
-        setRolePicks(role, (current.roles[role] ?? []).filter((pick) => pick !== key))
-      }
+        setRolePicks(
+          role,
+          (current.roles[role] ?? []).filter((pick) => pick !== key)
+        );
+      };
       const setTeam = (enabled) => {
-        setError(null)
-        setDraft({ ...current, team: enabled })
-      }
+        setError(null);
+        setDraft({ ...current, team: enabled });
+      };
 
       const save = async () => {
-        setBusy(true)
-        setError(null)
-        const patch = { expectedRevision: payload?.revision }
+        setBusy(true);
+        setError(null);
+        const patch = { expectedRevision: payload?.revision };
         for (const tier of TIERS) {
-          if (current.tiers[tier] !== stored.tiers[tier]) patch[tier] = parseKey(current.tiers[tier])
+          if (current.tiers[tier] !== stored.tiers[tier]) {
+            patch[tier] = parseKey(current.tiers[tier]);
+          }
         }
-        const roles = {}
+        const roles = {};
         for (const role of Object.keys(current.roles)) {
-          if (samePicks(current.roles[role], stored.roles[role])) continue
-          const picks = current.roles[role] ?? []
-          // No picks means the role goes back to following its tier.
-          roles[role] = picks.length === 0 ? null : { models: picks.map(parseKey) }
+          if (samePicks(current.roles[role], stored.roles[role])) {
+            continue;
+          }
+          const picks = current.roles[role] ?? [];
+          // An empty selection means the role goes back to following its tier.
+          roles[role] = picks.length === 0 ? null : { models: picks.map(parseKey) };
         }
-        if (Object.keys(roles).length > 0) patch.roles = roles
-        if (current.team !== stored.team) patch.team = current.team
+        if (Object.keys(roles).length > 0) {
+          patch.roles = roles;
+        }
+        if (current.team !== stored.team) {
+          patch.team = current.team;
+        }
         try {
           const response = await fetch(API, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(patch),
-          })
+          });
           if (response.status === 409) {
-            const rejection = await response.json().catch(() => ({}))
-            const detail = typeof rejection.error === 'string' ? rejection.error
-              : typeof rejection.message === 'string' ? rejection.message : ''
-            setError({ code: 'conflict', detail })
-            const body = await load().catch(() => null)
+            const rejection = await response.json().catch(() => ({}));
+            const detail =
+              typeof rejection.error === 'string'
+                ? rejection.error
+                : typeof rejection.message === 'string'
+                  ? rejection.message
+                  : '';
+            setError({ code: 'conflict', detail });
+            const body = await load().catch(() => null);
             if (body !== null) {
               // Rebase only fields the user edited. Keeping the entire old
               // draft would turn another editor's new values into our next
               // write and silently undo their changes.
-              const rebased = toSelection(body)
+              const rebased = toSelection(body);
               for (const tier of TIERS) {
-                if (tier in patch) rebased.tiers[tier] = current.tiers[tier]
+                if (tier in patch) {
+                  rebased.tiers[tier] = current.tiers[tier];
+                }
               }
-              for (const role of Object.keys(patch.roles ?? {})) rebased.roles[role] = current.roles[role]
-              if ('team' in patch) rebased.team = current.team
-              setPayload(body)
-              setDraft(rebased)
-              publishConfig(body)
+              for (const role of Object.keys(patch.roles ?? {})) {
+                rebased.roles[role] = current.roles[role];
+              }
+              if ('team' in patch) {
+                rebased.team = current.team;
+              }
+              setPayload(body);
+              setDraft(rebased);
+              publishConfig(body);
             }
-            return
+            return;
           }
-          if (!response.ok) throw new Error(response.status)
-          const body = await response.json()
-          setPayload(body)
+          if (!response.ok) {
+            setError('failed');
+            return;
+          }
+          const body = await response.json();
+          setPayload(body);
           // A role that just gained a second model is a panel from the next
           // call on; the conversation view needs to hear that without a reload.
-          publishConfig(body)
-          setDraft(null)
+          publishConfig(body);
+          setDraft(null);
         } catch {
-          setError('failed')
+          setError('failed');
         } finally {
-          setBusy(false)
+          setBusy(false);
         }
-      }
+      };
 
-      const h = React.createElement
-      const writable = Boolean(payload?.writable) && !busy
+      const h = React.createElement;
+      const writable = Boolean(payload?.writable) && !busy;
 
       // Grouped by provider route, so the route and the model are both visible
       // in one control and no combination can be typed that does not exist.
-      const byProvider = new Map()
+      const byProvider = new Map();
       for (const entry of models) {
-        if (!byProvider.has(entry.provider)) byProvider.set(entry.provider, [])
-        byProvider.get(entry.provider).push(entry)
+        if (!byProvider.has(entry.provider)) {
+          byProvider.set(entry.provider, []);
+        }
+        byProvider.get(entry.provider).push(entry);
       }
-      const modelOptions = (skip = []) => [...byProvider.entries()].map(([provider, entries]) => {
-        const options = entries
-          .filter((entry) => !skip.includes(pairKey(entry.provider, entry.id)))
-          .map((entry) => h(
-            'option',
-            { key: `${entry.provider}//${entry.id}`, value: pairKey(entry.provider, entry.id) },
-            entry.name,
-          ))
-        return options.length === 0
-          ? null
-          : h('optgroup', { key: provider, label: provider }, options)
-      })
+      const modelOptions = (skip = []) =>
+        [...byProvider.entries()].map(([provider, entries]) => {
+          const options = entries
+            .filter((entry) => !skip.includes(pairKey(entry.provider, entry.id)))
+            .map((entry) =>
+              h(
+                'option',
+                { key: `${entry.provider}//${entry.id}`, value: pairKey(entry.provider, entry.id) },
+                entry.name
+              )
+            );
+          return options.length === 0 ? null : h('optgroup', { key: provider, label: provider }, options);
+        });
 
       /** A label naming a model, with the route it comes from. */
       const pickLabel = (key) => {
-        const pair = parseKey(key)
-        if (pair === null) return ''
-        const known = models.find(
-          (entry) => entry.provider === pair.provider && entry.id === pair.model,
-        )
-        return `${pair.provider} / ${known?.name ?? pair.model}`
-      }
+        const pair = parseKey(key);
+        if (pair === null) {
+          return '';
+        }
+        const known = models.find((entry) => entry.provider === pair.provider && entry.id === pair.model);
+        return `${pair.provider} / ${known?.name ?? pair.model}`;
+      };
 
-      const tierRows = TIERS.map((tier) => h(
-        'div',
-        { className: 'ccg-row', key: tier },
+      const tierRows = TIERS.map((tier) =>
         h(
           'div',
-          { className: 'ccg-row-label' },
+          { className: 'ccg-row', key: tier },
           h(
-            'span',
-            { className: 'ccg-row-name' },
-            t(tier),
-            payload?.tiers?.[tier]?.overridden
-              ? h('span', { className: 'ccg-badge' }, t('overridden'))
-              : null,
+            'div',
+            { className: 'ccg-row-label' },
+            h(
+              'span',
+              { className: 'ccg-row-name' },
+              t(tier),
+              payload?.tiers?.[tier]?.overridden ? h('span', { className: 'ccg-badge' }, t('overridden')) : null
+            ),
+            h('span', { className: 'ccg-row-hint', title: t(`${tier}Hint`) }, t(`${tier}Hint`))
           ),
-          h('span', { className: 'ccg-row-hint', title: t(`${tier}Hint`) }, t(`${tier}Hint`)),
-        ),
-        h(
-          'select',
-          {
-            className: 'ccg-select',
-            value: current.tiers[tier],
-            disabled: !writable,
-            onChange: (event) => setTier(tier, event.target.value),
-          },
-          h('option', { value: '' }, `${t('unset')} — ${t('deploymentDefault')}`),
-          modelOptions(),
-        ),
-      ))
+          h(
+            'select',
+            {
+              className: 'ccg-select',
+              value: current.tiers[tier],
+              disabled: !writable,
+              onChange: (event) => setTier(tier, event.target.value),
+            },
+            h('option', { value: '' }, `${t('unset')} — ${t('deploymentDefault')}`),
+            modelOptions()
+          )
+        )
+      );
 
       const roleRows = (payload?.roles ?? []).map((entry) => {
-        const picks = current.roles[entry.role] ?? []
+        const picks = current.roles[entry.role] ?? [];
         return h(
           'div',
           { className: 'ccg-row', key: entry.role },
@@ -649,29 +704,31 @@ window.__ModuleLoader__.load({
               t(entry.role),
               picks.length >= 2
                 ? h('span', { className: 'ccg-panel-badge' }, `${picks.length} · ${t('panelOf')}`)
-                : null,
+                : null
             ),
-            h('span', { className: 'ccg-row-hint', title: entry.tool }, entry.tool),
+            h('span', { className: 'ccg-row-hint', title: entry.tool }, entry.tool)
           ),
           h(
             'div',
             { className: 'ccg-picks' },
-            picks.map((key) => h(
-              'span',
-              { className: 'ccg-chip', key },
-              pickLabel(key),
+            picks.map((key) =>
               h(
-                'button',
-                {
-                  type: 'button',
-                  className: 'ccg-chip-x',
-                  title: t('remove'),
-                  disabled: !writable,
-                  onClick: () => removeRoleModel(entry.role, key),
-                },
-                '×',
-              ),
-            )),
+                'span',
+                { className: 'ccg-chip', key },
+                pickLabel(key),
+                h(
+                  'button',
+                  {
+                    type: 'button',
+                    className: 'ccg-chip-x',
+                    title: t('remove'),
+                    disabled: !writable,
+                    onClick: () => removeRoleModel(entry.role, key),
+                  },
+                  '×'
+                )
+              )
+            ),
             h(
               'select',
               {
@@ -680,16 +737,12 @@ window.__ModuleLoader__.load({
                 disabled: !writable,
                 onChange: (event) => addRoleModel(entry.role, event.target.value),
               },
-              h(
-                'option',
-                { value: '' },
-                picks.length === 0 ? `${t('followTier')} — ${t(entry.tier)}` : t('addModel'),
-              ),
-              modelOptions(picks),
-            ),
-          ),
-        )
-      })
+              h('option', { value: '' }, picks.length === 0 ? `${t('followTier')} — ${t(entry.tier)}` : t('addModel')),
+              modelOptions(picks)
+            )
+          )
+        );
+      });
 
       // Hiring is a capability, not a route, so it is a switch rather than a
       // selector — the models a teammate runs on are the per-role rows above.
@@ -703,11 +756,9 @@ window.__ModuleLoader__.load({
             'span',
             { className: 'ccg-row-name' },
             t('team'),
-            payload?.team?.overridden
-              ? h('span', { className: 'ccg-badge' }, t('overridden'))
-              : null,
+            payload?.team?.overridden ? h('span', { className: 'ccg-badge' }, t('overridden')) : null
           ),
-          h('span', { className: 'ccg-row-hint', title: 'ccg_team' }, 'ccg_team'),
+          h('span', { className: 'ccg-row-hint', title: 'ccg_team' }, 'ccg_team')
         ),
         h(
           'label',
@@ -718,9 +769,9 @@ window.__ModuleLoader__.load({
             disabled: !writable,
             onChange: (event) => setTeam(event.target.checked),
           }),
-          h('span', null, t(current.team === false ? 'teamOff' : 'teamOn')),
-        ),
-      )
+          h('span', null, t(current.team === false ? 'teamOff' : 'teamOn'))
+        )
+      );
 
       const status = error
         ? error.code === 'conflict'
@@ -732,7 +783,7 @@ window.__ModuleLoader__.load({
             ? t('loading')
             : models.length === 0
               ? t('noModels')
-              : ''
+              : '';
 
       return h(
         'li',
@@ -741,25 +792,20 @@ window.__ModuleLoader__.load({
           'div',
           { className: 'ccg-head' },
           h('p', { className: 'ccg-title' }, t('title')),
-          dirty ? h('span', { className: 'ccg-badge' }, t('unsaved')) : null,
+          dirty ? h('span', { className: 'ccg-badge' }, t('unsaved')) : null
         ),
         h('p', { className: 'ccg-summary' }, t('summary')),
         h('div', { className: 'ccg-section' }, tierRows),
         roleRows.length > 0
           ? h(
-            'div',
-            { className: 'ccg-section' },
-            h('span', { className: 'ccg-row-name' }, t('roles')),
-            h('p', { className: 'ccg-note' }, t('rolesHint')),
-            roleRows,
-          )
+              'div',
+              { className: 'ccg-section' },
+              h('span', { className: 'ccg-row-name' }, t('roles')),
+              h('p', { className: 'ccg-note' }, t('rolesHint')),
+              roleRows
+            )
           : null,
-        h(
-          'div',
-          { className: 'ccg-section' },
-          h('p', { className: 'ccg-note' }, t('teamHint')),
-          teamRow,
-        ),
+        h('div', { className: 'ccg-section' }, h('p', { className: 'ccg-note' }, t('teamHint')), teamRow),
         h(
           'div',
           { className: 'ccg-actions' },
@@ -771,9 +817,12 @@ window.__ModuleLoader__.load({
               variant: 'ghost',
               size: 'sm',
               disabled: !dirty || busy,
-              onClick: () => { setDraft(null); setError(null) },
+              onClick: () => {
+                setDraft(null);
+                setError(null);
+              },
             },
-            t('discard'),
+            t('discard')
           ),
           h(
             Button,
@@ -783,10 +832,10 @@ window.__ModuleLoader__.load({
               disabled: !dirty || !writable,
               onClick: save,
             },
-            t('save'),
-          ),
-        ),
-      )
+            t('save')
+          )
+        )
+      );
     }
 
     /**
@@ -797,23 +846,27 @@ window.__ModuleLoader__.load({
      * @returns the parsed object, or `{}` when it is not readable yet.
      */
     function parseArgs(raw) {
-      if (typeof raw !== 'string' || raw.trim() === '') return {}
+      if (typeof raw !== 'string' || raw.trim() === '') {
+        return {};
+      }
       try {
-        const value = JSON.parse(raw)
-        return value !== null && typeof value === 'object' ? value : {}
+        const value = JSON.parse(raw);
+        return value !== null && typeof value === 'object' ? value : {};
       } catch {
-        return {}
+        return {};
       }
     }
 
     /** Flatten a settled result's content blocks to text. */
     function contentText(blocks) {
-      if (!Array.isArray(blocks)) return ''
+      if (!Array.isArray(blocks)) {
+        return '';
+      }
       return blocks
         .filter((block) => typeof block?.text === 'string')
         .map((block) => block.text)
         .join('\n')
-        .trim()
+        .trim();
     }
 
     /**
@@ -828,15 +881,21 @@ window.__ModuleLoader__.load({
      * @returns the payload, or null.
      */
     function readPanelMeta(meta) {
-      if (meta === null || typeof meta !== 'object') return null
-      if (meta.kind !== PANEL_META_KIND) return null
-      if (!Array.isArray(meta.answers) || meta.answers.length === 0) return null
-      return meta
+      if (meta === null || typeof meta !== 'object') {
+        return null;
+      }
+      if (meta.kind !== PANEL_META_KIND) {
+        return null;
+      }
+      if (!Array.isArray(meta.answers) || meta.answers.length === 0) {
+        return null;
+      }
+      return meta;
     }
 
     /** Whether any column is long enough that the clamp will actually cut it. */
     function worthExpanding(texts) {
-      return texts.some((text) => text.length > 320 || text.split('\n').length > 8)
+      return texts.some((text) => text.length > 320 || text.split('\n').length > 8);
     }
 
     /**
@@ -851,8 +910,8 @@ window.__ModuleLoader__.load({
      * @returns the route line, or '' when it would repeat the name.
      */
     function routeLine(label, provider, model) {
-      const route = `${provider} / ${model}`
-      return label === route ? '' : route
+      const route = `${provider} / ${model}`;
+      return label === route ? '' : route;
     }
 
     /**
@@ -868,24 +927,20 @@ window.__ModuleLoader__.load({
      * @returns the panel row.
      */
     function CcgPanelView(props) {
-      const { block, phase, inspect, t } = props
-      const roster = Array.isArray(props.roster) ? props.roster : []
-      const [open, setOpen] = React.useState(false)
-      const h = React.createElement
+      const { block, phase, inspect, t } = props;
+      const roster = Array.isArray(props.roster) ? props.roster : [];
+      const [open, setOpen] = React.useState(false);
+      const h = React.createElement;
 
       // Current Tool views supply an explicit phase, including a preparation
       // stage whose arguments may still be incomplete. Only a result carries
       // the durable presentation metadata.
-      const settled = phase === 'result' || block?.kind === 'tool-result'
-      const args = parseArgs(settled ? block.call?.argsRaw : block?.argsRaw)
-      const brief = String(args.description ?? args.prompt ?? '').trim()
+      const settled = phase === 'result' || block?.kind === 'tool-result';
+      const args = parseArgs(settled ? block.call?.argsRaw : block?.argsRaw);
+      const brief = String(args.description ?? args.prompt ?? '').trim();
 
-      const head = (...extras) => h(
-        'div',
-        { className: 'ccg-pv-head' },
-        h('span', { className: 'ccg-pv-name' }, t('panel.title')),
-        ...extras,
-      )
+      const head = (...extras) =>
+        h('div', { className: 'ccg-pv-head' }, h('span', { className: 'ccg-pv-name' }, t('panel.title')), ...extras);
 
       if (!settled) {
         return h(
@@ -895,78 +950,81 @@ window.__ModuleLoader__.load({
             roster.length > 0
               ? h('span', { className: 'ccg-pv-count' }, t('panel.running', { count: roster.length }))
               : null,
-            h('span', { className: 'ccg-pv-q', title: brief }, brief),
+            h('span', { className: 'ccg-pv-q', title: brief }, brief)
           ),
           // Naming the models while they think is most of what the wait is for:
           // it is the one moment the routing is visible without opening settings.
           roster.length === 0
             ? null
             : h(
-              'div',
-              { className: 'ccg-pv-grid' },
-              roster.map((member, index) => {
-                const label = member.label ?? `${member.provider} / ${member.model}`
-                const route = routeLine(label, member.provider, member.model)
-                return h(
-                  'div',
-                  { className: 'ccg-pv-col', key: `${member.provider}//${member.model}//${index}` },
-                  h('span', { className: 'ccg-pv-col-name' }, label),
-                  route === '' ? null : h('span', { className: 'ccg-pv-col-route' }, route),
-                  member.lens ? h('span', { className: 'ccg-pv-col-lens' }, member.lens) : null,
-                )
-              }),
-            ),
-        )
+                'div',
+                { className: 'ccg-pv-grid' },
+                roster.map((member, index) => {
+                  const label = member.label ?? `${member.provider} / ${member.model}`;
+                  const route = routeLine(label, member.provider, member.model);
+                  return h(
+                    'div',
+                    { className: 'ccg-pv-col', key: `${member.provider}//${member.model}//${index}` },
+                    h('span', { className: 'ccg-pv-col-name' }, label),
+                    route === '' ? null : h('span', { className: 'ccg-pv-col-route' }, route),
+                    member.lens ? h('span', { className: 'ccg-pv-col-lens' }, member.lens) : null
+                  );
+                })
+              )
+        );
       }
 
-      const meta = readPanelMeta(block.meta)
-      const stopped = block.error?.code === 'interrupted'
-      const failed = block.isError === true
+      const meta = readPanelMeta(block.meta);
+      const stopped = block.error?.code === 'interrupted';
+      const failed = block.isError === true;
 
-      const answers = meta?.answers ?? []
-      const answered = answers.filter((answer) => answer.ok).length
+      const answers = meta?.answers ?? [];
+      const answered = answers.filter((answer) => answer.ok).length;
       // What each column shows, and what the expand toggle is measured against.
       // With no payload there is one column: the result text as it stands.
-      const bodies = meta === null
-        ? [contentText(block.content)]
-        : answers.map((answer) => String((answer.ok ? answer.answer : answer.error) ?? ''))
+      const bodies =
+        meta === null
+          ? [contentText(block.content)]
+          : answers.map((answer) => String((answer.ok ? answer.answer : answer.error) ?? ''));
 
-      const expandable = worthExpanding(bodies)
-      const footer = !expandable && inspect === undefined
-        ? null
-        : h(
+      const expandable = worthExpanding(bodies);
+      const footer =
+        !expandable && inspect === undefined
+          ? null
+          : h(
+              'div',
+              { className: 'ccg-pv-foot' },
+              h(
+                'span',
+                { className: 'ccg-pv-read' },
+                // Only true once two answers actually came back; with fewer there
+                // is nothing to compare and saying so would be advice on nothing.
+                answered >= 2 ? t('panel.read') : ''
+              ),
+              expandable
+                ? h(
+                    Button,
+                    { variant: 'ghost', size: 'sm', onClick: () => setOpen((value) => !value) },
+                    t(open ? 'panel.collapse' : 'panel.expand')
+                  )
+                : null,
+              inspect === undefined
+                ? null
+                : h(Button, { variant: 'ghost', size: 'sm', onClick: inspect }, t('panel.inspect'))
+            );
+
+      const shell = (...children) =>
+        h(
           'div',
-          { className: 'ccg-pv-foot' },
-          h(
-            'span',
-            { className: 'ccg-pv-read' },
-            // Only true once two answers actually came back; with fewer there
-            // is nothing to compare and saying so would be advice on nothing.
-            answered >= 2 ? t('panel.read') : '',
-          ),
-          expandable
-            ? h(
-              Button,
-              { variant: 'ghost', size: 'sm', onClick: () => setOpen((value) => !value) },
-              t(open ? 'panel.collapse' : 'panel.expand'),
-            )
-            : null,
-          inspect === undefined
-            ? null
-            : h(Button, { variant: 'ghost', size: 'sm', onClick: inspect }, t('panel.inspect')),
-        )
-
-      const shell = (...children) => h(
-        'div',
-        {
-          className: 'ccg-pv',
-          'data-tool': 'ccg-panel',
-          'data-state': failed || answered === 0 ? 'error' : 'ok',
-          'data-open': open || undefined,
-        },
-        ...children,
-        footer,
-      )
+          {
+            className: 'ccg-pv',
+            'data-tool': 'ccg-panel',
+            'data-state': failed || answered === 0 ? 'error' : 'ok',
+            'data-open': open || undefined,
+          },
+          ...children,
+          footer
+        );
 
       // No payload: an older host, or a failure before the panel ever ran. Show
       // what the result does carry rather than an empty grid.
@@ -975,21 +1033,17 @@ window.__ModuleLoader__.load({
           head(
             failed
               ? h(
-                'span',
-                { className: 'ccg-pv-count', 'data-error': true },
-                t(stopped ? 'panel.stopped' : 'panel.failed'),
-              )
+                  'span',
+                  { className: 'ccg-pv-count', 'data-error': true },
+                  t(stopped ? 'panel.stopped' : 'panel.failed')
+                )
               : null,
-            h('span', { className: 'ccg-pv-q', title: brief }, brief),
+            h('span', { className: 'ccg-pv-q', title: brief }, brief)
           ),
           bodies[0] === ''
             ? null
-            : h(
-              'div',
-              { className: 'ccg-pv-body', ...(failed ? { 'data-error': true } : {}) },
-              bodies[0],
-            ),
-        )
+            : h('div', { className: 'ccg-pv-body', ...(failed ? { 'data-error': true } : {}) }, bodies[0])
+        );
       }
 
       return shell(
@@ -997,15 +1051,15 @@ window.__ModuleLoader__.load({
           h(
             'span',
             { className: 'ccg-pv-count', ...(answered === answers.length ? {} : { 'data-error': true }) },
-            t('panel.answered', { answered, total: answers.length }),
+            t('panel.answered', { answered, total: answers.length })
           ),
-          h('span', { className: 'ccg-pv-q', title: meta.question }, meta.question),
+          h('span', { className: 'ccg-pv-q', title: meta.question }, meta.question)
         ),
         h(
           'div',
           { className: 'ccg-pv-grid' },
           answers.map((answer, index) => {
-            const route = routeLine(answer.label, answer.provider, answer.model)
+            const route = routeLine(answer.label, answer.provider, answer.model);
             return h(
               'div',
               {
@@ -1017,33 +1071,30 @@ window.__ModuleLoader__.load({
                 'span',
                 { className: 'ccg-pv-col-head' },
                 h(Dot, { state: answer.ok ? 'done' : 'error', size: 6 }),
-                h('span', { className: 'ccg-pv-col-name' }, answer.label),
+                h('span', { className: 'ccg-pv-col-name' }, answer.label)
               ),
               route === '' ? null : h('span', { className: 'ccg-pv-col-route' }, route),
               answer.lens ? h('span', { className: 'ccg-pv-col-lens' }, answer.lens) : null,
-              // An answer is markdown; the failure line is not, and running it
+              // An answer is Markdown; the failure line is not, and running it
               // through a renderer would only invite it to reinterpret an error.
               answer.ok
                 ? h('div', { className: 'ccg-pv-body' }, h(Markdown, { text: bodies[index] }))
                 : h(
-                  'div',
-                  { className: 'ccg-pv-body', 'data-error': true },
-                  `${t('panel.noAnswer')} — ${bodies[index]}`,
-                ),
-            )
-          }),
-        ),
-      )
+                    'div',
+                    { className: 'ccg-pv-body', 'data-error': true },
+                    `${t('panel.noAnswer')} — ${bodies[index]}`
+                  )
+            );
+          })
+        )
+      );
     }
 
     /**
      * The team strip above the composer: who is hired, and what is theirs.
      *
-     * Ownership is the plugin's one mechanical guarantee — a hire that would
-     * collide is refused rather than warned about — and until now it was only
-     * visible by asking the model to read `ccg_roster`, which spends a turn to
-     * learn something the harness already knows. Here it is just there, and it
-     * is also the answer to "what is it actually doing right now".
+     * A colliding hire is refused before startup. The strip shows this ownership
+     * map and live activity without spending a turn on `ccg_roster`.
      *
      * Renders nothing at all when nobody is hired. A permanent strip saying
      * "no teammates" would cost every solo session a line of chrome to tell it
@@ -1053,14 +1104,14 @@ window.__ModuleLoader__.load({
      * @returns the strip, or null.
      */
     function CcgTeamDock(props) {
-      const { t } = props
-      const sessionId = props.session?.sessionId
+      const { t } = props;
+      const sessionId = props.session?.sessionId;
       // A hire lands during a coordinator turn, so a turn in flight is one
       // reason to watch.
-      const running = props.session?.running === true
-      const [rows, setRows] = React.useState([])
-      const [open, setOpen] = React.useState(false)
-      const h = React.createElement
+      const running = props.session?.running === true;
+      const [rows, setRows] = React.useState([]);
+      const [open, setOpen] = React.useState(false);
+      const h = React.createElement;
 
       // ...but not the only one, and this is the case that makes the strip worth
       // having: a teammate keeps working AFTER the coordinator's turn ends —
@@ -1069,65 +1120,72 @@ window.__ModuleLoader__.load({
       // while anyone is still going, and stops of its own accord when the last
       // one settles. A report wakes the parent, so `running` turns back on and
       // covers the narrow window where a just-hired child is not listed yet.
-      const anyLive = rows.some((row) => row.activity === 'running')
+      const anyLive = rows.some((row) => row.activity === 'running');
 
       React.useEffect(() => {
-        if (!sessionId) return undefined
-        let cancelled = false
-        const load = () => fetch(
-          `${TEAM_API}?session=${encodeURIComponent(sessionId)}`,
-          { headers: { Accept: 'application/json' } },
-        )
-          .then((response) => (response.ok ? response.json() : null))
-          .then((body) => {
-            if (cancelled || body === null) return
-            setRows(Array.isArray(body.teammates) ? body.teammates : [])
-          })
-          .catch(() => {
-            // No route means the host half is not serving this deployment.
-            // Keeping the last known roster is better than blanking the strip
-            // on one failed poll.
-          })
-
-        load()
-        if (!running && !anyLive) return () => { cancelled = true }
-        const timer = setInterval(load, TEAM_POLL_MS)
-        return () => {
-          cancelled = true
-          clearInterval(timer)
+        if (!sessionId) {
+          return undefined;
         }
-      }, [sessionId, running, anyLive])
+        let cancelled = false;
+        const load = () =>
+          fetch(`${TEAM_API}?session=${encodeURIComponent(sessionId)}`, { headers: { Accept: 'application/json' } })
+            .then((response) => (response.ok ? response.json() : null))
+            .then((body) => {
+              if (cancelled || body === null) {
+                return;
+              }
+              setRows(Array.isArray(body.teammates) ? body.teammates : []);
+            })
+            .catch(() => {
+              // No route means the host half is not serving this deployment.
+              // Keeping the last known roster is better than blanking the strip
+              // on one failed poll.
+            });
 
-      if (rows.length === 0) return null
+        void load();
+        if (!running && !anyLive) {
+          return () => {
+            cancelled = true;
+          };
+        }
+        const timer = setInterval(load, TEAM_POLL_MS);
+        return () => {
+          cancelled = true;
+          clearInterval(timer);
+        };
+      }, [sessionId, running, anyLive]);
 
-      const live = rows.filter((row) => row.activity === 'running').length
+      if (rows.length === 0) {
+        return null;
+      }
+
+      const live = rows.filter((row) => row.activity === 'running').length;
       const summary = [
         t('dock.hired', { count: rows.length }),
         ...(live > 0 ? [t('dock.running', { count: live })] : []),
-      ].join(' · ')
+      ].join(' · ');
 
-      const teammateRow = (row) => h(
-        'div',
-        { className: 'ccg-td-row', key: row.childId },
-        h(Dot, { state: row.activity === 'running' ? 'ongoing' : 'done', size: 6 }),
-        h('span', { className: 'ccg-td-role' }, row.role),
-        h('span', { className: 'ccg-td-label', title: row.label }, row.label),
+      const teammateRow = (row) =>
         h(
-          'span',
-          { className: 'ccg-td-route' },
-          row.provider && row.model ? `${row.provider} / ${row.model}` : t('dock.default'),
-        ),
-        h(
-          'span',
-          {
-            className: 'ccg-td-owns',
-            title: row.owns.length > 0 ? row.owns.join(', ') : t('dock.ownsNothing'),
-          },
-          row.owns.length > 0
-            ? `${t('dock.owns')} ${row.owns.join(', ')}`
-            : t('dock.ownsNothing'),
-        ),
-      )
+          'div',
+          { className: 'ccg-td-row', key: row.childId },
+          h(Dot, { state: row.activity === 'running' ? 'ongoing' : 'done', size: 6 }),
+          h('span', { className: 'ccg-td-role' }, row.role),
+          h('span', { className: 'ccg-td-label', title: row.label }, row.label),
+          h(
+            'span',
+            { className: 'ccg-td-route' },
+            row.provider && row.model ? `${row.provider} / ${row.model}` : t('dock.default')
+          ),
+          h(
+            'span',
+            {
+              className: 'ccg-td-owns',
+              title: row.owns.length > 0 ? row.owns.join(', ') : t('dock.ownsNothing'),
+            },
+            row.owns.length > 0 ? `${t('dock.owns')} ${row.owns.join(', ')}` : t('dock.ownsNothing')
+          )
+        );
 
       return h(
         'div',
@@ -1147,11 +1205,11 @@ window.__ModuleLoader__.load({
             h('span', { className: 'ccg-td-name' }, t('dock.team')),
             h('span', { className: 'ccg-td-count' }, summary),
             h('span', { className: 'ccg-td-spacer' }),
-            h('span', { className: 'ccg-td-chevron' }, open ? '▲' : '▼'),
+            h('span', { className: 'ccg-td-chevron' }, open ? '▲' : '▼')
           ),
-          open ? h('div', { className: 'ccg-td-rows' }, rows.map(teammateRow)) : null,
-        ),
-      )
+          open ? h('div', { className: 'ccg-td-rows' }, rows.map(teammateRow)) : null
+        )
+      );
     }
 
     /**
@@ -1163,13 +1221,13 @@ window.__ModuleLoader__.load({
      * to a role starts rendering that role's calls as a panel on the next call
      * rather than on the next page load.
      */
-    const configWatchers = new Set()
+    const configWatchers = new Set();
 
     /** Hand a freshly read payload to every watcher. */
     function publishConfig(payload) {
       for (const watcher of [...configWatchers]) {
         try {
-          watcher(payload)
+          watcher(payload);
         } catch {
           // One watcher failing must not stop the others from updating.
         }
@@ -1192,46 +1250,62 @@ window.__ModuleLoader__.load({
     function mountPanelViews(ctx, t) {
       // Read at render time rather than baked into each registration, so a
       // roster change reaches a view that is already registered.
-      const rosters = new Map()
-      const claims = new Map()
+      const rosters = new Map();
+      const claims = new Map();
 
       const sync = (payload) => {
-        const panels = payload?.panels
-        const wanted = panels !== null && typeof panels === 'object' ? panels : {}
+        const panels = payload?.panels;
+        const wanted = panels !== null && typeof panels === 'object' ? panels : {};
         for (const [tool, dispose] of [...claims]) {
-          if (wanted[tool] !== undefined) continue
-          claims.delete(tool)
-          rosters.delete(tool)
-          dispose()
+          if (wanted[tool] !== undefined) {
+            continue;
+          }
+          claims.delete(tool);
+          rosters.delete(tool);
+          dispose();
         }
         for (const [tool, members] of Object.entries(wanted)) {
-          rosters.set(tool, Array.isArray(members) ? members : [])
-          if (claims.has(tool)) continue
-          claims.set(tool, ctx.slots.register({
-            name: 'tool.call.toolview',
-            key: tool,
-            locale: NS,
-            inject: () => ({ t, roster: rosters.get(tool) ?? [] }),
-          }, CcgPanelView))
+          rosters.set(tool, Array.isArray(members) ? members : []);
+          if (claims.has(tool)) {
+            continue;
+          }
+          claims.set(
+            tool,
+            ctx.slots.register(
+              {
+                name: 'tool.call.toolview',
+                key: tool,
+                locale: NS,
+                inject: () => ({ t, roster: rosters.get(tool) ?? [] }),
+              },
+              CcgPanelView
+            )
+          );
         }
-      }
+      };
 
-      let live = true
-      configWatchers.add(sync)
+      let live = true;
+      configWatchers.add(sync);
       fetch(API, { headers: { Accept: 'application/json' } })
-        .then((response) => (response.ok ? response.json() : Promise.reject(new Error(response.status))))
-        .then((payload) => { if (live) sync(payload) })
+        .then((response) => (response.ok ? response.json() : Promise.reject(new Error(String(response.status)))))
+        .then((payload) => {
+          if (live) {
+            sync(payload);
+          }
+        })
         .catch(() => {
           // No route means the host half is not serving this deployment; the
           // generic tool row keeps rendering these calls.
-        })
+        });
 
       return () => {
-        live = false
-        configWatchers.delete(sync)
-        for (const dispose of claims.values()) dispose()
-        claims.clear()
-      }
+        live = false;
+        configWatchers.delete(sync);
+        for (const dispose of claims.values()) {
+          dispose();
+        }
+        claims.clear();
+      };
     }
 
     /**
@@ -1240,31 +1314,41 @@ window.__ModuleLoader__.load({
      * @param ctx - the browser plugin context.
      */
     function apply(ctx) {
-      const t = ctx.locale.bind(NS)
-      ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ccg: card dictionaries')
-      ctx.effect(() => mountStyles(), 'ccg: card styles')
+      const t = ctx.locale.bind(NS);
+      ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ccg: card dictionaries');
+      ctx.effect(() => mountStyles(), 'ccg: card styles');
 
-      ctx.slots.inject('settings.plugins.tab', () => ctx.slots.register({
-        name: 'settings.plugins.tab',
-        id: 'ccg',
-        order: 50,
-        label: () => t('title'),
-        locale: NS,
-        inject: () => ({ t }),
-      }, CcgCard))
+      ctx.slots.inject('settings.plugins.tab', () =>
+        ctx.slots.register(
+          {
+            name: 'settings.plugins.tab',
+            id: 'ccg',
+            order: 50,
+            label: () => t('title'),
+            locale: NS,
+            inject: () => ({ t }),
+          },
+          CcgCard
+        )
+      );
 
-      ctx.slots.inject('tool.call.toolview', () => mountPanelViews(ctx, t))
+      ctx.slots.inject('tool.call.toolview', () => mountPanelViews(ctx, t));
 
-      ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({
-        name: 'conversation.input.dock',
-        id: 'ccg-team',
-        order: 40,
-        locale: NS,
-        inject: () => ({ t }),
-      }, CcgTeamDock))
+      ctx.slots.inject('conversation.input.dock', () =>
+        ctx.slots.register(
+          {
+            name: 'conversation.input.dock',
+            id: 'ccg-team',
+            order: 40,
+            locale: NS,
+            inject: () => ({ t }),
+          },
+          CcgTeamDock
+        )
+      );
     }
 
-    module.exports = { apply, inject }
-    return module.exports
+    module.exports = { apply, inject };
+    return module.exports;
   },
-})
+});

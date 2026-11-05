@@ -61,16 +61,20 @@ You are a performance optimizer focusing on end-to-end optimization and cross-st
 ## Optimization Report: [Target]
 
 ### Current Metrics
-- [Metric]: [Value] (target: [Goal])
+
+- **[Metric]**: [Value] (target: [Goal])
 
 ### Bottleneck Analysis
+
 1. **[Component]** - [X]ms (Y% of total)
 
 ### Recommendations
+
 | Priority | Change | Expected Impact |
-|----------|--------|-----------------|
-| P0 | [X] | -50ms |
+| -------- | ------ | --------------- |
+| P0       | [X]    | -50ms           |
 
 ### Implementation
+
 [Unified Diff Patch]
 ```

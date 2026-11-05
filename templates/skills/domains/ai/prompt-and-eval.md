@@ -9,14 +9,14 @@ description: Prompt 工程与模型评估。Prompt 模式（Zero-shot、Few-shot
 
 ### 模式对比
 
-| 模式               | 复杂度 | 准确性 | Token 消耗 | 适用场景       |
-|------------------|-----|-----|----------|------------|
-| Zero-shot        | 低   | 中   | 低        | 简单任务、通用问题  |
-| Few-shot         | 中   | 高   | 中        | 格式化输出、分类   |
-| CoT              | 中   | 高   | 中        | 推理、数学、逻辑   |
-| Self-Consistency | 高   | 极高  | 高        | 关键决策       |
-| ToT              | 极高  | 极高  | 极高       | 复杂规划       |
-| ReAct            | 高   | 高   | 高        | 工具调用、Agent |
+| 模式             | 复杂度 | 准确性 | Token 消耗 | 适用场景           |
+|------------------|--------|--------|------------|--------------------|
+| Zero-shot        | 低     | 中     | 低         | 简单任务、通用问题 |
+| Few-shot         | 中     | 高     | 中         | 格式化输出、分类   |
+| CoT              | 中     | 高     | 中         | 推理、数学、逻辑   |
+| Self-Consistency | 高     | 极高   | 高         | 关键决策           |
+| ToT              | 极高   | 极高   | 极高       | 复杂规划           |
+| ReAct            | 高     | 高     | 高         | 工具调用、Agent    |
 
 ### Zero-shot
 
@@ -99,13 +99,13 @@ messages = [
 
 ### 优化原则
 
-| 原则   | 做          | 不做    |
-|------|------------|-------|
-| 清晰性  | 具体、可执行、有约束 | 模糊指令  |
-| 结构化  | 分隔符、编号、格式  | 大段文字  |
-| 示例驱动 | 2-5 个高质量示例 | 无示例   |
-| 分步指令 | 步骤 1/2/3   | 一句话包办 |
-| 约束边界 | 说明要做和不做什么  | 无限制   |
+| 原则     | 做                   | 不做       |
+|----------|----------------------|------------|
+| 清晰性   | 具体、可执行、有约束 | 模糊指令   |
+| 结构化   | 分隔符、编号、格式   | 大段文字   |
+| 示例驱动 | 2-5 个高质量示例     | 无示例     |
+| 分步指令 | 步骤 1/2/3           | 一句话包办 |
+| 约束边界 | 说明要做和不做什么   | 无限制     |
 
 ### 高级技巧
 
@@ -122,22 +122,22 @@ improved = llm(f"基于批评改进: {critique}")
 ### Prompt 模板速查
 
 ```yaml
-代码生成: "生成 {lang} 代码: {desc}。要求: 最佳实践 + 注释 + 异常处理"
-文本摘要: "总结为 {n} 字: {text}。保留关键信息，语言简洁"
-数据提取: "从文本提取 {fields}，输出 JSON: {text}"
-NL2SQL: "将自然语言转 SQL: {query}。表结构: {schema}"
+代码生成: '生成 {lang} 代码: {desc}。要求: 最佳实践 + 注释 + 异常处理'
+文本摘要: '总结为 {n} 字: {text}。保留关键信息，语言简洁'
+数据提取: '从文本提取 {fields}，输出 JSON: {text}'
+NL2SQL: '将自然语言转 SQL: {query}。表结构: {schema}'
 ```
 
 ## 三、模型评估
 
 ### 评估维度
 
-| 维度  | 指标                               | 适用场景   |
-|-----|----------------------------------|--------|
+| 维度   | 指标                             | 适用场景  |
+|--------|----------------------------------|-----------|
 | 准确性 | Accuracy, F1, Precision, Recall  | 分类、NER |
 | 相关性 | Relevance, Context Precision     | RAG、检索 |
-| 忠实性 | Faithfulness, Hallucination Rate | 生成任务   |
-| 效率  | Latency P95, Throughput, Cost/1K | 生产部署   |
+| 忠实性 | Faithfulness, Hallucination Rate | 生成任务  |
+| 效率   | Latency P95, Throughput, Cost/1K | 生产部署  |
 
 ### RAGAS 框架
 
@@ -183,17 +183,21 @@ def pairwise(q, a, b):
 
 ### 基准测试速查
 
-| 基准        | 评估能力    | 核心指标           |
-|-----------|---------|----------------|
-| MMLU      | 多任务语言理解 | Accuracy       |
-| HumanEval | 代码生成    | Pass@k         |
-| GSM8K     | 数学推理    | Accuracy (CoT) |
-| 自定义       | 业务场景    | 加权评分 + 延迟      |
+| 基准      | 评估能力       | 核心指标        |
+|-----------|----------------|-----------------|
+| MMLU      | 多任务语言理解 | Accuracy        |
+| HumanEval | 代码生成       | Pass@k          |
+| GSM8K     | 数学推理       | Accuracy (CoT)  |
+| 自定义    | 业务场景       | 加权评分 + 延迟 |
 
 ### 检索指标
 
 ```python
-def evaluate_retrieval(retrieved, relevant, k=5):
+def evaluate_retrieval(
+        retrieved,
+        relevant,
+        k=5
+):
     precision_at_k = len(set(retrieved[:k]) & set(relevant)) / k
     recall_at_k = len(set(retrieved[:k]) & set(relevant)) / len(relevant)
     # MRR: 第一个相关文档的倒数排名
@@ -216,14 +220,25 @@ rouge_scores = Rouge().get_scores(predictions, references, avg=True)
 
 ```python
 class ABTest:
-    def __init__(self, variants):  # [Variant(name, model, ratio)]
+    def __init__(
+            self,
+            variants
+    ):  # [Variant(name, model, ratio)]
         self.variants = variants
 
-    def get_variant(self, user_id):
+    def get_variant(
+            self,
+            user_id
+    ):
         # 一致性哈希分流
         return self.variants[hash(user_id) % 100 < cumulative_ratio]
 
-    def check_significance(self, a_scores, b_scores, alpha=0.05):
+    def check_significance(
+            self,
+            a_scores,
+            b_scores,
+            alpha=0.05
+    ):
         t_stat, p_value = stats.ttest_ind(a_scores, b_scores)
         cohens_d = (mean(a) - mean(b)) / pooled_std
         return {"p_value": p_value, "significant": p_value < alpha, "effect": cohens_d}
@@ -266,14 +281,14 @@ class AnomalyDetector:
 
 ## 工具速查
 
-| 工具           | 用途          |
-|--------------|-------------|
+| 工具         | 用途            |
+|--------------|-----------------|
 | RAGAS        | RAG 专用评估    |
 | LangSmith    | LLM 应用监控    |
-| Phoenix      | 可观测性平台      |
+| Phoenix      | 可观测性平台    |
 | LangChain    | Prompt 模板管理 |
-| Guidance     | 结构化生成       |
-| OpenAI Evals | 模型评估框架      |
+| Guidance     | 结构化生成      |
+| OpenAI Evals | 模型评估框架    |
 | W&B          | 实验追踪        |
 
 ---

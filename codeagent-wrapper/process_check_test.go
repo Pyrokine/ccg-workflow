@@ -1,5 +1,4 @@
 //go:build unix || darwin || linux
-// +build unix darwin linux
 
 package main
 
@@ -8,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -73,12 +71,7 @@ func TestIsProcessRunning(t *testing.T) {
 func exitedProcessPID(t *testing.T) int {
 	t.Helper()
 
-	var cmd *exec.Cmd
-	if runtime.GOOS == "windows" {
-		cmd = exec.Command("cmd", "/c", "exit 0")
-	} else {
-		cmd = exec.Command("sh", "-c", "exit 0")
-	}
+	cmd := exec.Command("sh", "-c", "exit 0")
 
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("failed to start helper process: %v", err)

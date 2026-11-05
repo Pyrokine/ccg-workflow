@@ -91,14 +91,16 @@ func TestExtractFilesChanged(t *testing.T) {
 	t.Run(
 		"limits to first 10", func(t *testing.T) {
 			var b strings.Builder
-			for i := 0; i < 12; i++ {
-				fmt.Fprintf(&b, "Modified: file%d.go\n", i)
+			for i := range 12 {
+				if _, err := fmt.Fprintf(&b, "Modified: file%d.go\n", i); err != nil {
+					t.Errorf("I/O operation failed: %v", err)
+				}
 			}
 			got := extractFilesChanged(b.String())
 			if len(got) != 10 {
 				t.Fatalf("len(files)=%d, want 10: %#v", len(got), got)
 			}
-			for i := 0; i < 10; i++ {
+			for i := range 10 {
 				want := fmt.Sprintf("file%d.go", i)
 				if got[i] != want {
 					t.Fatalf("files[%d]=%q, want %q", i, got[i], want)

@@ -9,12 +9,16 @@ import (
 func TestLogWriterWriteLimitsBuffer(t *testing.T) {
 	defer resetTestHooks()
 
-	logger, err := NewLogger()
+	logger, err := newLogger()
 	if err != nil {
 		t.Fatalf("NewLogger error: %v", err)
 	}
 	setLogger(logger)
-	defer closeLogger()
+	defer func() {
+		if err := closeLogger(); err != nil {
+			t.Errorf("I/O operation failed: %v", err)
+		}
+	}()
 
 	lw := newLogWriter("P:", 10)
 	_, _ = lw.Write([]byte(strings.Repeat("a", 100)))
@@ -28,7 +32,7 @@ func TestLogWriterWriteLimitsBuffer(t *testing.T) {
 
 	lw.Flush()
 	logger.Flush()
-	data, err := os.ReadFile(logger.Path())
+	data, err := os.ReadFile(logger.logPath())
 	if err != nil {
 		t.Fatalf("ReadFile error: %v", err)
 	}

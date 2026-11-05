@@ -1,13 +1,12 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -72,9 +71,33 @@ type processHandle interface {
 	Signal(os.Signal) error
 }
 
+type stdoutPipe struct {
+	file     *os.File
+	draining atomic.Bool
+}
+
+func (p *stdoutPipe) Read(data []byte) (int, error) {
+	if p.draining.Load() {
+		if err := p.file.SetReadDeadline(time.Now().Add(stdoutDrainTimeout)); err != nil {
+			return 0, err
+		}
+	}
+	return p.file.Read(data)
+}
+
+func (p *stdoutPipe) Close() error {
+	return p.file.Close()
+}
+
+func (p *stdoutPipe) drain() error {
+	p.draining.Store(true)
+	return p.file.SetReadDeadline(time.Now().Add(stdoutDrainTimeout))
+}
+
 // realCmd implements commandRunner using exec.Cmd
 type realCmd struct {
-	cmd *exec.Cmd
+	cmd          *exec.Cmd
+	stdoutWriter *os.File
 }
 
 func (r *realCmd) Start() error {
@@ -82,7 +105,14 @@ func (r *realCmd) Start() error {
 		return errors.New("command is nil")
 	}
 	isolateProcessGroup(r.cmd)
-	return r.cmd.Start()
+	err := r.cmd.Start()
+	if r.stdoutWriter != nil {
+		if closeErr := r.stdoutWriter.Close(); closeErr != nil {
+			logWarn("Close parent stdout writer failed: " + closeErr.Error())
+		}
+		r.stdoutWriter = nil
+	}
+	return err
 }
 
 func (r *realCmd) Wait() error {
@@ -96,7 +126,21 @@ func (r *realCmd) StdoutPipe() (io.ReadCloser, error) {
 	if r.cmd == nil {
 		return nil, errors.New("command is nil")
 	}
-	return r.cmd.StdoutPipe()
+	if r.cmd.Stdout != nil {
+		return nil, errors.New("stdout is already configured")
+	}
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		return nil, err
+	}
+	// 读取端由执行器负责排空和关闭，避免 Cmd.Wait 提前关闭它
+	r.cmd.Stdout = writer
+	r.stdoutWriter = writer
+	if err := reader.SetReadDeadline(time.Time{}); err != nil {
+		logWarn("Stdout read deadlines unavailable; using bounded drain: " + err.Error())
+		return reader, nil
+	}
+	return &stdoutPipe{file: reader}, nil
 }
 
 func (r *realCmd) StdinPipe() (io.WriteCloser, error) {
@@ -203,43 +247,44 @@ var newCommandRunner = func(ctx context.Context, name string, args ...string) co
 }
 
 var runAntigravityPTYRetryFn = runAntigravityPTYRetry
-var ansiEscapePattern = regexp.MustCompile(`\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1b\\))`)
+var ansiEscapePattern = regexp.MustCompile(`\x1b(?:\[[0-?]*[ -/]*[@-~]|][^\x07]*(?:\x07|\x1b\\))`)
 
 type parseResult struct {
 	message  string
 	threadID string
+	failure  string
 }
 
 type taskLoggerContextKey struct{}
 
-func withTaskLogger(ctx context.Context, logger *Logger) context.Context {
+func withTaskLogger(ctx context.Context, logger *fileLogger) context.Context {
 	if ctx == nil || logger == nil {
 		return ctx
 	}
 	return context.WithValue(ctx, taskLoggerContextKey{}, logger)
 }
 
-func taskLoggerFromContext(ctx context.Context) *Logger {
+func taskLoggerFromContext(ctx context.Context) *fileLogger {
 	if ctx == nil {
 		return nil
 	}
-	logger, _ := ctx.Value(taskLoggerContextKey{}).(*Logger)
+	logger, _ := ctx.Value(taskLoggerContextKey{}).(*fileLogger)
 	return logger
 }
 
 type taskLoggerHandle struct {
-	logger  *Logger
+	logger  *fileLogger
 	path    string
 	shared  bool
 	closeFn func()
 }
 
 func newTaskLoggerHandle(taskID string) taskLoggerHandle {
-	taskLogger, err := NewLoggerWithSuffix(taskID)
+	taskLogger, err := newLoggerWithSuffix(taskID)
 	if err == nil {
 		return taskLoggerHandle{
 			logger:  taskLogger,
-			path:    taskLogger.Path(),
+			path:    taskLogger.logPath(),
 			closeFn: func() { _ = taskLogger.Close() },
 		}
 	}
@@ -250,17 +295,19 @@ func newTaskLoggerHandle(taskID string) taskLoggerHandle {
 		logWarn(msg)
 		return taskLoggerHandle{
 			logger: mainLogger,
-			path:   mainLogger.Path(),
+			path:   mainLogger.logPath(),
 			shared: true,
 		}
 	}
 
-	fmt.Fprintln(os.Stderr, msg)
+	if _, err := fmt.Fprintln(os.Stderr, msg); err != nil {
+		logWarn("I/O operation failed: " + err.Error())
+	}
 	return taskLoggerHandle{}
 }
 
 // defaultRunCodexTaskFn is the default implementation of runCodexTaskFn (exposed for test reset)
-func defaultRunCodexTaskFn(task TaskSpec, timeout int) TaskResult {
+func defaultRunCodexTaskFn(task taskSpec, timeout int) taskResult {
 	if task.WorkDir == "" {
 		task.WorkDir = defaultWorkdir
 	}
@@ -278,7 +325,7 @@ func defaultRunCodexTaskFn(task TaskSpec, timeout int) TaskResult {
 
 	backend, err := selectBackendFn(backendName)
 	if err != nil {
-		return TaskResult{TaskID: task.ID, ExitCode: 1, Error: err.Error()}
+		return taskResult{TaskID: task.ID, ExitCode: 1, Error: err.Error()}
 	}
 	task.Backend = backend.Name()
 
@@ -291,8 +338,8 @@ func defaultRunCodexTaskFn(task TaskSpec, timeout int) TaskResult {
 
 var runCodexTaskFn = defaultRunCodexTaskFn
 
-func topologicalSort(tasks []TaskSpec) ([][]TaskSpec, error) {
-	idToTask := make(map[string]TaskSpec, len(tasks))
+func topologicalSort(tasks []taskSpec) ([][]taskSpec, error) {
+	idToTask := make(map[string]taskSpec, len(tasks))
 	indegree := make(map[string]int, len(tasks))
 	adj := make(map[string][]string, len(tasks))
 
@@ -318,13 +365,13 @@ func topologicalSort(tasks []TaskSpec) ([][]TaskSpec, error) {
 		}
 	}
 
-	layers := make([][]TaskSpec, 0)
+	layers := make([][]taskSpec, 0)
 	processed := 0
 
 	for len(queue) > 0 {
 		current := queue
 		queue = nil
-		layer := make([]TaskSpec, len(current))
+		layer := make([]taskSpec, len(current))
 		for i, id := range current {
 			layer[i] = idToTask[id]
 			processed++
@@ -357,25 +404,25 @@ func topologicalSort(tasks []TaskSpec) ([][]TaskSpec, error) {
 	return layers, nil
 }
 
-func executeConcurrent(layers [][]TaskSpec, timeout int) []TaskResult {
+func executeConcurrent(layers [][]taskSpec, timeout int) []taskResult {
 	maxWorkers := resolveMaxParallelWorkers()
 	return executeConcurrentWithContext(context.Background(), layers, timeout, maxWorkers)
 }
 
 func executeConcurrentWithContext(
 	parentCtx context.Context,
-	layers [][]TaskSpec,
+	layers [][]taskSpec,
 	timeout int,
 	maxWorkers int,
-) []TaskResult {
+) []taskResult {
 	totalTasks := 0
 	for _, layer := range layers {
 		totalTasks += len(layer)
 	}
 
-	results := make([]TaskResult, 0, totalTasks)
-	failed := make(map[string]TaskResult, totalTasks)
-	resultsCh := make(chan TaskResult, totalTasks)
+	results := make([]taskResult, 0, totalTasks)
+	failed := make(map[string]taskResult, totalTasks)
+	resultsCh := make(chan taskResult, totalTasks)
 
 	var startPrintMu sync.Mutex
 	bannerPrinted := false
@@ -386,14 +433,18 @@ func executeConcurrentWithContext(
 		}
 		startPrintMu.Lock()
 		if !bannerPrinted {
-			fmt.Fprintln(os.Stderr, "=== Starting Parallel Execution ===")
+			if _, err := fmt.Fprintln(os.Stderr, "=== Starting Parallel Execution ==="); err != nil {
+				logWarn("I/O operation failed: " + err.Error())
+			}
 			bannerPrinted = true
 		}
 		label := "Log"
 		if shared {
 			label = "Log (shared)"
 		}
-		fmt.Fprintf(os.Stderr, "Task %s: %s: %s\n", taskID, label, logPath)
+		if _, err := fmt.Fprintf(os.Stderr, "Task %s: %s: %s\n", taskID, label, logPath); err != nil {
+			logWarn("I/O operation failed: " + err.Error())
+		}
 		startPrintMu.Unlock()
 	}
 
@@ -404,10 +455,7 @@ func executeConcurrentWithContext(
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	workerLimit := maxWorkers
-	if workerLimit < 0 {
-		workerLimit = 0
-	}
+	workerLimit := max(maxWorkers, 0)
 
 	var sem chan struct{}
 	if workerLimit > 0 {
@@ -438,7 +486,7 @@ func executeConcurrentWithContext(
 		}
 	}
 
-	var activeWorkers int64
+	var activeWorkers atomic.Int64
 
 	for _, layer := range layers {
 		var wg sync.WaitGroup
@@ -446,7 +494,7 @@ func executeConcurrentWithContext(
 
 		for _, task := range layer {
 			if skip, reason := shouldSkipTask(task, failed); skip {
-				res := TaskResult{TaskID: task.ID, ExitCode: 1, Error: reason}
+				res := taskResult{TaskID: task.ID, ExitCode: 1, Error: reason}
 				results = append(results, res)
 				failed[task.ID] = res
 				continue
@@ -461,13 +509,13 @@ func executeConcurrentWithContext(
 
 			executed++
 			wg.Add(1)
-			go func(ts TaskSpec) {
+			go func(ts taskSpec) {
 				defer wg.Done()
 				var taskLogPath string
 				handle := taskLoggerHandle{}
 				defer func() {
 					if r := recover(); r != nil {
-						resultsCh <- TaskResult{
+						resultsCh <- taskResult{
 							TaskID: ts.ID, ExitCode: 1, Error: fmt.Sprintf("panic: %v", r), LogPath: taskLogPath,
 							sharedLog: handle.shared,
 						}
@@ -480,10 +528,10 @@ func executeConcurrentWithContext(
 				}
 				defer releaseSlot()
 
-				current := atomic.AddInt64(&activeWorkers, 1)
+				current := activeWorkers.Add(1)
 				logConcurrencyState("start", ts.ID, int(current), workerLimit)
 				defer func() {
-					after := atomic.AddInt64(&activeWorkers, -1)
+					after := activeWorkers.Add(-1)
 					logConcurrencyState("done", ts.ID, int(after), workerLimit)
 				}()
 
@@ -503,12 +551,13 @@ func executeConcurrentWithContext(
 
 				res := runCodexTaskFn(ts, timeout)
 				if taskLogPath != "" {
-					if res.LogPath == "" || (handle.shared && handle.logger != nil && res.LogPath == handle.logger.Path()) {
+					if res.LogPath == "" ||
+						(handle.shared && handle.logger != nil && res.LogPath == handle.logger.logPath()) {
 						res.LogPath = taskLogPath
 					}
 				}
 				// 只有当最终的 LogPath 确实是共享 logger 的路径时才标记为 shared
-				if handle.shared && handle.logger != nil && res.LogPath == handle.logger.Path() {
+				if handle.shared && handle.logger != nil && res.LogPath == handle.logger.logPath() {
 					res.sharedLog = true
 				}
 				resultsCh <- res
@@ -529,17 +578,17 @@ func executeConcurrentWithContext(
 	return results
 }
 
-func cancelledTaskResult(taskID string, ctx context.Context) TaskResult {
+func cancelledTaskResult(taskID string, ctx context.Context) taskResult {
 	exitCode := 130
 	msg := "execution cancelled"
 	if ctx != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		exitCode = 124
 		msg = "execution timeout"
 	}
-	return TaskResult{TaskID: taskID, ExitCode: exitCode, Error: msg}
+	return taskResult{TaskID: taskID, ExitCode: exitCode, Error: msg}
 }
 
-func shouldSkipTask(task TaskSpec, failed map[string]TaskResult) (bool, string) {
+func shouldSkipTask(task taskSpec, failed map[string]taskResult) (bool, string) {
 	if len(task.Dependencies) == 0 {
 		return false, ""
 	}
@@ -566,14 +615,14 @@ func getStatusSymbols() (success, warning, failed string) {
 	return "✓", "⚠️", "✗"
 }
 
-func generateFinalOutput(results []TaskResult) string {
+func generateFinalOutput(results []taskResult) string {
 	return generateFinalOutputWithMode(results, true) // default to summary mode
 }
 
 // generateFinalOutputWithMode generates output based on mode
 // summaryOnly=true: structured report - every token has value
 // summaryOnly=false: full output with complete messages (legacy behavior)
-func generateFinalOutputWithMode(results []TaskResult, summaryOnly bool) string {
+func generateFinalOutputWithMode(results []taskResult, summaryOnly bool) string {
 	var sb strings.Builder
 	successSymbol, warningSymbol, failedSymbol := getStatusSymbols()
 
@@ -652,7 +701,7 @@ func generateFinalOutputWithMode(results []TaskResult, summaryOnly bool) string 
 					sb.WriteString(fmt.Sprintf("Log: %s\n", logPath))
 				}
 
-			} else if isSuccess && isBelowTarget {
+			} else if isSuccess {
 				// Below target: add Gap info
 				sb.WriteString(fmt.Sprintf("\n### %s %s %s (below %.0f%%)\n", taskID, warningSymbol, coverage, target))
 
@@ -773,7 +822,7 @@ func generateFinalOutputWithMode(results []TaskResult, summaryOnly bool) string 
 	return sb.String()
 }
 
-func buildCodexArgs(cfg *Config, targetArg string) []string {
+func buildCodexArgs(cfg *config, targetArg string) []string {
 	if cfg == nil {
 		panic("buildCodexArgs: nil config")
 	}
@@ -825,7 +874,7 @@ func buildCodexArgs(cfg *Config, targetArg string) []string {
 	)
 }
 
-func runCodexTask(taskSpec TaskSpec, silent bool, timeoutSec int) TaskResult {
+func runCodexTask(taskSpec taskSpec, silent bool, timeoutSec int) taskResult {
 	return runCodexTaskWithContext(context.Background(), taskSpec, nil, nil, false, silent, timeoutSec)
 }
 
@@ -837,7 +886,7 @@ func runCodexProcess(
 	timeoutSec int,
 ) (message, threadID string, exitCode int) {
 	res := runCodexTaskWithContext(
-		parentCtx, TaskSpec{Task: taskText, WorkDir: defaultWorkdir, Mode: "new", UseStdin: useStdin}, nil, codexArgs,
+		parentCtx, taskSpec{Task: taskText, WorkDir: defaultWorkdir, Mode: "new", UseStdin: useStdin}, nil, codexArgs,
 		true, false, timeoutSec,
 	)
 	return res.Message, res.SessionID, res.ExitCode
@@ -845,13 +894,13 @@ func runCodexProcess(
 
 func runCodexTaskWithContext(
 	parentCtx context.Context,
-	taskSpec TaskSpec,
-	backend Backend,
+	taskSpec taskSpec,
+	backend backend,
 	customArgs []string,
 	useCustomArgs bool,
 	silent bool,
 	timeoutSec int,
-) TaskResult {
+) taskResult {
 	if parentCtx == nil {
 		parentCtx = taskSpec.Context
 	}
@@ -859,11 +908,11 @@ func runCodexTaskWithContext(
 		parentCtx = context.Background()
 	}
 
-	result := TaskResult{TaskID: taskSpec.ID}
+	result := taskResult{TaskID: taskSpec.ID}
 	injectedLogger := taskLoggerFromContext(parentCtx)
 	logger := injectedLogger
 
-	cfg := &Config{
+	cfg := &config{
 		Mode:                 taskSpec.Mode,
 		Task:                 taskSpec.Task,
 		SessionID:            taskSpec.SessionID,
@@ -908,7 +957,9 @@ func runCodexTaskWithContext(
 	targetArg := taskSpec.Task
 
 	// Antigravity CLI does not support "-" as stdin marker for -p flag.
-	promptBackend := cfg.Backend == "antigravity" || cfg.Backend == "agy" || cfg.Backend == "grok" || cfg.Backend == "kimi" || cfg.Backend == "opencode"
+	promptBackend := cfg.Backend == "antigravity" || cfg.Backend == "agy" || cfg.Backend == "grok" ||
+		cfg.Backend == "kimi" ||
+		cfg.Backend == "opencode"
 	promptDirect := useStdin && promptBackend
 	if useStdin && !promptDirect {
 		targetArg = "-"
@@ -925,18 +976,16 @@ func runCodexTaskWithContext(
 	// Skip in lite mode for better performance
 	var webSessionID string
 	if !liteMode && globalWebServer == nil {
-		globalWebServer = NewWebServer(cfg.Backend)
-		if err := globalWebServer.Start(); err != nil {
+		globalWebServer = newWebServer(cfg.Backend)
+		if err := globalWebServer.start(); err != nil {
 			logWarn(fmt.Sprintf("Failed to start web server: %v", err))
 		}
 	}
 
 	// Generate a unique session ID for WebServer tracking
 	if !liteMode && globalWebServer != nil {
-		randBytes := make([]byte, 4)
-		rand.Read(randBytes)
-		webSessionID = fmt.Sprintf("%s-%d-%s", cfg.Backend, time.Now().UnixMilli(), hex.EncodeToString(randBytes))
-		globalWebServer.StartSession(webSessionID, cfg.Backend, taskSpec.Task)
+		webSessionID = fmt.Sprintf("%s-%d-%s", cfg.Backend, time.Now().UnixMilli(), rand.Text())
+		globalWebServer.startSession(webSessionID, cfg.Backend, taskSpec.Task)
 	}
 
 	prefixMsg := func(msg string) string {
@@ -954,17 +1003,17 @@ func runCodexTaskWithContext(
 		// Silent mode: only persist to file when available; avoid stderr noise.
 		logInfoFn = func(msg string) {
 			if logger != nil {
-				logger.Info(prefixMsg(msg))
+				logger.info(prefixMsg(msg))
 			}
 		}
 		logWarnFn = func(msg string) {
 			if logger != nil {
-				logger.Warn(prefixMsg(msg))
+				logger.warn(prefixMsg(msg))
 			}
 		}
 		logErrorFn = func(msg string) {
 			if logger != nil {
-				logger.Error(prefixMsg(msg))
+				logger.error(prefixMsg(msg))
 			}
 		}
 	} else {
@@ -978,9 +1027,9 @@ func runCodexTaskWithContext(
 	var stdoutLogger *logWriter
 	var stderrLogger *logWriter
 
-	var tempLogger *Logger
+	var tempLogger *fileLogger
 	if logger == nil && silent && activeLogger() == nil {
-		if l, err := NewLogger(); err == nil {
+		if l, err := newLogger(); err == nil {
 			setLogger(l)
 			tempLogger = l
 			logger = l
@@ -995,13 +1044,13 @@ func runCodexTaskWithContext(
 		if result.LogPath != "" || logger == nil {
 			return
 		}
-		result.LogPath = logger.Path()
+		result.LogPath = logger.logPath()
 	}()
 	if logger == nil {
 		logger = activeLogger()
 	}
 	if logger != nil {
-		result.LogPath = logger.Path()
+		result.LogPath = logger.logPath()
 	}
 
 	if !silent {
@@ -1027,13 +1076,17 @@ func runCodexTaskWithContext(
 		return fmt.Sprintf("%s; stderr: %s", msg, stderr)
 	}
 
-	isPlainTextBackend := cfg.Backend == "antigravity" || cfg.Backend == "agy"
+	isAntigravityBackend := cfg.Backend == "antigravity" || cfg.Backend == "agy"
 	var antigravityLogPath string
-	if isPlainTextBackend {
+	if isAntigravityBackend {
 		if f, err := os.CreateTemp("", "codeagent-antigravity-*.log"); err == nil {
 			antigravityLogPath = f.Name()
 			_ = f.Close()
-			defer os.Remove(antigravityLogPath)
+			defer func() {
+				if err := os.Remove(antigravityLogPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+					logWarn("I/O operation failed: " + err.Error())
+				}
+			}()
 			codexArgs = withAntigravityLogFile(codexArgs, antigravityLogPath)
 		} else {
 			logWarnFn("Failed to create Antigravity log file: " + err.Error())
@@ -1048,9 +1101,7 @@ func runCodexTaskWithContext(
 	if env == nil {
 		env = make(map[string]string)
 	}
-	for k, v := range loadModelProxyEnv(cfg.Backend) {
-		env[k] = v
-	}
+	maps.Copy(env, loadModelProxyEnv(cfg.Backend))
 	cmd.SetEnv(env) // SetEnv 会自动合并 os.Environ() (executor.go:122-161)
 
 	// Set working directory for backends that don't support -C flag.
@@ -1067,12 +1118,20 @@ func runCodexTaskWithContext(
 
 	var antigravityStderrFile *os.File
 	var antigravityStderrPath string
-	if isPlainTextBackend {
+	if isAntigravityBackend {
 		if f, err := os.CreateTemp("", "codeagent-antigravity-stderr-*.log"); err == nil {
 			antigravityStderrFile = f
 			antigravityStderrPath = f.Name()
-			defer os.Remove(antigravityStderrPath)
-			defer f.Close()
+			defer func() {
+				if err := os.Remove(antigravityStderrPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+					logWarn("I/O operation failed: " + err.Error())
+				}
+			}()
+			defer func() {
+				if err := f.Close(); err != nil && !errors.Is(err, os.ErrClosed) {
+					logWarn("I/O operation failed: " + err.Error())
+				}
+			}()
 			cmd.SetStderr(f)
 		} else {
 			cmd.SetStderr(os.Stderr)
@@ -1087,7 +1146,11 @@ func runCodexTaskWithContext(
 		var stderrFilter *filteringWriter
 		if !silent {
 			stderrFilter = newFilteringWriter(os.Stderr, noisePatterns)
-			defer stderrFilter.Flush()
+			defer func() {
+				if err := stderrFilter.Flush(); err != nil {
+					logWarnFn("Flush stderr output failed: " + err.Error())
+				}
+			}()
 			stderrWriters = append([]io.Writer{stderrFilter}, stderrWriters...)
 		}
 		if len(stderrWriters) == 1 {
@@ -1122,9 +1185,7 @@ func runCodexTaskWithContext(
 		stdoutReader = io.TeeReader(stdout, stdoutLogger)
 	}
 
-	// Start parse goroutine BEFORE starting the command to avoid race condition
-	// where fast-completing commands close stdout before parser starts reading
-	messageSeen := make(chan struct{}, 1)
+	// 启动子进程前开始读取，避免启动阶段的输出填满管道
 	completeSeen := make(chan struct{}, 1)
 	parseCh := make(chan parseResult, 1)
 
@@ -1134,14 +1195,16 @@ func runCodexTaskWithContext(
 		sessionID := webSessionID
 		backendName := cfg.Backend
 		onContentCallback = func(content, contentType string) {
-			globalWebServer.SendContentWithType(sessionID, backendName, content, contentType)
+			globalWebServer.sendContentWithType(sessionID, backendName, content, contentType)
 		}
 	}
 
 	var onProgressCallback func(line string)
 	if cfg.Progress {
 		onProgressCallback = func(line string) {
-			fmt.Fprintln(os.Stderr, line)
+			if _, err := fmt.Fprintln(os.Stderr, line); err != nil {
+				logWarn("I/O operation failed: " + err.Error())
+			}
 		}
 	}
 
@@ -1158,64 +1221,45 @@ func runCodexTaskWithContext(
 				return
 			}
 			sessionIDEmitted = true
-			fmt.Fprintf(os.Stderr, "  Session-ID: %s\n", id)
+			if _, err := fmt.Fprintf(os.Stderr, "  Session-ID: %s\n", id); err != nil {
+				logWarn("I/O operation failed: " + err.Error())
+			}
 		}
 	}
 
-	// Antigravity CLI outputs plain text (no JSON streaming).
-	// Read stdout directly instead of parsing JSON events.
 	go func() {
-		if isPlainTextBackend {
-			scanner := bufio.NewScanner(stdoutReader)
-			scanner.Buffer(make([]byte, 0, 256*1024), 10*1024*1024)
-			var sb strings.Builder
-			firstLine := true
-			for scanner.Scan() {
-				line := scanner.Text()
-				if firstLine {
-					firstLine = false
-					select {
-					case messageSeen <- struct{}{}:
-					default:
-					}
-				}
-				if sb.Len() > 0 {
-					sb.WriteByte('\n')
-				}
-				sb.WriteString(line)
-				if onContentCallback != nil {
-					onContentCallback(line+"\n", "text")
-				}
-				if onProgressCallback != nil {
-					onProgressCallback(line)
-				}
-			}
-			msg := strings.TrimSpace(sb.String())
+		if isAntigravityBackend {
+			msg, tid, failure := parseAntigravityStream(
+				stdoutReader, agyStreamHandlers{
+					onSession: onSessionStartedCallback,
+					onText: func(text string) {
+						if onContentCallback != nil {
+							onContentCallback(text, "text")
+						}
+					},
+					onLine: onProgressCallback,
+				},
+			)
 			select {
 			case completeSeen <- struct{}{}:
 			default:
 			}
 			if globalWebServer != nil && webSessionID != "" {
-				globalWebServer.EndSession(webSessionID, cfg.Backend)
+				globalWebServer.endSession(webSessionID, cfg.Backend)
 			}
-			parseCh <- parseResult{message: msg}
+			parseCh <- parseResult{message: msg, threadID: tid, failure: failure}
 			return
 		}
 
 		msg, tid := parseJSONStreamInternalWithContent(
-			stdoutReader, logWarnFn, logInfoFn, func() {
-				select {
-				case messageSeen <- struct{}{}:
-				default:
-				}
-			}, func() {
+			stdoutReader, logWarnFn, logInfoFn, nil, func() {
 				select {
 				case completeSeen <- struct{}{}:
 				default:
 				}
 				// Notify WebServer that session is complete
 				if globalWebServer != nil && webSessionID != "" {
-					globalWebServer.EndSession(webSessionID, cfg.Backend)
+					globalWebServer.endSession(webSessionID, cfg.Backend)
 				}
 			}, onContentCallback, onProgressCallback, onSessionStartedCallback,
 		)
@@ -1234,6 +1278,8 @@ func runCodexTaskWithContext(
 	)
 
 	if err := cmd.Start(); err != nil {
+		closeWithReason(stdout, stdoutCloseReasonWait)
+		<-parseCh
 		if strings.Contains(err.Error(), "executable file not found") {
 			msg := fmt.Sprintf("%s command not found in PATH", commandName)
 			logErrorFn(msg)
@@ -1249,31 +1295,37 @@ func runCodexTaskWithContext(
 
 	logInfoFn(fmt.Sprintf("Starting %s with PID: %d", commandName, cmd.Process().Pid()))
 	if logger != nil {
-		logInfoFn(fmt.Sprintf("Log capturing to: %s", logger.Path()))
+		logInfoFn(fmt.Sprintf("Log capturing to: %s", logger.logPath()))
 	}
 
+	var stdinDone chan error
 	if useStdin && stdinPipe != nil {
+		stdinDone = make(chan error, 1)
 		logInfoFn(fmt.Sprintf("Writing %d chars to stdin...", len(taskSpec.Task)))
 		go func(data string) {
-			defer stdinPipe.Close()
-			_, _ = io.WriteString(stdinPipe, data)
+			written, writeErr := io.WriteString(stdinPipe, data)
+			if writeErr == nil && written != len(data) {
+				writeErr = io.ErrShortWrite
+			}
+			if err := stdinPipe.Close(); err != nil && !errors.Is(err, os.ErrClosed) {
+				writeErr = errors.Join(writeErr, err)
+			}
+			logInfoFn("Stdin closed")
+			stdinDone <- writeErr
 		}(taskSpec.Task)
-		logInfoFn("Stdin closed")
 	}
 
 	waitCh := make(chan error, 1)
 	go func() { waitCh <- cmd.Wait() }()
 
 	var (
-		waitErr              error
-		forceKillTimer       *forceKillTimer
-		ctxCancelled         bool
-		messageTimer         *time.Timer
-		messageTimerCh       <-chan time.Time
-		forcedAfterComplete  bool
-		terminated           bool
-		messageSeenObserved  bool
-		completeSeenObserved bool
+		waitErr             error
+		forceKillTimer      *forceKillTimer
+		ctxCancelled        bool
+		messageTimer        *time.Timer
+		messageTimerCh      <-chan time.Time
+		forcedAfterComplete bool
+		terminated          bool
 		// Fallback exit timer: ensures loop exits even if waitCh never returns
 		// This handles Windows edge case where child processes hold stdout handles
 		fallbackExitTimer   *time.Timer
@@ -1301,20 +1353,14 @@ waitLoop:
 			messageTimerCh = nil
 			if !terminated {
 				logWarnFn(fmt.Sprintf("%s output parsed; terminating lingering backend", commandName))
-				// FIX: Close stdout FIRST to unblock cmd.Wait() on Windows.
-				// On Windows, child processes may hold stdout handles open even after
-				// the main process is killed via taskkill. cmd.Wait() blocks until ALL
-				// stdout handles are closed. Closing stdout here ensures the parser
-				// goroutine receives EOF and cmd.Wait() can complete.
+				// 终止进程前关闭读取端，释放等待后代关闭 stdout 的解析器
 				closeWithReason(stdout, "messageTimer")
 				if timer := terminateCommandFn(cmd); timer != nil {
 					forceKillTimer = timer
 					terminated = true
 				}
 			}
-			// Start fallback exit timer: if waitCh doesn't return within forceKillDelay + 2 seconds,
-			// force exit the loop. This handles Windows edge case where child processes hold handles
-			// and cmd.Wait() blocks forever even after the main process is killed.
+			// Wait 在信号处理或其他输出清理中持续阻塞时，按既定时限结束等待
 			if fallbackExitTimer == nil {
 				fallbackDelay := time.Duration(forceKillDelay.Load()+2) * time.Second
 				fallbackExitTimer = time.NewTimer(fallbackDelay)
@@ -1327,14 +1373,11 @@ waitLoop:
 			forcedAfterComplete = true
 			break waitLoop
 		case <-completeSeen:
-			completeSeenObserved = true
 			if messageTimer != nil {
 				continue
 			}
 			messageTimer = time.NewTimer(resolvePostMessageDelay())
 			messageTimerCh = messageTimer.C
-		case <-messageSeen:
-			messageSeenObserved = true
 		}
 	}
 
@@ -1358,7 +1401,7 @@ waitLoop:
 	}
 
 	if forceKillTimer != nil {
-		forceKillTimer.Stop()
+		forceKillTimer.stop()
 	}
 
 	if antigravityStderrFile != nil {
@@ -1376,33 +1419,50 @@ waitLoop:
 	case ctxCancelled:
 		closeWithReason(stdout, stdoutCloseReasonCtx)
 		parsed = <-parseCh
-	case messageSeenObserved || completeSeenObserved:
-		closeWithReason(stdout, stdoutCloseReasonWait)
-		parsed = <-parseCh
 	default:
-		drainTimer := time.NewTimer(stdoutDrainTimeout)
-		defer drainTimer.Stop()
+		if pipe, ok := stdout.(*stdoutPipe); ok {
+			if err := pipe.drain(); err != nil && !errors.Is(err, os.ErrClosed) {
+				logWarnFn("Set stdout drain deadline failed: " + err.Error())
+				closeWithReason(stdout, stdoutCloseReasonDrain)
+			}
+			stopDrainOnCancel := context.AfterFunc(
+				ctx, func() {
+					closeWithReason(stdout, stdoutCloseReasonCtx)
+				},
+			)
+			parsed = <-parseCh
+			stopDrainOnCancel()
+			closeWithReason(stdout, stdoutCloseReasonWait)
+		} else {
+			drainTimer := time.NewTimer(stdoutDrainTimeout)
+			defer drainTimer.Stop()
 
-		select {
-		case parsed = <-parseCh:
-			closeWithReason(stdout, stdoutCloseReasonWait)
-		case <-messageSeen:
-			messageSeenObserved = true
-			closeWithReason(stdout, stdoutCloseReasonWait)
-			parsed = <-parseCh
-		case <-completeSeen:
-			completeSeenObserved = true
-			closeWithReason(stdout, stdoutCloseReasonWait)
-			parsed = <-parseCh
-		case <-drainTimer.C:
-			closeWithReason(stdout, stdoutCloseReasonDrain)
-			parsed = <-parseCh
+			select {
+			case parsed = <-parseCh:
+				closeWithReason(stdout, stdoutCloseReasonWait)
+			case <-ctx.Done():
+				closeWithReason(stdout, stdoutCloseReasonCtx)
+				parsed = <-parseCh
+			case <-drainTimer.C:
+				closeWithReason(stdout, stdoutCloseReasonDrain)
+				parsed = <-parseCh
+			}
 		}
 	}
 
+	var stdinErr error
+	if stdinDone != nil {
+		if err := stdinPipe.Close(); err != nil && !errors.Is(err, os.ErrClosed) {
+			stdinErr = err
+		}
+		stdinErr = errors.Join(stdinErr, <-stdinDone)
+	}
+	if isAntigravityBackend {
+		result.SessionID = parsed.threadID
+	}
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		if errors.Is(ctxErr, context.DeadlineExceeded) {
-			if isPlainTextBackend && isAntigravityAuthenticationPrompt(stderrBuf.String()) {
+			if isAntigravityBackend && isAntigravityAuthenticationPrompt(stderrBuf.String()) {
 				msg := antigravityAuthenticationFailureMessage()
 				logErrorFn(msg)
 				result.ExitCode = 1
@@ -1420,7 +1480,9 @@ waitLoop:
 
 	message := parsed.message
 	threadID := parsed.threadID
-	if isPlainTextBackend && isAntigravityAuthenticationFailure(message, stderrBuf.String()) {
+	if isAntigravityBackend &&
+		(isAntigravityAuthenticationFailure(message, stderrBuf.String()) ||
+			isAntigravityAuthenticationFailure(parsed.failure, "")) {
 		msg := antigravityAuthenticationFailureMessage()
 		logErrorFn(msg)
 		result.ExitCode = 1
@@ -1432,7 +1494,7 @@ waitLoop:
 		if forcedAfterComplete && parsed.message != "" {
 			logWarnFn(fmt.Sprintf("%s terminated after delivering output", commandName))
 		} else {
-			if isPlainTextBackend {
+			if isAntigravityBackend {
 				if msg := antigravityLogDiagnosticMessage(antigravityLogPath, true); msg != "" {
 					logErrorFn(msg)
 					result.ExitCode = 1
@@ -1440,7 +1502,8 @@ waitLoop:
 					return result
 				}
 			}
-			if exitErr, ok := waitErr.(*exec.ExitError); ok {
+			var exitErr *exec.ExitError
+			if errors.As(waitErr, &exitErr) {
 				code := exitErr.ExitCode()
 				logErrorFn(fmt.Sprintf("%s exited with status %d", commandName, code))
 				result.ExitCode = code
@@ -1453,8 +1516,22 @@ waitLoop:
 			return result
 		}
 	}
+	if parsed.failure != "" {
+		result.ExitCode = 1
+		result.Message = message
+		result.Error = attachStderr("Antigravity stream failed: " + parsed.failure)
+		logErrorFn(result.Error)
+		return result
+	}
+	if stdinErr != nil {
+		result.ExitCode = 1
+		result.Message = message
+		result.Error = attachStderr("failed to write task input: " + stdinErr.Error())
+		logErrorFn(result.Error)
+		return result
+	}
 	if message == "" {
-		if isPlainTextBackend {
+		if isAntigravityBackend {
 			if msg := antigravityLogDiagnosticMessage(antigravityLogPath, false); msg != "" {
 				logErrorFn(msg)
 				result.ExitCode = 1
@@ -1462,21 +1539,32 @@ waitLoop:
 				return result
 			}
 			logWarnFn("Antigravity returned empty output; retrying with pseudo-TTY")
-			ptyMessage, ok, ptyErr := runAntigravityPTYRetryFn(ctx, commandName, codexArgs, cfg.WorkDir, env)
-			if ok && ptyErr == nil {
+			ptyResult, ptyErr := runAntigravityPTYRetryFn(ctx, commandName, codexArgs, cfg.WorkDir, env)
+			if ptyResult.threadID != "" {
+				result.SessionID = ptyResult.threadID
+			}
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				result.ExitCode = 130
+				result.Error = attachStderr("execution cancelled")
+				if errors.Is(ctxErr, context.DeadlineExceeded) {
+					result.ExitCode = 124
+					result.Error = attachStderr(commandName + " execution timeout")
+				}
+				return result
+			}
+			if ptyResult.message != "" && ptyErr == nil {
 				result.ExitCode = 0
-				result.Message = ptyMessage
-				result.SessionID = threadID
+				result.Message = ptyResult.message
 				if result.LogPath == "" && injectedLogger != nil {
-					result.LogPath = injectedLogger.Path()
+					result.LogPath = injectedLogger.logPath()
 				}
 				return result
 			}
 			if ptyErr != nil {
 				logWarnFn("Antigravity pseudo-TTY retry failed: " + ptyErr.Error())
 			}
-			if ptyMessage != "" {
-				msg := "Antigravity pseudo-TTY retry failed: " + ptyMessage
+			if ptyResult.message != "" {
+				msg := "Antigravity pseudo-TTY retry failed: " + ptyResult.message
 				logErrorFn(msg)
 				result.ExitCode = 1
 				result.Error = attachStderr(msg)
@@ -1511,7 +1599,7 @@ waitLoop:
 	result.Message = message
 	result.SessionID = threadID
 	if result.LogPath == "" && injectedLogger != nil {
-		result.LogPath = injectedLogger.Path()
+		result.LogPath = injectedLogger.logPath()
 	}
 
 	return result
@@ -1562,13 +1650,15 @@ func antigravityLogDiagnosticMessage(path string, includeAuth bool) string {
 
 func antigravityLogDiagnostic(logText string, includeAuth bool) string {
 	lower := strings.ToLower(logText)
-	authenticated := strings.Contains(lower, "silent auth succeeded") || strings.Contains(lower, "authenticated successfully")
+	authenticated := strings.Contains(lower, "silent auth succeeded") ||
+		strings.Contains(lower, "authenticated successfully")
 	switch {
 	case strings.Contains(lower, "user location is not supported for the api use"):
 		return "Antigravity backend rejected the request: User location is not supported for the API use"
 	case includeAuth && strings.Contains(lower, "you are not logged into antigravity") && !authenticated:
 		return antigravityAuthenticationFailureMessage()
-	case strings.Contains(lower, "resource_exhausted") || strings.Contains(lower, "quota exhausted") || strings.Contains(lower, "quota exceeded") || strings.Contains(lower, "insufficient quota"):
+	case strings.Contains(lower, "resource_exhausted") || strings.Contains(lower, "quota exhausted") ||
+		strings.Contains(lower, "quota exceeded") || strings.Contains(lower, "insufficient quota"):
 		return "Antigravity backend rejected the request: quota exhausted"
 	case strings.Contains(lower, "permission_denied"):
 		return "Antigravity backend rejected the request: permission denied"
@@ -1584,22 +1674,23 @@ func runAntigravityPTYRetry(
 	args []string,
 	workDir string,
 	env map[string]string,
-) (string, bool, error) {
+) (parseResult, error) {
 	if runtime.GOOS == "windows" {
-		return "", false, errors.New("pty retry is not supported on windows")
+		return parseResult{}, errors.New("pty retry is not supported on windows")
 	}
 	if _, err := exec.LookPath("script"); err != nil {
-		return "", false, err
+		return parseResult{}, err
 	}
 
-	commandLine := shellQuote(commandName)
+	var commandLine strings.Builder
+	commandLine.WriteString(shellQuote(commandName))
 	for _, arg := range args {
-		commandLine += " " + shellQuote(arg)
+		commandLine.WriteString(" " + shellQuote(arg))
 	}
 
-	scriptArgs := []string{"-qec", commandLine, "/dev/null"}
+	scriptArgs := []string{"-qec", commandLine.String(), "/dev/null"}
 	if runtime.GOOS == "darwin" {
-		scriptArgs = []string{"-q", "/dev/null", "sh", "-lc", commandLine}
+		scriptArgs = []string{"-q", "/dev/null", "sh", "-lc", commandLine.String()}
 	}
 
 	cmd := commandContext(ctx, "script", scriptArgs...)
@@ -1609,14 +1700,19 @@ func runAntigravityPTYRetry(
 	}
 	cmd.Env = mergeEnv(env)
 	output, err := cmd.CombinedOutput()
-	message := cleanPTYOutput(string(output))
-	if message == "" {
-		if err == nil {
-			err = errors.New("pty retry produced no output")
-		}
-		return "", false, err
+	message, id, failure := parseAntigravityStream(
+		strings.NewReader(cleanPTYOutput(string(output))),
+		agyStreamHandlers{},
+	)
+	parsed := parseResult{message: message, threadID: id, failure: failure}
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		err = ctxErr
+	} else if failure != "" {
+		err = errors.Join(err, errors.New(failure))
+	} else if message == "" && err == nil {
+		err = errors.New("pty retry produced no output")
 	}
-	return message, true, err
+	return parsed, err
 }
 
 func shellQuote(value string) string {
@@ -1667,7 +1763,7 @@ func isAntigravityAuthenticationFailure(stdout, stderr string) bool {
 }
 
 func isAntigravityAuthenticationFailureLine(output string) bool {
-	for _, line := range strings.Split(output, "\n") {
+	for line := range strings.SplitSeq(output, "\n") {
 		line = strings.ToLower(strings.TrimSpace(line))
 		if strings.HasPrefix(line, "authentication required") ||
 			strings.HasPrefix(line, "error: authentication required") ||
@@ -1682,7 +1778,7 @@ func isAntigravityAuthenticationFailureLine(output string) bool {
 }
 
 func isAntigravityAuthenticationPrompt(output string) bool {
-	for _, line := range strings.Split(output, "\n") {
+	for line := range strings.SplitSeq(output, "\n") {
 		line = strings.ToLower(strings.TrimSpace(line))
 		if strings.HasPrefix(line, "waiting for authentication") ||
 			strings.Contains(line, "please visit the url to log in") {
@@ -1774,7 +1870,7 @@ type forceKillTimer struct {
 	drained atomic.Bool
 }
 
-func (t *forceKillTimer) Stop() {
+func (t *forceKillTimer) stop() {
 	if t == nil || t.timer == nil {
 		return
 	}

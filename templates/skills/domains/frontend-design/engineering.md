@@ -9,13 +9,13 @@ description: 前端工程化。性能优化（Web Vitals、懒加载、虚拟滚
 
 ### Core Web Vitals
 
-| 指标  | 含义                       | 目标值     |
-|-----|--------------------------|---------|
-| LCP | Largest Contentful Paint | < 2.5s  |
-| FID | First Input Delay        | < 100ms |
-| CLS | Cumulative Layout Shift  | < 0.1   |
-| FCP | First Contentful Paint   | < 1.8s  |
-| TTI | Time to Interactive      | < 3.8s  |
+| 指标 | 含义                     | 目标值  |
+|------|--------------------------|---------|
+| LCP  | Largest Contentful Paint | < 2.5s  |
+| FID  | First Input Delay        | < 100ms |
+| CLS  | Cumulative Layout Shift  | < 0.1   |
+| FCP  | First Contentful Paint   | < 1.8s  |
+| TTI  | Time to Interactive      | < 3.8s  |
 
 ### 性能决策树
 
@@ -41,7 +41,7 @@ export default defineConfig({
       output: {
         manualChunks: {
           'react-vendor': ['react', 'react-dom'],
-          'ui': ['@mui/material'],
+          ui: ['@mui/material'],
         },
       },
     },
@@ -51,7 +51,7 @@ export default defineConfig({
 
 ### 虚拟滚动
 
-```typescript
+```tsx
 import { FixedSizeList } from 'react-window'
 
 function VirtualList({ items }: { items: Item[] }) {
@@ -65,14 +65,14 @@ function VirtualList({ items }: { items: Item[] }) {
 
 ### React 性能要点
 
-```typescript
+```tsx
 // memo 避免重渲染
 const Row = memo(function Row({ item, onClick }: Props) {
   return <div onClick={() => onClick(item.id)}>{item.name}</div>
 })
 
 // useMemo 缓存计算 + useCallback 缓存回调
-const filtered = useMemo(() => data.filter(x => x.name.includes(q)), [data, q])
+const filtered = useMemo(() => data.filter((x) => x.name.includes(q)), [data, q])
 const handleClick = useCallback((id: string) => select(id), [])
 
 // startTransition 低优先级更新
@@ -139,7 +139,7 @@ describe('formatCurrency', () => {
 
 ### 组件测试
 
-```typescript
+```tsx
 import { render, screen, fireEvent } from '@testing-library/react'
 
 it('calls onClick', () => {
@@ -157,9 +157,7 @@ import { http, HttpResponse } from 'msw'
 import { setupServer } from 'msw/node'
 
 const server = setupServer(
-  http.get('/api/users/:id', ({ params }) =>
-    HttpResponse.json({ id: params.id, name: 'John' })
-  ),
+  http.get('/api/users/:id', ({ params }) => HttpResponse.json({ id: params.id, name: 'John' }))
 )
 beforeAll(() => server.listen())
 afterEach(() => server.resetHandlers())
@@ -207,12 +205,12 @@ class LoginPage {
 
 ### 工具对比
 
-| 工具        | 冷启动    | HMR     | 生产构建   | 生态  |
-|-----------|--------|---------|--------|-----|
-| Vite      | < 1s   | < 100ms | 10-30s | 成熟  |
-| Webpack   | 10-30s | 1-3s    | 30-60s | 最丰富 |
-| Turbopack | < 1s   | < 100ms | 10-20s | 新兴  |
-| esbuild   | < 1s   | N/A     | 5-10s  | 基础  |
+| 工具      | 冷启动 | HMR     | 生产构建 | 生态   |
+|-----------|--------|---------|----------|--------|
+| Vite      | < 1s   | < 100ms | 10-30s   | 成熟   |
+| Webpack   | 10-30s | 1-3s    | 30-60s   | 最丰富 |
+| Turbopack | < 1s   | < 100ms | 10-20s   | 新兴   |
+| esbuild   | < 1s   | N/A     | 5-10s    | 基础   |
 
 ### Vite 核心配置
 
@@ -240,18 +238,22 @@ export default defineConfig({
 
 ### Webpack 生产优化要点
 
+Webpack 配置片段，目标项目需导入 `TerserPlugin` 和 `CssMinimizerPlugin`
+
 ```javascript
-optimization: {
-  minimize: true,
-  minimizer: [new TerserPlugin(), new CssMinimizerPlugin()],
-  splitChunks: {
-    chunks: 'all',
-    cacheGroups: {
-      react: { test: /[\\/]node_modules[\\/](react|react-dom)[\\/]/, priority: 20 },
-      vendor: { test: /[\\/]node_modules[\\/]/, priority: 10 },
+export default {
+  optimization: {
+    minimize: true,
+    minimizer: [new TerserPlugin(), new CssMinimizerPlugin()],
+    splitChunks: {
+      chunks: 'all',
+      cacheGroups: {
+        react: { test: /[\\/]node_modules[\\/](react|react-dom)[\\/]/, priority: 20 },
+        vendor: { test: /[\\/]node_modules[\\/]/, priority: 10 },
+      },
     },
+    runtimeChunk: 'single',
   },
-  runtimeChunk: 'single',
 }
 ```
 
@@ -273,15 +275,15 @@ optimization: {
 
 ## 工具速查
 
-| 类别        | 推荐工具                                               |
-|-----------|----------------------------------------------------|
-| 构建        | Vite (新项目) / Webpack (复杂项目)                        |
-| 单元测试      | Vitest                                             |
-| 组件测试      | Testing Library                                    |
-| E2E       | Playwright                                         |
-| API Mock  | MSW                                                |
-| 性能监控      | web-vitals + Lighthouse                            |
+| 类别        | 推荐工具                                           |
+|-------------|----------------------------------------------------|
+| 构建        | Vite (新项目) / Webpack (复杂项目)                 |
+| 单元测试    | Vitest                                             |
+| 组件测试    | Testing Library                                    |
+| E2E         | Playwright                                         |
+| API Mock    | MSW                                                |
+| 性能监控    | web-vitals + Lighthouse                            |
 | Bundle 分析 | webpack-bundle-analyzer / rollup-plugin-visualizer |
-| 视觉回归      | Playwright screenshots / Chromatic                 |
+| 视觉回归    | Playwright screenshots / Chromatic                 |
 
 ---

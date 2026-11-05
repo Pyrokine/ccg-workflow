@@ -1,9 +1,9 @@
 import { spawnSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { chmodSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
 import { collectInvocableSkills, generateCommandContent } from '../skill-registry'
-import { packageRoot, distributions, scripts, write, lintProject, repository } from './quality-gates-fixtures'
+import { distributions, lintProject, packageRoot, repository, scripts, write } from './quality-gates-fixtures'
 
 it('executes language checks through the generated command and runner', () => {
   const root = lintProject()
@@ -11,19 +11,50 @@ it('executes language checks through the generated command and runner', () => {
   const skills = join(packageRoot, 'templates', 'skills')
   const catalog = collectInvocableSkills(skills)
   const quality = catalog.find((skill) => skill.name === 'verify-quality')
-  if (!quality) throw new Error('Quality skill is missing')
+  if (!quality) {
+    throw new Error('Quality skill is missing')
+  }
   const text = generateCommandContent(quality, skills)
-  const command = /^node "([^"]+)" verify-quality --language-checks \$ARGUMENTS$/m.exec(text)
-  if (!command) throw new Error('Generated quality command does not request language checks')
-  const result = spawnSync(process.execPath, [command[1], 'verify-quality', '--language-checks', source, '--json'], {
+  const command = /```bash\n(?<command>[\s\S]*?)\n```/m.exec(text)?.[1]
+  if (!command) {
+    throw new Error('Generated quality command is missing')
+  }
+  const capture = join(root, 'arguments.txt')
+  const wrapper = write(
+    root,
+    'bin/node',
+    `#!/bin/sh\nprintf '%s\\n' "$@" > ${JSON.stringify(capture)}\nexec ${JSON.stringify(process.execPath)} "$@"\n`
+  )
+  chmodSync(wrapper, 0o755)
+  for (const flag of ['', '--language-checks']) {
+    const result = spawnSync(
+      'bash',
+      ['-c', command.replace('$ARGUMENTS', `${JSON.stringify(source)} ${flag} --json`)],
+      {
+        cwd: root,
+        env: { ...process.env, PATH: `${join(root, 'bin')}:${process.env.PATH}`, SAGE_SKILLS_DIR: skills },
+        encoding: 'utf8',
+      }
+    )
+    expect(result.status, result.stderr).toBe(1)
+    expect(JSON.parse(result.stdout)).toMatchObject({ complete: true, passed: false, analysis_mode: 'language' })
+    expect(
+      readFileSync(capture, 'utf8')
+        .split('\n')
+        .filter((arg) => arg === '--language-checks')
+    ).toHaveLength(1)
+  }
+  const direct = spawnSync(process.execPath, [join(skills, 'run_skill.js'), 'verify-quality', source, '--json'], {
     cwd: root,
     env: { ...process.env, SAGE_SKILLS_DIR: skills },
     encoding: 'utf8',
   })
-  expect(result.status).toBe(1)
-  expect(JSON.parse(result.stdout)).toMatchObject({ complete: true, passed: false, analysis_mode: 'language' })
+  expect(direct.status, direct.stderr).toBe(0)
+  expect(JSON.parse(direct.stdout)).toMatchObject({ complete: true, analysis_mode: 'text' })
   const security = catalog.find((skill) => skill.name === 'verify-security')
-  if (!security) throw new Error('Security skill is missing')
+  if (!security) {
+    throw new Error('Security skill is missing')
+  }
   expect(generateCommandContent(security, skills)).not.toContain('--language-checks')
 })
 
@@ -32,9 +63,15 @@ it('executes change analysis through the generated command and runner with share
   const source = write(root, 'src/clean.ts', 'export const value = 2\n')
   const skills = join(packageRoot, 'templates', 'skills')
   const change = collectInvocableSkills(skills).find((skill) => skill.name === 'verify-change')
-  if (!change) throw new Error('Change skill is missing')
-  const command = /^node "([^"]+)" verify-change \$ARGUMENTS$/m.exec(generateCommandContent(change, skills))
-  if (!command) throw new Error('Generated change command is missing')
+  if (!change) {
+    throw new Error('Change skill is missing')
+  }
+  const command = /^node "(?<runnerPath>[^"]+)" verify-change \$ARGUMENTS$/m.exec(
+    generateCommandContent(change, skills)
+  )
+  if (!command) {
+    throw new Error('Generated change command is missing')
+  }
   const result = spawnSync(process.execPath, [command[1], 'verify-change', source, '--json'], {
     cwd: root,
     env: { ...process.env, SAGE_SKILLS_DIR: skills },

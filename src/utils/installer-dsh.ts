@@ -5,21 +5,21 @@
  * profile 同时需要依赖和 dsh.profile.bundles 条目，再由自己的包管理器安装依赖
  */
 
+import fs from 'fs-extra'
 import { execFileSync, type SpawnSyncOptions } from 'node:child_process'
 import { homedir } from 'node:os'
-import fs from 'fs-extra'
 import { join } from 'pathe'
-import { PACKAGE_ROOT } from './installer-template'
 import {
   DSH_PLUGIN_NAME,
   errorMessage,
   lstatIfExists,
+  requireContainedPath,
   requirePlainDirectory,
   requirePlainFile,
-  requireContainedPath,
-  writeJsonAtomic,
   stagePlugin,
+  writeJsonAtomic,
 } from './installer-dsh-files'
+import { PACKAGE_ROOT } from './installer-template'
 
 export { DSH_PLUGIN_NAME } from './installer-dsh-files'
 
@@ -42,7 +42,7 @@ export function dshPluginDir(dshHome = defaultDshHome()): string {
 }
 
 /** Where the plugin ships inside this package. */
-export function bundledPluginDir(): string {
+function bundledPluginDir(): string {
   return join(PACKAGE_ROOT, DSH_PLUGIN_NAME)
 }
 
@@ -75,7 +75,7 @@ export type DshInstallResult = {
 /**
  * Whether a DeepSeek Harness home exists at all.
  *
- * Used to decide whether to offer the option rather than to gate the install:
+ * Used to decide whether to offer the option rather than to gate installation:
  * a user who has not run dsh yet has no profile to install into.
  */
 export async function hasDshHome(dshHome = defaultDshHome()): Promise<boolean> {
@@ -103,7 +103,9 @@ export async function hasDshHome(dshHome = defaultDshHome()): Promise<boolean> {
  */
 export async function findDshProfiles(dshHome = defaultDshHome()): Promise<DshProfile[]> {
   const profilesDir = join(dshHome, 'profiles')
-  if (!(await lstatIfExists(profilesDir))) return []
+  if (!(await lstatIfExists(profilesDir))) {
+    return []
+  }
 
   await requirePlainDirectory(dshHome, 'DSH_HOME')
   await requirePlainDirectory(profilesDir, 'DSH profiles directory')
@@ -112,16 +114,22 @@ export async function findDshProfiles(dshHome = defaultDshHome()): Promise<DshPr
   const profiles: DshProfile[] = []
   for (const name of (await fs.readdir(profilesDir)).sort()) {
     const profile = await readDshProfile(profilesDir, name)
-    if (profile) profiles.push(profile)
+    if (profile) {
+      profiles.push(profile)
+    }
   }
   return profiles
 }
 
 async function readDshProfile(profilesDir: string, name: string): Promise<DshProfile | null> {
-  if (name === 'node_modules' || name.startsWith('.')) return null
+  if (name === 'node_modules' || name.startsWith('.')) {
+    return null
+  }
   const dir = join(profilesDir, name)
   const directoryStat = await lstatIfExists(dir)
-  if (!directoryStat || !directoryStat.isDirectory() || directoryStat.isSymbolicLink()) return null
+  if (!directoryStat || !directoryStat.isDirectory() || directoryStat.isSymbolicLink()) {
+    return null
+  }
   await requireContainedPath(profilesDir, dir, 'DSH profile')
 
   return readProfileManifest(name, dir)
@@ -130,12 +138,16 @@ async function readDshProfile(profilesDir: string, name: string): Promise<DshPro
 async function readProfileManifest(name: string, dir: string): Promise<DshProfile | null> {
   const manifest = join(dir, 'package.json')
   const manifestStat = await lstatIfExists(manifest)
-  if (!manifestStat || !manifestStat.isFile() || manifestStat.isSymbolicLink()) return null
+  if (!manifestStat || !manifestStat.isFile() || manifestStat.isSymbolicLink()) {
+    return null
+  }
 
   try {
     const pkg = await fs.readJson(manifest)
     const bundles = pkg?.dsh?.profile?.bundles
-    if (!Array.isArray(bundles)) return null
+    if (!Array.isArray(bundles)) {
+      return null
+    }
     return { name, dir, installed: bundles.includes(DSH_PLUGIN_NAME) }
   } catch {
     // A profile whose manifest does not parse is one this installer must not
@@ -177,7 +189,9 @@ async function wireProfile(dir: string, pluginDir: string): Promise<boolean> {
     changed = true
   }
 
-  if (changed) await writeJsonAtomic(manifest, pkg)
+  if (changed) {
+    await writeJsonAtomic(manifest, pkg)
+  }
   return changed
 }
 
@@ -186,8 +200,12 @@ async function wireProfile(dir: string, pluginDir: string): Promise<boolean> {
  * A Windows shim's name stays bare so `%~dp0` resolves to its own directory.
  */
 export function profileLinkCommand(bin: string, args: string[], platform = process.platform) {
-  if (platform !== 'win32') return { file: bin, args, windowsVerbatimArguments: false }
-  if (!/^[\w.-]+$/.test(bin)) throw new Error(`Unsupported launcher name: ${bin}`)
+  if (platform !== 'win32') {
+    return { file: bin, args, windowsVerbatimArguments: false }
+  }
+  if (!/^[\w.-]+$/.test(bin)) {
+    throw new Error(`Unsupported launcher name: ${bin}`)
+  }
   if (!args.every((value) => /^[\p{L}\p{N}_. -]+$/u.test(value))) {
     throw new Error('Unsupported Windows profile name: shell metacharacters are not allowed')
   }
@@ -230,7 +248,9 @@ function linkProfile(dir: string, name: string): string | undefined {
       const failure = error as { code?: string; status?: number } | null
       const missing = failure?.code === 'ENOENT' || failure?.status === 9009
       if (bin === 'dsh') {
-        if (!missing) return last
+        if (!missing) {
+          return last
+        }
         console.warn('未找到 dsh，改用 pnpm 安装 profile 依赖')
       }
     }
@@ -305,7 +325,9 @@ export async function installDshPlugin(
 
     const pluginDir = dshPluginDir(dshHome)
     const stageWarning = await stagePlugin(pluginDir, dshHome, bundledPluginDir())
-    if (stageWarning) warnings.push(stageWarning)
+    if (stageWarning) {
+      warnings.push(stageWarning)
+    }
 
     const wired = await installProfiles(wanted, pluginDir, link, warnings)
 
@@ -329,7 +351,9 @@ async function unwireProfile(dir: string): Promise<boolean> {
     pkg.dsh.profile.bundles = bundles.filter((entry) => entry !== DSH_PLUGIN_NAME)
     changed = true
   }
-  if (!changed) return false
+  if (!changed) {
+    return false
+  }
 
   await writeJsonAtomic(manifest, pkg)
   return true
@@ -367,10 +391,13 @@ export async function uninstallDshPlugin(
   try {
     const changedProfiles: string[] = []
     for (const profile of await findDshProfiles(dshHome)) {
-      if (!(await unwireProfile(profile.dir))) continue
+      if (!(await unwireProfile(profile.dir))) {
+        continue
+      }
       const failure = link(profile.dir, profile.name)
-      if (failure !== undefined)
+      if (failure !== undefined) {
         warnings.push(`${profile.name}: removed from the manifest, but \`install\` failed — run it yourself to prune`)
+      }
       changedProfiles.push(profile.name)
     }
 

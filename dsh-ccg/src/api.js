@@ -5,26 +5,24 @@
  * — `dsh-host-apiproxy` builds it from its own constants plus the configurable
  * model providers, so a third-party namespace is deliberately neither readable
  * nor writable over the wire ("a future registration does not become remotely
- * readable or writable by default"). A plugin that wants its own card must
- * therefore serve its own section, which is what this route does: the Host
- * still owns every write, through the same settings scope the profile patch
- * layers under.
+ * readable or writable by default"). This route serves the plugin’s section.
+ * The Host owns each write through the settings scope beneath the profile patch.
  *
  * Writes are refused off-loopback. The harness gates its own configuration
  * methods the same way, because changing model routing from a LAN client is
  * not something a browser-trust fence alone should decide.
  */
 
-import { CROSSCHECK_TOOL, resolvePanel } from './crosscheck.js'
-import { rosterOf } from './memory.js'
-import { ROLES, ROLE_NAMES, TIERS, resolveRoles } from './roles.js'
-import { directChildActivity } from './subagent.js'
+import { CROSSCHECK_TOOL, resolvePanel } from './crosscheck.js';
+import { rosterOf } from './memory.js';
+import { resolveRoles, ROLE_NAMES, ROLES, TIERS } from './roles.js';
+import { directChildActivity } from './subagent.js';
 
 /** Route the card reads and writes. */
-export const API_PATH = '/api/ccg/config'
+export const API_PATH = '/api/ccg/config';
 
 /** Route the team strip reads. */
-export const TEAM_API_PATH = '/api/ccg/team'
+export const TEAM_API_PATH = '/api/ccg/team';
 
 /**
  * Whether a request came from this machine.
@@ -33,8 +31,8 @@ export const TEAM_API_PATH = '/api/ccg/team'
  * @returns whether the peer address is loopback.
  */
 export function isLoopback(req) {
-  const address = req?.socket?.remoteAddress ?? ''
-  return address === '127.0.0.1' || address === '::1' || address === '::ffff:127.0.0.1'
+  const address = req?.socket?.remoteAddress ?? '';
+  return address === '127.0.0.1' || address === '::1' || address === '::ffff:127.0.0.1';
 }
 
 /**
@@ -46,12 +44,14 @@ export function isLoopback(req) {
  * @returns that tier's provider and model, blank when unset.
  */
 function readTier(layer, tier) {
-  const section = layer && typeof layer === 'object' ? layer[tier] : undefined
-  if (!section || typeof section !== 'object') return { provider: '', model: '' }
+  const section = layer && typeof layer === 'object' ? layer[tier] : undefined;
+  if (!section || typeof section !== 'object') {
+    return { provider: '', model: '' };
+  }
   return {
     provider: typeof section.provider === 'string' ? section.provider : '',
     model: typeof section.model === 'string' ? section.model : '',
-  }
+  };
 }
 
 /**
@@ -66,30 +66,30 @@ function readTier(layer, tier) {
  * @returns the card payload.
  */
 export function buildConfigPayload(value, user, writable, models = []) {
-  const tiers = {}
+  const tiers = {};
   for (const tier of TIERS) {
     tiers[tier] = {
       ...readTier(value, tier),
       overridden: Boolean(user && typeof user === 'object' && user[tier] !== undefined),
-    }
+    };
   }
 
-  const section = value && typeof value === 'object' ? value : {}
-  const overrides = section.roles ?? {}
+  const section = value && typeof value === 'object' ? value : {};
+  const overrides = section.roles ?? {};
 
   // Reuse the resolver the plugin actually mounts from, so the card cannot
   // show a role on a model its children are not really running on.
-  let resolved = []
+  let resolved;
   try {
-    resolved = resolveRoles(section)
+    resolved = resolveRoles(section);
   } catch {
-    resolved = []
+    resolved = [];
   }
-  const byRole = Object.fromEntries(resolved.map((entry) => [entry.role, entry]))
+  const byRole = Object.fromEntries(resolved.map((entry) => [entry.role, entry]));
 
   const roles = ROLE_NAMES.map((role) => {
-    const override = overrides[role] ?? {}
-    const entry = byRole[role]
+    const override = overrides[role] ?? {};
+    const entry = byRole[role];
     return {
       role,
       tool: override.toolName ?? ROLES[role].tool,
@@ -103,18 +103,17 @@ export function buildConfigPayload(value, user, writable, models = []) {
       // `pinned` means the role names its own models; otherwise it follows its
       // tier, and no members at all means the deployment default answers.
       pinned: Boolean(
-        (Array.isArray(override.models) && override.models.length > 0)
-        || (override.provider && override.model),
+        (Array.isArray(override.models) && override.models.length > 0) || (override.provider && override.model)
       ),
-    }
-  })
+    };
+  });
 
   // Hiring is on unless the document says otherwise; the card shows the
   // effective state and whether the user is the one who set it.
   const team = {
     enabled: section.team !== false,
     overridden: Boolean(user && typeof user === 'object' && user.team !== undefined),
-  }
+  };
 
   return {
     writable: Boolean(writable),
@@ -123,7 +122,7 @@ export function buildConfigPayload(value, user, writable, models = []) {
     team,
     models,
     panels: buildPanelIndex(section, roles),
-  }
+  };
 }
 
 /**
@@ -135,26 +134,28 @@ export function buildConfigPayload(value, user, writable, models = []) {
  *
  * @param section - the resolved settings section.
  * @param roles - the role rows already built for the card.
- * @returns `{ <toolName>: [{provider, model, label, lens?}] }`, panels only.
+ * @returns a tool-name index of panel members, carrying provider, model, label and optional lens.
  */
 export function buildPanelIndex(section, roles) {
-  const panels = {}
+  const panels = {};
   for (const entry of roles) {
-    if (entry.enabled === false || entry.members.length < 2) continue
+    if (entry.enabled === false || entry.members.length < 2) {
+      continue;
+    }
     panels[entry.tool] = entry.members.map((member) => ({
       provider: member.provider,
       model: member.model,
       label: `${member.provider} / ${member.model}`,
-    }))
+    }));
   }
 
   // The standalone cross-check keeps its own roster, which may name roles and
   // lenses the per-role rows never carry.
-  let members = []
+  let members;
   try {
-    members = section.crosscheck === false ? [] : resolvePanel(section)
+    members = section.crosscheck === false ? [] : resolvePanel(section);
   } catch {
-    members = []
+    members = [];
   }
   if (members.length >= 2) {
     panels[CROSSCHECK_TOOL] = members.map((member) => ({
@@ -162,9 +163,9 @@ export function buildPanelIndex(section, roles) {
       model: member.model,
       label: member.label,
       ...(member.lens ? { lens: member.lens } : {}),
-    }))
+    }));
   }
-  return panels
+  return panels;
 }
 
 /**
@@ -177,58 +178,76 @@ export function buildPanelIndex(section, roles) {
  * @param user - the current raw user section.
  * @param patch - `{ strong?, worker?, roles?: { <role>: pair | null } }`.
  * @returns the next user section.
- * @throws if the patch names an unknown tier or role.
+ * @throws {Error} If the patch names an unknown tier or role.
  */
 export function nextUserSection(user, patch) {
-  const next = user && typeof user === 'object' ? { ...user } : {}
+  const next = user && typeof user === 'object' ? { ...user } : {};
 
   for (const [key, entry] of Object.entries(patch ?? {})) {
-    if (key === 'roles') continue
+    if (key === 'roles') {
+      continue;
+    }
     if (key === 'team') {
       // A boolean sets it; null returns the key to whatever the profile patch
       // decided, which is not the same as writing `true`.
-      if (entry === null || entry === undefined) delete next.team
-      else next.team = Boolean(entry)
-      continue
+      if (entry === null || entry === undefined) {
+        delete next.team;
+      } else {
+        next.team = Boolean(entry);
+      }
+      continue;
     }
-    if (!TIERS.includes(key)) throw new Error(`unknown tier "${key}"`)
-    const pair = readPair(entry)
-    if (pair === undefined) delete next[key]
-    else next[key] = pair
+    if (!TIERS.includes(key)) {
+      throw new Error(`unknown tier "${key}"`);
+    }
+    const pair = readPair(entry);
+    if (pair === undefined) {
+      delete next[key];
+    } else {
+      next[key] = pair;
+    }
   }
 
   if (patch?.roles !== undefined) {
-    const roles = { ...(next.roles && typeof next.roles === 'object' ? next.roles : {}) }
+    const roles = { ...(next.roles && typeof next.roles === 'object' ? next.roles : {}) };
     for (const [role, entry] of Object.entries(patch.roles ?? {})) {
-      if (!ROLE_NAMES.includes(role)) throw new Error(`unknown role "${role}"`)
-      const existing = roles[role] && typeof roles[role] === 'object' ? { ...roles[role] } : {}
-      const models = readModels(entry)
+      if (!ROLE_NAMES.includes(role)) {
+        throw new Error(`unknown role "${role}"`);
+      }
+      const existing = roles[role] && typeof roles[role] === 'object' ? { ...roles[role] } : {};
+      const models = readModels(entry);
       if (models.length === 0) {
         // Clearing a role's models returns it to its tier, but must not discard
         // whatever else that role carries (its tier, its tool name, enabled).
-        delete existing.models
-        delete existing.provider
-        delete existing.model
+        delete existing.models;
+        delete existing.provider;
+        delete existing.model;
       } else {
-        existing.models = models
+        existing.models = models;
         // The list is the whole answer; a stale single pin beside it would
         // read as a second opinion the resolver never consults.
-        delete existing.provider
-        delete existing.model
+        delete existing.provider;
+        delete existing.model;
       }
 
-      if (Object.keys(existing).length === 0) delete roles[role]
-      else roles[role] = existing
+      if (Object.keys(existing).length === 0) {
+        delete roles[role];
+      } else {
+        roles[role] = existing;
+      }
     }
-    if (Object.keys(roles).length === 0) delete next.roles
-    else next.roles = roles
+    if (Object.keys(roles).length === 0) {
+      delete next.roles;
+    } else {
+      next.roles = roles;
+    }
   }
 
-  return next
+  return next;
 }
 
 /**
- * Normalise one submitted provider/model pair.
+ * Normalize one submitted provider/model pair.
  *
  * @param entry - the submitted value.
  * @returns the trimmed pair, or undefined when it clears the slot. Half a route
@@ -236,37 +255,45 @@ export function nextUserSection(user, patch) {
  * rather than storing something that silently does nothing.
  */
 function readPair(entry) {
-  if (entry === null || entry === undefined) return undefined
-  const provider = typeof entry.provider === 'string' ? entry.provider.trim() : ''
-  const model = typeof entry.model === 'string' ? entry.model.trim() : ''
-  if (provider === '' || model === '') return undefined
-  return { provider, model }
+  if (entry === null || entry === undefined) {
+    return undefined;
+  }
+  const provider = typeof entry.provider === 'string' ? entry.provider.trim() : '';
+  const model = typeof entry.model === 'string' ? entry.model.trim() : '';
+  if (provider === '' || model === '') {
+    return undefined;
+  }
+  return { provider, model };
 }
 
 /**
- * Normalise a role's submitted model list.
+ * Normalize a role's submitted model list.
  *
  * @param entry - `{ models: [...] }`, a bare pair, or null.
  * @returns the accepted pairs, deduplicated; empty means the role follows its
  * tier again.
  */
 function readModels(entry) {
-  if (entry === null || entry === undefined) return []
-  const declared = Array.isArray(entry.models)
-    ? entry.models
-    : Array.isArray(entry) ? entry : [entry]
-
-  const seen = new Set()
-  const models = []
-  for (const candidate of declared) {
-    const pair = readPair(candidate)
-    if (pair === undefined) continue
-    const key = `${pair.provider}/${pair.model}`
-    if (seen.has(key)) continue
-    seen.add(key)
-    models.push(pair)
+  if (entry === null || entry === undefined) {
+    return [];
   }
-  return models
+  const declared = Array.isArray(entry.models) ? entry.models : Array.isArray(entry) ? entry : [entry];
+
+  const seen = new Set();
+  const models = [];
+  for (const candidate of declared) {
+    const pair = readPair(candidate);
+    if (pair === undefined) {
+      continue;
+    }
+    const key = `${pair.provider}/${pair.model}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    models.push(pair);
+  }
+  return models;
 }
 
 /**
@@ -295,7 +322,7 @@ export function buildTeamPayload(rows = [], status = {}) {
       hiredAt: row.hiredAt ?? 0,
       ...(status[row.childId] ? { activity: status[row.childId] } : {}),
     })),
-  }
+  };
 }
 
 /**
@@ -311,16 +338,20 @@ export function buildTeamPayload(rows = [], status = {}) {
  * @returns childId → activity.
  */
 export async function liveActivity(subagents, parentId, rows = []) {
-  if (subagents === undefined || rows.length === 0) return {}
+  if (subagents === undefined || rows.length === 0) {
+    return {};
+  }
   try {
-    const status = {}
+    const status = {};
     for (const entry of await directChildActivity(subagents, parentId)) {
-      const id = String(entry?.id ?? '')
-      if (id !== '' && entry?.activity) status[id] = String(entry.activity)
+      const id = String(entry?.id ?? '');
+      if (id !== '' && entry?.activity) {
+        status[id] = String(entry.activity);
+      }
     }
-    return status
+    return status;
   } catch {
-    return {}
+    return {};
   }
 }
 
@@ -335,8 +366,8 @@ export async function liveActivity(subagents, parentId, rows = []) {
  * @returns the disposer removing the route.
  */
 export function registerTeamRoute(ctx, deps = {}) {
-  const getTable = deps.getTable ?? (() => undefined)
-  const getSubagents = deps.getSubagents ?? (() => ctx.get('subagents'))
+  const getTable = deps.getTable ?? (() => undefined);
+  const getSubagents = deps.getSubagents ?? (() => ctx.get('subagents'));
 
   return ctx.webServer.register({
     kind: 'exact',
@@ -344,25 +375,25 @@ export function registerTeamRoute(ctx, deps = {}) {
     handler: async (req, res) => {
       try {
         if (req.method !== 'GET') {
-          res.writeHead(405, { Allow: 'GET' })
-          res.end()
-          return
+          res.writeHead(405, { Allow: 'GET' });
+          res.end();
+          return;
         }
-        const session = new URL(req.url, 'http://localhost').searchParams.get('session') ?? ''
-        const table = getTable()
+        const session = new URL(req.url, 'http://localhost').searchParams.get('session') ?? '';
+        const table = getTable();
         // No session, or a deployment with no storage form: an empty team is
         // the honest answer and the strip renders nothing.
         if (session.trim() === '' || table === undefined) {
-          send(res, 200, buildTeamPayload([]))
-          return
+          send(res, 200, buildTeamPayload([]));
+          return;
         }
-        const rows = rosterOf(table, session.trim())
-        send(res, 200, buildTeamPayload(rows, await liveActivity(getSubagents(), session.trim(), rows)))
+        const rows = rosterOf(table, session.trim());
+        send(res, 200, buildTeamPayload(rows, await liveActivity(getSubagents(), session.trim(), rows)));
       } catch (error) {
-        send(res, 400, { error: String(error?.message ?? error) })
+        send(res, 400, { error: String(error?.message ?? error) });
       }
     },
-  })
+  });
 }
 
 /**
@@ -374,37 +405,37 @@ export function registerTeamRoute(ctx, deps = {}) {
  */
 function readJsonBody(req, limit = 64 * 1024) {
   return new Promise((resolve, reject) => {
-    const chunks = []
-    let size = 0
+    const chunks = [];
+    let size = 0;
     req.on('data', (chunk) => {
-      size += chunk.length
+      size += chunk.length;
       if (size > limit) {
-        reject(new Error('request body too large'))
-        req.destroy()
-        return
+        reject(new Error('request body too large'));
+        req.destroy();
+        return;
       }
-      chunks.push(chunk)
-    })
-    req.on('error', reject)
+      chunks.push(chunk);
+    });
+    req.on('error', reject);
     req.on('end', () => {
       try {
-        resolve(chunks.length === 0 ? {} : JSON.parse(Buffer.concat(chunks).toString('utf8')))
+        resolve(chunks.length === 0 ? {} : JSON.parse(Buffer.concat(chunks).toString('utf8')));
       } catch (error) {
-        reject(error)
+        reject(error);
       }
-    })
-  })
+    });
+  });
 }
 
 /** Answer with one JSON value. */
 function send(res, status, body) {
-  const text = JSON.stringify(body)
+  const text = JSON.stringify(body);
   res.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
     'Content-Length': Buffer.byteLength(text),
     'Cache-Control': 'no-store',
-  })
-  res.end(text)
+  });
+  res.end(text);
 }
 
 /**
@@ -420,48 +451,50 @@ export function registerConfigRoute(ctx, scope, snapshot, catalog = async () => 
   const payload = async (state) => ({
     ...buildConfigPayload(state.value, state.user, state.writable, await catalog()),
     ...(state.revision === undefined ? {} : { revision: state.revision }),
-  })
+  });
   return ctx.webServer.register({
     kind: 'exact',
     path: API_PATH,
     handler: async (req, res) => {
       try {
         if (req.method === 'GET') {
-          send(res, 200, await payload(snapshot()))
-          return
+          send(res, 200, await payload(snapshot()));
+          return;
         }
         if (req.method === 'POST') {
           if (!isLoopback(req)) {
-            send(res, 403, { error: 'ccg: settings writes are accepted from this machine only' })
-            return
+            send(res, 403, { error: 'ccg: settings writes are accepted from this machine only' });
+            return;
           }
-          const body = await readJsonBody(req)
+          const body = await readJsonBody(req);
           if (body === null || typeof body !== 'object' || Array.isArray(body)) {
-            throw new TypeError('ccg: configuration update must be an object')
+            send(res, 400, { error: 'ccg: configuration update must be an object' });
+            return;
           }
-          const { expectedRevision, ...patch } = body
+          const { expectedRevision, ...patch } = body;
           if (expectedRevision !== undefined && (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0)) {
-            throw new TypeError('ccg: expectedRevision must be a non-negative integer')
+            send(res, 400, { error: 'ccg: expectedRevision must be a non-negative integer' });
+            return;
           }
-          const { user, writable, revision } = snapshot()
+          const { user, writable, revision } = snapshot();
           if (!writable) {
-            send(res, 403, { error: 'ccg: this profile is not writable' })
-            return
+            send(res, 403, { error: 'ccg: this profile is not writable' });
+            return;
           }
           if (expectedRevision !== undefined && expectedRevision !== revision) {
-            send(res, 409, { error: 'ccg: configuration changed; reload before saving' })
-            return
+            send(res, 409, { error: 'ccg: configuration changed; reload before saving' });
+            return;
           }
-          await scope.replace(nextUserSection(user, patch), expectedRevision ?? revision)
-          const after = snapshot()
-          send(res, 200, await payload(after))
-          return
+          await scope.replace(nextUserSection(user, patch), expectedRevision ?? revision);
+          const after = snapshot();
+          send(res, 200, await payload(after));
+          return;
         }
-        res.writeHead(405, { Allow: 'GET, POST' })
-        res.end()
+        res.writeHead(405, { Allow: 'GET, POST' });
+        res.end();
       } catch (error) {
-        send(res, error?.code === 'SETTINGS_CONFLICT' ? 409 : 400, { error: String(error?.message ?? error) })
+        send(res, error?.code === 'SETTINGS_CONFLICT' ? 409 : 400, { error: String(error?.message ?? error) });
       }
     },
-  })
+  });
 }

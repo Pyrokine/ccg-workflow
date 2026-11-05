@@ -12,8 +12,7 @@ use.
 
 Use the `frontend-design` skill as the governing entry point and follow its design principles, anti-patterns, and
 **Context Gathering Protocol**. If design context is missing, ask only for the missing audience, use case, or brand
-direction. Additionally
-gather: audience technical level and users' mental state in context.
+direction. Additionally gather: audience technical level and users' mental state in context.
 
 ---
 
@@ -55,11 +54,9 @@ Refine text across these common areas:
 
 ### Error Messages
 
-**Bad**: "Error 403: Forbidden"
-**Good**: "You don't have permission to view this page. Contact your admin for access."
+**Bad**: "Error 403: Forbidden" **Good**: "You don't have permission to view this page. Contact your admin for access."
 
-**Bad**: "Invalid input"
-**Good**: "Email addresses need an @ symbol. Try: name@example.com"
+**Bad**: "Invalid input" **Good**: "Email addresses need an @ symbol. Try: name@example.com"
 
 **Principles**:
 
@@ -71,11 +68,9 @@ Refine text across these common areas:
 
 ### Form Labels & Instructions
 
-**Bad**: "DOB (MM/DD/YYYY)"
-**Good**: "Date of birth" (with placeholder showing format)
+**Bad**: "DOB (MM/DD/YYYY)" **Good**: "Date of birth" (with placeholder showing format)
 
-**Bad**: "Enter value here"
-**Good**: "Your email address" or "Company name"
+**Bad**: "Enter value here" **Good**: "Your email address" or "Company name"
 
 **Principles**:
 
@@ -87,8 +82,7 @@ Refine text across these common areas:
 
 ### Button & CTA Text
 
-**Bad**: "Click here" | "Submit" | "OK"
-**Good**: "Create account" | "Save changes" | "Got it, thanks"
+**Bad**: "Click here" | "Submit" | "OK" **Good**: "Create account" | "Save changes" | "Got it, thanks"
 
 **Principles**:
 
@@ -99,8 +93,7 @@ Refine text across these common areas:
 
 ### Help Text & Tooltips
 
-**Bad**: "This is the username field"
-**Good**: "Choose a username. You can change this later in Settings."
+**Bad**: "This is the username field" **Good**: "Choose a username. You can change this later in Settings."
 
 **Principles**:
 
@@ -111,8 +104,7 @@ Refine text across these common areas:
 
 ### Empty States
 
-**Bad**: "No items"
-**Good**: "No projects yet. Create your first project to get started."
+**Bad**: "No items" **Good**: "No projects yet. Create your first project to get started."
 
 **Principles**:
 
@@ -122,8 +114,7 @@ Refine text across these common areas:
 
 ### Success Messages
 
-**Bad**: "Success"
-**Good**: "Settings saved! Your changes will take effect immediately."
+**Bad**: "Success" **Good**: "Settings saved! Your changes will take effect immediately."
 
 **Principles**:
 
@@ -134,8 +125,7 @@ Refine text across these common areas:
 
 ### Loading States
 
-**Bad**: "Loading..." (for 30+ seconds)
-**Good**: "Analyzing your data... this usually takes 30-60 seconds"
+**Bad**: "Loading..." (for 30+ seconds) **Good**: "Analyzing your data... this usually takes 30-60 seconds"
 
 **Principles**:
 
@@ -146,8 +136,7 @@ Refine text across these common areas:
 
 ### Confirmation Dialogs
 
-**Bad**: "Are you sure?"
-**Good**: "Delete 'Project Alpha'? This can't be undone."
+**Bad**: "Are you sure?" **Good**: "Delete 'Project Alpha'? This can't be undone."
 
 **Principles**:
 
@@ -158,8 +147,8 @@ Refine text across these common areas:
 
 ### Navigation & Wayfinding
 
-**Bad**: Generic labels like "Items" | "Things" | "Stuff"
-**Good**: Specific labels like "Your projects" | "Team members" | "Settings"
+**Bad**: Generic labels like "Items" | "Things" | "Stuff" **Good**: Specific labels like "Your projects" | "Team
+members" | "Settings"
 
 **Principles**:
 
@@ -204,4 +193,3 @@ Test that copy improvements work:
 
 Remember: You're a clarity expert with excellent communication skills. Write like you're explaining to a smart friend
 who's unfamiliar with the product. Be clear, be helpful, be human.
-

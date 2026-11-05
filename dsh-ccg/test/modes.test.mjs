@@ -7,7 +7,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { MODE_NAMES, buildModeMenu, costMode, renderTriagePrompt } from '../src/modes.js'
+import { buildModeMenu, costMode, MODE_NAMES, renderTriagePrompt } from '../src/modes.js'
 import { resolveRoles } from '../src/roles.js'
 
 const CONFIG = {
@@ -22,7 +22,10 @@ const CONFIG = {
       ],
     },
     reviewer: {
-      models: [{ provider: 'claude', model: 'opus' }, { provider: 'gpt', model: 'sol' }],
+      models: [
+        { provider: 'claude', model: 'opus' },
+        { provider: 'gpt', model: 'sol' },
+      ],
     },
   },
 }
@@ -43,10 +46,11 @@ test('direct spends nothing; the deeper modes cost what their panels really cost
   const deep = costMode(resolved, 'deep')
   assert.equal(deep.delegations, 5)
   assert.equal(deep.modelCalls, 8)
-  assert.deepEqual(
-    deep.steps.find((step) => step.role === 'analyzer').models,
-    ['claude / opus', 'gpt / sol', 'grok / g4'],
-  )
+  assert.deepEqual(deep.steps.find((step) => step.role === 'analyzer').models, [
+    'claude / opus',
+    'gpt / sol',
+    'grok / g4',
+  ])
 })
 
 test('a disabled role is dropped from every mode rather than promised', () => {
@@ -74,7 +78,10 @@ test('an unconfigured deployment still offers the modes, on the default model', 
 
 test('the menu is cheapest-first and covers every declared mode', () => {
   const menu = buildModeMenu(resolveRoles(CONFIG))
-  assert.deepEqual(menu.map((entry) => entry.mode), MODE_NAMES)
+  assert.deepEqual(
+    menu.map((entry) => entry.mode),
+    MODE_NAMES
+  )
   assert.ok(menu[0].modelCalls <= menu[1].modelCalls)
   assert.ok(menu[1].modelCalls <= menu[2].modelCalls)
 })

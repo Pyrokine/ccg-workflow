@@ -16,14 +16,14 @@ Producer → Broker → Consumer
   发布订阅 (Topic): 1 Producer → N Consumers
 ```
 
-| 概念          | 含义       | 类比   |
-|-------------|----------|------|
-| Producer    | 消息生产者    | 发令者  |
-| Consumer    | 消息消费者    | 执行者  |
-| Broker      | 消息中间件    | 传令阵  |
-| Topic/Queue | 消息通道     | 传音符  |
-| Partition   | 分区（并行单元） | 阵眼   |
-| Offset      | 消费位置     | 修行进度 |
+| 概念        | 含义             | 类比     |
+|-------------|------------------|----------|
+| Producer    | 消息生产者       | 发令者   |
+| Consumer    | 消息消费者       | 执行者   |
+| Broker      | 消息中间件       | 传令阵   |
+| Topic/Queue | 消息通道         | 传音符   |
+| Partition   | 分区（并行单元） | 阵眼     |
+| Offset      | 消费位置         | 修行进度 |
 
 ---
 
@@ -50,24 +50,29 @@ from confluent_kafka import Producer
 
 conf = {
     'bootstrap.servers': 'kafka:9092',
-    'acks': 'all',                    # 等待所有副本确认
+    'acks': 'all',  # 等待所有副本确认
     'retries': 3,
     'retry.backoff.ms': 1000,
-    'enable.idempotence': True,       # 幂等生产者
-    'linger.ms': 5,                   # 批量发送延迟
-    'batch.size': 16384,              # 批量大小
-    'compression.type': 'snappy',     # 压缩
+    'enable.idempotence': True,  # 幂等生产者
+    'linger.ms': 5,  # 批量发送延迟
+    'batch.size': 16384,  # 批量大小
+    'compression.type': 'snappy',  # 压缩
 }
 
 producer = Producer(conf)
 
-def delivery_report(err, msg):
+
+def delivery_report(
+        err,
+        msg
+):
     if err:
         print(f"Delivery failed: {err}")
 
+
 producer.produce(
     topic='orders',
-    key=order_id.encode(),    # 相同 key → 相同 partition → 有序
+    key=order_id.encode(),  # 相同 key → 相同 partition → 有序
     value=json.dumps(order).encode(),
     callback=delivery_report
 )
@@ -107,7 +112,7 @@ finally:
 
 ### Kafka 关键配置
 
-```yaml
+```text
 Broker:
   num.partitions: 6                # 默认分区数
   default.replication.factor: 3    # 副本数
@@ -127,10 +132,10 @@ Topic 设计:
 
 ### Exchange 类型
 
-| 类型      | 路由规则              | 适用场景 |
-|---------|-------------------|------|
-| Direct  | 精确匹配 routing key  | 点对点  |
-| Fanout  | 广播到所有绑定队列         | 发布订阅 |
+| 类型    | 路由规则               | 适用场景 |
+|---------|------------------------|----------|
+| Direct  | 精确匹配 routing key   | 点对点   |
+| Fanout  | 广播到所有绑定队列     | 发布订阅 |
 | Topic   | 通配符匹配 routing key | 灵活路由 |
 | Headers | 匹配消息头             | 复杂路由 |
 
@@ -186,11 +191,11 @@ XACK orders order-group <message-id>
 XPENDING orders order-group
 ```
 
-| 特性   | 适用       | 不适用     |
-|------|----------|---------|
-| 轻量级  | 中小规模、低延迟 | 海量数据持久化 |
-| 消费组  | 多消费者并行   | 复杂路由    |
-| 内存存储 | 实时处理     | 长期存储    |
+| 特性     | 适用             | 不适用         |
+|----------|------------------|----------------|
+| 轻量级   | 中小规模、低延迟 | 海量数据持久化 |
+| 消费组   | 多消费者并行     | 复杂路由       |
+| 内存存储 | 实时处理         | 长期存储       |
 
 ---
 
@@ -243,15 +248,15 @@ Orchestration (编排):
 
 ## 选型对比
 
-| 维度   | Kafka      | RabbitMQ | Redis Streams |
-|------|------------|----------|---------------|
-| 吞吐量  | 极高 (百万/s)  | 高 (万/s)  | 高 (十万/s)      |
-| 延迟   | ms 级       | μs-ms 级  | μs 级          |
-| 持久化  | 磁盘         | 磁盘/内存    | 内存+AOF        |
-| 消息顺序 | 分区内有序      | 队列内有序    | 流内有序          |
-| 消息回溯 | ✅ 支持       | ❌ 不支持    | ✅ 支持          |
-| 协议   | 自有协议       | AMQP     | Redis协议       |
-| 适用   | 大数据/日志/流处理 | 业务消息/RPC | 轻量级实时         |
+| 维度     | Kafka              | RabbitMQ     | Redis Streams |
+|----------|--------------------|--------------|---------------|
+| 吞吐量   | 极高 (百万/s)      | 高 (万/s)    | 高 (十万/s)   |
+| 延迟     | ms 级              | μs-ms 级     | μs 级         |
+| 持久化   | 磁盘               | 磁盘/内存    | 内存+AOF      |
+| 消息顺序 | 分区内有序         | 队列内有序   | 流内有序      |
+| 消息回溯 | ✅ 支持            | ❌ 不支持    | ✅ 支持       |
+| 协议     | 自有协议           | AMQP         | Redis协议     |
+| 适用     | 大数据/日志/流处理 | 业务消息/RPC | 轻量级实时    |
 
 ### 选型决策树
 
@@ -325,4 +330,3 @@ Orchestration (编排):
   - ACL 授权
   - 审计日志
 ```
-

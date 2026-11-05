@@ -2,18 +2,18 @@ import { spawnSync } from 'node:child_process'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
+import type { Analyze } from './language-checks-fixtures'
 import {
-  loadModule,
-  root,
-  distributions,
-  limits,
-  fixture,
-  write,
   dependency,
+  distributions,
   fakeEslint,
   files,
+  fixture,
+  limits,
+  loadModule,
+  root,
+  write,
 } from './language-checks-fixtures'
-import type { Analyze } from './language-checks-fixtures'
 
 function fakeTypeScriptCli(directory: string, kind: string): string {
   const diagnostic = 'console.log("source.ts(1,14): error TS2322: synthetic_private_message"); process.exit(2);'
@@ -54,7 +54,7 @@ function timeoutTypeScriptCli(cli: string): void {
   const cp = loadModule('node:child_process') as typeof import('node:child_process')
   const nativeSpawn = cp.spawnSync
   vi.spyOn(cp, 'spawnSync').mockImplementation((command, args, options) => {
-    if (args?.[0] === cli)
+    if (args?.[0] === cli) {
       return {
         error: Object.assign(new Error('private timeout'), { code: 'ETIMEDOUT' }),
         status: null,
@@ -64,6 +64,7 @@ function timeoutTypeScriptCli(cli: string): void {
         stdout: '',
         stderr: '',
       }
+    }
     return nativeSpawn(command, args, options)
   })
 }
@@ -203,21 +204,27 @@ describe.each(distributions)('%s language tool execution', (distribution) => {
     (kind) => {
       const directory = fixture()
       const cli = fakeTypeScriptCli(directory, kind)
-      if (kind === 'timeout') timeoutTypeScriptCli(cli)
+      if (kind === 'timeout') {
+        timeoutTypeScriptCli(cli)
+      }
       write(directory, 'tsconfig.json', '{"files":["source.ts"]}')
       const source = write(directory, 'source.ts', 'export const value = 1;\n')
       const outside = write(directory, 'outside.ts', 'export const value = 2;\n')
       const before = files(directory)
       const result = runLanguageChecks([source, outside], limits)
       const check = result.checks.find((entry) => entry.tool === 'typescript')
-      if (!check) throw new Error('TypeScript check is missing')
+      if (!check) {
+        throw new Error('TypeScript check is missing')
+      }
       expect(check.status).toBe(kind === 'clean' ? 'passed' : kind === 'error' ? 'failed' : 'unavailable')
       if (kind === 'clean' || kind === 'error') {
         expect(check.files).toEqual([source])
         expect(check.reason).toContain('TypeScript CLI')
         expect(result.uncovered).toEqual([expect.objectContaining({ path: outside })])
       }
-      if (kind === 'timeout') expect(check.reason).toBe('Analysis timed out')
+      if (kind === 'timeout') {
+        expect(check.reason).toBe('Analysis timed out')
+      }
       expect(result.issues).toHaveLength(kind === 'error' ? 1 : 0)
       expect(JSON.stringify(result)).not.toContain('synthetic_private_message')
       expect(files(directory)).toEqual(before)
@@ -232,8 +239,11 @@ describe.each(distributions)('%s language tool execution', (distribution) => {
       write(outer, 'eslint.config.cjs', "throw new Error('outer configuration executed');")
       write(outer, 'tsconfig.json', '{"compilerOptions":{"allowJs":true}}')
       const inner = join(outer, 'independent')
-      if (kind === 'package') write(inner, 'package.json', '{}')
-      else mkdirSync(join(inner, '.git'), { recursive: true })
+      if (kind === 'package') {
+        write(inner, 'package.json', '{}')
+      } else {
+        mkdirSync(join(inner, '.git'), { recursive: true })
+      }
       const source = write(inner, 'source.js', 'export const value = 1;\n')
       const result = runLanguageChecks([source], limits)
       expect(result.checks).toHaveLength(1)
@@ -250,8 +260,11 @@ describe.each(distributions)('%s language tool execution', (distribution) => {
   it.each(['npm', 'pnpm'])('uses declared %s workspace dependencies and configuration', (kind) => {
     const directory = fixture()
     dependency(directory, 'eslint')
-    if (kind === 'npm') write(directory, 'package.json', JSON.stringify({ workspaces: ['packages/*'] }))
-    else write(directory, 'pnpm-workspace.yaml', "packages:\n  - 'packages/*'\n")
+    if (kind === 'npm') {
+      write(directory, 'package.json', JSON.stringify({ workspaces: ['packages/*'] }))
+    } else {
+      write(directory, 'pnpm-workspace.yaml', "packages:\n  - 'packages/*'\n")
+    }
     write(directory, 'eslint.config.cjs', 'module.exports = [{}];')
     const child = join(directory, 'packages', 'library')
     write(child, 'package.json', '{}')
@@ -281,8 +294,11 @@ describe.each(distributions)('%s language tool execution', (distribution) => {
       const result = runLanguageChecks([source, excluded], limits)
       expect(result.uncovered).toEqual([])
       const checks = result.checks.filter((check) => check.tool === 'typescript')
-      if (allowJs) expect(checks).toEqual([expect.objectContaining({ status: 'failed', files: [source] })])
-      else expect(checks).toEqual([])
+      if (allowJs) {
+        expect(checks).toEqual([expect.objectContaining({ status: 'failed', files: [source] })])
+      } else {
+        expect(checks).toEqual([])
+      }
     },
     20000
   )

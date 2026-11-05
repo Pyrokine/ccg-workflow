@@ -34,8 +34,9 @@ function validateOrphanManifestEntry(entry, names) {
   if (!entry || typeof entry !== 'object' || Array.isArray(entry) || !isSafeOrphanName(entry.name)) {
     fail('MIGRATION_MANIFEST_INVALID', 'Orphan manifest contains an invalid entry');
   }
-  if (names.has(entry.name))
+  if (names.has(entry.name)) {
     fail('MIGRATION_MANIFEST_INVALID', `Orphan manifest contains duplicate name: ${entry.name}`);
+  }
   names.add(entry.name);
   if (
     entry.source !== `.ccg/tasks/${entry.name}` ||
@@ -67,12 +68,18 @@ function readOrphanManifest(projectRoot) {
   }
   validateOrphanManifest(existing.manifest);
   const names = new Set();
-  for (const entry of existing.manifest.entries) validateOrphanManifestEntry(entry, names);
+  for (const entry of existing.manifest.entries) {
+    validateOrphanManifestEntry(entry, names);
+  }
   if (existing.manifest.stateTransition !== undefined && existing.manifest.stateTransition !== null) {
     validateStateTransition(existing.manifest.stateTransition);
   }
-  if (existing.manifest.stateApplied === undefined) existing.manifest.stateApplied = true;
-  if (existing.manifest.stateTransition === undefined) existing.manifest.stateTransition = null;
+  if (existing.manifest.stateApplied === undefined) {
+    existing.manifest.stateApplied = true;
+  }
+  if (existing.manifest.stateTransition === undefined) {
+    existing.manifest.stateTransition = null;
+  }
   return existing;
 }
 
@@ -83,11 +90,14 @@ function operationQuarantineOrphans(projectRoot, sessionKey, request) {
     const stateResult = assertStateReadable(readState(projectRoot));
     assertExpectedState(stateResult, expected);
     const bindingResult = assertStateReadable(readBinding(projectRoot, sessionKey, stateResult.state.stateId));
-    if (!stateResult.exists && bindingResult.exists)
+    if (!stateResult.exists && bindingResult.exists) {
       fail('BINDING_INVALID', 'A session binding exists without task state');
+    }
     assertExpectedBinding(bindingResult, expected, stateResult.state);
     const listed = listTasks(projectRoot, { allowLegacy: true });
-    if (!listed.ok) fail(listed.code, listed.message);
+    if (!listed.ok) {
+      fail(listed.code, listed.message);
+    }
     const manifestState = readOrphanManifest(projectRoot);
     prepareOrphanQuarantine(manifestState, listed.orphans);
     const quarantined = quarantineManifestEntries(projectRoot, manifestState);
@@ -134,7 +144,9 @@ function operationRestoreOrphans(projectRoot, sessionKey, request) {
     for (const entry of entries) {
       const source = assertRuntimePath(projectRoot, entry.source, { allowMissing: true, kind: 'directory' });
       const target = assertRuntimePath(projectRoot, entry.target, { allowMissing: true, kind: 'directory' });
-      if (source.exists === target.exists) fail('ORPHAN_QUARANTINE_CONFLICT', `Cannot restore orphan: ${entry.name}`);
+      if (source.exists === target.exists) {
+        fail('ORPHAN_QUARANTINE_CONFLICT', `Cannot restore orphan: ${entry.name}`);
+      }
       if (target.exists) {
         ensureRuntimeDirectory(projectRoot, '.ccg/tasks');
         fs.renameSync(target.path, source.path);
@@ -183,7 +195,9 @@ function validateOrphanManifest(manifest) {
 function prepareOrphanQuarantine(manifestState, orphans) {
   const known = new Map(manifestState.manifest.entries.map((entry) => [entry.name, entry]));
   for (const name of orphans) {
-    if (!isSafeOrphanName(name)) fail('ORPHAN_TASK_DIR', `Unsafe orphan directory name: ${name}`);
+    if (!isSafeOrphanName(name)) {
+      fail('ORPHAN_TASK_DIR', `Unsafe orphan directory name: ${name}`);
+    }
     const existing = known.get(name);
     if (!existing) {
       const entry = {
@@ -211,11 +225,17 @@ function prepareOrphanQuarantine(manifestState, orphans) {
 function quarantineManifestEntries(projectRoot, manifestState) {
   const quarantined = [];
   for (const entry of manifestState.manifest.entries) {
-    if (entry.status !== 'pending') continue;
-    if (!isSafeOrphanName(entry.name)) fail('MIGRATION_MANIFEST_INVALID', 'Orphan manifest contains an unsafe name');
+    if (entry.status !== 'pending') {
+      continue;
+    }
+    if (!isSafeOrphanName(entry.name)) {
+      fail('MIGRATION_MANIFEST_INVALID', 'Orphan manifest contains an unsafe name');
+    }
     const source = assertRuntimePath(projectRoot, entry.source, { allowMissing: true, kind: 'directory' });
     const target = assertRuntimePath(projectRoot, entry.target, { allowMissing: true, kind: 'directory' });
-    if (source.exists && target.exists) fail('ORPHAN_QUARANTINE_CONFLICT', `Both orphan paths exist: ${entry.name}`);
+    if (source.exists && target.exists) {
+      fail('ORPHAN_QUARANTINE_CONFLICT', `Both orphan paths exist: ${entry.name}`);
+    }
     if (source.exists) {
       ensureRuntimeDirectory(projectRoot, '.ccg/historical-artifacts/orphans');
       fs.renameSync(source.path, target.path);

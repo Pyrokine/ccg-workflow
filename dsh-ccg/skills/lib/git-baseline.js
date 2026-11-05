@@ -9,12 +9,18 @@ function resolveTarget(requested) {
   const suffix = [];
   while (true) {
     try {
-      if (fs.lstatSync(directory).isDirectory()) break;
+      if (fs.lstatSync(directory).isDirectory()) {
+        break;
+      }
     } catch (error) {
-      if (error.code !== 'ENOENT' && error.code !== 'ENOTDIR') throw error;
+      if (error.code !== 'ENOENT' && error.code !== 'ENOTDIR') {
+        throw error;
+      }
     }
     const parent = path.dirname(directory);
-    if (parent === directory) throw new Error('Cannot resolve target directory: ' + requested);
+    if (parent === directory) {
+      throw new Error('Cannot resolve target directory: ' + requested);
+    }
     suffix.unshift(path.basename(directory));
     directory = parent;
   }
@@ -26,8 +32,12 @@ function baselineIssueGroups(files, issues) {
   const groups = new Map();
   for (const entry of issues) {
     entry.origin = 'unclassified';
-    if (entry.tool) entry.change_scope = files.includes(entry.file_path) ? 'unknown' : 'outside_request';
-    if (!groups.has(entry.file_path)) groups.set(entry.file_path, []);
+    if (entry.tool) {
+      entry.change_scope = files.includes(entry.file_path) ? 'unknown' : 'outside_request';
+    }
+    if (!groups.has(entry.file_path)) {
+      groups.set(entry.file_path, []);
+    }
     groups.get(entry.file_path).push(entry);
   }
   return groups;
@@ -45,8 +55,12 @@ function baselineRepositories(files, base, result) {
         roots.set(directory, git(directory, 'rev-parse', '--show-toplevel').replace(/\n$/, ''));
       }
       const root = roots.get(directory);
-      if (!root) throw new Error('Git repository is unavailable');
-      if (!groups.has(root)) groups.set(root, []);
+      if (!root) {
+        throw new Error('Git repository is unavailable');
+      }
+      if (!groups.has(root)) {
+        groups.set(root, []);
+      }
       groups.get(root).push({ file, canonical, name: path.relative(root, canonical).split(path.sep).join('/') });
     } catch {
       result.baseline.push({
@@ -55,12 +69,13 @@ function baselineRepositories(files, base, result) {
         path: file,
         reason: 'Git repository is unavailable',
       });
-      if (base !== undefined)
+      if (base !== undefined) {
         result.errors.push({
           path: file,
           code: 'BASELINE_UNAVAILABLE',
           message: 'Explicit baseline requires a readable Git repository',
         });
+      }
     }
   }
   return groups;
@@ -75,8 +90,12 @@ function regularBaselineBlob(object) {
 }
 
 function baselineContent(object, context) {
-  if (!object) return '';
-  if (!context.blobs.has(object.oid)) context.blobs.set(object.oid, git(context.root, 'cat-file', 'blob', object.oid));
+  if (!object) {
+    return '';
+  }
+  if (!context.blobs.has(object.oid)) {
+    context.blobs.set(object.oid, git(context.root, 'cat-file', 'blob', object.oid));
+  }
   return context.blobs.get(object.oid);
 }
 
@@ -103,16 +122,22 @@ function compareCurrentIssues(issues, context) {
     const key = fingerprint(entry, context.lines);
     const count = context.counts.get(key) || 0;
     entry.origin = count ? 'existing' : 'new';
-    if (count) context.counts.set(key, count - 1);
+    if (count) {
+      context.counts.set(key, count - 1);
+    }
   }
 }
 
 function compareBaselineEntry(entry, context) {
   const current = context.byFile.get(entry.file) || [];
-  if (!current.length) return;
+  if (!current.length) {
+    return;
+  }
   const previousName = baselineName(context.changes, entry);
   const object = context.tree.get(previousName);
-  if (!regularBaselineBlob(object)) return;
+  if (!regularBaselineBlob(object)) {
+    return;
+  }
   const content = baselineContent(object, context);
   const previous = object ? context.analyze(path.join(context.root, previousName), content) : [];
   const lines = (context.contents.get(entry.file) ?? fs.readFileSync(entry.file, 'utf8')).split('\n');
@@ -128,14 +153,18 @@ function compareRepository(root, entries, byFile, context) {
   const tree = readTree(root, revision, names);
   const state = { ...context, root, revision, changes, tree, byFile, blobs: new Map() };
   context.record.revision = revision;
-  for (const entry of entries) compareBaselineEntry(entry, state);
+  for (const entry of entries) {
+    compareBaselineEntry(entry, state);
+  }
   context.record.status = 'available';
 }
 
 function resetBaselineIssues(issues) {
   for (const entry of issues) {
     entry.origin = 'unclassified';
-    if (entry.tool) entry.change_scope = 'unknown';
+    if (entry.tool) {
+      entry.change_scope = 'unknown';
+    }
   }
 }
 
@@ -156,7 +185,9 @@ function targetRepositories(targets) {
     if (relative === '..' || relative.startsWith('../') || path.isAbsolute(relative)) {
       throw new Error('Target is outside the resolved repository: ' + requested);
     }
-    if (!groups.has(root)) groups.set(root, { root, requested: [], paths: new Set() });
+    if (!groups.has(root)) {
+      groups.set(root, { root, requested: [], paths: new Set() });
+    }
     const group = groups.get(root);
     group.requested.push(requested);
     group.paths.add(relative);
@@ -186,7 +217,9 @@ function readNameStatus(root, args, pathspecs = []) {
     const status = parts[index++];
     const from = parts[index++];
     const to = /^[RC]/.test(status) ? parts[index++] : from;
-    if (!status || from === undefined || to === undefined) throw new Error('Invalid git name-status output');
+    if (!status || from === undefined || to === undefined) {
+      throw new Error('Invalid git name-status output');
+    }
     changes.push({ status, path: to, ...(from !== to ? { old_path: from } : {}) });
   }
   return changes;
@@ -199,21 +232,67 @@ function fingerprint(issue, lines) {
 
 function readTree(root, revision, names) {
   const tree = new Map();
-  if (!names.length) return tree;
+  if (!names.length) {
+    return tree;
+  }
   const records = git(root, 'ls-tree', '-r', '-z', '--full-tree', revision, '--', ...names).split('\0');
   for (const record of records) {
-    if (!record) continue;
+    if (!record) {
+      continue;
+    }
     const separator = record.indexOf('\t');
-    if (separator < 0) throw new Error('Invalid git tree output');
+    if (separator < 0) {
+      throw new Error('Invalid git tree output');
+    }
     const [mode, kind, oid] = record.slice(0, separator).split(' ');
     tree.set(record.slice(separator + 1), { mode, kind, oid });
   }
   return tree;
 }
 
+function gitFileView(root, revision) {
+  const tree = readTree(root, revision, ['.']);
+  const context = { root, blobs: new Map() };
+  const isFile = (name) => Boolean(tree.get(name) && regularBaselineBlob(tree.get(name)));
+  return {
+    root,
+    isFile,
+    has(name) {
+      return !name || tree.has(name) || [...tree.keys()].some((entry) => entry.startsWith(name + '/'));
+    },
+    read(name) {
+      if (!isFile(name)) {
+        throw new Error('Requested document is not a regular Git file: ' + name);
+      }
+      return baselineContent(tree.get(name), context);
+    },
+    entries(directory) {
+      const prefix = directory && directory !== '.' ? directory + '/' : '';
+      const entries = new Map();
+      for (const [file, object] of tree) {
+        if (!file.startsWith(prefix)) {
+          continue;
+        }
+        const suffix = file.slice(prefix.length);
+        const nested = suffix.includes('/');
+        const name = suffix.split('/', 1)[0];
+        if (entries.has(name)) {
+          continue;
+        }
+        entries.set(name, {
+          name,
+          isFile: () => !nested && regularBaselineBlob(object),
+          isDirectory: () => nested,
+        });
+      }
+      return [...entries.values()];
+    },
+  };
+}
+
 function changedLines(root, revision, name) {
   const diff = git(root, 'diff', '--no-ext-diff', '--no-textconv', '--unified=0', revision, '--', name);
-  return [...diff.matchAll(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/gm)].map((match) => [
+  return [...diff.matchAll(/^@@ -\d+(?:,\d+)? \+(?<start>\d+)(?:,(?<count>\d+))? @@/gm)].map((match) => [
     Number(match[1]),
     Number(match[2] ?? 1),
   ]);
@@ -231,18 +310,23 @@ function compareBaseline(files, issues, analyze, base, contents = new Map()) {
       compareRepository(root, entries, byFile, { record, analyze, contents });
     } catch {
       record.reason = 'Git baseline comparison failed';
-      if (base !== undefined)
+      if (base !== undefined) {
         errors.push({
           path: root,
           code: 'BASELINE_UNAVAILABLE',
           message: 'Explicit baseline could not be resolved or analyzed',
         });
-      for (const entry of entries) resetBaselineIssues(byFile.get(entry.file) || []);
+      }
+      for (const entry of entries) {
+        resetBaselineIssues(byFile.get(entry.file) || []);
+      }
     }
   }
   const originCounts = { new: 0, existing: 0, unclassified: 0 };
-  for (const entry of issues) originCounts[entry.origin]++;
+  for (const entry of issues) {
+    originCounts[entry.origin]++;
+  }
   return { baseline, origin_counts: originCounts, errors };
 }
 
-module.exports = { git, targetRepositories, readNameStatus, compareBaseline };
+module.exports = { git, targetRepositories, readNameStatus, compareBaseline, gitFileView };

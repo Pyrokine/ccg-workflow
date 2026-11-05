@@ -3,6 +3,7 @@ description: '初始化 OpenSpec (OPSX) 环境 + 验证多模型 MCP 工具'
 ---
 
 <!-- CCG:SPEC:INIT:START -->
+
 **Core Philosophy**
 
 - OPSX provides the specification framework; CCG adds multi-model collaboration.
@@ -63,12 +64,14 @@ description: '初始化 OpenSpec (OPSX) 环境 + 验证多模型 MCP 工具'
     - Report any errors with remediation steps.
 
 4. **Validate Model Routes**
-    - 当 `{{BACKEND_PRIMARY}}` 与 `{{FRONTEND_PRIMARY}}` 都是 Claude 时，只检查 Claude Code 可用性，不调用 codeagent-wrapper 或任何外部 CLI。
-    - 只有用户已将某条 primary route 明确配置为 Codex、Antigravity、Grok、Kimi Code 或 OpenCode 时，才检查 codeagent-wrapper 可用性并测试该外部 route。
+    - 当 `{{BACKEND_PRIMARY}}` 与 `{{FRONTEND_PRIMARY}}` 都是 Claude 时，只检查 Claude
+      Code 可用性，不调用 codeagent-wrapper 或任何外部 CLI。
+    - 只有用户已将某条 primary route 明确配置为 Codex、Antigravity、Grok、Kimi
+      Code 或 OpenCode 时，才检查 codeagent-wrapper 可用性并测试该外部 route。
     - For each unavailable explicitly configured tool, display warning with installation instructions.
 
-5. **Summary Report**
-   Display status table:
+5. **Summary Report** Display status table:
+
    ```
    Component                 Status
    ─────────────────────────────────

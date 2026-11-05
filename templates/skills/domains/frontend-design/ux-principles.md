@@ -1,5 +1,7 @@
 # UX 原则
 
+以下 CSS 片段复用目标项目的主题令牌，需提供 `--shadow-4` 和 `--primary-dark`
+
 ## 可用性
 
 ### Nielsen十大可用性原则
@@ -31,7 +33,9 @@
   <svg aria-hidden="true">...</svg>
 </button>
 <nav aria-label="主导航">
-  <ul role="list">...</ul>
+  <ul role="list">
+    ...
+  </ul>
 </nav>
 <div role="alert" aria-live="assertive">错误消息</div>
 ```
@@ -39,26 +43,26 @@
 ### 键盘导航支持
 
 ```javascript
-element.addEventListener("keydown", e => {
-  if (e.key === "Enter" || e.key === " ") {
-    e.preventDefault();
-    handleClick();
+element.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault()
+    handleClick()
   }
-  if (e.key === "Escape") {
-    closeModal();
+  if (e.key === 'Escape') {
+    closeModal()
   }
-});
-element.setAttribute("tabindex", "0");
+})
+element.setAttribute('tabindex', '0')
 ```
 
 ## 信息架构
 
 ### 信息架构设计模式
 
-- 层级结构(树形)
-- 顺序结构(线性)
-- 矩阵结构(网格)
-- 数据库结构(标签)
+- 层级结构 (树形)
+- 顺序结构 (线性)
+- 矩阵结构 (网格)
+- 数据库结构 (标签)
 
 导航深度≤3层，广度5±2项。
 
@@ -81,8 +85,12 @@ element.setAttribute("tabindex", "0");
   animation: loading 1.5s ease-in-out infinite;
 }
 @keyframes loading {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 ```
 

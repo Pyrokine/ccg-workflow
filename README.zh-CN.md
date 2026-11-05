@@ -9,7 +9,7 @@
 [![GitHub Release](https://img.shields.io/github/v/release/Pyrokine/ccg-workflow?include_prereleases)](https://github.com/Pyrokine/ccg-workflow/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-Compatible-green.svg)](https://claude.ai/code)
-[![Tests](https://img.shields.io/badge/Tests-340%20passed-brightgreen.svg)](#)
+[![Tests](https://img.shields.io/badge/Tests-340%20passed-brightgreen.svg)](https://github.com/Pyrokine/ccg-workflow/actions/workflows/ci.yml)
 
 简体中文 | [English](./README.md)
 
@@ -19,34 +19,37 @@
 
 [![PackyCode](assets/sponsors/packycode.png)](https://www.packyapi.ai/register?aff=m21P)
 
-[PackyCode](https://www.packyapi.ai/register?aff=m21P) 通过同一域名和 API key 提供 Claude Code 与 Codex 专用通道；安装器可配置 Claude Code，并在不改变当前 active provider 的情况下注册 Codex provider
+[PackyCode](https://www.packyapi.ai/register?aff=m21P) 通过同一域名和 API key 提供 Claude
+Code 与 Codex 专用通道；安装器可配置 Claude Code，并在不改变当前 active provider 的情况下注册 Codex provider
 
 ---
 
 [![APIMart](assets/sponsors/apimart.jpg)](https://go.apimart.ai/gh-ccg-workflow)
 
-[APIMart](https://go.apimart.ai/gh-ccg-workflow) 赞助本项目，并提供图片、视频、Claude 和 GPT API；安装器可将其
-Anthropic 兼容端点配置为 Claude Code API 提供方，也可单独注册 Codex provider，是否激活由用户明确选择
+[APIMart](https://go.apimart.ai/gh-ccg-workflow) 赞助本项目，并提供图片、视频、Claude 和 GPT
+API；安装器可将其 Anthropic 兼容端点配置为 Claude Code API 提供方，也可单独注册 Codex provider，是否激活由用户明确选择
 
 ---
 
 [![x6.ai](assets/sponsors/x6ai.png)](https://x6.ai)
 
-[x6.ai](https://x6.ai) 提供 Claude 兼容端点和 Codex Responses 端点；安装器注册 Codex provider 时保留当前 active provider，激活需明确选择
+[x6.ai](https://x6.ai) 提供 Claude 兼容端点和 Codex Responses 端点；安装器注册 Codex provider 时保留当前 active
+provider，激活需明确选择
 
 ---
 
 [![NotebookLM Remover](assets/sponsors/notebooklm-remover.png)](https://notebooklmremover.org)
 
-[NotebookLM Remover](https://notebooklmremover.org) — 免费浏览器本地 AI 水印去除工具。支持视频、PDF、PPTX、信息图、播客等全格式，100%
-隐私，离线可用。
+[NotebookLM Remover](https://notebooklmremover.org)
+— 免费浏览器本地 AI 水印去除工具。支持视频、PDF、PPTX、信息图、播客等全格式，100% 隐私，离线可用。
 
 ---
 
 ## DeepSeek Harness 版 CCG：`dsh-ccg`
 
 内置的 `dsh-ccg` 插件将同一套角色矩阵带入
-[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)。安装器使用当前 `DSH_HOME`，把插件复制到长期保留的本地路径，并且只修改用户选定的 profile manifest。
+[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)。安装器使用当前
+`DSH_HOME`，把插件复制到长期保留的本地路径，并且只修改用户选定的 profile manifest。
 
 ```bash
 node bin/ccg.mjs dsh install                # 安装到所有已发现的 profile
@@ -59,13 +62,24 @@ node bin/ccg.mjs dsh uninstall
 
 ---
 
-CCG 是 Claude Code 的工作流引擎。默认前端、后端和审查都使用独立 Claude Code Agent。Codex、Antigravity、Grok、Kimi Code、OpenCode 与 GPT/Grok 外部审查只在用户明确请求时运行。
+CCG 是 Claude Code 的工作流引擎。默认前端、后端和审查都使用独立 Claude Code Agent。Codex、Antigravity、Grok、Kimi
+Code、OpenCode 与 GPT/Grok 外部审查只在用户明确请求时运行。
 
 Gemini CLI 已禁用：2026-06-18 后 consumer OAuth 请求不再处理。旧 Gemini 路由迁移为 Grok，`agy` 保留为 Antigravity 别名。
 
+## v3.7.4-aug.1 更新
+
+- 吸收上游 v3.7.4：Web UI 限定本机访问，校验 Host 并安全显示任务文本；Antigravity 支持 stream-json 会话与恢复，Skill
+  Router 使用英文词边界匹配
+- 进程退出后保留完整输出，任务输入写入失败返回错误，Antigravity 最终正文在 Web UI 和终端完整显示且不重复
+- 文档生成器按 README-only／DESIGN-only 选择生成，文件失败通过 JSON 返回；修复静态检查问题并保留兼容接口和有效测试
+- 更新兼容依赖、pnpm 12.16.1、CI Actions 与 Go 1.27.3 构建工具链，保持 Go 1.26.0 源码要求
+- 分发 codeagent-wrapper 5.16.0-aug.1 与 dsh-ccg 0.5.1，新增 DeepSeek Harness 0.2.2-rc.1 支持并保留已有预发布组
+
 ## v3.7.3-aug.2 更新
 
-- Go／Rust 质量检查离线使用工程原生工具，明确报告构建条件排除的文件；支持 TypeScript 7 CLI，Ruff target version 保持可选，沿用工程配置
+- Go／Rust 质量检查离线使用工程原生工具，明确报告构建条件排除的文件；支持 TypeScript 7 CLI，Ruff target
+  version 保持可选，沿用工程配置
 - C／C++ 安全规则覆盖凭证、动态命令与无界输入，检查时区分注释和字符串上下文
 - 文档检查在 working、staged、committed 三种模式下识别所选源码路径之外的关联文档更新
 - 只读任务查询与帮助直接返回，写操作保留有界 stdin 校验；运行时升级保留既有 Codex 所有权记录和用户内容
@@ -74,17 +88,25 @@ Gemini CLI 已禁用：2026-06-18 后 consumer OAuth 请求不再处理。旧 Ge
 ## v3.7.3-aug.1 更新
 
 - 原生 Skills 支持按使用端选择、更新与移除，重装及路由刷新保留空选，显式兼容模式继续使用原有目录
-- `doctor --json` 报告安装模式、主路由 CLI、原生 Skills、6 个 Hook 脚本和 5 类事件、Codex runtime 完整性及当前 session 任务，版本比较仅使用本地文件
+- `doctor --json` 报告安装模式、主路由 CLI、原生 Skills、6 个 Hook 脚本和 5 类事件、Codex
+  runtime 完整性及当前 session 任务，版本比较仅使用本地文件
 - OpenCode 校验 `provider/model`；核心安装失败时 init 返回非零状态并终止后续配置，可选 wrapper 与命令生成警告仍单独报告
-- sponsor registry 新增 x6.ai；`dsh-ccg` 0.5.0 支持 DeepSeek Harness `>=0.2.0-rc.2 <0.2.1-0 || >=0.2.1-alpha.2 <0.2.2-0`，包含 profile settings、activation、常驻 subagent 和 Windows launcher 处理
+- sponsor registry 新增 x6.ai；`dsh-ccg` 0.5.0 支持 DeepSeek Harness
+  `>=0.2.0-rc.2 <0.2.1-0 || >=0.2.1-alpha.2 <0.2.2-0`，包含 profile settings、activation、常驻 subagent 和 Windows
+  launcher 处理
 - 质量扫描覆盖单文件与目录，并报告缺失或不可读目标；Hook 处理延迟 stdin，任务文档作为当前明确用户请求下的参考材料
 
 ### 保留的 fork 行为
 
-- package tarball 改用明确的 skill 子目录白名单并排除 `templates/skills/domains/security/`；红队和渗透参考笔记仍保留在 Git 中，默认安装也继续排除该目录
+- package tarball 改用明确的 skill 子目录白名单并排除
+  `templates/skills/domains/security/`；红队和渗透参考笔记仍保留在 Git 中，默认安装也继续排除该目录
 - PackyCode 与 APIMart 进入共享 sponsor registry，init、API 菜单、Codex mode 和卸载使用同一配置来源
-- Codex mode 只在现有 `~/.codex/AGENTS.md` 中合并一个 managed block，在保留用户 Hook 的前提下注册一个 `UserPromptSubmit` command，并在安装前备份；任一安装步骤失败时恢复全部目标文件；ownership manifest 会在卸载时恢复安装前已有的同名 runtime 文件，并保留安装后的用户修改
-- sponsor Codex provider 只做增量注册，不覆盖用户已有 provider table、认证或配置权限，只有用户明确选择时才激活；卸载只移除本次 Codex mode 安装新增的 provider table；沿用当前 Codex 的稳定 Hook 和 multi-agent 默认值，不再强制写入过时的 `multi_agent_v2` timeout table
+- Codex mode 只在现有 `~/.codex/AGENTS.md` 中合并一个 managed block，在保留用户 Hook 的前提下注册一个 `UserPromptSubmit`
+  command，并在安装前备份；任一安装步骤失败时恢复全部目标文件；ownership
+  manifest 会在卸载时恢复安装前已有的同名 runtime 文件，并保留安装后的用户修改
+- sponsor Codex provider 只做增量注册，不覆盖用户已有 provider
+  table、认证或配置权限，只有用户明确选择时才激活；卸载只移除本次 Codex mode 安装新增的 provider
+  table；沿用当前 Codex 的稳定 Hook 和 multi-agent 默认值，不再强制写入过时的 `multi_agent_v2` timeout table
 - GPT 审查保持 `gpt-5.6-sol / xhigh`；Grok 审查默认升级为 `grok-4.6 / high`，安装时迁移精确的 `grok-4.5` 旧默认值
 - Claude Code 可从当前仓库以原生 plugin 方式安装技能包；完整多模型工作流仍由安装器提供
 - 新增 `bt-panel`、`seo-page-builder` 和 `adsense-site-auditor` 三个 Web 运维技能
@@ -98,13 +120,20 @@ Gemini CLI 已禁用：2026-06-18 后 consumer OAuth 请求不再处理。旧 Ge
 v3.0 从底层重写。一个命令替代 29 个。
 
 - `/ccg:go` — 用自然语言描述任务，引擎自动分析意图、选择策略、执行到底。
-- **Hook 引擎** — 用户消息只注入限长任务摘要；startup、resume、clear 和 compact 恢复当前 session 的完整任务契约、artifact 与精确关联的 spec section；fork 使用新的未绑定 session identity。
-- **Task 持久化** — 每个 worktree 保存共享 task 和 opaque per-session binding。durable status 仍为 `open`、`completed`、`cancelled`；当前 session 认领的 open task 对外显示 `in_progress`。state、binding、task 三层 revision 拒绝过期并发写入。
+- **Hook 引擎**
+  — 用户消息只注入限长任务摘要；startup、resume、clear 和 compact 恢复当前 session 的完整任务契约、artifact 与精确关联的 spec
+  section；fork 使用新的未绑定 session identity。
+- **Task 持久化** — 每个 worktree 保存共享 task 和 opaque per-session binding。durable status 仍为
+  `open`、`completed`、`cancelled`；当前 session 认领的 open task 对外显示
+  `in_progress`。state、binding、task 三层 revision 拒绝过期并发写入。
 - **Agent Teams** — 大型任务通过 TeamCreate 并行 spawn 多个 Builder。每个 Builder 有独立文件所有权。
 - **质量关卡** — `ccg:verify-security`、`ccg:verify-quality`、`ccg:verify-change` 作为 Skill 在策略验证阶段强制调用。
 - **域知识 Hook** — 消息涉及安全、缓存、RAG 等关键词时，相关知识文件自动注入上下文。
-- **模型路由** — 前端与后端默认使用独立 Claude Code Agent。Codex、Antigravity、Grok、Kimi Code 和 OpenCode 是显式可选路由。Grok、Kimi Code 和 OpenCode CLI 路由可分别设置可选型号。
-- **交叉审查** — 用户明确请求 GPT、Grok、双模型审查或 `/ccg:spec-review` 时，GPT、Grok 通过当前配置的 Claude Code provider 运行独立且不持久化的 print 会话。`routing.review.profiles` 独立配置它们在 provider 侧使用的型号和 effort，不受 Grok CLI 路由型号影响。
+- **模型路由** — 前端与后端默认使用独立 Claude Code Agent。Codex、Antigravity、Grok、Kimi
+  Code 和 OpenCode 是显式可选路由。Grok、Kimi Code 和 OpenCode CLI 路由可分别设置可选型号。
+- **交叉审查** — 用户明确请求 GPT、Grok、双模型审查或 `/ccg:spec-review` 时，GPT、Grok 通过当前配置的 Claude Code
+  provider 运行独立且不持久化的 print 会话。`routing.review.profiles`
+  独立配置它们在 provider 侧使用的型号和 effort，不受 Grok CLI 路由型号影响。
 - **纯 Claude Code 模式** — 默认模式。独立 Claude Code Agent 或 Agent Teams 处理前端、后端和审查，不调用外部 CLI。
 - **Codex 主导模式** — 用户明确选择时使用 Codex CLI 作为主导编排者。通过菜单 `X` 选项安装。
 
@@ -119,7 +148,8 @@ pnpm build
 node bin/ccg.mjs
 ```
 
-需要 Node.js 22.13+ 或 24.19.0+ 和 Claude Code CLI。Codex CLI、Antigravity CLI、Grok CLI、Kimi Code CLI 和 OpenCode CLI 仅在前端或后端路由时可选使用。
+需要 Node.js 22.13+ 或 24.19.0+ 和 Claude Code CLI。Codex CLI、Antigravity CLI、Grok CLI、Kimi Code CLI 和 OpenCode
+CLI 仅在前端或后端路由时可选使用。
 
 安装器依次配置 API、模型路由、MCP 工具、性能模式与 Skills 选择
 
@@ -211,18 +241,26 @@ v3.0 默认安装 12 个核心命令。Legacy 模式额外安装 18 个。
 
 CCG 安装 CommonJS Hook runtime，并在 `~/.claude/settings.json` 的五类 Hook event 中注册四个处理脚本：
 
-| Hook                  | 事件                                                    | 作用                                                                         |
-| --------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `workflow-state.js`   | `UserPromptSubmit`、`PostToolUse`、`PostToolUseFailure` | 每次输入及前台外部结果返回后刷新精确权威                                     |
-| `session-start.js`    | `SessionStart`                                          | 在 startup、resume、clear、compact、fork 时恢复完整任务 snapshot             |
-| `subagent-context.js` | Bash/Agent 的 `PreToolUse`                              | 修改实际 Agent prompt 或 wrapper heredoc，注入按角色匹配的任务与 spec 上下文 |
-| `skill-router.js`     | `UserPromptSubmit`                                      | 注入命中的领域知识                                                           |
+| Hook                  | 事件                                                    | 作用                                                                                  |
+| --------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `workflow-state.js`   | `UserPromptSubmit`、`PostToolUse`、`PostToolUseFailure` | 每次输入及前台外部结果返回后刷新精确权威                                              |
+| `session-start.js`    | `SessionStart`                                          | 在 startup、resume、clear、compact、fork 时恢复完整任务 snapshot                      |
+| `subagent-context.js` | Bash/Agent/Edit/Write 的 `PreToolUse`                   | 普通工具执行前刷新任务要求，向 Agent prompt 和 wrapper heredoc 注入任务与 spec 上下文 |
+| `skill-router.js`     | `UserPromptSubmit`                                      | 注入命中的领域知识                                                                    |
 
-`SessionStart` 从 Claude Code `session_id` 派生 opaque key，并通过 `CLAUDE_ENV_FILE` 导出。所有 controller 调用和 authority refresh 都使用该 key。Agent prompt 与 wrapper heredoc 继承父 Claude session binding；原始 session ID 不写入 state、binding 或 turn 文件。
+`SessionStart` 从 Claude Code `session_id` 派生 opaque key，并通过 `CLAUDE_ENV_FILE`
+导出；通过 CCG 专用短锁避免重复追加当前 key，保留其他 Hook 的内容，锁竞争返回 `CLAUDE_ENV_FILE_BUSY`，恢复方法见
+`templates/engine/phase-guide.md`；所有 controller 调用和 authority refresh 都使用该 key，Agent prompt 与 wrapper
+heredoc 继承父 Claude session binding，原始 session ID 不写入 state、binding 或 turn 文件
 
-`task-state.js` 是唯一允许修改任务生命周期的入口。Hook 输入、任务文件和 spec section 都有大小限制。任务状态无效、权威上下文缺失或超限、quoted heredoc 无法绑定到 wrapper command 时，`PreToolUse` Hook 返回 `permissionDecision: "deny"`，Agent 或 wrapper 不会在缺少任务契约的情况下启动。
+普通 Bash、Edit 和 Write 在执行前取得当前活动任务的最新要求，Hook 保留原始输入，状态异常时输出诊断；普通工具保持可用，无活动任务时也可执行
 
-内部 `task-state-*.js` 模块分别处理事务存储、任务生命周期、迁移恢复和孤立数据管理，Claude 与 Codex 从同一文件清单安装完整运行时，doctor 逐项检查依赖，所有模块通过现有控制器入口加载，Hook 注册保持不变
+`task-state.js` 是唯一允许修改任务生命周期的入口，Hook 输入、任务文件和 spec
+section 都有大小限制；任务状态无效、权威上下文缺失或超限、quoted heredoc 无法绑定到 wrapper command 时，`PreToolUse`
+Hook 返回 `permissionDecision: "deny"`，拒绝此次 Agent 或 wrapper 启动
+
+内部 `task-state-*.js`
+模块分别处理事务存储、任务生命周期、迁移恢复和孤立数据管理，Claude 与 Codex 从同一文件清单安装完整运行时，doctor 逐项检查依赖，所有模块通过现有控制器入口加载，Hook 注册保持不变
 
 ## Task 系统
 
@@ -248,11 +286,18 @@ CCG 安装 CommonJS Hook runtime，并在 `~/.claude/settings.json` 的五类 Ho
 └── historical-artifacts/orphans/ # 无 task.json 目录的可逆隔离区
 ```
 
-Task 文件只持久化 `open`、`completed` 或 `cancelled`。当前 session binding 指向 open task 时，resolver 返回 effective `in_progress`；其他 open task 显示 `suspended`。一个 open task 默认只由一个 session 认领，其 open `returnToTaskId` 链也属于同一 claim。选择已占用任务返回 `TASK_CLAIMED`，只有显式 takeover 才转移 binding。完成或恢复任务只修改调用 session 的 binding。state、binding、task 三层 compare-and-swap revision 拒绝过期写入；多文件修改会保留可重放的 transaction marker，直到全部原子替换完成。
+Task 文件只持久化 `open`、`completed` 或 `cancelled`。当前 session binding 指向 open task 时，resolver 返回 effective
+`in_progress`；其他 open task 显示 `suspended`。一个 open task 默认只由一个 session 认领，其 open `returnToTaskId`
+链也属于同一 claim。选择已占用任务返回
+`TASK_CLAIMED`，只有显式 takeover 才转移 binding。完成或恢复任务只修改调用 session 的 binding。state、binding、task 三层 compare-and-swap
+revision 拒绝过期写入；多文件修改会保留可重放的 transaction marker，直到全部原子替换完成。
 
-当前 session 没有 binding 但仍有 open task 时，控制器只返回候选元数据并要求显式选择。它不返回其他 session key，也不向当前 session 注入其他任务的 requirements、spec 或 artifact。这属于任务路由隔离，不是同一操作系统用户下的文件系统保密边界。
+当前 session 没有 binding 但仍有 open task 时，控制器只返回候选元数据并要求显式选择。它不返回其他 session
+key，也不向当前 session 注入其他任务的 requirements、spec 或 artifact。这属于任务路由隔离，不是同一操作系统用户下的文件系统保密边界。
 
-Schema v1 state、legacy task、有证据的无效状态和 orphan directory 分别使用显式迁移、修复与 quarantine 操作。旧 global pointer 只保留为重新认领提示，不自动分配。unfinished legacy task 保持 open；orphan directory 仅做 rename，不读取内容或推断 lifecycle。运行态父路径必须是 worktree 内的普通目录，symlink 会被拒绝。分支名和目录时间只用于诊断，不能选择任务。
+Schema v1 state、legacy task、有证据的无效状态和 orphan directory 分别使用显式迁移、修复与 quarantine 操作。旧 global
+pointer 只保留为重新认领提示，不自动分配。unfinished legacy task 保持 open；orphan
+directory 仅做 rename，不读取内容或推断 lifecycle。运行态父路径必须是 worktree 内的普通目录，symlink 会被拒绝。分支名和目录时间只用于诊断，不能选择任务。
 
 ## 规范权威
 
@@ -267,9 +312,13 @@ Schema v1 state、legacy task、有证据的无效状态和 orphan directory 分
 }
 ```
 
-Hook 验证项目相对路径、普通文件、literal Git 跟踪状态、fenced code block 之外的唯一精确 heading、完整且限长的 section、全部关联内容的上下文预算、角色和项目根边界。精确 spec section 与 `requirements.md` 先于可选任务 artifact 渲染，最终 32 KiB 限制不会删掉权威来源。系统不再扫描整个规范目录，也不再使用隐式 `.ccg/spec/` 模板。
+Hook 验证项目相对路径、普通文件、literal Git 跟踪状态、fenced code
+block 之外的唯一精确 heading、完整且限长的 section、全部关联内容的上下文预算、角色和项目根边界。精确 spec section 与
+`requirements.md` 先于可选任务 artifact 渲染，最终 32 KiB 限制不会删掉权威来源。系统不再扫描整个规范目录，也不再使用隐式
+`.ccg/spec/` 模板。
 
-当前明确用户请求决定执行范围；精确关联的 spec section 与 `requirements.md` 保存任务约束，计划、进度、compact 摘要和外部模型输出作为参考材料；新请求与任务记录冲突时，先更新任务范围再继续；compact/resume 和外部模型返回后，Lead 重新 resolve，并核对实体、版本、依赖方向、排除项和验收标准
+当前明确用户请求决定执行范围；精确关联的 spec section 与 `requirements.md`
+保存任务约束，计划、进度、compact 摘要和外部模型输出作为参考材料；新请求与任务记录冲突时，先更新任务范围再继续；compact/resume 和外部模型返回后，Lead 重新 resolve，并核对实体、版本、依赖方向、排除项和验收标准
 
 ## 本地与共享上下文
 
@@ -295,17 +344,29 @@ node bin/ccg.mjs init --skills none --skip-prompt --skip-mcp
 node bin/ccg.mjs doctor --json
 ```
 
-菜单 `S` 提供使用端选择和复选框；Claude 入口位于 `~/.claude/skills/ccg-*`，Codex 入口位于 `~/.agents/skills/ccg-*`；每个使用端维护独立 manifest 和发现目录之外的资源快照；更新只替换受管链接，移除入口后保留快照及其他用户技能；链接或快照被修改时报告错误并保留现有内容
+菜单 `S` 提供使用端选择和复选框；Claude 入口位于 `~/.claude/skills/ccg-*`，Codex 入口位于
+`~/.agents/skills/ccg-*`；每个使用端维护独立 manifest 和发现目录之外的资源快照；更新只替换受管链接，移除入口后保留快照及其他用户技能；链接或快照被修改时报告错误并保留现有内容
 
-原生模式按需加载选定的 `/ccg-<name>`，停用旧关键词知识注入；`--skills none` 选择零项，`--skills all` 选择全部目录项，逗号分隔列表选择指定技能；未配置原生选择时保留兼容安装，显式兼容模式优先于旧原生 manifest；仓库 plugin 继续使用 `/ccg:<name>` 命名空间和完整技能目录
+原生模式按需加载选定的 `/ccg-<name>`，停用旧关键词知识注入；`--skills none` 选择零项，`--skills all`
+选择全部目录项，逗号分隔列表选择指定技能；未配置原生选择时保留兼容安装，显式兼容模式优先于旧原生 manifest；仓库 plugin 继续使用
+`/ccg:<name>` 命名空间和完整技能目录
 
 ### 质量检查
 
-`verify-quality` 入口默认传递 `--language-checks`，调用项目本地 ESLint 和 TypeScript、已安装的 Ruff，或使用现有 compilation database 的 clang-tidy；报告列出实际执行的工具与文件，缺工具、文件未覆盖、配置错误和超时保留为未完成，直接调用脚本且省略该参数时保留文本规则检查
+`verify-quality` 入口默认传递
+`--language-checks`，调用项目本地 ESLint 和 TypeScript、已安装的 Ruff，或使用现有 compilation
+database 的 clang-tidy；报告列出实际执行的工具与文件，缺工具、文件未覆盖、配置错误和超时保留为未完成，直接调用脚本且省略该参数时保留文本规则检查
 
-函数复杂度、代码行数和参数数量阈值分别为 10、50 和 5；Vitest `describe`／`suite` 注册容器通过 import 绑定与作用域识别，单个测试、生产函数和被遮蔽的同名调用继续使用原阈值
+Go vet 和 Cargo／Clippy 离线执行，使用私有构建输出，按工具／项目／配置组共享 120 s 总预算，其他原生检查保持 30
+s，报告提供执行阶段耗时；报告声明支持的文件类型，TOML 权限、SSH 配置和 systemd 单元语义仍未覆盖
 
-质量与安全报告默认对照 Git `HEAD`，可用 `--base` 指定其他比较点；内置规则区分新增和既有问题，外部诊断没有同工具基线时保留来源未判定，既有阻断问题仍参与结果；变更分析使用最近模块已有的文档，纯测试变更不触发实现文档提醒
+函数复杂度、代码行数和参数数量阈值分别为 10、50 和 5，Python 签名支持嵌套默认值、注解、字符串和多行参数，接收者名称及裸
+`/`、`*` 分隔符不计参数；Vitest `describe`／`suite`
+注册容器通过 import 绑定与作用域识别，单个测试、生产函数和被遮蔽的同名调用继续使用原阈值
+
+质量与安全报告默认对照 Git `HEAD`，可用 `--base`
+指定其他比较点；内置规则区分新增和既有问题，外部诊断没有同工具基线时保留来源未判定，既有阻断问题仍参与结果；变更分析使用最近模块已有的文档，纯测试变更不触发实现文档提醒；比较两个提交时使用
+`verify-change <paths...> --mode committed --base <A> --target-ref <B>`，差异、模块边界、关联文档和 Rust 内联测试取自所选提交，支持当前工作区中已不存在的历史路径
 
 兼容安装和 Claude Code plugin 提供以下直接入口：
 
@@ -417,4 +478,5 @@ MIT
 
 ---
 
-v3.7.3-aug.2 | [Issues](https://github.com/Pyrokine/ccg-workflow/issues) | [Contributing](./CONTRIBUTING.md) | [Releasing](./RELEASING.md)
+v3.7.4-aug.1 | [Issues](https://github.com/Pyrokine/ccg-workflow/issues) | [Contributing](./CONTRIBUTING.md) |
+[Releasing](./RELEASING.md)

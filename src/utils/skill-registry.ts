@@ -59,20 +59,26 @@ const NATIVE_SKIP_NAMES = new Set([...SKIP_NAMES, 'references', 'refs'])
 // ═══════════════════════════════════════════════════════
 
 /**
- * Parse YAML frontmatter from a markdown file.
+ * Parse YAML frontmatter from a Markdown file.
  * Returns a plain key-value object, or null if no frontmatter found.
  */
 export function parseFrontmatter(content: string): Record<string, string> | null {
-  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/)
-  if (!match) return null
+  const match = content.match(/^---\r?\n(?<frontmatter>[\s\S]*?)\r?\n---/)
+  if (!match) {
+    return null
+  }
 
   const meta: Record<string, string> = Object.create(null)
   for (const rawLine of match[1].split(/\r?\n/)) {
     const line = rawLine.trim()
-    if (!line || line.startsWith('#')) continue
+    if (!line || line.startsWith('#')) {
+      continue
+    }
 
-    const m = rawLine.match(/^([\w][\w-]*)\s*:\s*(.+)$/)
-    if (!m) continue // Skip malformed lines instead of throwing
+    const m = rawLine.match(/^(?<key>\w[\w-]*)\s*:\s*(?<value>.+)$/)
+    if (!m) {
+      continue
+    } // Skip malformed lines instead of throwing
 
     if (!UNSAFE_KEYS.has(m[1])) {
       meta[m[1]] = m[2].trim().replace(/^["']|["']$/g, '')
@@ -88,10 +94,18 @@ export function parseFrontmatter(content: string): Record<string, string> | null
 function inferCategory(relPath: string): SkillCategory {
   const normalized = relPath.split(sep).join('/')
   const head = normalized.split('/')[0]
-  if (head === 'tools') return 'tool'
-  if (head === 'domains') return 'domain'
-  if (head === 'orchestration') return 'orchestration'
-  if (head === 'impeccable') return 'impeccable'
+  if (head === 'tools') {
+    return 'tool'
+  }
+  if (head === 'domains') {
+    return 'domain'
+  }
+  if (head === 'orchestration') {
+    return 'orchestration'
+  }
+  if (head === 'impeccable') {
+    return 'impeccable'
+  }
   return 'root'
 }
 
@@ -119,7 +133,9 @@ function commaSeparated(value: string | undefined): string[] {
 
 function normalizeAllowedTools(value: string | undefined): string[] {
   const tools = commaSeparated(value)
-  if (tools.length === 0) return [...DEFAULT_ALLOWED_TOOLS]
+  if (tools.length === 0) {
+    return [...DEFAULT_ALLOWED_TOOLS]
+  }
 
   // Validate tool names but don't throw — just filter invalid ones
   return tools.filter((t) => TOOL_NAME_RE.test(t))
@@ -127,7 +143,9 @@ function normalizeAllowedTools(value: string | undefined): string[] {
 
 function skillIdentity(meta: Record<string, string>) {
   const name = meta.name?.trim()
-  if (!name || !NAME_SLUG_RE.test(name)) return null
+  if (!name || !NAME_SLUG_RE.test(name)) {
+    return null
+  }
   const description = meta.description?.trim()
   return description ? { name, description } : null
 }
@@ -142,10 +160,14 @@ function normalizeSkillRecord(
   const scriptEntries = listScriptEntries(skillDir)
 
   // Skip if more than 1 script (ambiguous)
-  if (scriptEntries.length > 1 && !native) return null
+  if (scriptEntries.length > 1 && !native) {
+    return null
+  }
 
   const identity = skillIdentity(meta)
-  if (!identity) return null
+  if (!identity) {
+    return null
+  }
 
   // user-invocable defaults to false if missing
   const userInvocable = String(meta['user-invocable'] || 'false').toLowerCase() === 'true'
@@ -166,11 +188,17 @@ function normalizeSkillRecord(
 
 function readNativeSkill(skillsDir: string, dir: string): SkillMeta | null {
   const path = join(dir, 'SKILL.md')
-  if (!relative(skillsDir, dir) || !fs.existsSync(path)) return null
-  if (fs.lstatSync(path).isSymbolicLink()) throw new Error(`Template symlink is not supported: ${path}`)
+  if (!relative(skillsDir, dir) || !fs.existsSync(path)) {
+    return null
+  }
+  if (fs.lstatSync(path).isSymbolicLink()) {
+    throw new Error(`Template symlink is not supported: ${path}`)
+  }
   const meta = parseFrontmatter(fs.readFileSync(path, 'utf8'))
   const skill = meta && normalizeSkillRecord(skillsDir, dir, meta, true)
-  if (!skill) throw new Error(`Invalid skill metadata: ${path}`)
+  if (!skill) {
+    throw new Error(`Invalid skill metadata: ${path}`)
+  }
   return skill
 }
 
@@ -180,19 +208,31 @@ export function collectNativeSkills(skillsDir: string): SkillMeta[] {
   const names = new Set<string>()
   function walk(dir: string): void {
     const rel = relative(skillsDir, dir).split(sep).join('/')
-    if (rel === 'domains/security' || rel.startsWith('domains/security/')) return
+    if (rel === 'domains/security' || rel.startsWith('domains/security/')) {
+      return
+    }
     const stat = fs.lstatSync(dir)
-    if (stat.isSymbolicLink()) throw new Error(`Template symlink is not supported: ${dir}`)
+    if (stat.isSymbolicLink()) {
+      throw new Error(`Template symlink is not supported: ${dir}`)
+    }
     const skill = readNativeSkill(skillsDir, dir)
     if (skill) {
-      if (names.has(skill.name)) throw new Error(`Duplicate skill slug: ${skill.name}`)
+      if (names.has(skill.name)) {
+        throw new Error(`Duplicate skill slug: ${skill.name}`)
+      }
       names.add(skill.name)
       skills.push(skill)
     }
     for (const entry of fs.readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
-      if (NATIVE_SKIP_NAMES.has(entry.name)) continue
-      if (entry.isSymbolicLink()) throw new Error(`Template symlink is not supported: ${join(dir, entry.name)}`)
-      if (entry.isDirectory()) walk(join(dir, entry.name))
+      if (NATIVE_SKIP_NAMES.has(entry.name)) {
+        continue
+      }
+      if (entry.isSymbolicLink()) {
+        throw new Error(`Template symlink is not supported: ${join(dir, entry.name)}`)
+      }
+      if (entry.isDirectory()) {
+        walk(join(dir, entry.name))
+      }
     }
   }
   walk(skillsDir)
@@ -205,7 +245,9 @@ export function collectNativeSkills(skillsDir: string): SkillMeta[] {
 
 function readLegacySkill(skillsDir: string, dir: string): SkillMeta | null {
   const skillMd = join(dir, 'SKILL.md')
-  if (!fs.existsSync(skillMd)) return null
+  if (!fs.existsSync(skillMd)) {
+    return null
+  }
   try {
     const content = fs.readFileSync(skillMd, 'utf8')
     const meta = parseFrontmatter(content)
@@ -238,8 +280,12 @@ export function collectSkills(skillsDir: string): SkillMeta[] {
     }
 
     for (const entry of entries) {
-      if (!entry.isDirectory()) continue
-      if (SKIP_NAMES.has(entry.name)) continue
+      if (!entry.isDirectory()) {
+        continue
+      }
+      if (SKIP_NAMES.has(entry.name)) {
+        continue
+      }
       scan(join(dir, entry.name))
     }
   }
@@ -286,7 +332,18 @@ export function generateCommandContent(skill: SkillMeta, skillsInstallDir: strin
       '执行以下命令：',
       '',
       '```bash',
-      `node "${runSkillPath}" ${skill.name}${skill.name === 'verify-quality' ? ' --language-checks' : ''} $ARGUMENTS`,
+      ...(skill.name === 'verify-quality'
+        ? [
+            'set -- $ARGUMENTS',
+            'language_checks=',
+            'for argument do',
+            '  [ "$argument" = -- ] && break',
+            '  [ "$argument" = --language-checks ] && language_checks=1',
+            'done',
+            '[ -n "$language_checks" ] || set -- --language-checks "$@"',
+            `node "${runSkillPath}" ${skill.name} "$@"`,
+          ]
+        : [`node "${runSkillPath}" ${skill.name} $ARGUMENTS`]),
       '```',
       '',
       `如需了解此技能的详细说明，请读取: ${skillMdPath}`,
@@ -318,6 +375,7 @@ export function generateCommandContent(skill: SkillMeta, skillsInstallDir: strin
  * @param skillsInstallDir - Path to ~/.claude/skills/ccg/ (installed destination)
  * @param commandsDir - Path to ~/.claude/commands/ccg/ (command output)
  * @param existingCommandNames - Set of command names already defined in installer-data.ts (to avoid conflicts)
+ * @param skipCategories - Skill categories excluded from command generation
  * @returns List of generated command names
  */
 export async function installSkillCommands(
@@ -334,7 +392,9 @@ export async function installSkillCommands(
 
   for (const skill of invocableSkills) {
     // Skip if a command with this name already exists in installer-data.ts
-    if (existingCommandNames.has(skill.name)) continue
+    if (existingCommandNames.has(skill.name)) {
+      continue
+    }
 
     const content = generateCommandContent(skill, skillsInstallDir)
     const cmdPath = join(commandsDir, `${skill.name}.md`)

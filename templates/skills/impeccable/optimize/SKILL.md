@@ -9,6 +9,8 @@ Identify and fix performance issues to create faster, smoother user experiences.
 
 ## Assess Performance Issues
 
+Font-loading snippets require the target project’s `/fonts/custom.woff2` asset.
+
 Understand current performance and identify problems:
 
 1. **Measure current state**:
@@ -61,7 +63,7 @@ Create systematic improvement plan:
 
 ```javascript
 // Lazy load heavy component
-const HeavyChart = lazy(() => import('./HeavyChart'));
+const HeavyChart = lazy(() => import('./HeavyChart'))
 ```
 
 **Optimize CSS**:
@@ -102,16 +104,16 @@ const HeavyChart = lazy(() => import('./HeavyChart'));
 
 ```javascript
 // ❌ Bad: Alternating reads and writes (causes reflows)
-elements.forEach(el => {
-  const height = el.offsetHeight; // Read (forces layout)
-  el.style.height = height * 2; // Write
-});
+elements.forEach((el) => {
+  const height = el.offsetHeight // Read (forces layout)
+  el.style.height = height * 2 // Write
+})
 
 // ✅ Good: Batch reads, then batch writes
-const heights = elements.map(el => el.offsetHeight); // All reads
+const heights = elements.map((el) => el.offsetHeight) // All reads
 elements.forEach((el, i) => {
-  el.style.height = heights[i] * 2; // All writes
-});
+  el.style.height = heights[i] * 2 // All writes
+})
 ```
 
 **Optimize Rendering**:
@@ -160,12 +162,12 @@ elements.forEach((el, i) => {
 ```javascript
 // Efficiently detect when elements enter viewport
 const observer = new IntersectionObserver((entries) => {
-  entries.forEach(entry => {
+  entries.forEach((entry) => {
     if (entry.isIntersecting) {
       // Element is visible, lazy load or animate
     }
-  });
-});
+  })
+})
 ```
 
 ### React/Framework Optimization
@@ -283,8 +285,7 @@ Test that optimizations worked:
 - **Different devices**: Test on low-end Android, not just flagship iPhone
 - **Slow connections**: Throttle to 3G, test experience
 - **No regressions**: Ensure functionality still works
-- **User perception**: Does it *feel* faster?
+- **User perception**: Does it _feel_ faster?
 
 Remember: Performance is a feature. Fast experiences feel more responsive, more polished, more professional. Optimize
 systematically, measure ruthlessly, and prioritize user-perceived performance.
-

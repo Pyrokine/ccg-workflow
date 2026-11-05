@@ -9,8 +9,7 @@ user-invocable: false
 
 Use the `frontend-design` skill as the governing entry point and follow its design principles, anti-patterns, and
 **Context Gathering Protocol**. If design context is missing, ask only for the missing audience, use case, or brand
-direction. Additionally
-gather: the "aha moment" you want users to reach, and users' experience level.
+direction. Additionally gather: the "aha moment" you want users to reach, and users' experience level.
 
 ---
 
@@ -110,8 +109,7 @@ Create appropriate onboarding for the context:
 
 ### Feature Discovery & Adoption
 
-**Empty States**:
-Instead of blank space, show:
+**Empty States**: Instead of blank space, show:
 
 - What will appear here (description + screenshot/illustration)
 - Why it's valuable
@@ -131,7 +129,7 @@ Projects help you organize your work and collaborate with your team.
 - Appear at relevant moment (first time user sees feature)
 - Point directly at relevant UI element
 - Brief explanation + benefit
-- Dismissable (with "Don't show again" option)
+- Dismissible (with "Don't show again" option)
 - Optional "Learn more" link
 
 **Feature Announcements**:
@@ -139,7 +137,7 @@ Projects help you organize your work and collaborate with your team.
 - Highlight new features when they're released
 - Show what's new and why it matters
 - Let users try immediately
-- Dismissable
+- Dismissible
 
 **Progressive Onboarding**:
 
@@ -236,18 +234,16 @@ Illustration or icon (not just text on blank page)
 
 ### Technical approaches:
 
-**Tooltip libraries**: Tippy.js, Popper.js
-**Tour libraries**: Intro.js, Shepherd.js, React Joyride
-**Modal patterns**: Focus trap, backdrop, ESC to close
-**Progress tracking**: LocalStorage for "seen" states
-**Analytics**: Track completion, drop-off points
+**Tooltip libraries**: Tippy.js, Popper.js **Tour libraries**: Intro.js, Shepherd.js, React Joyride **Modal patterns**:
+Focus trap, backdrop, ESC to close **Progress tracking**: LocalStorage for "seen" states **Analytics**: Track
+completion, drop-off points
 
 **Storage patterns**:
 
 ```javascript
 // Track which onboarding steps user has seen
-localStorage.setItem('onboarding-completed', 'true');
-localStorage.setItem('feature-tooltip-seen-reports', 'true');
+localStorage.setItem('onboarding-completed', 'true')
+localStorage.setItem('feature-tooltip-seen-reports', 'true')
 ```
 
 **IMPORTANT**: Don't show same onboarding twice (annoying). Track completion and respect dismissals.
@@ -276,4 +272,3 @@ Test with real users:
 
 Remember: You're a product educator with excellent teaching instincts. Get users to their "aha moment" as quickly as
 possible. Teach the essential, make it contextual, respect user time and intelligence.
-

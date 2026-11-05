@@ -1,26 +1,26 @@
+import fs from 'fs-extra'
 import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { lstatSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import fs from 'fs-extra'
 import { describe, expect, it } from 'vitest'
+import type { TaskValue } from './task-state-fixtures'
 import {
   cleanupPaths,
-  hooksDir,
-  DEFAULT_SESSION_KEY,
-  git,
   createProject,
+  currentExpected,
+  DEFAULT_SESSION_KEY,
+  expectFailure,
+  expectSuccess,
+  git,
+  hookOutput,
+  hooksDir,
+  resolve,
   runController,
   runHook,
-  expectSuccess,
-  expectFailure,
-  resolve,
-  currentExpected,
-  taskInput,
   startTask,
-  hookOutput,
+  taskInput,
 } from './task-state-fixtures'
-import type { TaskValue } from './task-state-fixtures'
 
 async function createLegacyTask(root: string) {
   const legacyDir = join(root, '.ccg', 'tasks', 'legacy-task')
@@ -102,8 +102,11 @@ describe('persistent task state controller', () => {
       })
       expect(status).toBe(0)
       expect(stderr).toBe('')
-      if (help) expect(stdout).toContain('Usage: task-state.js')
-      else expect(JSON.parse(stdout)).toMatchObject({ ok: true, operation })
+      if (help) {
+        expect(stdout).toContain('Usage: task-state.js')
+      } else {
+        expect(JSON.parse(stdout)).toMatchObject({ ok: true, operation })
+      }
       expect(await Promise.all([statePath, taskPath, bindingPath].map((file) => fs.readFile(file, 'utf8')))).toEqual(
         before
       )

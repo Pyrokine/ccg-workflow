@@ -18,34 +18,18 @@ Read("~/.claude/.ccg/engine/model-router.md")
 
 ## 工作流状态机
 
-[phase-state:1-collect]
-当前阶段：信息收集
-📍 Next: 收集完错误信息后启动双模型诊断
-[/phase-state:1-collect]
+[phase-state:1-collect] 当前阶段：信息收集 📍 Next: 收集完错误信息后启动双模型诊断 [/phase-state:1-collect]
 
-[phase-state:2-diagnose]
-当前阶段：双模型并行诊断
-Gate: 错误信息已收集 ✓
-📍 Next: 双模型诊断返回后进入交叉验证
-[/phase-state:2-diagnose]
+[phase-state:2-diagnose] 当前阶段：双模型并行诊断 Gate: 错误信息已收集 ✓ 📍
+Next: 双模型诊断返回后进入交叉验证 [/phase-state:2-diagnose]
 
-[phase-state:3-validate]
-当前阶段：交叉验证
-Gate: 双模型诊断已返回 ✓
-📍 Next: 假设排序后请用户确认修复方向
-[/phase-state:3-validate]
+[phase-state:3-validate] 当前阶段：交叉验证 Gate: 双模型诊断已返回 ✓ 📍
+Next: 假设排序后请用户确认修复方向 [/phase-state:3-validate]
 
-[phase-state:4-confirm]
-当前阶段：用户确认（HARD STOP）
-Gate: 假设已排序 ✓
-📍 Next: 用户确认后进入修复
-[/phase-state:4-confirm]
+[phase-state:4-confirm] 当前阶段：用户确认（HARD STOP）Gate: 假设已排序 ✓ 📍
+Next: 用户确认后进入修复 [/phase-state:4-confirm]
 
-[phase-state:5-fix]
-当前阶段：修复与验证
-Gate: 用户已确认修复方向 ✓
-📍 Next: 修复完成后报告结果
-[/phase-state:5-fix]
+[phase-state:5-fix] 当前阶段：修复与验证 Gate: 用户已确认修复方向 ✓ 📍 Next: 修复完成后报告结果 [/phase-state:5-fix]
 
 ---
 
@@ -53,7 +37,8 @@ Gate: 用户已确认修复方向 ✓
 
 ### Phase 1: 信息收集 [required]
 
-使用 `checkpoint` 更新为 `1-collect`，下一动作设为“收集错误信息”。把复现条件、错误消息和明确约束写入 `requirements.md`，需要修改契约时调用 `update-requirements`。
+使用 `checkpoint` 更新为 `1-collect`，下一动作设为“收集错误信息”。把复现条件、错误消息和明确约束写入
+`requirements.md`，需要修改契约时调用 `update-requirements`。
 
 1. 收集错误上下文：
     - 错误消息 / 堆栈跟踪
@@ -80,7 +65,8 @@ Gate: 用户已确认修复方向 ✓
   ```
 - **frontend 模型**：debugger 角色（相同格式）
 
-等待双模型返回。返回后重新 `resolve`，确认 active task 和 revision 未变化。将诊断证据与假设使用 `write-artifact` 写入 `analysis.md`，再用 `checkpoint` 更新为 `2-diagnose`，下一动作设为“交叉验证诊断假设”。
+等待双模型返回。返回后重新 `resolve`，确认 active task 和 revision 未变化。将诊断证据与假设使用 `write-artifact` 写入
+`analysis.md`，再用 `checkpoint` 更新为 `2-diagnose`，下一动作设为“交叉验证诊断假设”。
 
 ### Phase 3: 交叉验证
 
@@ -143,7 +129,8 @@ Gate: 用户已确认修复方向 ✓
 
 #### Spec Evolution 与完成
 
-按 `phase-guide.md § 7` 检查根因和修复是否需要更新项目已有的 tracked 文档或 OpenSpec，并用 `set-spec-evolution` 记录结果。
+按 `phase-guide.md § 7` 检查根因和修复是否需要更新项目已有的 tracked 文档或 OpenSpec，并用 `set-spec-evolution`
+记录结果。
 
 验证通过且 Gate 为 `null` 后，用 `finish` 标记任务为 `completed`。任务目录保持原路径，不移动、不提交 `.ccg/`。
 

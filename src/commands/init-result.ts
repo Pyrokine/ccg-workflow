@@ -33,7 +33,9 @@ function showInstalledContent(result: InstallResult): void {
     const grouped: Record<string, string[]> = {}
     result.installedPrompts.forEach((p) => {
       const [model, role] = p.split('/')
-      if (!grouped[model]) grouped[model] = []
+      if (!grouped[model]) {
+        grouped[model] = []
+      }
       grouped[model].push(role)
     })
     Object.entries(grouped).forEach(([model, roles]) => {

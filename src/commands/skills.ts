@@ -1,19 +1,19 @@
 import type { CAC } from 'cac'
-import { dirname } from 'node:path'
 import inquirer from 'inquirer'
+import { dirname } from 'node:path'
+import { readCcgConfig, writeCcgConfig } from '../utils/config'
+import { activateNativeSkills } from '../utils/skill-activation'
+import type { SkillManagerOptions, SkillTarget } from '../utils/skill-manager'
 import {
   getSkillCatalog,
   installedNames,
   installSkills,
   listSkills,
   removeSkills,
+  resolveSkillPaths,
   syncSkills,
   updateSkills,
 } from '../utils/skill-manager'
-import type { SkillManagerOptions, SkillTarget } from '../utils/skill-manager'
-import { resolveSkillPaths } from '../utils/skill-manager'
-import { readCcgConfig, writeCcgConfig } from '../utils/config'
-import { activateNativeSkills } from '../utils/skill-activation'
 
 export interface SkillCommandOptions extends SkillManagerOptions {
   json?: boolean
@@ -23,14 +23,19 @@ export interface SkillCommandOptions extends SkillManagerOptions {
 async function saveNativeSelection(selected: string[], options: SkillManagerOptions): Promise<void> {
   const paths = resolveSkillPaths(options)
   const defaults = resolveSkillPaths({ target: 'claude' })
-  if (paths.target !== 'claude' || paths.nativeDir !== defaults.nativeDir || paths.storeDir !== defaults.storeDir)
+  if (paths.target !== 'claude' || paths.nativeDir !== defaults.nativeDir || paths.storeDir !== defaults.storeDir) {
     return
+  }
   const config = await readCcgConfig()
-  if (!config) return
+  if (!config) {
+    return
+  }
   config.performance = { ...config.performance, skillsProfile: selected, skillsMode: 'native' }
   await writeCcgConfig(config)
   const notes = await activateNativeSkills({ installDir: dirname(defaults.nativeDir), names: selected })
-  for (const note of notes) console.error(`Skills: ${note}`)
+  for (const note of notes) {
+    console.error(`Skills: ${note}`)
+  }
 }
 
 export async function runSkillsCommand(
@@ -103,12 +108,15 @@ export async function manageSkillsMenu(options: SkillManagerOptions = {}): Promi
 }
 
 function validateSkillsAction(action: string, names: string[]): void {
-  if (!['catalog', 'list', 'install', 'update', 'remove'].includes(action))
+  if (!['catalog', 'list', 'install', 'update', 'remove'].includes(action)) {
     throw new Error(`Unknown skills action: ${action}`)
-  if (['catalog', 'list', 'update'].includes(action) && names.length)
+  }
+  if (['catalog', 'list', 'update'].includes(action) && names.length) {
     throw new Error(`${action} does not accept skill names`)
-  if (['install', 'remove'].includes(action) && !names.length)
+  }
+  if (['install', 'remove'].includes(action) && !names.length) {
     throw new Error(`${action} requires one or more catalog slugs`)
+  }
 }
 
 function showSkillCatalog(options: SkillCommandOptions): void {
@@ -118,20 +126,29 @@ function showSkillCatalog(options: SkillCommandOptions): void {
     description,
     category,
   }))
-  if (options.json) console.log(JSON.stringify(catalog, null, 2))
-  else for (const entry of catalog) console.log(`${entry.name} [${entry.category}] ${entry.description}`)
+  if (options.json) {
+    console.log(JSON.stringify(catalog, null, 2))
+  } else {
+    for (const entry of catalog) {
+      console.log(`${entry.name} [${entry.category}] ${entry.description}`)
+    }
+  }
 }
 
 async function showSelectedSkills(options: SkillCommandOptions): Promise<void> {
   let entries = await listSkills(options)
-  if (options.installed) entries = entries.filter((s) => s.installed)
-  if (options.json) console.log(JSON.stringify(entries, null, 2))
-  else {
+  if (options.installed) {
+    entries = entries.filter((s) => s.installed)
+  }
+  if (options.json) {
+    console.log(JSON.stringify(entries, null, 2))
+  } else {
     console.log(`Skills (${options.target ?? 'claude'}): ${entries.filter((s) => s.installed).length} selected`)
-    for (const entry of entries)
+    for (const entry of entries) {
       console.log(
         `${entry.installed ? (entry.healthy ? '✓' : '!') : '·'} ${entry.name} [${entry.category}] ${entry.description}`
       )
+    }
   }
 }
 

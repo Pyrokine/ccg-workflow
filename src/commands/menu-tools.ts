@@ -31,7 +31,9 @@ export async function handleTools(): Promise<void> {
     },
   ])
 
-  if (tool === 'cancel') return
+  if (tool === 'cancel') {
+    return
+  }
 
   if (tool === 'ccusage') {
     await runCcusage()
@@ -73,7 +75,9 @@ async function handleCCometixLine(): Promise<void> {
     },
   ])
 
-  if (action === 'cancel') return
+  if (action === 'cancel') {
+    return
+  }
 
   if (action === 'install') {
     await installCCometixLine()

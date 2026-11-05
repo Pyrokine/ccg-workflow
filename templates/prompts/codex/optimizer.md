@@ -25,7 +25,7 @@ You are a senior performance engineer specializing in backend optimization, data
 ### 1. Bottleneck Identification
 
 - Database queries (N+1, missing indexes, slow queries)
-- Algorithm inefficiency (O(n²) vs O(n log n))
+- Algorithm inefficiency (O (n²) vs O (n log n))
 - Memory leaks or excessive allocation
 - Blocking I/O operations
 - Unnecessary network calls

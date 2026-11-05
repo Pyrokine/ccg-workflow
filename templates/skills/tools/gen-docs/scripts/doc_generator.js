@@ -4,7 +4,7 @@
  * 自动生成/更新 README.md 和 DESIGN.md 骨架
  */
 
-const fs = require('fs');
+const fs = require('node:fs');
 const path = require('path');
 
 // --- Utilities ---
@@ -24,11 +24,17 @@ function parseGitignore(modPath) {
       line = line.trim();
       if (line && !line.startsWith('#')) {
         const negate = line.startsWith('!');
-        if (negate) line = line.slice(1);
+        if (negate) {
+          line = line.slice(1);
+        }
         patterns.push({ pattern: line, negate });
       }
     });
-  } catch {}
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      throw error;
+    }
+  }
 
   return patterns;
 }
@@ -40,7 +46,7 @@ function shouldIgnore(filePath, basePath, patterns) {
 
   let ignored = false;
   for (const { pattern, negate } of patterns) {
-    let match = false;
+    let match;
     const cleanPattern = pattern.replace(/\/$/, '');
 
     if (cleanPattern.includes('*')) {
@@ -56,19 +62,23 @@ function shouldIgnore(filePath, basePath, patterns) {
       match = name === cleanPattern || parts.includes(cleanPattern);
     }
 
-    if (match) ignored = !negate;
+    if (match) {
+      ignored = !negate;
+    }
   }
   return ignored;
 }
 
-function rglob(dir, filter, basePath = dir) {
+function rglob(dir, filter = undefined, basePath = dir) {
   const patterns = parseGitignore(basePath);
   const results = [];
 
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
 
-    if (shouldIgnore(full, basePath, patterns)) continue;
+    if (shouldIgnore(full, basePath, patterns)) {
+      continue;
+    }
 
     if (entry.isDirectory()) {
       results.push(...rglob(full, filter, basePath));
@@ -97,10 +107,12 @@ function detectLanguage(modPath) {
   try {
     for (const f of rglob(modPath)) {
       const ext = path.extname(f).toLowerCase();
-      if (ext) exts[ext] = (exts[ext] || 0) + 1;
+      if (ext) {
+        exts[ext] = (exts[ext] || 0) + 1;
+      }
     }
-  } catch {
-    return 'Unknown';
+  } catch (error) {
+    throw new Error(`Cannot inspect module ${modPath}: ${error.message}`, { cause: error });
   }
   const codeExts = Object.entries(exts).filter(([k]) => k in LANG_MAP);
   if (codeExts.length) {
@@ -119,28 +131,34 @@ function analyzePythonModule(modPath) {
 
   for (const pyFile of pyFiles) {
     const basename = path.basename(pyFile);
-    if (basename.startsWith('test_') || basename.includes('_test')) continue;
+    if (basename.startsWith('test_') || basename.includes('_test')) {
+      continue;
+    }
     let content;
     try {
       content = fs.readFileSync(pyFile, 'utf-8');
-    } catch {
-      continue;
+    } catch (error) {
+      throw new Error(`Cannot read source ${pyFile}`, { cause: error });
     }
 
     // Module docstring (triple-quoted at top)
     if (!info.description) {
-      const docM = content.match(/^(?:#[^\n]*\n)*\s*(?:"""([\s\S]*?)"""|'''([\s\S]*?)''')/);
-      if (docM) info.description = (docM[1] || docM[2]).split('\n')[0].trim();
+      const docM = content.match(
+        /^(?:#[^\n]*\n)*\s*(?:"""(?<doubleQuoted>[\s\S]*?)"""|'''(?<singleQuoted>[\s\S]*?)''')/
+      );
+      if (docM) {
+        info.description = (docM[1] || docM[2]).split('\n')[0].trim();
+      }
     }
 
     const rel = path.relative(modPath, pyFile);
 
     // Functions
-    for (const m of content.matchAll(/^def\s+([A-Za-z]\w*)\s*\(/gm)) {
+    for (const m of content.matchAll(/^def\s+(?<name>[A-Za-z]\w*)\s*\(/gm)) {
       info.functions.push({ name: m[1], file: rel, doc: '' });
     }
     // Classes
-    for (const m of content.matchAll(/^class\s+([A-Za-z]\w*)\s*[:(]/gm)) {
+    for (const m of content.matchAll(/^class\s+(?<name>[A-Za-z]\w*)\s*[:(]/gm)) {
       info.classes.push({ name: m[1], file: rel, doc: '' });
     }
 
@@ -160,7 +178,11 @@ function analyzePythonModule(modPath) {
         info.dependencies.push(trimmed.split(/[=><]/)[0]);
       }
     }
-  } catch {}
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      throw error;
+    }
+  }
 
   return info;
 }
@@ -168,49 +190,59 @@ function analyzePythonModule(modPath) {
 // --- Generic analysis (regex fallback) ---
 
 const LANG_PATTERNS = {
-  Go: [/^\s*func\s+(\w+)/, /^\s*type\s+(\w+)\s+struct\b/],
-  Rust: [/^\s*(?:pub\s+)?fn\s+(\w+)/, /^\s*(?:pub\s+)?struct\s+(\w+)/],
-  TypeScript: [/^\s*(?:export\s+)?(?:async\s+)?function\s+(\w+)/, /^\s*(?:export\s+)?class\s+(\w+)/],
-  JavaScript: [/^\s*(?:export\s+)?(?:async\s+)?function\s+(\w+)/, /^\s*(?:export\s+)?class\s+(\w+)/],
-  Java: [/^\s*(?:public|private|protected)?\s*(?:static\s+)?\w+\s+(\w+)\s*\(/, /^\s*(?:public\s+)?class\s+(\w+)/],
-  'C++': [/^\s*(?:\w+\s+)+(\w+)\s*\([^;]*$/, /^\s*class\s+(\w+)/],
-  C: [/^\s*(?:\w+\s+)+(\w+)\s*\([^;]*$/, null],
+  Go: [/^\s*func\s+(?<name>\w+)/, /^\s*type\s+(?<name>\w+)\s+struct\b/],
+  Rust: [/^\s*(?:pub\s+)?fn\s+(?<name>\w+)/, /^\s*(?:pub\s+)?struct\s+(?<name>\w+)/],
+  TypeScript: [/^\s*(?:export\s+)?(?:async\s+)?function\s+(?<name>\w+)/, /^\s*(?:export\s+)?class\s+(?<name>\w+)/],
+  JavaScript: [/^\s*(?:export\s+)?(?:async\s+)?function\s+(?<name>\w+)/, /^\s*(?:export\s+)?class\s+(?<name>\w+)/],
+  Java: [
+    /^\s*(?:public|private|protected)?\s*(?:static\s+)?\w+\s+(?<name>\w+)\s*\(/,
+    /^\s*(?:public\s+)?class\s+(?<name>\w+)/,
+  ],
+  'C++': [/^\s*(?:\w+\s+)+(?<name>\w+)\s*\([^;]*$/, /^\s*class\s+(?<name>\w+)/],
+  C: [/^\s*(?:\w+\s+)+(?<name>\w+)\s*\([^;]*$/, null],
 };
 
 const CODE_EXTS = new Set(['.py', '.go', '.rs', '.ts', '.js', '.java', '.c', '.cpp']);
 
 function analyzeModule(modPath) {
   const language = detectLanguage(modPath);
-  if (language === 'Python') return analyzePythonModule(modPath);
+  if (language === 'Python') {
+    return analyzePythonModule(modPath);
+  }
 
   const info = makeInfo(modPath, language);
   const [funcPat, clsPat] = LANG_PATTERNS[language] || [null, null];
 
   try {
     for (const f of rglob(modPath)) {
-      if (!CODE_EXTS.has(path.extname(f).toLowerCase())) continue;
+      if (!CODE_EXTS.has(path.extname(f).toLowerCase())) {
+        continue;
+      }
       const rel = path.relative(modPath, f);
       info.files.push(rel);
 
-      if (!funcPat && !clsPat) continue;
-      let content;
-      try {
-        content = fs.readFileSync(f, 'utf-8');
-      } catch {
+      if (!funcPat && !clsPat) {
         continue;
       }
+      const content = fs.readFileSync(f, 'utf-8');
       for (const line of content.split('\n')) {
         if (funcPat) {
           const m = line.match(funcPat);
-          if (m && !m[1].startsWith('_')) info.functions.push({ name: m[1], file: rel, doc: '' });
+          if (m && !m[1].startsWith('_')) {
+            info.functions.push({ name: m[1], file: rel, doc: '' });
+          }
         }
         if (clsPat) {
           const m = line.match(clsPat);
-          if (m && !m[1].startsWith('_')) info.classes.push({ name: m[1], file: rel, doc: '' });
+          if (m && !m[1].startsWith('_')) {
+            info.classes.push({ name: m[1], file: rel, doc: '' });
+          }
         }
       }
     }
-  } catch {}
+  } catch (error) {
+    throw new Error(`Cannot inspect module ${modPath}: ${error.message}`, { cause: error });
+  }
 
   return info;
 }
@@ -249,7 +281,9 @@ function generateReadme(info) {
   if (info.dependencies.length) {
     L.push('## 依赖', '', '```');
     info.dependencies.slice(0, 10).forEach((d) => L.push(d));
-    if (info.dependencies.length > 10) L.push(`# ... 及其他 ${info.dependencies.length - 10} 个依赖`);
+    if (info.dependencies.length > 10) {
+      L.push(`# ... 及其他 ${info.dependencies.length - 10} 个依赖`);
+    }
     L.push('```', '');
   }
 
@@ -319,7 +353,9 @@ function generateReadme(info) {
     .sort()
     .slice(0, 15)
     .forEach((f) => L.push(`├── ${f}`));
-  if (info.files.length > 15) L.push(`└── ... (${info.files.length - 15} more files)`);
+  if (info.files.length > 15) {
+    L.push(`└── ... (${info.files.length - 15} more files)`);
+  }
   L.push('```', '');
   L.push('## 相关文档', '', '- [设计文档](DESIGN.md)', '');
   return L.join('\n');
@@ -354,7 +390,9 @@ function generateDesign(info) {
   L.push('| 日期 | 决策 | 理由 | 影响 |', '|------|------|------|------|');
   L.push(`| ${today} | 初始设计 | - | - |`, '');
   L.push('### 技术选型', '', `- **语言**: ${info.language}`);
-  if (info.dependencies.length) L.push(`- **主要依赖**: ${info.dependencies.slice(0, 5).join(', ')}`);
+  if (info.dependencies.length) {
+    L.push(`- **主要依赖**: ${info.dependencies.slice(0, 5).join(', ')}`);
+  }
   L.push('- **理由**: <!-- 请说明为什么选择这些技术栈，包括性能、可维护性、生态等考量 -->', '');
   L.push('## 权衡取舍', '', '### 已知限制', '');
   L.push('<!-- 列出模块的已知限制和约束条件 -->');
@@ -378,36 +416,47 @@ function generateDesign(info) {
 
 // --- Core: generate_docs ---
 
-function generateDocs(targetPath, force) {
+function generateDocs(targetPath, force, readmeOnly = false, designOnly = false) {
   const modPath = path.resolve(targetPath);
   const result = { readme: null, design: null, status: 'success', messages: [] };
 
+  if (readmeOnly && designOnly) {
+    result.status = 'error';
+    result.messages.push('--readme-only 与 --design-only 只能选择一项');
+    return result;
+  }
   if (!fs.existsSync(modPath)) {
     result.status = 'error';
     result.messages.push(`路径不存在: ${modPath}`);
     return result;
   }
 
-  const info = analyzeModule(modPath);
-
-  const readmePath = path.join(modPath, 'README.md');
-  if (fs.existsSync(readmePath) && !force) {
-    result.messages.push('README.md 已存在，跳过（使用 --force 覆盖）');
-  } else {
-    fs.writeFileSync(readmePath, generateReadme(info));
-    result.readme = readmePath;
-    result.messages.push('已生成 README.md');
+  try {
+    const info = analyzeModule(modPath);
+    if (!designOnly) {
+      const readmePath = path.join(modPath, 'README.md');
+      if (fs.existsSync(readmePath) && !force) {
+        result.messages.push('README.md 已存在，跳过（使用 --force 覆盖）');
+      } else {
+        fs.writeFileSync(readmePath, generateReadme(info));
+        result.readme = readmePath;
+        result.messages.push('已生成 README.md');
+      }
+    }
+    if (!readmeOnly) {
+      const designPath = path.join(modPath, 'DESIGN.md');
+      if (fs.existsSync(designPath) && !force) {
+        result.messages.push('DESIGN.md 已存在，跳过（使用 --force 覆盖）');
+      } else {
+        fs.writeFileSync(designPath, generateDesign(info));
+        result.design = designPath;
+        result.messages.push('已生成 DESIGN.md');
+      }
+    }
+  } catch (error) {
+    result.status = 'error';
+    result.messages.push(error.message);
   }
-
-  const designPath = path.join(modPath, 'DESIGN.md');
-  if (fs.existsSync(designPath) && !force) {
-    result.messages.push('DESIGN.md 已存在，跳过（使用 --force 覆盖）');
-  } else {
-    fs.writeFileSync(designPath, generateDesign(info));
-    result.design = designPath;
-    result.messages.push('已生成 DESIGN.md');
-  }
-
   return result;
 }
 
@@ -418,22 +467,30 @@ function parseArgs(argv) {
   const rest = argv.slice(2);
   const positional = [];
   for (const a of rest) {
-    if (a === '-f' || a === '--force') args.force = true;
-    else if (a === '--json') args.json = true;
-    else if (a === '--readme-only') args.readmeOnly = true;
-    else if (a === '--design-only') args.designOnly = true;
-    else if (a === '-h' || a === '--help') {
+    if (a === '-f' || a === '--force') {
+      args.force = true;
+    } else if (a === '--json') {
+      args.json = true;
+    } else if (a === '--readme-only') {
+      args.readmeOnly = true;
+    } else if (a === '--design-only') {
+      args.designOnly = true;
+    } else if (a === '-h' || a === '--help') {
       console.log('Usage: doc_generator.js [path] [-f|--force] [--json] [--readme-only] [--design-only]');
       process.exit(0);
-    } else positional.push(a);
+    } else {
+      positional.push(a);
+    }
   }
-  if (positional.length) args.path = positional[0];
+  if (positional.length) {
+    args.path = positional[0];
+  }
   return args;
 }
 
 function main() {
   const args = parseArgs(process.argv);
-  const result = generateDocs(args.path, args.force);
+  const result = generateDocs(args.path, args.force, args.readmeOnly, args.designOnly);
 
   if (args.json) {
     process.stdout.write(JSON.stringify(result, null, 2) + '\n');
@@ -453,16 +510,3 @@ function main() {
 if (require.main === module) {
   main();
 }
-
-module.exports = {
-  parseGitignore,
-  shouldIgnore,
-  rglob,
-  detectLanguage,
-  analyzeModule,
-  generateReadme,
-  generateDesign,
-  generateDocs,
-  parseArgs,
-  main,
-};

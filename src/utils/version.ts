@@ -95,15 +95,25 @@ export function compareVersions(v1: string, v2: string): number {
     const num1 = parsed1.parts[i] || 0
     const num2 = parsed2.parts[i] || 0
 
-    if (num1 > num2) return 1
-    if (num1 < num2) return -1
+    if (num1 > num2) {
+      return 1
+    }
+    if (num1 < num2) {
+      return -1
+    }
   }
 
-  if (!parsed1.suffix || !parsed2.suffix) return 0
+  if (!parsed1.suffix || !parsed2.suffix) {
+    return 0
+  }
 
   const suffixOrder = parsed1.suffix.localeCompare(parsed2.suffix, undefined, { numeric: true })
-  if (suffixOrder > 0) return 1
-  if (suffixOrder < 0) return -1
+  if (suffixOrder > 0) {
+    return 1
+  }
+  if (suffixOrder < 0) {
+    return -1
+  }
   return 0
 }
 
@@ -141,13 +151,4 @@ export async function checkForUpdates(): Promise<{
     currentVersion,
     latestVersion,
   }
-}
-
-/**
- * Get changelog between two versions (simplified)
- */
-export async function getChangelog(fromVersion: string, toVersion: string): Promise<string[]> {
-  // In a real implementation, this would fetch from CHANGELOG.md or GitHub releases
-  // For now, return a placeholder
-  return [`升级从 v${fromVersion} 到 v${toVersion}`, '• 优化命令模板', '• 更新专家提示词', '• 修复已知问题']
 }

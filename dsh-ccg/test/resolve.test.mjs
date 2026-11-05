@@ -9,14 +9,8 @@ import assert from 'node:assert/strict'
 
 import { existsSync } from 'node:fs'
 
-import {
-  BUNDLED_SKILL_DIR,
-  Config,
-  resolveRoles,
-  resolveSkillDirs,
-  renderRoutingPrompt,
-} from '../src/index.js'
-import { ROLES, ROLE_NAMES } from '../src/roles.js'
+import { BUNDLED_SKILL_DIR, Config, renderRoutingPrompt, resolveRoles, resolveSkillDirs } from '../src/index.js'
+import { ROLE_NAMES, ROLES } from '../src/roles.js'
 
 const TIERS = {
   strong: { provider: 'gw', model: 'big-model' },
@@ -92,18 +86,14 @@ test('a disabled role is not registered, and a tool can be renamed', () => {
 
 test('half a route is refused: provider without model falls back to the default model', () => {
   const resolved = resolveRoles({ strong: { provider: 'gw' }, worker: { model: 'fast-model' } })
-  for (const entry of resolved) assert.equal(entry.agentOptions, undefined)
+  for (const entry of resolved) {
+    assert.equal(entry.agentOptions, undefined)
+  }
 })
 
 test('a typo in a role name or tier is refused loudly, never silently ignored', () => {
-  assert.throws(
-    () => resolveRoles({ roles: { reviewrs: { enabled: false } } }),
-    /unknown role "reviewrs"/,
-  )
-  assert.throws(
-    () => resolveRoles({ roles: { reviewer: { tier: 'strongest' } } }),
-    /unknown tier "strongest"/,
-  )
+  assert.throws(() => resolveRoles({ roles: { reviewrs: { enabled: false } } }), /unknown role "reviewrs"/)
+  assert.throws(() => resolveRoles({ roles: { reviewer: { tier: 'strongest' } } }), /unknown tier "strongest"/)
 })
 
 test('the bundled skill root ships with the package and holds real bundles', () => {
@@ -111,7 +101,7 @@ test('the bundled skill root ships with the package and holds real bundles', () 
   for (const skill of ['ccg-workflow', 'verify-security', 'verify-quality', 'gen-docs']) {
     assert.ok(
       existsSync(new URL(`../skills/${skill}/SKILL.md`, import.meta.url)),
-      `${skill}/SKILL.md is missing from the bundle`,
+      `${skill}/SKILL.md is missing from the bundle`
     )
   }
   // The bundled gates are CommonJS; without this the package's own
@@ -127,10 +117,7 @@ test('skill roots resolve, can be switched off, and never publish a missing dire
   assert.deepEqual(resolveSkillDirs({}, present), ['/bundled'])
   assert.deepEqual(resolveSkillDirs({ skills: false }, present), [])
   assert.deepEqual(resolveSkillDirs({}, absent), [])
-  assert.deepEqual(
-    resolveSkillDirs({ skillDirs: ['/extra', '  ', ''] }, present),
-    ['/bundled', '/extra'],
-  )
+  assert.deepEqual(resolveSkillDirs({ skillDirs: ['/extra', '  ', ''] }, present), ['/bundled', '/extra'])
   assert.deepEqual(resolveSkillDirs({ skills: false, skillDirs: ['/extra'] }, absent), ['/extra'])
 })
 
@@ -154,14 +141,11 @@ test('the declared Config schema accepts the documented shape and fills its defa
   // validates but drops its entries would silently disable every override.
   const resolved = resolveRoles(validated)
   assert.equal(resolved.length, ROLE_NAMES.length - 1)
-  assert.deepEqual(
-    resolved.find((e) => e.role === 'builder').agentOptions,
-    { provider: 'gw', model: 'big-model' },
-  )
+  assert.deepEqual(resolved.find((e) => e.role === 'builder').agentOptions, { provider: 'gw', model: 'big-model' })
   assert.equal(resolved.find((e) => e.role === 'analyzer').toolName, 'deep_think')
 })
 
-test('the routing prompt states each tool\'s real route and never invents one', () => {
+test("the routing prompt states each tool's real route and never invents one", () => {
   const text = renderRoutingPrompt(resolveRoles(TIERS))
   assert.match(text, /`ccg_review` \(reviewer, gw \/ big-model\)/)
   assert.match(text, /`ccg_build` \(builder, gw \/ fast-model\)/)

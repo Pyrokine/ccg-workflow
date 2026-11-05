@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -14,42 +15,50 @@ func TestLoggerWithSuffixNamingAndIsolation(t *testing.T) {
 	taskA := "task-1"
 	taskB := "task-2"
 
-	loggerA, err := NewLoggerWithSuffix(taskA)
+	loggerA, err := newLoggerWithSuffix(taskA)
 	if err != nil {
 		t.Fatalf("NewLoggerWithSuffix(%q) error = %v", taskA, err)
 	}
-	defer loggerA.Close()
+	defer func() {
+		if err := loggerA.Close(); err != nil && !errors.Is(err, os.ErrClosed) {
+			t.Errorf("I/O operation failed: %v", err)
+		}
+	}()
 
-	loggerB, err := NewLoggerWithSuffix(taskB)
+	loggerB, err := newLoggerWithSuffix(taskB)
 	if err != nil {
 		t.Fatalf("NewLoggerWithSuffix(%q) error = %v", taskB, err)
 	}
-	defer loggerB.Close()
+	defer func() {
+		if err := loggerB.Close(); err != nil && !errors.Is(err, os.ErrClosed) {
+			t.Errorf("I/O operation failed: %v", err)
+		}
+	}()
 
 	wantA := filepath.Join(tempDir, fmt.Sprintf("%s-%d-%s.log", primaryLogPrefix(), os.Getpid(), taskA))
-	if loggerA.Path() != wantA {
-		t.Fatalf("loggerA path = %q, want %q", loggerA.Path(), wantA)
+	if loggerA.logPath() != wantA {
+		t.Fatalf("loggerA path = %q, want %q", loggerA.logPath(), wantA)
 	}
 
 	wantB := filepath.Join(tempDir, fmt.Sprintf("%s-%d-%s.log", primaryLogPrefix(), os.Getpid(), taskB))
-	if loggerB.Path() != wantB {
-		t.Fatalf("loggerB path = %q, want %q", loggerB.Path(), wantB)
+	if loggerB.logPath() != wantB {
+		t.Fatalf("loggerB path = %q, want %q", loggerB.logPath(), wantB)
 	}
 
-	if loggerA.Path() == loggerB.Path() {
-		t.Fatalf("expected different log files, got %q", loggerA.Path())
+	if loggerA.logPath() == loggerB.logPath() {
+		t.Fatalf("expected different log files, got %q", loggerA.logPath())
 	}
 
-	loggerA.Info("from taskA")
-	loggerB.Info("from taskB")
+	loggerA.info("from taskA")
+	loggerB.info("from taskB")
 	loggerA.Flush()
 	loggerB.Flush()
 
-	dataA, err := os.ReadFile(loggerA.Path())
+	dataA, err := os.ReadFile(loggerA.logPath())
 	if err != nil {
 		t.Fatalf("failed to read loggerA file: %v", err)
 	}
-	dataB, err := os.ReadFile(loggerB.Path())
+	dataB, err := os.ReadFile(loggerB.logPath())
 	if err != nil {
 		t.Fatalf("failed to read loggerB file: %v", err)
 	}
@@ -77,7 +86,7 @@ func TestLoggerWithSuffixReturnsErrorWhenTempDirNotWritable(t *testing.T) {
 	t.Cleanup(func() { _ = os.Chmod(noWrite, 0o700) })
 	setTempDirEnv(t, noWrite)
 
-	logger, err := NewLoggerWithSuffix("task-err")
+	logger, err := newLoggerWithSuffix("task-err")
 	if err == nil {
 		_ = logger.Close()
 		t.Fatalf("expected error when temp dir is not writable")
@@ -96,22 +105,22 @@ func TestLoggerWithSuffixSanitizesUnsafeSuffix(t *testing.T) {
 		t.Fatalf("sanitized suffix should not contain path separators, got %q", safe)
 	}
 
-	logger, err := NewLoggerWithSuffix(raw)
+	logger, err := newLoggerWithSuffix(raw)
 	if err != nil {
 		t.Fatalf("NewLoggerWithSuffix(%q) error = %v", raw, err)
 	}
 	t.Cleanup(
 		func() {
 			_ = logger.Close()
-			_ = os.Remove(logger.Path())
+			_ = os.Remove(logger.logPath())
 		},
 	)
 
 	wantBase := fmt.Sprintf("%s-%d-%s.log", primaryLogPrefix(), os.Getpid(), safe)
-	if gotBase := filepath.Base(logger.Path()); gotBase != wantBase {
+	if gotBase := filepath.Base(logger.logPath()); gotBase != wantBase {
 		t.Fatalf("log filename = %q, want %q", gotBase, wantBase)
 	}
-	if dir := filepath.Dir(logger.Path()); dir != tempDir {
+	if dir := filepath.Dir(logger.logPath()); dir != tempDir {
 		t.Fatalf("logger path dir = %q, want %q", dir, tempDir)
 	}
 }

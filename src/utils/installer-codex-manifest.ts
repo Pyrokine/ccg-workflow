@@ -1,17 +1,17 @@
 import fs from 'fs-extra'
 import { basename } from 'pathe'
-import { SPONSORS } from './sponsors'
 import { asRecord, parseJsonRecord } from './installer-codex-content'
 import {
   CODEX_MANAGED_FILES,
-  codexFileSha256,
-  type CodexOriginalFile,
-  type CodexManagedFile,
-  type CodexModeManifest,
-  type CodexInstallPlan,
   type CodexBackup,
   type CodexBackupEntry,
+  codexFileSha256,
+  type CodexInstallPlan,
+  type CodexManagedFile,
+  type CodexModeManifest,
+  type CodexOriginalFile,
 } from './installer-codex-files'
+import { SPONSORS } from './sponsors'
 
 const LEGACY_MANAGED_FILES = new Set([
   'agents/ccg-implement.toml',
@@ -24,7 +24,9 @@ const LEGACY_MANAGED_FILES = new Set([
 ])
 
 function hasCompleteFileSet(seen: Set<string>, expected: Set<string>): boolean {
-  if (seen.size === expected.size) return true
+  if (seen.size === expected.size) {
+    return true
+  }
   return seen.size === LEGACY_MANAGED_FILES.size && [...seen].every((file) => LEGACY_MANAGED_FILES.has(file))
 }
 
@@ -115,7 +117,9 @@ export function parseCodexModeManifest(content: string): CodexModeManifest {
 }
 
 async function originalFileFromBackup(backup: CodexBackup, entry: CodexBackupEntry): Promise<CodexOriginalFile | null> {
-  if (!entry.existed) return null
+  if (!entry.existed) {
+    return null
+  }
   if (!entry.backupPath || entry.mode === undefined) {
     throw new Error(`Codex backup entry is incomplete: ${entry.relativePath}`)
   }
@@ -135,14 +139,18 @@ export async function buildCodexModeManifest(
   for (const relativePath of CODEX_MANAGED_FILES) {
     const planned = plannedFiles.get(relativePath)
     const backupEntry = backupEntries.get(relativePath)
-    if (!planned || !backupEntry) throw new Error(`Codex ownership data is incomplete: ${relativePath}`)
+    if (!planned || !backupEntry) {
+      throw new Error(`Codex ownership data is incomplete: ${relativePath}`)
+    }
     const previous = previousFiles.get(relativePath)
     const original = previous ? previous.original : await originalFileFromBackup(backup, backupEntry)
     files.push({ relativePath, installedSha256: codexFileSha256(planned.content), original })
   }
   const sponsorProviderIds = new Set(plan.retainedSponsorProviderIds)
   for (const result of sponsorResults) {
-    if (result.status === 'added') sponsorProviderIds.add(result.id)
+    if (result.status === 'added') {
+      sponsorProviderIds.add(result.id)
+    }
   }
   return { schemaVersion: 1, files, sponsorProviderIds: [...sponsorProviderIds] }
 }

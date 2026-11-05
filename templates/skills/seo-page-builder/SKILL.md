@@ -8,10 +8,10 @@ argument-hint: "[目标关键词 或 页面路径]"
 
 # SEO 工具页构建器
 
-> **来源说明**：本技能改编自 yuzeiki 的 `seo-page-builder`，在其基础上大幅重写 ——
-> 收窄边界为「只处理工具型 SEO 页面」、新增 `scripts/onpage-audit.py` 可执行量具、
-> 用实测竞品数据替换了拍脑袋的密度指标。原作若有明确许可要求请提 issue，我们会立即遵从。
-> 其余部分随 CCG 以 MIT 分发。
+> **来源说明**：本技能改编自 yuzeiki 的
+> `seo-page-builder`，在其基础上大幅重写 ——收窄边界为「只处理工具型 SEO 页面」、新增 `scripts/onpage-audit.py`
+> 可执行量具、用实测竞品数据替换了拍脑袋的密度指标。原作若有明确许可要求请提 issue，我们会立即遵从。其余部分随 CCG 以 MIT
+> 分发。
 
 ## 核心原则
 
@@ -68,11 +68,11 @@ argument-hint: "[目标关键词 或 页面路径]"
 
 1. 读取 `references/feature-page-seo.md`。
 2. 扫描仓库中最接近的工具页模板。
-3. 按 `references/serp-research.md` 做 SERP 研究。Firecrawl 不可用时改用
-   `scripts/onpage-audit.py --suggest` 取 Google autocomplete 真实词，**禁止让模型编 PAA**。
+3. 按 `references/serp-research.md` 做 SERP 研究。Firecrawl 不可用时改用 `scripts/onpage-audit.py --suggest` 取 Google
+   autocomplete 真实词， **禁止让模型编 PAA**。
 4. 建立关键词地图、FAQ、相关工具和 cannibalization 判断。FAQ 问题用用户原话，不要改写。
 5. 判断工具页类型：删除、批量、生成编辑、增强修复、转换或模型页。
-6. `scripts/onpage-audit.py --benchmark` 实测 3-5 个排名竞品，**先拿到密度区间再动笔**。
+6. `scripts/onpage-audit.py --benchmark` 实测 3-5 个排名竞品， **先拿到密度区间再动笔**。
 7. 严格镜像模板 route shape 与 JSON shape。
 8. 只改必要接线：slug、namespace、import、metadata、page identifier、related links、页面文案。
 9. 按模块跑信息价值与 SEO QA。
@@ -94,9 +94,9 @@ argument-hint: "[目标关键词 或 页面路径]"
 - 每个主要模块都必须提供信息价值：独特说明、真实限制、可验证示例、具体场景、操作步骤或可信来源。
 - 页面模块由关键词意图和工具类型决定，不把所有工具页写成同一个长模板。
 - 关键词自然出现在 title、meta、H1、URL、首段、alt 和相关小节。
-- 不套用固定密度数字，但必须**实测**：主关键词在正文的命中次数（**0 次是常见静默失败**），
-  靶子由实测竞品区间给出，不用记忆或口头传闻的百分比。客户说「密度 2%」时先判定口径 ——
-  按 `hits%` 对多词短语追 2% 就是堆词。详见 `references/feature-page-seo.md`。
+- 不套用固定密度数字，但必须 **实测**：主关键词在正文的命中次数（ **0 次是常见静默失败**），靶子由实测竞品区间给出，不用记忆或口头传闻的百分比。客户说「密度
+  2%」时先判定口径 ——按
+  `hits%` 对多词短语追 2% 就是堆词。详见 `references/feature-page-seo.md`。
 - 提密度优先换指代词为实名、H2 写工具全名（零新增字数），不靠加句子；短于目标就如实报告。
 - 不做薄页 clone、doorway page、假工具、无证据承诺、抓取改写或隐藏关键信息。
 - 链接少而相关，锚文本描述具体目标；付费或赞助链接使用正确 `rel`。
@@ -108,8 +108,7 @@ argument-hint: "[目标关键词 或 页面路径]"
 - `references/serp-research.md`：SERP 深度、抓取、意图与失败处理。
 - `references/feature-page-seo.md`：工具页流程、模块信息价值与 SEO QA。
 - `references/seo-source-library.md`：Google、Moz、Backlinko 与算法解读资料引用库。
-- `scripts/onpage-audit.py`：三个模式的量具，stdlib only，无需 key ——
-  `--suggest` 取 Google autocomplete、`--benchmark` 量竞品密度并提取其 FAQ、`--targets` 打分交付页。
-  配置模板见 `scripts/targets.example.json`。
+- `scripts/onpage-audit.py`：三个模式的量具，stdlib only，无需 key —— `--suggest` 取 Google autocomplete、`--benchmark`
+  量竞品密度并提取其 FAQ、`--targets` 打分交付页。配置模板见 `scripts/targets.example.json`。
 
 [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md

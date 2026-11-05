@@ -241,14 +241,13 @@ myproject/
 
 ## 常用库
 
-| 库             | 用途    |
-|---------------|-------|
+| 库            | 用途       |
+|---------------|------------|
 | Boost         | 通用库集合 |
 | fmt           | 格式化输出 |
-| spdlog        | 日志    |
-| nlohmann/json | JSON  |
-| Catch2/GTest  | 测试    |
-| OpenSSL       | 加密    |
+| spdlog        | 日志       |
+| nlohmann/json | JSON       |
+| Catch2/GTest  | 测试       |
+| OpenSSL       | 加密       |
 
 ---
-

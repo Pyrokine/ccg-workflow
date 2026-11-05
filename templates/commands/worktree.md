@@ -4,7 +4,8 @@ description: '管理 Git Worktree，并隔离 worktree 运行态与 session 任�
 
 # Worktree - Git Worktree 管理
 
-在仓库外的结构化目录创建和管理 Git worktree。每个 worktree 有独立的项目根 `.ccg/state.json`、`.ccg/sessions/` 和 `.ccg/tasks/`，共享 Git 跟踪的源码、规范和 `.context` 团队知识。每个 Claude Code session 只解析自己的 opaque binding。
+在仓库外的结构化目录创建和管理 Git worktree。每个 worktree 有独立的项目根 `.ccg/state.json`、`.ccg/sessions/` 和
+`.ccg/tasks/`，共享 Git 跟踪的源码、规范和 `.context` 团队知识。每个 Claude Code session 只解析自己的 opaque binding。
 
 ## 使用方法
 
@@ -14,18 +15,18 @@ description: '管理 Git Worktree，并隔离 worktree 运行态与 session 任�
 
 ## 子命令
 
-| 命令               | 说明                                             |
-| ------------------ | ------------------------------------------------ |
-| `add <name>`       | 创建新 worktree                                  |
-| `list`             | 列出 worktree、分支和当前 session 的任务状态摘要 |
-| `remove <name      | path>`                                           | 删除指定 worktree |
-| `prune`            | 清理失效的 Git worktree 引用                     |
-| `migrate <target>` | 把未提交的产品改动迁移到目标 worktree            |
+| 命令                  | 说明                                             |
+|-----------------------|--------------------------------------------------|
+| `add <name>`          | 创建新 worktree                                  |
+| `list`                | 列出 worktree、分支和当前 session 的任务状态摘要 |
+| `remove <name\|path>` | 删除指定 worktree                                |
+| `prune`               | 清理失效的 Git worktree 引用                     |
+| `migrate <target>`    | 把未提交的产品改动迁移到目标 worktree            |
 
 ## 选项
 
 | 选项              | 说明                           |
-| ----------------- | ------------------------------ |
+|-------------------|--------------------------------|
 | `-b <branch>`     | 创建新分支                     |
 | `-o, --open`      | 创建后用 IDE 打开              |
 | `--from <source>` | 指定迁移源 worktree            |
@@ -65,7 +66,9 @@ parent-directory/
 8. 新 worktree 首次创建持久任务时，task controller 自动建立本地 `.ccg/` 并写入 Git exclude
 9. `--open` 只在创建成功后执行
 
-一个 worktree 可以保存多个 session binding，但每个 session 同时只认领一个 task，同一 open task 默认只由一个 session 认领。不同 session 不会自动注入彼此的任务正文；可能并发改写同一产品文件的独立任务仍应放在不同 worktree。
+一个 worktree 可以保存多个 session binding，但每个 session 同时只认领一个 task，同一 open
+task 默认只由一个 session 认领。不同 session 不会自动注入彼此的任务正文；可能并发改写同一产品文件的独立任务仍应放在不同
+worktree。
 
 ## list
 
@@ -75,12 +78,12 @@ parent-directory/
    node ~/.claude/hooks/ccg/task-state.js resolve --root "<worktree>" --session-key "$CCG_SESSION_KEY"
    ```
 3. 显示路径、分支、HEAD、锁定状态和当前 session 在该 worktree 的以下任务状态之一：
-   - `in_progress: <task-id>@<revision>`
-   - `selection-required`
-   - `migration-required`
-   - `recovery-required`
-   - `invalid: <code>`
-   - `none`
+    - `in_progress: <task-id>@<revision>`
+    - `selection-required`
+    - `migration-required`
+    - `recovery-required`
+    - `invalid: <code>`
+    - `none`
 4. `selection-required` 只展示候选元数据与 `claimed` 状态，不展示其他 session key 或任务正文
 5. 不按分支名、目录名或修改时间推断任务
 
@@ -102,7 +105,8 @@ parent-directory/
 
 1. 解析并展示目标 worktree、分支和 `git status --short`
 2. 使用当前 session key 调用目标 task controller `resolve`，并读取 session-neutral 的 open task 与 binding 数量
-3. 存在未提交改动、任何 open task、任何 session binding、待迁移数据、恢复状态或损坏状态时，说明会丢失的本地内容并等待明确确认
+3. 存在未提交改动、任何 open task、任何 session
+   binding、待迁移数据、恢复状态或损坏状态时，说明会丢失的本地内容并等待明确确认
 4. 默认执行 `git worktree remove <path>`，只有用户明确要求才使用 `--force`
 5. 删除 worktree 会同时删除该目录中的 `.ccg/` 本地任务运行态；Git 跟踪的规范和 `.context` 团队知识不受影响
 

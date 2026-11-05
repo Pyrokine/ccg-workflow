@@ -6,12 +6,12 @@ import { homedir } from 'node:os'
 import { promisify } from 'node:util'
 import ora from 'ora'
 import { join } from 'pathe'
+import packageJson from '../../package.json'
 import { i18n } from '../i18n'
 import { readCcgConfig } from '../utils/config'
 import { showBinaryDownloadWarning, verifyBinary } from '../utils/installer'
 import { migrateToV1_4_0, needsMigration } from '../utils/migration'
 import { checkForUpdates, compareVersions } from '../utils/version'
-import packageJson from '../../package.json'
 import { init } from './init'
 
 const execAsync = promisify(exec)
@@ -60,8 +60,12 @@ async function performUpdate(fromVersion: string, toVersion: string, isNewVersio
   console.log()
   console.log(ansis.yellow.bold(`⚙️  ${i18n.t('update:starting')}`))
   console.log()
-  if (!(await offerNpmUpdate(toVersion, isNewVersion))) return
-  if (!(await downloadLatestPackage())) return
+  if (!(await offerNpmUpdate(toVersion, isNewVersion))) {
+    return
+  }
+  if (!(await downloadLatestPackage())) {
+    return
+  }
   await migrateUpdate()
 
   // ── Atomic update: backup → install → verify → cleanup / rollback ──
@@ -71,7 +75,9 @@ async function performUpdate(fromVersion: string, toVersion: string, isNewVersio
 
   const installDir = join(homedir(), '.claude')
   const backedUp = await backupInstallation(installDir)
-  if (!backedUp) return
+  if (!backedUp) {
+    return
+  }
   const installSuccess = await installLatestWorkflows(installDir)
   if (!installSuccess) {
     await restoreInstallation(backedUp)
@@ -107,7 +113,9 @@ async function updateCurrentCheckout(spinner: ReturnType<typeof ora>): Promise<v
   const previousExitCode = process.exitCode
   process.exitCode = 0
   await init({ force: true, skipPrompt: true, skipMcp: true })
-  if (process.exitCode) return
+  if (process.exitCode) {
+    return
+  }
   process.exitCode = previousExitCode
   console.log(i18n.t('update:updateDone'))
   return
@@ -419,7 +427,7 @@ async function restoreInstallation(backedUp: string[]): Promise<void> {
   for (const dir of backedUp) {
     const backupPath = dir + BACKUP_SUFFIX
     try {
-      // Remove any partial install artifacts
+      // Remove any partial installation artifacts
       if (await fs.pathExists(dir)) {
         await fs.remove(dir)
       }

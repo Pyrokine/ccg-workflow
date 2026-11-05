@@ -1,8 +1,17 @@
 import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { distributions, fakeExecutable, fixture, limits, loadModule, root, write } from './language-checks-fixtures'
 import type { Analyze } from './language-checks-fixtures'
+import {
+  distributions,
+  fakeExecutable,
+  fixture,
+  limits,
+  loadModule,
+  nativeClock,
+  root,
+  write,
+} from './language-checks-fixtures'
 
 function rustProject(): string {
   const directory = fixture()
@@ -95,6 +104,16 @@ describe.each(distributions)('%s Cargo and Clippy analysis', (distribution) => {
     expect(existsSync(calls[1].env.CARGO_TARGET_DIR)).toBe(false)
     expect(existsSync(join(directory, 'target'))).toBe(false)
     expect(readFileSync(join(directory, 'Cargo.lock'), 'utf8')).toContain('version = 3')
+  })
+
+  it('uses the remaining cold-start budget for Clippy after metadata', () => {
+    const directory = rustProject()
+    const source = write(directory, 'src/lib.rs', 'pub fn work() {}\n')
+    fakeCargo(directory, [source])
+    const spawn = nativeClock({ metadata: 75000 })
+    const result = runLanguageChecks([source], limits)
+    expect(result.checks[0]).toMatchObject({ status: 'passed', timing: { budget_ms: 120000, elapsed_ms: 75000 } })
+    expect(spawn.mock.calls.map((call) => call[2]?.timeout)).toEqual([120000, 45000])
   })
 
   it.each(['warning', 'error'])('preserves %s diagnostics and Clippy rule identifiers', (severity) => {

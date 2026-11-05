@@ -122,9 +122,15 @@ describe.each(distributions)('%s feedback regressions', (distribution) => {
         '    assert_eq!("{", "{");\n'.repeat(55) +
         '}\n}\n'
     )
-    if (mode !== 'working') git(root, 'add', '.')
-    if (mode === 'committed') git(root, 'commit', '-qm', 'test: Rust inline tests')
-    if (mode === 'staged') write(root, 'src/lib.rs', 'pub fn different_worktree() {}\n')
+    if (mode !== 'working') {
+      git(root, 'add', '.')
+    }
+    if (mode === 'committed') {
+      git(root, 'commit', '-qm', 'test: Rust inline tests')
+    }
+    if (mode === 'staged') {
+      write(root, 'src/lib.rs', 'pub fn different_worktree() {}\n')
+    }
     const result = run(distribution, 'change', [source, '--mode', mode], root)
     expect(result.status).toBe(0)
     expect(result.output.changes).toContainEqual(

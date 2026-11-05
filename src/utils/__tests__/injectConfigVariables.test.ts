@@ -389,7 +389,10 @@ describe('additional backend model flags', () => {
     }
 
     for (const input of [
-      '---\ndescription: test\n---\ncodeagent-wrapper --backend claude',
+      `---
+description: test
+---
+codeagent-wrapper --backend claude`,
       'template without wrapper',
     ]) {
       const result = injectConfigVariables(input, config)

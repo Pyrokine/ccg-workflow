@@ -24,57 +24,57 @@ id: 0d65953c-7f75-4f4b-9a16-8b8f9f2b6d5e
 status: stable
 description: Detects Mimikatz credential dumping via LSASS access
 references:
-    - https://attack.mitre.org/techniques/T1003/001/
+  - https://attack.mitre.org/techniques/T1003/001/
 tags:
-    - attack.credential_access
-    - attack.t1003.001
+  - attack.credential_access
+  - attack.t1003.001
 logsource:
-    category: process_access
-    product: windows
+  category: process_access
+  product: windows
 detection:
-    selection:
-        TargetImage|endswith: '\lsass.exe'
-        GrantedAccess:
-            - '0x1010'
-            - '0x1038'
-            - '0x1410'
-    filter_system:
-        SourceImage|startswith:
-            - 'C:\Windows\System32\'
-    condition: selection and not filter_system
+  selection:
+    TargetImage|endswith: '\lsass.exe'
+    GrantedAccess:
+      - '0x1010'
+      - '0x1038'
+      - '0x1410'
+  filter_system:
+    SourceImage|startswith:
+      - 'C:\Windows\System32\'
+  condition: selection and not filter_system
 level: high
 ---
 # 可疑 PowerShell
 title: Suspicious PowerShell Download
 logsource:
-    category: process_creation
-    product: windows
+  category: process_creation
+  product: windows
 detection:
-    selection:
-        CommandLine|contains:
-            - 'IEX'
-            - 'Invoke-Expression'
-            - 'DownloadString'
-            - 'Net.WebClient'
-            - '-enc'
-            - 'FromBase64String'
-    condition: selection
+  selection:
+    CommandLine|contains:
+      - 'IEX'
+      - 'Invoke-Expression'
+      - 'DownloadString'
+      - 'Net.WebClient'
+      - '-enc'
+      - 'FromBase64String'
+  condition: selection
 level: high
 ---
 # DCSync 检测
 title: DCSync Attack
 logsource:
-    product: windows
-    service: security
+  product: windows
+  service: security
 detection:
-    selection:
-        EventID: 4662
-        Properties|contains:
-            - '1131f6ad-9c07-11d1-f79f-00c04fc2dcd2'
-            - '1131f6aa-9c07-11d1-f79f-00c04fc2dcd2'
-    filter_dc:
-        SubjectUserName|endswith: '$'
-    condition: selection and not filter_dc
+  selection:
+    EventID: 4662
+    Properties|contains:
+      - '1131f6ad-9c07-11d1-f79f-00c04fc2dcd2'
+      - '1131f6aa-9c07-11d1-f79f-00c04fc2dcd2'
+  filter_dc:
+    SubjectUserName|endswith: '$'
+  condition: selection and not filter_dc
 level: critical
 ```
 
@@ -344,7 +344,7 @@ zcat /var/log/auth.log.*.gz | grep "sudo"
 
 ```yaml
 # 基于 ATT&CK 的狩猎假设
-hypothesis: "攻击者可能使用 PowerShell 下载并执行恶意代码"
+hypothesis: '攻击者可能使用 PowerShell 下载并执行恶意代码'
 technique: T1059.001
 data_sources:
   - Windows PowerShell 日志
@@ -371,21 +371,22 @@ WHERE remote_port NOT IN (80, 443, 53)
 -- 可疑计划任务
 SELECT name, command, trigger
 FROM scheduled_tasks
-WHERE command LIKE '%powershell%' OR command LIKE '%cmd%'
+WHERE command LIKE '%powershell%'
+   OR command LIKE '%cmd%'
 ```
 
 ## 工具清单
 
-| 工具             | 用途      |
-|----------------|---------|
-| Sigma          | 通用检测规则  |
-| YARA           | 恶意软件检测  |
-| Splunk/Elastic | SIEM 平台 |
-| Volatility     | 内存取证    |
-| Autopsy        | 磁盘取证    |
-| Velociraptor   | 端点响应    |
-| TheHive        | 事件管理    |
-| MISP           | 威胁情报    |
+| 工具           | 用途         |
+|----------------|--------------|
+| Sigma          | 通用检测规则 |
+| YARA           | 恶意软件检测 |
+| Splunk/Elastic | SIEM 平台    |
+| Volatility     | 内存取证     |
+| Autopsy        | 磁盘取证     |
+| Velociraptor   | 端点响应     |
+| TheHive        | 事件管理     |
+| MISP           | 威胁情报     |
 
 ## 密钥管理
 
@@ -397,33 +398,37 @@ WHERE command LIKE '%powershell%' OR command LIKE '%cmd%'
 
 ### 核心工具
 
-| 工具                  | 类型  | 特点                   |
-|---------------------|-----|----------------------|
-| HashiCorp Vault     | 平台  | 动态密钥、AppRole、多后端     |
-| AWS KMS             | 云服务 | 托管密钥、信封加密、自动轮转       |
-| AWS Secrets Manager | 云服务 | 自动轮转、Lambda集成        |
-| Sealed Secrets      | K8s | GitOps 友好、加密存储       |
-| External Secrets    | K8s | 多后端同步（Vault/AWS/GCP） |
+| 工具                | 类型   | 特点                         |
+|---------------------|--------|------------------------------|
+| HashiCorp Vault     | 平台   | 动态密钥、AppRole、多后端    |
+| AWS KMS             | 云服务 | 托管密钥、信封加密、自动轮转 |
+| AWS Secrets Manager | 云服务 | 自动轮转、Lambda集成         |
+| Sealed Secrets      | K8s    | GitOps 友好、加密存储        |
+| External Secrets    | K8s    | 多后端同步（Vault/AWS/GCP）  |
 
 ### 密钥管理检查清单
 
-```yaml
+```markdown
 生成与存储:
-  - [ ] 加密强随机数生成器
-  - [ ] 密钥长度符合标准（AES-256, RSA-2048+）
-  - [ ] 集中存储在密钥管理系统 + 静态加密 + 访问控制
+
+- [ ] 加密强随机数生成器
+- [ ] 密钥长度符合标准（AES-256, RSA-2048+）
+- [ ] 集中存储在密钥管理系统 + 静态加密 + 访问控制
 
 分发与使用:
-  - [ ] 最小权限 + 短期凭证优先（动态密钥）
-  - [ ] 禁止硬编码，使用环境变量或挂载卷
-  - [ ] 传输加密（TLS）
+
+- [ ] 最小权限 + 短期凭证优先（动态密钥）
+- [ ] 禁止硬编码，使用环境变量或挂载卷
+- [ ] 传输加密（TLS）
 
 轮转与撤销:
-  - [ ] 定期自动轮转（P0年度/P1季度/P2月度/P3小时）
-  - [ ] 支持紧急撤销 + 轮转后验证 + 审计日志
+
+- [ ] 定期自动轮转（P0年度/P1季度/P2月度/P3小时）
+- [ ] 支持紧急撤销 + 轮转后验证 + 审计日志
 
 监控:
-  - [ ] 记录所有密钥访问 + 异常检测告警 + 定期合规审计
+
+- [ ] 记录所有密钥访问 + 异常检测告警 + 定期合规审计
 ```
 
 ### Vault 关键操作速查
@@ -442,12 +447,11 @@ vault write auth/approle/login role_id="<id>" secret_id="<id>"
 
 ### 密钥分类策略
 
-| 级别 | 类型      | 轮转周期 | 存储              |
-|----|---------|------|-----------------|
-| P0 | 根密钥、主密钥 | 年度   | HSM             |
-| P1 | 数据加密密钥  | 季度   | Vault           |
-| P2 | API 密钥  | 月度   | Secrets Manager |
-| P3 | 会话令牌    | 小时   | Redis           |
+| 级别 | 类型           | 轮转周期 | 存储            |
+|------|----------------|----------|-----------------|
+| P0   | 根密钥、主密钥 | 年度     | HSM             |
+| P1   | 数据加密密钥   | 季度     | Vault           |
+| P2   | API 密钥       | 月度     | Secrets Manager |
+| P3   | 会话令牌       | 小时     | Redis           |
 
 ---
-

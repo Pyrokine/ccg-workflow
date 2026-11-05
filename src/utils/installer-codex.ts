@@ -1,39 +1,39 @@
-import { homedir } from 'node:os'
 import fs from 'fs-extra'
+import { homedir } from 'node:os'
 import { join } from 'pathe'
-import type { InstallConfig } from './installer-context'
 import { normalizeRoutingForInstall, readCcgConfig } from './config'
-import { PACKAGE_ROOT } from './installer-template'
-import { SPONSORS } from './sponsors'
 import { configureAllSponsorsForCodex } from './installer-codex-api'
 import {
-  TASK_STATE_RUNTIME_FILES,
-  CODEX_MODE_MANIFEST,
-  CODEX_BACKUP_FILES,
-  assertCodexPathLayout,
-  ensureCodexPathLayout,
-  readOptionalCodexFile,
-  readRequiredCodexSource,
-  writeCodexFileAtomic,
-  createCodexBackup,
-  restoreCodexBackup,
-  readCodexOriginalFile,
-  type CodexInstallPlan,
-  type CodexModeManifest,
-  type CodexBackup,
-  type CodexPlannedFile,
-} from './installer-codex-files'
-import {
   asRecord,
-  renderCodexPaths,
-  renderCodexManagedBlock,
-  mergeCodexManagedBlock,
+  assertCodexModeFeatures,
   canonicalCodexHookDefinition,
   mergeCodexHooks,
+  mergeCodexManagedBlock,
   parseCodexConfig,
-  assertCodexModeFeatures,
+  renderCodexManagedBlock,
+  renderCodexPaths,
 } from './installer-codex-content'
-import { isCodexSponsorProvider, parseCodexModeManifest, buildCodexModeManifest } from './installer-codex-manifest'
+import {
+  assertCodexPathLayout,
+  CODEX_BACKUP_FILES,
+  CODEX_MODE_MANIFEST,
+  type CodexBackup,
+  type CodexInstallPlan,
+  type CodexModeManifest,
+  type CodexPlannedFile,
+  createCodexBackup,
+  ensureCodexPathLayout,
+  readCodexOriginalFile,
+  readOptionalCodexFile,
+  readRequiredCodexSource,
+  restoreCodexBackup,
+  TASK_STATE_RUNTIME_FILES,
+  writeCodexFileAtomic,
+} from './installer-codex-files'
+import { buildCodexModeManifest, isCodexSponsorProvider, parseCodexModeManifest } from './installer-codex-manifest'
+import type { InstallConfig } from './installer-context'
+import { PACKAGE_ROOT } from './installer-template'
+import { SPONSORS } from './sponsors'
 
 async function createCodexInstallConfig(): Promise<InstallConfig> {
   const config = await readCcgConfig()
@@ -63,7 +63,7 @@ function planCodexInstructions(
   codexHome: string
 ): CodexPlannedFile[] {
   const { managedBlock, existingAgents, hookDefinition, existingHooks } = instructions
-  const files: CodexPlannedFile[] = [
+  return [
     {
       relativePath: 'AGENTS.md',
       content: mergeCodexManagedBlock(existingAgents?.content ?? null, managedBlock),
@@ -75,7 +75,6 @@ function planCodexInstructions(
       mode: existingHooks?.mode ?? 0o600,
     },
   ]
-  return files
 }
 
 async function appendCodexRuntimeFiles(files: CodexPlannedFile[], codexTemplateDir: string): Promise<void> {
@@ -117,7 +116,9 @@ async function prepareCodexInstall(
   const previousManifest = manifestFile ? parseCodexModeManifest(manifestFile.content) : null
   if (previousManifest) {
     for (const managedFile of previousManifest.files) {
-      if (managedFile.original) await readCodexOriginalFile(codexHome, managedFile)
+      if (managedFile.original) {
+        await readCodexOriginalFile(codexHome, managedFile)
+      }
     }
   }
   const providers = asRecord(parsedConfig.model_providers)
@@ -169,7 +170,9 @@ async function verifyCodexInstall(
   await verifyCodexProviders(codexHome, plan.activeProvider)
 
   const manifestFile = await readOptionalCodexFile(join(codexHome, CODEX_MODE_MANIFEST))
-  if (!manifestFile) throw new Error('Codex mode ownership manifest is missing')
+  if (!manifestFile) {
+    throw new Error('Codex mode ownership manifest is missing')
+  }
   const manifest = parseCodexModeManifest(manifestFile.content)
   if (JSON.stringify(manifest) !== JSON.stringify(expectedManifest)) {
     throw new Error('Codex mode ownership manifest verification failed')
@@ -213,7 +216,9 @@ export async function installCodexMode(): Promise<{ success: boolean; message: s
     }
 
     const sponsorApis = await configureAllSponsorsForCodex()
-    if (!sponsorApis.success) throw new Error(sponsorApis.message)
+    if (!sponsorApis.success) {
+      throw new Error(sponsorApis.message)
+    }
     const manifest = await buildCodexModeManifest(plan, backup, sponsorApis.results)
     await writeCodexFileAtomic(join(codexHome, CODEX_MODE_MANIFEST), `${JSON.stringify(manifest, null, 2)}\n`, 0o600)
     await verifyCodexInstall(codexHome, plan, manifest)
@@ -223,7 +228,9 @@ export async function installCodexMode(): Promise<{ success: boolean; message: s
       message: codexInstallMessage(backup),
     }
   } catch (error) {
-    if (!backup) return { success: false, message: `Failed to install Codex mode: ${error}` }
+    if (!backup) {
+      return { success: false, message: `Failed to install Codex mode: ${error}` }
+    }
     try {
       await restoreCodexBackup(codexHome, backup)
       return {

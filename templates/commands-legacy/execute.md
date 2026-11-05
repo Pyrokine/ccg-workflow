@@ -10,8 +10,8 @@ $ARGUMENTS
 
 ## 核心协议
 
-- **语言协议**：与工具/模型交互用**英语**，与用户交互用**中文**
-- **代码主权**：外部模型对文件系统**零写入权限**，所有修改由 Claude 执行
+- **语言协议**：与工具/模型交互用 **英语**，与用户交互用 **中文**
+- **代码主权**：外部模型对文件系统 **零写入权限**，所有修改由 Claude 执行
 - **脏原型重构**：将外部模型的 Unified Diff 视为"脏原型"，必须重构为生产级代码
 - **止损机制**：当前阶段输出通过验证前，不进入下一阶段
 - **前置条件**：仅在用户对 `/ccg:plan` 输出明确回复 "Y" 后执行（如缺失，必须先二次确认）
@@ -22,7 +22,8 @@ $ARGUMENTS
 
 **工作目录**：
 
-- `{{WORKDIR}}`：**必须通过 Bash 执行 `pwd`（Unix）或 `cd`（Windows CMD）获取当前工作目录的绝对路径**，禁止从 `$HOME` 或环境变量推断
+- `{{WORKDIR}}`： **必须通过 Bash 执行 `pwd`（Unix）或 `cd`（Windows CMD）获取当前工作目录的绝对路径**，禁止从 `$HOME`
+  或环境变量推断
 - 如果用户通过 `/add-dir` 添加了多个工作区，先用 Glob/Grep 确定任务相关的工作区
 - 如果无法确定，用 `AskUserQuestion` 询问用户选择目标工作区
 
@@ -64,19 +65,21 @@ EOF",
 
 在同一条消息中并行启动 GPT、Grok 两个 `Bash` 调用，每个调用接收完整 diff、完整相关文件和计划验收规则：
 
-| reviewer | wrapper 参数 | 审查重点 |
-|---|---|---|
-| GPT | `--backend claude --no-session-persistence --claude-model {{REVIEW_GPT_MODEL}} --claude-effort {{REVIEW_GPT_EFFORT}}` | 后端逻辑、正确性、安全、回归与测试缺口 |
-| Grok | `--backend claude --no-session-persistence --claude-model {{REVIEW_GROK_MODEL}} --claude-effort {{REVIEW_GROK_EFFORT}}` | 前端交互、可访问性、设计一致性与前端安全 |
+| reviewer | wrapper 参数                                                                                                            | 审查重点                                 |
+|----------|-------------------------------------------------------------------------------------------------------------------------|------------------------------------------|
+| GPT      | `--backend claude --no-session-persistence --claude-model {{REVIEW_GPT_MODEL}} --claude-effort {{REVIEW_GPT_EFFORT}}`   | 后端逻辑、正确性、安全、回归与测试缺口   |
+| Grok     | `--backend claude --no-session-persistence --claude-model {{REVIEW_GROK_MODEL}} --claude-effort {{REVIEW_GROK_EFFORT}}` | 前端交互、可访问性、设计一致性与前端安全 |
 
-两个外部调用使用 `~/.claude/.ccg/prompts/claude/reviewer.md`，输出按 Critical/Warning/Info 分级的 findings。外部 reviewer 不使用 `resume` 或 `SESSION_ID`。
+两个外部调用使用
+`~/.claude/.ccg/prompts/claude/reviewer.md`，输出按 Critical/Warning/Info 分级的 findings。外部 reviewer 不使用 `resume`
+或 `SESSION_ID`。
 
 **角色提示词**：
 
-| 阶段 | 后端 | 前端 |
-|----|---|---|
-| 实施 | `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/architect.md` | `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/frontend.md` |
-| 审查 | `~/.claude/.ccg/prompts/claude/reviewer.md`，供 GPT、Grok 两个外部 profile 共用 | 同左 |
+| 阶段 | 后端                                                                            | 前端                                                      |
+|------|---------------------------------------------------------------------------------|-----------------------------------------------------------|
+| 实施 | `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/architect.md`                       | `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/frontend.md` |
+| 审查 | `~/.claude/.ccg/prompts/claude/reviewer.md`，供 GPT、Grok 两个外部 profile 共用 | 同左                                                      |
 
 **会话复用**：如果 `/ccg:plan` 提供了 SESSION_ID，原型生成可以使用 `resume <SESSION_ID>`。审计调用不复用会话。
 
@@ -89,12 +92,13 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 **重要**：
 
 - 必须指定 `timeout: 600000`，否则默认只有 30 秒会导致提前超时
-- 若 10 分钟后仍未完成，继续用 `TaskOutput` 轮询，**绝对不要 Kill 进程**
-- 若因等待时间过长跳过了等待，**必须调用 `AskUserQuestion` 询问用户选择继续等待还是 Kill Task**
-- ⛔ **前端模型失败必须重试**：若 {{FRONTEND_PRIMARY}} 调用失败（非零退出码或输出包含错误信息），最多重试 2 次（间隔 5 秒）。仅当
-  3 次全部失败时才跳过前端模型结果并使用单模型结果继续。
-- ⛔ **后端模型结果必须等待**：{{BACKEND_PRIMARY}} 执行时间较长（5-15 分钟）属于正常。TaskOutput 超时后必须继续用 TaskOutput
-  轮询，**绝对禁止在后端模型未返回结果时直接跳过或继续下一阶段**。已启动的任务若被跳过 = 浪费 token + 丢失结果。
+- 若 10 分钟后仍未完成，继续用 `TaskOutput` 轮询， **绝对不要 Kill 进程**
+- 若因等待时间过长跳过了等待， **必须调用 `AskUserQuestion` 询问用户选择继续等待还是 Kill Task**
+- ⛔ **前端模型失败必须重试**：若 {{FRONTEND_PRIMARY}}
+  调用失败（非零退出码或输出包含错误信息），最多重试 2 次（间隔 5 秒）。仅当 3 次全部失败时才跳过前端模型结果并使用单模型结果继续。
+- ⛔ **后端模型结果必须等待**：{{BACKEND_PRIMARY}}
+  执行时间较长（5-15 分钟）属于正常。TaskOutput 超时后必须继续用 TaskOutput 轮询，
+  **绝对禁止在后端模型未返回结果时直接跳过或继续下一阶段**。已启动的任务若被跳过 = 浪费 token + 丢失结果。
 
 ---
 
@@ -120,11 +124,9 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 
 4. **任务类型判断**：
 
-   | 任务类型 | 判断依据 | 路由 |
-            |----------|----------|------|
-   | **前端** | 页面、组件、UI、样式、布局 | {{FRONTEND_PRIMARY}} |
-   | **后端** | API、接口、数据库、逻辑、算法 | {{BACKEND_PRIMARY}} |
-   | **全栈** | 同时包含前后端 | {{BACKEND_PRIMARY}} ∥ {{FRONTEND_PRIMARY}} 并行 |
+   | 任务类型 | 判断依据 | 路由 | |----------|----------|------| | **前端** | 页面、组件、UI、样式、布局 |
+   {{FRONTEND_PRIMARY}} | | **后端** | API、接口、数据库、逻辑、算法 | {{BACKEND_PRIMARY}} | | **全栈**
+   | 同时包含前后端 | {{BACKEND_PRIMARY}} ∥ {{FRONTEND_PRIMARY}} 并行 |
 
 ---
 
@@ -209,7 +211,7 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
     - 识别潜在冲突或副作用
 
 3. **重构清理**：
-    - 将"脏原型"重构为**高可读、高可维护性、企业发布级代码**
+    - 将"脏原型"重构为 **高可读、高可维护性、企业发布级代码**
     - 去除冗余代码
     - 确保符合项目现有代码规范
     - **非必要不生成注释与文档**，代码自解释
@@ -237,12 +239,14 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 **变更生效后，立即并行调用** GPT、Grok 两个 reviewer，输入变更的完整 Diff、目标完整文件和计划验收规则：
 
 1. **GPT**（`run_in_background: true`）：
-    - `--backend claude --no-session-persistence --claude-model {{REVIEW_GPT_MODEL}} --claude-effort {{REVIEW_GPT_EFFORT}}`
+    -
+    `--backend claude --no-session-persistence --claude-model {{REVIEW_GPT_MODEL}} --claude-effort {{REVIEW_GPT_EFFORT}}`
     - ROLE_FILE: `~/.claude/.ccg/prompts/claude/reviewer.md`
     - 关注：后端逻辑、正确性、安全、回归与测试缺口
 
 2. **Grok**（`run_in_background: true`）：
-    - `--backend claude --no-session-persistence --claude-model {{REVIEW_GROK_MODEL}} --claude-effort {{REVIEW_GROK_EFFORT}}`
+    -
+    `--backend claude --no-session-persistence --claude-model {{REVIEW_GROK_MODEL}} --claude-effort {{REVIEW_GROK_EFFORT}}`
     - ROLE_FILE: `~/.claude/.ccg/prompts/claude/reviewer.md`
     - 关注：前端交互、可访问性、设计一致性与前端安全
 
@@ -263,15 +267,18 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 ## ✅ 执行完成
 
 ### 变更摘要
-| 文件 | 操作 | 说明 |
-|------|------|------|
+
+| 文件            | 操作 | 说明 |
+| --------------- | ---- | ---- |
 | path/to/file.ts | 修改 | 描述 |
 
 ### 审计结果
+
 - GPT：<通过/发现 N 个问题>
 - Grok：<通过/发现 N 个问题>
 
 ### 后续建议
+
 1. [ ] <建议的测试步骤>
 2. [ ] <建议的验证步骤>
 ```

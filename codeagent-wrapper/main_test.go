@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -36,10 +37,12 @@ func resetTestHooks() {
 	newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
 		return &realCmd{cmd: commandContext(ctx, name, args...)}
 	}
-	jsonMarshal = json.Marshal
+
 	forceKillDelay.Store(5)
 	liteMode = true
-	closeLogger()
+	if err := closeLogger(); err != nil {
+		panic(err)
+	}
 	executablePathFn = os.Executable
 	runTaskFn = runCodexTask
 	runCodexTaskFn = defaultRunCodexTaskFn
@@ -64,7 +67,7 @@ func (e errReader) Read([]byte) (int, error) {
 type testBackend struct {
 	name    string
 	command string
-	argsFn  func(*Config, string) []string
+	argsFn  func(*config, string) []string
 }
 
 func (t testBackend) Name() string {
@@ -74,7 +77,7 @@ func (t testBackend) Name() string {
 	return "test-backend"
 }
 
-func (t testBackend) BuildArgs(cfg *Config, targetArg string) []string {
+func (t testBackend) BuildArgs(cfg *config, targetArg string) []string {
 	if t.argsFn != nil {
 		return t.argsFn(cfg, targetArg)
 	}
@@ -88,9 +91,9 @@ func (t testBackend) Command() string {
 	return "echo"
 }
 
-func withBackend(command string, argsFn func(*Config, string) []string) func() {
+func withBackend(command string, argsFn func(*config, string) []string) func() {
 	prev := selectBackendFn
-	selectBackendFn = func(name string) (Backend, error) {
+	selectBackendFn = func(name string) (backend, error) {
 		return testBackend{name: name, command: command, argsFn: argsFn}, nil
 	}
 	return func() { selectBackendFn = prev }
@@ -107,9 +110,13 @@ func restoreStdoutPipe(c *capturedStdout) {
 	if c == nil {
 		return
 	}
-	c.writer.Close()
+	if err := c.writer.Close(); err != nil && !errors.Is(err, os.ErrClosed) {
+		panic(err)
+	}
 	os.Stdout = c.old
-	io.Copy(&c.buf, c.reader)
+	if _, err := io.Copy(&c.buf, c.reader); err != nil {
+		panic(err)
+	}
 }
 
 func (c *capturedStdout) String() string {
@@ -125,11 +132,15 @@ func captureOutput(t *testing.T, fn func()) string {
 	old := os.Stdout
 	os.Stdout = w
 	fn()
-	w.Close()
+	if err := w.Close(); err != nil && !errors.Is(err, os.ErrClosed) {
+		t.Errorf("I/O operation failed: %v", err)
+	}
 	os.Stdout = old
 
 	var buf bytes.Buffer
-	io.Copy(&buf, r)
+	if _, err := io.Copy(&buf, r); err != nil {
+		t.Errorf("I/O operation failed: %v", err)
+	}
 	return buf.String()
 }
 
@@ -139,11 +150,15 @@ func captureStderr(t *testing.T, fn func()) string {
 	old := os.Stderr
 	os.Stderr = w
 	fn()
-	w.Close()
+	if err := w.Close(); err != nil && !errors.Is(err, os.ErrClosed) {
+		t.Errorf("I/O operation failed: %v", err)
+	}
 	os.Stderr = old
 
 	var buf bytes.Buffer
-	io.Copy(&buf, r)
+	if _, err := io.Copy(&buf, r); err != nil {
+		t.Errorf("I/O operation failed: %v", err)
+	}
 	return buf.String()
 }
 
@@ -531,9 +546,7 @@ func (f *fakeCmd) SetEnv(env map[string]string) {
 	if f.env == nil {
 		f.env = make(map[string]string, len(env))
 	}
-	for k, v := range env {
-		f.env[k] = v
-	}
+	maps.Copy(f.env, env)
 }
 
 func (f *fakeCmd) Process() processHandle {
@@ -708,12 +721,12 @@ func TestFakeCmdInfra(t *testing.T) {
 			newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
 				return fake
 			}
-			buildCodexArgsFn = func(cfg *Config, targetArg string) []string {
+			buildCodexArgsFn = func(cfg *config, targetArg string) []string {
 				return []string{targetArg}
 			}
 			codexCommand = "fake-cmd"
 
-			res := runCodexTask(TaskSpec{Task: "ignored"}, false, 2)
+			res := runCodexTask(taskSpec{Task: "ignored"}, false, 2)
 			if res.ExitCode != 0 {
 				t.Fatalf("runCodexTask exit = %d, want 0 (%s)", res.ExitCode, res.Error)
 			}
@@ -761,13 +774,13 @@ func TestRunCodexTask_WaitBeforeParse(t *testing.T) {
 	newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
 		return fake
 	}
-	buildCodexArgsFn = func(cfg *Config, targetArg string) []string {
+	buildCodexArgsFn = func(cfg *config, targetArg string) []string {
 		return []string{targetArg}
 	}
 	codexCommand = "fake-cmd"
 
 	start := time.Now()
-	result := runCodexTask(TaskSpec{Task: "ignored"}, false, 5)
+	result := runCodexTask(taskSpec{Task: "ignored"}, false, 5)
 	elapsed := time.Since(start)
 
 	if result.ExitCode != 0 {
@@ -786,8 +799,8 @@ func TestRunCodexTask_WaitBeforeParse(t *testing.T) {
 	if fake.stdout == nil {
 		t.Fatalf("stdout reader not initialized")
 	}
-	if reason := fake.stdout.Reason(); reason != stdoutCloseReasonWait {
-		t.Fatalf("stdout close reason = %q, want %q", reason, stdoutCloseReasonWait)
+	if reason := fake.stdout.Reason(); reason != stdoutCloseReasonDrain {
+		t.Fatalf("stdout close reason = %q, want %q", reason, stdoutCloseReasonDrain)
 	}
 }
 
@@ -810,13 +823,13 @@ func TestRunCodexTask_ParseStall(t *testing.T) {
 	newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
 		return blockingCmd
 	}
-	buildCodexArgsFn = func(cfg *Config, targetArg string) []string {
+	buildCodexArgsFn = func(cfg *config, targetArg string) []string {
 		return []string{targetArg}
 	}
 	codexCommand = "fake-cmd"
 
 	start := time.Now()
-	result := runCodexTask(TaskSpec{Task: "stall"}, false, 60)
+	result := runCodexTask(taskSpec{Task: "stall"}, false, 60)
 	elapsed := time.Since(start)
 	if !blockingCmd.injected.Load() {
 		t.Fatalf("stdout wrapper was not installed")
@@ -881,7 +894,7 @@ func TestRunCodexTask_ContextTimeout(t *testing.T) {
 	newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
 		return fake
 	}
-	buildCodexArgsFn = func(cfg *Config, targetArg string) []string {
+	buildCodexArgsFn = func(cfg *config, targetArg string) []string {
 		return []string{targetArg}
 	}
 	codexCommand = "fake-cmd"
@@ -898,7 +911,7 @@ func TestRunCodexTask_ContextTimeout(t *testing.T) {
 	defer func() { terminateCommandFn = terminateCommand }()
 
 	result := runCodexTaskWithContext(
-		ctx, TaskSpec{Task: "ctx-timeout", WorkDir: defaultWorkdir}, nil, nil, false, false, 60,
+		ctx, taskSpec{Task: "ctx-timeout", WorkDir: defaultWorkdir}, nil, nil, false, false, 60,
 	)
 
 	if result.ExitCode != 124 {
@@ -957,12 +970,12 @@ func TestRunCodexTask_ForcesStopAfterCompletion(t *testing.T) {
 	newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
 		return fake
 	}
-	buildCodexArgsFn = func(cfg *Config, targetArg string) []string { return []string{targetArg} }
+	buildCodexArgsFn = func(cfg *config, targetArg string) []string { return []string{targetArg} }
 	codexCommand = "fake-cmd"
 
 	start := time.Now()
 	result := runCodexTaskWithContext(
-		context.Background(), TaskSpec{Task: "done", WorkDir: defaultWorkdir}, nil, nil, false, false, 60,
+		context.Background(), taskSpec{Task: "done", WorkDir: defaultWorkdir}, nil, nil, false, false, 60,
 	)
 	duration := time.Since(start)
 
@@ -1005,12 +1018,12 @@ func TestRunCodexTask_DoesNotTerminateBeforeThreadCompleted(t *testing.T) {
 	newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
 		return fake
 	}
-	buildCodexArgsFn = func(cfg *Config, targetArg string) []string { return []string{targetArg} }
+	buildCodexArgsFn = func(cfg *config, targetArg string) []string { return []string{targetArg} }
 	codexCommand = "fake-cmd"
 
 	start := time.Now()
 	result := runCodexTaskWithContext(
-		context.Background(), TaskSpec{Task: "done", WorkDir: defaultWorkdir}, nil, nil, false, false, 60,
+		context.Background(), taskSpec{Task: "done", WorkDir: defaultWorkdir}, nil, nil, false, false, 60,
 	)
 	duration := time.Since(start)
 
@@ -1029,20 +1042,20 @@ func TestBackendParseArgs_NewMode(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    []string
-		want    *Config
+		want    *config
 		wantErr bool
 	}{
 		{
 			name: "simple task",
 			args: []string{"codeagent-wrapper", "analyze code"},
-			want: &Config{
+			want: &config{
 				Mode: "new", Task: "analyze code", WorkDir: ".", ExplicitStdin: false, Backend: defaultBackendName,
 			},
 		},
 		{
 			name: "task with workdir",
 			args: []string{"codeagent-wrapper", "analyze code", "/path/to/dir"},
-			want: &Config{
+			want: &config{
 				Mode: "new", Task: "analyze code", WorkDir: "/path/to/dir", ExplicitStdin: false,
 				Backend: defaultBackendName,
 			},
@@ -1050,12 +1063,12 @@ func TestBackendParseArgs_NewMode(t *testing.T) {
 		{
 			name: "explicit stdin mode",
 			args: []string{"codeagent-wrapper", "-"},
-			want: &Config{Mode: "new", Task: "-", WorkDir: ".", ExplicitStdin: true, Backend: defaultBackendName},
+			want: &config{Mode: "new", Task: "-", WorkDir: ".", ExplicitStdin: true, Backend: defaultBackendName},
 		},
 		{
 			name: "stdin with workdir",
 			args: []string{"codeagent-wrapper", "-", "/some/dir"},
-			want: &Config{
+			want: &config{
 				Mode: "new", Task: "-", WorkDir: "/some/dir", ExplicitStdin: true, Backend: defaultBackendName,
 			},
 		},
@@ -1100,13 +1113,13 @@ func TestBackendParseArgs_ResumeMode(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    []string
-		want    *Config
+		want    *config
 		wantErr bool
 	}{
 		{
 			name: "resume with task",
 			args: []string{"codeagent-wrapper", "resume", "session-123", "continue task"},
-			want: &Config{
+			want: &config{
 				Mode: "resume", SessionID: "session-123", Task: "continue task", WorkDir: ".", ExplicitStdin: false,
 				Backend: defaultBackendName,
 			},
@@ -1114,7 +1127,7 @@ func TestBackendParseArgs_ResumeMode(t *testing.T) {
 		{
 			name: "resume with workdir",
 			args: []string{"codeagent-wrapper", "resume", "session-456", "task", "/work"},
-			want: &Config{
+			want: &config{
 				Mode: "resume", SessionID: "session-456", Task: "task", WorkDir: "/work", ExplicitStdin: false,
 				Backend: defaultBackendName,
 			},
@@ -1122,7 +1135,7 @@ func TestBackendParseArgs_ResumeMode(t *testing.T) {
 		{
 			name: "resume with stdin",
 			args: []string{"codeagent-wrapper", "resume", "session-789", "-"},
-			want: &Config{
+			want: &config{
 				Mode: "resume", SessionID: "session-789", Task: "-", WorkDir: ".", ExplicitStdin: true,
 				Backend: defaultBackendName,
 			},
@@ -1150,7 +1163,9 @@ func TestBackendParseArgs_ResumeMode(t *testing.T) {
 				if err != nil {
 					t.Fatalf("parseArgs() unexpected error: %v", err)
 				}
-				if cfg.Mode != tt.want.Mode || cfg.SessionID != tt.want.SessionID || cfg.Task != tt.want.Task || cfg.WorkDir != tt.want.WorkDir || cfg.ExplicitStdin != tt.want.ExplicitStdin {
+				if cfg.Mode != tt.want.Mode || cfg.SessionID != tt.want.SessionID || cfg.Task != tt.want.Task ||
+					cfg.WorkDir != tt.want.WorkDir ||
+					cfg.ExplicitStdin != tt.want.ExplicitStdin {
 					t.Errorf("parseArgs() mismatch: %+v vs %+v", cfg, tt.want)
 				}
 				if cfg.Backend != tt.want.Backend {
@@ -1241,9 +1256,17 @@ func TestBackendParseArgs_BackendFlag(t *testing.T) {
 
 func TestBackendParseArgs_SkipPermissions(t *testing.T) {
 	const envKey = "CODEAGENT_SKIP_PERMISSIONS"
-	t.Cleanup(func() { os.Unsetenv(envKey) })
+	t.Cleanup(
+		func() {
+			if err := os.Unsetenv(envKey); err != nil {
+				t.Errorf("I/O operation failed: %v", err)
+			}
+		},
+	)
 
-	os.Setenv(envKey, "true")
+	if err := os.Setenv(envKey, "true"); err != nil {
+		t.Errorf("I/O operation failed: %v", err)
+	}
 	os.Args = []string{"codeagent-wrapper", "task"}
 	cfg, err := parseArgs()
 	if err != nil {
@@ -1316,19 +1339,31 @@ func TestBackendParseBoolFlag(t *testing.T) {
 
 func TestBackendEnvFlagEnabled(t *testing.T) {
 	const key = "TEST_FLAG_ENABLED"
-	t.Cleanup(func() { os.Unsetenv(key) })
+	t.Cleanup(
+		func() {
+			if err := os.Unsetenv(key); err != nil {
+				t.Errorf("I/O operation failed: %v", err)
+			}
+		},
+	)
 
-	os.Unsetenv(key)
+	if err := os.Unsetenv(key); err != nil {
+		t.Errorf("I/O operation failed: %v", err)
+	}
 	if envFlagEnabled(key) {
 		t.Fatalf("envFlagEnabled should be false when unset")
 	}
 
-	os.Setenv(key, "true")
+	if err := os.Setenv(key, "true"); err != nil {
+		t.Errorf("I/O operation failed: %v", err)
+	}
 	if !envFlagEnabled(key) {
 		t.Fatalf("envFlagEnabled should be true for 'true'")
 	}
 
-	os.Setenv(key, "no")
+	if err := os.Setenv(key, "no"); err != nil {
+		t.Errorf("I/O operation failed: %v", err)
+	}
 	if envFlagEnabled(key) {
 		t.Fatalf("envFlagEnabled should be false for 'no'")
 	}
@@ -1349,7 +1384,9 @@ do something`
 		t.Fatalf("expected 1 task, got %d", len(cfg.Tasks))
 	}
 	task := cfg.Tasks[0]
-	if task.ID != "task-1" || task.Task != "do something" || task.WorkDir != defaultWorkdir || len(task.Dependencies) != 1 || task.Dependencies[0] != "task-0" {
+	if task.ID != "task-1" || task.Task != "do something" || task.WorkDir != defaultWorkdir ||
+		len(task.Dependencies) != 1 ||
+		task.Dependencies[0] != "task-0" {
 		t.Fatalf("task mismatch: %+v", task)
 	}
 }
@@ -1493,10 +1530,18 @@ func TestRunShouldUseStdin(t *testing.T) {
 
 func TestRunBuildCodexArgs_NewMode(t *testing.T) {
 	const key = "CODEX_REQUIRE_APPROVAL"
-	t.Cleanup(func() { os.Unsetenv(key) })
-	os.Unsetenv(key)
+	t.Cleanup(
+		func() {
+			if err := os.Unsetenv(key); err != nil {
+				t.Errorf("I/O operation failed: %v", err)
+			}
+		},
+	)
+	if err := os.Unsetenv(key); err != nil {
+		t.Errorf("I/O operation failed: %v", err)
+	}
 
-	cfg := &Config{Mode: "new", WorkDir: "/test/dir"}
+	cfg := &config{Mode: "new", WorkDir: "/test/dir"}
 	args := buildCodexArgs(cfg, "my task")
 	expected := []string{
 		"e",
@@ -1519,10 +1564,18 @@ func TestRunBuildCodexArgs_NewMode(t *testing.T) {
 
 func TestRunBuildCodexArgs_ResumeMode(t *testing.T) {
 	const key = "CODEX_REQUIRE_APPROVAL"
-	t.Cleanup(func() { os.Unsetenv(key) })
-	os.Unsetenv(key)
+	t.Cleanup(
+		func() {
+			if err := os.Unsetenv(key); err != nil {
+				t.Errorf("I/O operation failed: %v", err)
+			}
+		},
+	)
+	if err := os.Unsetenv(key); err != nil {
+		t.Errorf("I/O operation failed: %v", err)
+	}
 
-	cfg := &Config{Mode: "resume", SessionID: "session-abc"}
+	cfg := &config{Mode: "resume", SessionID: "session-abc"}
 	args := buildCodexArgs(cfg, "-")
 	expected := []string{
 		"e",
@@ -1546,13 +1599,22 @@ func TestRunBuildCodexArgs_ResumeMode(t *testing.T) {
 
 func TestRunBuildCodexArgs_ResumeMode_EmptySessionHandledGracefully(t *testing.T) {
 	const key = "CODEX_REQUIRE_APPROVAL"
-	t.Cleanup(func() { os.Unsetenv(key) })
-	os.Unsetenv(key)
+	t.Cleanup(
+		func() {
+			if err := os.Unsetenv(key); err != nil {
+				t.Errorf("I/O operation failed: %v", err)
+			}
+		},
+	)
+	if err := os.Unsetenv(key); err != nil {
+		t.Errorf("I/O operation failed: %v", err)
+	}
 
-	cfg := &Config{Mode: "resume", SessionID: "   ", WorkDir: "/test/dir"}
+	cfg := &config{Mode: "resume", SessionID: "   ", WorkDir: "/test/dir"}
 	args := buildCodexArgs(cfg, "task")
 	expected := []string{
-		"e", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "-c", "mcp_servers={}", "-C", "/test/dir", "--json", "task",
+		"e", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check",
+		"-c", "mcp_servers={}", "-C", "/test/dir", "--json", "task",
 	}
 	if len(args) != len(expected) {
 		t.Fatalf("len mismatch")
@@ -1567,7 +1629,7 @@ func TestRunBuildCodexArgs_ResumeMode_EmptySessionHandledGracefully(t *testing.T
 func TestRunBuildCodexArgs_RequireApprovalDisablesBypass(t *testing.T) {
 	t.Setenv("CODEX_REQUIRE_APPROVAL", "true")
 
-	cfg := &Config{Mode: "new", WorkDir: "/test/dir"}
+	cfg := &config{Mode: "new", WorkDir: "/test/dir"}
 	args := buildCodexArgs(cfg, "my task")
 	for _, arg := range args {
 		if arg == "--dangerously-bypass-approvals-and-sandbox" {
@@ -1580,12 +1642,12 @@ func TestBackendSelectBackend(t *testing.T) {
 	tests := []struct {
 		name string
 		in   string
-		kind Backend
+		kind backend
 	}{
-		{"codex", "codex", CodexBackend{}},
-		{"claude mixed case", "ClAuDe", ClaudeBackend{}},
-		{"antigravity", "antigravity", AntigravityBackend{}},
-		{"agy alias", "agy", AntigravityBackend{}},
+		{"codex", "codex", codexBackend{}},
+		{"claude mixed case", "ClAuDe", claudeBackend{}},
+		{"antigravity", "antigravity", antigravityBackend{}},
+		{"agy alias", "agy", antigravityBackend{}},
 	}
 
 	for _, tt := range tests {
@@ -1596,16 +1658,16 @@ func TestBackendSelectBackend(t *testing.T) {
 					t.Fatalf("selectBackend() error = %v", err)
 				}
 				switch tt.kind.(type) {
-				case CodexBackend:
-					if _, ok := got.(CodexBackend); !ok {
+				case codexBackend:
+					if _, ok := got.(codexBackend); !ok {
 						t.Fatalf("expected CodexBackend, got %T", got)
 					}
-				case ClaudeBackend:
-					if _, ok := got.(ClaudeBackend); !ok {
+				case claudeBackend:
+					if _, ok := got.(claudeBackend); !ok {
 						t.Fatalf("expected ClaudeBackend, got %T", got)
 					}
-				case AntigravityBackend:
-					if _, ok := got.(AntigravityBackend); !ok {
+				case antigravityBackend:
+					if _, ok := got.(antigravityBackend); !ok {
 						t.Fatalf("expected AntigravityBackend, got %T", got)
 					}
 				}
@@ -1635,14 +1697,14 @@ func TestBackendSelectBackend_DefaultOnEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("selectBackend(\"\") error = %v", err)
 	}
-	if _, ok := backend.(CodexBackend); !ok {
+	if _, ok := backend.(codexBackend); !ok {
 		t.Fatalf("expected default CodexBackend, got %T", backend)
 	}
 }
 
 func TestBackendBuildArgs_CodexBackend(t *testing.T) {
-	backend := CodexBackend{}
-	cfg := &Config{Mode: "new", WorkDir: "/test/dir"}
+	backend := codexBackend{}
+	cfg := &config{Mode: "new", WorkDir: "/test/dir"}
 	got := backend.BuildArgs(cfg, "task")
 	want := []string{
 		"e",
@@ -1664,10 +1726,19 @@ func TestBackendBuildArgs_CodexBackend(t *testing.T) {
 }
 
 func TestBackendBuildArgs_ClaudeBackend(t *testing.T) {
-	backend := ClaudeBackend{}
-	cfg := &Config{Mode: "new", WorkDir: defaultWorkdir}
+	backend := claudeBackend{}
+	cfg := &config{Mode: "new", WorkDir: defaultWorkdir}
 	got := backend.BuildArgs(cfg, "todo")
-	want := []string{"-p", "--dangerously-skip-permissions", "--setting-sources", "", "--output-format", "stream-json", "--verbose", "todo"}
+	want := []string{
+		"-p",
+		"--dangerously-skip-permissions",
+		"--setting-sources",
+		"",
+		"--output-format",
+		"stream-json",
+		"--verbose",
+		"todo",
+	}
 	if len(got) != len(want) {
 		t.Fatalf("args length=%d, want %d: %v", len(got), len(want), got)
 	}
@@ -1683,12 +1754,21 @@ func TestBackendBuildArgs_ClaudeBackend(t *testing.T) {
 }
 
 func TestClaudeBackendBuildArgs_OutputValidation(t *testing.T) {
-	backend := ClaudeBackend{}
-	cfg := &Config{Mode: "resume"}
+	backend := claudeBackend{}
+	cfg := &config{Mode: "resume"}
 	target := "ensure-flags"
 
 	args := backend.BuildArgs(cfg, target)
-	want := []string{"-p", "--dangerously-skip-permissions", "--setting-sources", "", "--output-format", "stream-json", "--verbose", target}
+	want := []string{
+		"-p",
+		"--dangerously-skip-permissions",
+		"--setting-sources",
+		"",
+		"--output-format",
+		"stream-json",
+		"--verbose",
+		target,
+	}
 	if len(args) != len(want) {
 		t.Fatalf("args length=%d, want %d: %v", len(args), len(want), args)
 	}
@@ -1700,10 +1780,10 @@ func TestClaudeBackendBuildArgs_OutputValidation(t *testing.T) {
 }
 
 func TestBackendBuildArgs_AntigravityBackend(t *testing.T) {
-	backend := AntigravityBackend{}
-	cfg := &Config{Mode: "new"}
+	backend := antigravityBackend{}
+	cfg := &config{Mode: "new"}
 	got := backend.BuildArgs(cfg, "task")
-	want := []string{"-p", "task"}
+	want := []string{"--output-format", "stream-json", "-p", "task"}
 	if len(got) != len(want) {
 		t.Fatalf("length mismatch")
 	}
@@ -1719,12 +1799,12 @@ func TestBackendBuildArgs_AntigravityBackend(t *testing.T) {
 }
 
 func TestAntigravityBackendBuildArgs_OutputValidation(t *testing.T) {
-	backend := AntigravityBackend{}
-	cfg := &Config{Mode: "resume", SessionID: "sid-123"}
+	backend := antigravityBackend{}
+	cfg := &config{Mode: "resume", SessionID: "sid-123"}
 	target := "prompt-data"
 
 	args := backend.BuildArgs(cfg, target)
-	expected := []string{"--conversation", "sid-123", "-p"}
+	expected := []string{"--conversation", "sid-123", "--output-format", "stream-json", "-p"}
 
 	if len(args) != len(expected)+1 {
 		t.Fatalf("args length=%d, want %d", len(args), len(expected)+1)
@@ -1740,7 +1820,7 @@ func TestAntigravityBackendBuildArgs_OutputValidation(t *testing.T) {
 }
 
 func TestBackendNamesAndCommands(t *testing.T) {
-	tests := []Backend{CodexBackend{}, ClaudeBackend{}, AntigravityBackend{}}
+	tests := []backend{codexBackend{}, claudeBackend{}, antigravityBackend{}}
 	expected := []struct {
 		name    string
 		command string
@@ -1780,8 +1860,14 @@ func TestRunResolveTimeout(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(
 			tt.name, func(t *testing.T) {
-				os.Setenv("CODEX_TIMEOUT", tt.envVal)
-				defer os.Unsetenv("CODEX_TIMEOUT")
+				if err := os.Setenv("CODEX_TIMEOUT", tt.envVal); err != nil {
+					t.Errorf("I/O operation failed: %v", err)
+				}
+				defer func() {
+					if err := os.Unsetenv("CODEX_TIMEOUT"); err != nil {
+						t.Errorf("I/O operation failed: %v", err)
+					}
+				}()
 				got := resolveTimeout()
 				if got != tt.want {
 					t.Errorf("resolveTimeout() with env=%q = %v, want %v", tt.envVal, got, tt.want)
@@ -1794,13 +1880,13 @@ func TestRunResolveTimeout(t *testing.T) {
 func TestRunNormalizeText(t *testing.T) {
 	tests := []struct {
 		name  string
-		input interface{}
+		input any
 		want  string
 	}{
 		{"string", "hello world", "hello world"},
-		{"string array", []interface{}{"hello", " ", "world"}, "hello world"},
-		{"empty array", []interface{}{}, ""},
-		{"mixed array", []interface{}{"text", 123, "more"}, "textmore"},
+		{"string array", []any{"hello", " ", "world"}, "hello world"},
+		{"empty array", []any{}, ""},
+		{"mixed array", []any{"text", 123, "more"}, "textmore"},
 		{"nil", nil, ""},
 		{"number", 123, ""},
 		{"empty string", "", ""},
@@ -2159,10 +2245,18 @@ func TestRunGetEnv(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(
 			tt.name, func(t *testing.T) {
-				os.Unsetenv(tt.key)
+				if err := os.Unsetenv(tt.key); err != nil {
+					t.Errorf("I/O operation failed: %v", err)
+				}
 				if tt.setEnv {
-					os.Setenv(tt.key, tt.envVal)
-					defer os.Unsetenv(tt.key)
+					if err := os.Setenv(tt.key, tt.envVal); err != nil {
+						t.Errorf("I/O operation failed: %v", err)
+					}
+					defer func() {
+						if err := os.Unsetenv(tt.key); err != nil {
+							t.Errorf("I/O operation failed: %v", err)
+						}
+					}()
 				}
 
 				got := getEnv(tt.key, tt.defaultVal)
@@ -2246,19 +2340,23 @@ func TestRunLogFunctions(t *testing.T) {
 	tempDir := t.TempDir()
 	t.Setenv("TMPDIR", tempDir)
 
-	logger, err := NewLogger()
+	logger, err := newLogger()
 	if err != nil {
 		t.Fatalf("NewLogger() error = %v", err)
 	}
 	setLogger(logger)
-	defer closeLogger()
+	defer func() {
+		if err := closeLogger(); err != nil {
+			t.Errorf("I/O operation failed: %v", err)
+		}
+	}()
 
 	logInfo("info message")
 	logWarn("warn message")
 	logError("error message")
 	logger.Flush()
 
-	data, err := os.ReadFile(logger.Path())
+	data, err := os.ReadFile(logger.logPath())
 	if err != nil {
 		t.Fatalf("failed to read log file: %v", err)
 	}
@@ -2276,17 +2374,17 @@ func TestRunLogFunctions(t *testing.T) {
 }
 
 func TestLoggerPathAndRemoveNil(t *testing.T) {
-	var logger *Logger
-	if logger.Path() != "" {
+	var logger *fileLogger
+	if logger.logPath() != "" {
 		t.Fatalf("nil logger path should be empty")
 	}
-	if err := logger.RemoveLogFile(); err != nil {
+	if err := logger.removeLogFile(); err != nil {
 		t.Fatalf("expected nil logger RemoveLogFile to be no-op, got %v", err)
 	}
 }
 
 func TestLoggerLogDropOnDone(t *testing.T) {
-	logger := &Logger{
+	logger := &fileLogger{
 		ch:   make(chan logEntry),
 		done: make(chan struct{}),
 	}
@@ -2297,7 +2395,7 @@ func TestLoggerLogDropOnDone(t *testing.T) {
 
 func TestLoggerLogAfterClose(t *testing.T) {
 	defer resetTestHooks()
-	logger, err := NewLogger()
+	logger, err := newLogger()
 	if err != nil {
 		t.Fatalf("NewLogger error: %v", err)
 	}
@@ -2309,7 +2407,7 @@ func TestLoggerLogAfterClose(t *testing.T) {
 
 func TestLogWriterLogLine(t *testing.T) {
 	defer resetTestHooks()
-	logger, err := NewLogger()
+	logger, err := newLogger()
 	if err != nil {
 		t.Fatalf("NewLogger error: %v", err)
 	}
@@ -2319,11 +2417,13 @@ func TestLogWriterLogLine(t *testing.T) {
 	lw.logLine(false)
 	lw.logLine(false) // empty buffer path
 	logger.Flush()
-	data, _ := os.ReadFile(logger.Path())
+	data, _ := os.ReadFile(logger.logPath())
 	if !strings.Contains(string(data), "P:abc") {
 		t.Fatalf("log output missing truncated entry, got %q", string(data))
 	}
-	closeLogger()
+	if err := closeLogger(); err != nil {
+		t.Errorf("I/O operation failed: %v", err)
+	}
 }
 
 func TestNewLogWriterDefaultMaxLen(t *testing.T) {
@@ -2338,11 +2438,15 @@ func TestBackendPrintHelp(t *testing.T) {
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 	printHelp()
-	w.Close()
+	if err := w.Close(); err != nil && !errors.Is(err, os.ErrClosed) {
+		t.Errorf("I/O operation failed: %v", err)
+	}
 	os.Stdout = oldStdout
 
 	var buf bytes.Buffer
-	io.Copy(&buf, r)
+	if _, err := io.Copy(&buf, r); err != nil {
+		t.Errorf("I/O operation failed: %v", err)
+	}
 	output := buf.String()
 
 	expected := []string{
@@ -2358,9 +2462,9 @@ func TestBackendPrintHelp(t *testing.T) {
 
 func TestRun_RedactsTaskFromStartupCommand(t *testing.T) {
 	defer resetTestHooks()
-	cleanupLogsFn = func() (CleanupStats, error) { return CleanupStats{}, nil }
-	runTaskFn = func(TaskSpec, bool, int) TaskResult {
-		return TaskResult{ExitCode: 0, Message: "ok"}
+	cleanupLogsFn = func() (cleanupStats, error) { return cleanupStats{}, nil }
+	runTaskFn = func(taskSpec, bool, int) taskResult {
+		return taskResult{ExitCode: 0, Message: "ok"}
 	}
 
 	const task = "api_key=secret-value"
@@ -2368,11 +2472,13 @@ func TestRun_RedactsTaskFromStartupCommand(t *testing.T) {
 	isTerminalFn = func() bool { return false }
 	os.Args = []string{"codeagent-wrapper", "--backend", "grok", "-"}
 
-	stderr := captureStderr(t, func() {
-		if code := run(); code != 0 {
-			t.Fatalf("run exit = %d, want 0", code)
-		}
-	})
+	stderr := captureStderr(
+		t, func() {
+			if code := run(); code != 0 {
+				t.Fatalf("run exit = %d, want 0", code)
+			}
+		},
+	)
 	if strings.Contains(stderr, task) {
 		t.Fatalf("startup output leaked task: %q", stderr)
 	}
@@ -2443,8 +2549,8 @@ func TestRunReadPipedTask(t *testing.T) {
 func TestRunCodexTask_CommandNotFound(t *testing.T) {
 	defer resetTestHooks()
 	codexCommand = "nonexistent-command-xyz"
-	buildCodexArgsFn = func(cfg *Config, targetArg string) []string { return []string{targetArg} }
-	res := runCodexTask(TaskSpec{Task: "task"}, false, 10)
+	buildCodexArgsFn = func(cfg *config, targetArg string) []string { return []string{targetArg} }
+	res := runCodexTask(taskSpec{Task: "task"}, false, 10)
 	if res.ExitCode != 127 {
 		t.Errorf("exitCode = %d, want 127", res.ExitCode)
 	}
@@ -2459,12 +2565,16 @@ func TestRunCodexTask_StartError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
-	defer os.Remove(tmpFile.Name())
+	defer func() {
+		if err := os.Remove(tmpFile.Name()); err != nil && !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("I/O operation failed: %v", err)
+		}
+	}()
 
 	codexCommand = tmpFile.Name()
-	buildCodexArgsFn = func(cfg *Config, targetArg string) []string { return []string{} }
+	buildCodexArgsFn = func(cfg *config, targetArg string) []string { return []string{} }
 
-	res := runCodexTask(TaskSpec{Task: "task"}, false, 1)
+	res := runCodexTask(taskSpec{Task: "task"}, false, 1)
 	if res.ExitCode != 1 || !strings.Contains(res.Error, "failed to start") {
 		t.Fatalf("unexpected result: %+v", res)
 	}
@@ -2473,12 +2583,12 @@ func TestRunCodexTask_StartError(t *testing.T) {
 func TestRunCodexTask_WithEcho(t *testing.T) {
 	defer resetTestHooks()
 	codexCommand = "echo"
-	buildCodexArgsFn = func(cfg *Config, targetArg string) []string { return []string{targetArg} }
+	buildCodexArgsFn = func(cfg *config, targetArg string) []string { return []string{targetArg} }
 
 	jsonOutput := `{"type":"thread.started","thread_id":"test-session"}
 {"type":"item.completed","item":{"type":"agent_message","text":"Test output"}}`
 
-	res := runCodexTask(TaskSpec{Task: jsonOutput}, false, 10)
+	res := runCodexTask(taskSpec{Task: jsonOutput}, false, 10)
 	if res.ExitCode != 0 || res.Message != "Test output" || res.SessionID != "test-session" {
 		t.Fatalf("unexpected result: %+v", res)
 	}
@@ -2503,17 +2613,17 @@ func TestRunCodexTaskFn_UsesTaskBackend(t *testing.T) {
 		seenArgs = append([]string(nil), args...)
 		return fake
 	}
-	selectBackendFn = func(name string) (Backend, error) {
+	selectBackendFn = func(name string) (backend, error) {
 		return testBackend{
 			name:    strings.ToLower(name),
 			command: "custom-cli",
-			argsFn: func(cfg *Config, targetArg string) []string {
+			argsFn: func(cfg *config, targetArg string) []string {
 				return []string{"do", targetArg}
 			},
 		}, nil
 	}
 
-	res := runCodexTaskFn(TaskSpec{ID: "task-1", Task: "payload", Backend: "Custom"}, 5)
+	res := runCodexTaskFn(taskSpec{ID: "task-1", Task: "payload", Backend: "Custom"}, 5)
 
 	if res.ExitCode != 0 || res.Message != "backend-msg" || res.SessionID != "backend-thread" {
 		t.Fatalf("unexpected result: %+v", res)
@@ -2535,11 +2645,11 @@ func TestRunCodexTaskFn_UsesTaskBackend(t *testing.T) {
 func TestRunCodexTaskFn_InvalidBackend(t *testing.T) {
 	defer resetTestHooks()
 
-	selectBackendFn = func(name string) (Backend, error) {
+	selectBackendFn = func(name string) (backend, error) {
 		return nil, fmt.Errorf("invalid backend: %s", name)
 	}
 
-	res := runCodexTaskFn(TaskSpec{ID: "bad-task", Task: "noop", Backend: "unknown"}, 5)
+	res := runCodexTaskFn(taskSpec{ID: "bad-task", Task: "noop", Backend: "unknown"}, 5)
 	if res.ExitCode == 0 {
 		t.Fatalf("expected failure for invalid backend")
 	}
@@ -2554,21 +2664,21 @@ func TestRunCodexTaskFn_InvalidBackend(t *testing.T) {
 func TestRunCodexTask_LogPathWithActiveLogger(t *testing.T) {
 	defer resetTestHooks()
 
-	logger, err := NewLoggerWithSuffix("active-logpath")
+	logger, err := newLoggerWithSuffix("active-logpath")
 	if err != nil {
 		t.Fatalf("failed to create logger: %v", err)
 	}
 	setLogger(logger)
 
 	codexCommand = "echo"
-	buildCodexArgsFn = func(cfg *Config, targetArg string) []string { return []string{targetArg} }
+	buildCodexArgsFn = func(cfg *config, targetArg string) []string { return []string{targetArg} }
 
 	jsonOutput := `{"type":"thread.started","thread_id":"fake-thread"}
 {"type":"item.completed","item":{"type":"agent_message","text":"ok"}}`
 
-	result := runCodexTask(TaskSpec{Task: jsonOutput}, false, 5)
-	if result.LogPath != logger.Path() {
-		t.Fatalf("LogPath = %q, want %q", result.LogPath, logger.Path())
+	result := runCodexTask(taskSpec{Task: jsonOutput}, false, 5)
+	if result.LogPath != logger.logPath() {
+		t.Fatalf("LogPath = %q, want %q", result.LogPath, logger.logPath())
 	}
 	if result.ExitCode != 0 {
 		t.Fatalf("exit = %d, want 0 (%s)", result.ExitCode, result.Error)
@@ -2579,16 +2689,18 @@ func TestRunCodexTask_LogPathWithTempLogger(t *testing.T) {
 	defer resetTestHooks()
 
 	codexCommand = "echo"
-	buildCodexArgsFn = func(cfg *Config, targetArg string) []string { return []string{targetArg} }
+	buildCodexArgsFn = func(cfg *config, targetArg string) []string { return []string{targetArg} }
 
 	jsonOutput := `{"type":"thread.started","thread_id":"temp-thread"}
 {"type":"item.completed","item":{"type":"agent_message","text":"temp"}}`
 
-	result := runCodexTask(TaskSpec{Task: jsonOutput}, true, 5)
+	result := runCodexTask(taskSpec{Task: jsonOutput}, true, 5)
 	t.Cleanup(
 		func() {
 			if result.LogPath != "" {
-				os.Remove(result.LogPath)
+				if err := os.Remove(result.LogPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+					t.Errorf("I/O operation failed: %v", err)
+				}
 			}
 		},
 	)
@@ -2606,7 +2718,7 @@ func TestRunCodexTask_LogPathWithTempLogger(t *testing.T) {
 func TestRunCodexTask_LogPathOnStartError(t *testing.T) {
 	defer resetTestHooks()
 
-	logger, err := NewLoggerWithSuffix("start-error")
+	logger, err := newLoggerWithSuffix("start-error")
 	if err != nil {
 		t.Fatalf("failed to create logger: %v", err)
 	}
@@ -2616,26 +2728,30 @@ func TestRunCodexTask_LogPathOnStartError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
-	defer os.Remove(tmpFile.Name())
+	defer func() {
+		if err := os.Remove(tmpFile.Name()); err != nil && !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("I/O operation failed: %v", err)
+		}
+	}()
 
 	codexCommand = tmpFile.Name()
-	buildCodexArgsFn = func(cfg *Config, targetArg string) []string { return []string{} }
+	buildCodexArgsFn = func(cfg *config, targetArg string) []string { return []string{} }
 
-	result := runCodexTask(TaskSpec{Task: "ignored"}, false, 5)
+	result := runCodexTask(taskSpec{Task: "ignored"}, false, 5)
 	if result.ExitCode == 0 {
 		t.Fatalf("expected non-zero exit")
 	}
-	if result.LogPath != logger.Path() {
-		t.Fatalf("LogPath = %q, want %q", result.LogPath, logger.Path())
+	if result.LogPath != logger.logPath() {
+		t.Fatalf("LogPath = %q, want %q", result.LogPath, logger.logPath())
 	}
 }
 
 func TestRunCodexTask_NoMessage(t *testing.T) {
 	defer resetTestHooks()
 	codexCommand = "echo"
-	buildCodexArgsFn = func(cfg *Config, targetArg string) []string { return []string{targetArg} }
+	buildCodexArgsFn = func(cfg *config, targetArg string) []string { return []string{targetArg} }
 	jsonOutput := `{"type":"thread.started","thread_id":"test-session"}`
-	res := runCodexTask(TaskSpec{Task: jsonOutput}, false, 10)
+	res := runCodexTask(taskSpec{Task: jsonOutput}, false, 10)
 	if res.ExitCode != 1 || res.Error == "" {
 		t.Fatalf("expected error for missing agent_message, got %+v", res)
 	}
@@ -2644,9 +2760,9 @@ func TestRunCodexTask_NoMessage(t *testing.T) {
 func TestRunCodexTask_WithStdin(t *testing.T) {
 	defer resetTestHooks()
 	codexCommand = "cat"
-	buildCodexArgsFn = func(cfg *Config, targetArg string) []string { return []string{} }
+	buildCodexArgsFn = func(cfg *config, targetArg string) []string { return []string{} }
 	jsonInput := `{"type":"item.completed","item":{"type":"agent_message","text":"from stdin"}}`
-	res := runCodexTask(TaskSpec{Task: jsonInput, UseStdin: true}, false, 10)
+	res := runCodexTask(taskSpec{Task: jsonInput, UseStdin: true}, false, 10)
 	if res.ExitCode != 0 || res.Message != "from stdin" {
 		t.Fatalf("unexpected result: %+v", res)
 	}
@@ -2671,8 +2787,8 @@ func TestRunCodexProcess_WithStdin(t *testing.T) {
 func TestRunCodexTask_ExitError(t *testing.T) {
 	defer resetTestHooks()
 	codexCommand = "false"
-	buildCodexArgsFn = func(cfg *Config, targetArg string) []string { return []string{} }
-	res := runCodexTask(TaskSpec{Task: "noop"}, false, 10)
+	buildCodexArgsFn = func(cfg *config, targetArg string) []string { return []string{} }
+	res := runCodexTask(taskSpec{Task: "noop"}, false, 10)
 	if res.ExitCode == 0 || res.Error == "" {
 		t.Fatalf("expected failure, got %+v", res)
 	}
@@ -2685,8 +2801,8 @@ func TestRunCodexTask_StdinPipeError(t *testing.T) {
 		cmd.Stdin = os.Stdin
 		return cmd
 	}
-	buildCodexArgsFn = func(cfg *Config, targetArg string) []string { return []string{} }
-	res := runCodexTask(TaskSpec{Task: "data", UseStdin: true}, false, 1)
+	buildCodexArgsFn = func(cfg *config, targetArg string) []string { return []string{} }
+	res := runCodexTask(taskSpec{Task: "data", UseStdin: true}, false, 1)
 	if res.ExitCode != 1 || !strings.Contains(res.Error, "stdin pipe") {
 		t.Fatalf("expected stdin pipe error, got %+v", res)
 	}
@@ -2699,8 +2815,8 @@ func TestRunCodexTask_StdoutPipeError(t *testing.T) {
 		cmd.Stdout = os.Stdout
 		return cmd
 	}
-	buildCodexArgsFn = func(cfg *Config, targetArg string) []string { return []string{} }
-	res := runCodexTask(TaskSpec{Task: "noop"}, false, 1)
+	buildCodexArgsFn = func(cfg *config, targetArg string) []string { return []string{} }
+	res := runCodexTask(taskSpec{Task: "noop"}, false, 1)
 	if res.ExitCode != 1 || !strings.Contains(res.Error, "stdout pipe") {
 		t.Fatalf("expected stdout pipe error, got %+v", res)
 	}
@@ -2709,8 +2825,8 @@ func TestRunCodexTask_StdoutPipeError(t *testing.T) {
 func TestRunCodexTask_Timeout(t *testing.T) {
 	defer resetTestHooks()
 	codexCommand = "sleep"
-	buildCodexArgsFn = func(cfg *Config, targetArg string) []string { return []string{"2"} }
-	res := runCodexTask(TaskSpec{Task: "ignored"}, false, 1)
+	buildCodexArgsFn = func(cfg *config, targetArg string) []string { return []string{"2"} }
+	res := runCodexTask(taskSpec{Task: "ignored"}, false, 1)
 	if res.ExitCode != 124 || !strings.Contains(res.Error, "timeout") {
 		t.Fatalf("expected timeout, got %+v", res)
 	}
@@ -2723,10 +2839,10 @@ func TestRunCodexTask_SignalHandling(t *testing.T) {
 
 	defer resetTestHooks()
 	codexCommand = "sleep"
-	buildCodexArgsFn = func(cfg *Config, targetArg string) []string { return []string{"5"} }
+	buildCodexArgsFn = func(cfg *config, targetArg string) []string { return []string{"5"} }
 
-	resultCh := make(chan TaskResult, 1)
-	go func() { resultCh <- runCodexTask(TaskSpec{Task: "ignored"}, false, 5) }()
+	resultCh := make(chan taskResult, 1)
+	go func() { resultCh <- runCodexTask(taskSpec{Task: "ignored"}, false, 5) }()
 
 	time.Sleep(200 * time.Millisecond)
 	if err := sendTestSignal(os.Getpid(), syscall.SIGTERM); err != nil {
@@ -2793,20 +2909,24 @@ func TestRunSilentMode(t *testing.T) {
 	jsonOutput := `{"type":"thread.started","thread_id":"silent-session"}
 {"type":"item.completed","item":{"type":"agent_message","text":"quiet"}}`
 	codexCommand = "echo"
-	buildCodexArgsFn = func(cfg *Config, targetArg string) []string { return []string{targetArg} }
+	buildCodexArgsFn = func(cfg *config, targetArg string) []string { return []string{targetArg} }
 
 	capture := func(silent bool, noSessionPersistence bool) string {
 		oldStderr := os.Stderr
 		r, w, _ := os.Pipe()
 		os.Stderr = w
-		res := runCodexTask(TaskSpec{Task: jsonOutput, NoSessionPersistence: noSessionPersistence}, silent, 10)
+		res := runCodexTask(taskSpec{Task: jsonOutput, NoSessionPersistence: noSessionPersistence}, silent, 10)
 		if res.ExitCode != 0 {
 			t.Fatalf("unexpected exitCode %d", res.ExitCode)
 		}
-		w.Close()
+		if err := w.Close(); err != nil && !errors.Is(err, os.ErrClosed) {
+			t.Errorf("I/O operation failed: %v", err)
+		}
 		os.Stderr = oldStderr
 		var buf bytes.Buffer
-		io.Copy(&buf, r)
+		if _, err := io.Copy(&buf, r); err != nil {
+			t.Errorf("I/O operation failed: %v", err)
+		}
 		return buf.String()
 	}
 
@@ -2829,8 +2949,12 @@ func TestRunSilentMode(t *testing.T) {
 }
 
 func TestRunGenerateFinalOutput(t *testing.T) {
-	results := []TaskResult{
-		{TaskID: "a", ExitCode: 0, Message: "ok"}, {TaskID: "b", ExitCode: 1, Error: "boom"}, {TaskID: "c", ExitCode: 0},
+	results := []taskResult{
+		{
+			TaskID:   "a",
+			ExitCode: 0,
+			Message:  "ok",
+		}, {TaskID: "b", ExitCode: 1, Error: "boom"}, {TaskID: "c", ExitCode: 0},
 	}
 	out := generateFinalOutput(results)
 	if out == "" {
@@ -2851,7 +2975,7 @@ func TestRunGenerateFinalOutput(t *testing.T) {
 }
 
 func TestRunGenerateFinalOutput_LogPath(t *testing.T) {
-	results := []TaskResult{
+	results := []taskResult{
 		{
 			TaskID:    "a",
 			ExitCode:  0,
@@ -2882,7 +3006,7 @@ func TestRunGenerateFinalOutput_LogPath(t *testing.T) {
 }
 
 func TestRunTopologicalSort_LinearChain(t *testing.T) {
-	tasks := []TaskSpec{{ID: "a"}, {ID: "b", Dependencies: []string{"a"}}, {ID: "c", Dependencies: []string{"b"}}}
+	tasks := []taskSpec{{ID: "a"}, {ID: "b", Dependencies: []string{"a"}}, {ID: "c", Dependencies: []string{"b"}}}
 	layers, err := topologicalSort(tasks)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -2893,7 +3017,7 @@ func TestRunTopologicalSort_LinearChain(t *testing.T) {
 }
 
 func TestRunTopologicalSort_Branching(t *testing.T) {
-	tasks := []TaskSpec{
+	tasks := []taskSpec{
 		{ID: "root"}, {ID: "left", Dependencies: []string{"root"}}, {ID: "right", Dependencies: []string{"root"}},
 		{ID: "leaf", Dependencies: []string{"left", "right"}},
 	}
@@ -2907,7 +3031,7 @@ func TestRunTopologicalSort_Branching(t *testing.T) {
 }
 
 func TestParallelTopologicalSortTasks(t *testing.T) {
-	tasks := []TaskSpec{{ID: "a"}, {ID: "b"}, {ID: "c"}}
+	tasks := []taskSpec{{ID: "a"}, {ID: "b"}, {ID: "c"}}
 	layers, err := topologicalSort(tasks)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -2918,17 +3042,17 @@ func TestParallelTopologicalSortTasks(t *testing.T) {
 }
 
 func TestRunShouldSkipTask(t *testing.T) {
-	failed := map[string]TaskResult{"a": {TaskID: "a", ExitCode: 1}, "b": {TaskID: "b", ExitCode: 2}}
+	failed := map[string]taskResult{"a": {TaskID: "a", ExitCode: 1}, "b": {TaskID: "b", ExitCode: 2}}
 	tests := []struct {
 		name           string
-		task           TaskSpec
+		task           taskSpec
 		skip           bool
 		reasonContains []string
 	}{
-		{"no deps", TaskSpec{ID: "c"}, false, nil},
-		{"missing deps not failed", TaskSpec{ID: "d", Dependencies: []string{"x"}}, false, nil},
-		{"single failed dep", TaskSpec{ID: "e", Dependencies: []string{"a"}}, true, []string{"a"}},
-		{"multiple failed deps", TaskSpec{ID: "f", Dependencies: []string{"a", "b"}}, true, []string{"a", "b"}},
+		{"no deps", taskSpec{ID: "c"}, false, nil},
+		{"missing deps not failed", taskSpec{ID: "d", Dependencies: []string{"x"}}, false, nil},
+		{"single failed dep", taskSpec{ID: "e", Dependencies: []string{"a"}}, true, []string{"a"}},
+		{"multiple failed deps", taskSpec{ID: "f", Dependencies: []string{"a", "b"}}, true, []string{"a", "b"}},
 	}
 
 	for _, tt := range tests {
@@ -2949,14 +3073,14 @@ func TestRunShouldSkipTask(t *testing.T) {
 }
 
 func TestRunTopologicalSort_CycleDetection(t *testing.T) {
-	tasks := []TaskSpec{{ID: "a", Dependencies: []string{"b"}}, {ID: "b", Dependencies: []string{"a"}}}
+	tasks := []taskSpec{{ID: "a", Dependencies: []string{"b"}}, {ID: "b", Dependencies: []string{"a"}}}
 	if _, err := topologicalSort(tasks); err == nil || !strings.Contains(err.Error(), "cycle detected") {
 		t.Fatalf("expected cycle error, got %v", err)
 	}
 }
 
 func TestRunTopologicalSort_IndirectCycle(t *testing.T) {
-	tasks := []TaskSpec{
+	tasks := []taskSpec{
 		{ID: "a", Dependencies: []string{"c"}}, {ID: "b", Dependencies: []string{"a"}},
 		{ID: "c", Dependencies: []string{"b"}},
 	}
@@ -2966,7 +3090,7 @@ func TestRunTopologicalSort_IndirectCycle(t *testing.T) {
 }
 
 func TestRunTopologicalSort_MissingDependency(t *testing.T) {
-	tasks := []TaskSpec{{ID: "a", Dependencies: []string{"missing"}}}
+	tasks := []taskSpec{{ID: "a", Dependencies: []string{"missing"}}}
 	if _, err := topologicalSort(tasks); err == nil || !strings.Contains(
 		err.Error(), "dependency \"missing\" not found",
 	) {
@@ -2976,15 +3100,15 @@ func TestRunTopologicalSort_MissingDependency(t *testing.T) {
 
 func TestRunTopologicalSort_LargeGraph(t *testing.T) {
 	const count = 200
-	tasks := make([]TaskSpec, count)
-	for i := 0; i < count; i++ {
+	tasks := make([]taskSpec, count)
+	for i := range count {
 		id := fmt.Sprintf("task-%d", i)
 		if i == 0 {
-			tasks[i] = TaskSpec{ID: id}
+			tasks[i] = taskSpec{ID: id}
 			continue
 		}
 		prev := fmt.Sprintf("task-%d", i-1)
-		tasks[i] = TaskSpec{ID: id, Dependencies: []string{prev}}
+		tasks[i] = taskSpec{ID: id, Dependencies: []string{prev}}
 	}
 
 	layers, err := topologicalSort(tasks)
@@ -3002,10 +3126,10 @@ func TestParallelExecuteConcurrent(t *testing.T) {
 	defer func() { runCodexTaskFn = orig }()
 
 	var maxParallel int64
-	var current int64
+	var current atomic.Int64
 
-	runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
-		cur := atomic.AddInt64(&current, 1)
+	runCodexTaskFn = func(task taskSpec, timeout int) taskResult {
+		cur := current.Add(1)
 		for {
 			prev := atomic.LoadInt64(&maxParallel)
 			if cur <= prev || atomic.CompareAndSwapInt64(&maxParallel, prev, cur) {
@@ -3013,11 +3137,11 @@ func TestParallelExecuteConcurrent(t *testing.T) {
 			}
 		}
 		time.Sleep(150 * time.Millisecond)
-		atomic.AddInt64(&current, -1)
-		return TaskResult{TaskID: task.ID}
+		current.Add(-1)
+		return taskResult{TaskID: task.ID}
 	}
 
-	layers := [][]TaskSpec{{{ID: "a"}, {ID: "b"}, {ID: "c"}}}
+	layers := [][]taskSpec{{{ID: "a"}, {ID: "b"}, {ID: "c"}}}
 	results := executeConcurrent(layers, 10)
 
 	if len(results) != 3 {
@@ -3035,14 +3159,14 @@ func TestRunExecuteConcurrent_LayerOrdering(t *testing.T) {
 	var mu sync.Mutex
 	var order []string
 
-	runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
+	runCodexTaskFn = func(task taskSpec, timeout int) taskResult {
 		mu.Lock()
 		order = append(order, task.ID)
 		mu.Unlock()
-		return TaskResult{TaskID: task.ID}
+		return taskResult{TaskID: task.ID}
 	}
 
-	layers := [][]TaskSpec{{{ID: "first-1"}, {ID: "first-2"}}, {{ID: "second"}}}
+	layers := [][]taskSpec{{{ID: "first-1"}, {ID: "first-2"}}, {{ID: "second"}}}
 	executeConcurrent(layers, 10)
 
 	if len(order) != 3 || order[2] != "second" {
@@ -3054,14 +3178,14 @@ func TestRunExecuteConcurrent_ErrorIsolation(t *testing.T) {
 	orig := runCodexTaskFn
 	defer func() { runCodexTaskFn = orig }()
 
-	runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
+	runCodexTaskFn = func(task taskSpec, timeout int) taskResult {
 		if task.ID == "fail" {
-			return TaskResult{TaskID: task.ID, ExitCode: 2, Error: "boom"}
+			return taskResult{TaskID: task.ID, ExitCode: 2, Error: "boom"}
 		}
-		return TaskResult{TaskID: task.ID, ExitCode: 0}
+		return taskResult{TaskID: task.ID, ExitCode: 0}
 	}
 
-	layers := [][]TaskSpec{{{ID: "ok"}, {ID: "fail"}}, {{ID: "after"}}}
+	layers := [][]taskSpec{{{ID: "ok"}, {ID: "fail"}}, {{ID: "after"}}}
 	results := executeConcurrent(layers, 10)
 
 	if len(results) != 3 {
@@ -3087,11 +3211,11 @@ func TestRunExecuteConcurrent_PanicRecovered(t *testing.T) {
 	orig := runCodexTaskFn
 	defer func() { runCodexTaskFn = orig }()
 
-	runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
+	runCodexTaskFn = func(task taskSpec, timeout int) taskResult {
 		panic("boom")
 	}
 
-	results := executeConcurrent([][]TaskSpec{{{ID: "panic"}}}, 10)
+	results := executeConcurrent([][]taskSpec{{{ID: "panic"}}}, 10)
 	if len(results) != 1 || results[0].Error == "" || results[0].ExitCode == 0 {
 		t.Fatalf("panic should be captured, got %+v", results[0])
 	}
@@ -3101,12 +3225,12 @@ func TestRunExecuteConcurrent_LargeFanout(t *testing.T) {
 	orig := runCodexTaskFn
 	defer func() { runCodexTaskFn = orig }()
 
-	runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult { return TaskResult{TaskID: task.ID} }
-	layer := make([]TaskSpec, 0, 1200)
-	for i := 0; i < 1200; i++ {
-		layer = append(layer, TaskSpec{ID: fmt.Sprintf("id-%d", i)})
+	runCodexTaskFn = func(task taskSpec, timeout int) taskResult { return taskResult{TaskID: task.ID} }
+	layer := make([]taskSpec, 0, 1200)
+	for i := range 1200 {
+		layer = append(layer, taskSpec{ID: fmt.Sprintf("id-%d", i)})
 	}
-	results := executeConcurrent([][]TaskSpec{layer}, 10)
+	results := executeConcurrent([][]taskSpec{layer}, 10)
 	if len(results) != 1200 {
 		t.Fatalf("expected 1200 results, got %d", len(results))
 	}
@@ -3114,16 +3238,16 @@ func TestRunExecuteConcurrent_LargeFanout(t *testing.T) {
 
 func TestParallelBackendPropagation(t *testing.T) {
 	defer resetTestHooks()
-	cleanupLogsFn = func() (CleanupStats, error) { return CleanupStats{}, nil }
+	cleanupLogsFn = func() (cleanupStats, error) { return cleanupStats{}, nil }
 
 	orig := runCodexTaskFn
 	var mu sync.Mutex
 	seen := make(map[string]string)
-	runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
+	runCodexTaskFn = func(task taskSpec, timeout int) taskResult {
 		mu.Lock()
 		seen[task.ID] = task.Backend
 		mu.Unlock()
-		return TaskResult{TaskID: task.ID, ExitCode: 0, Message: "ok"}
+		return taskResult{TaskID: task.ID, ExitCode: 0, Message: "ok"}
 	}
 	t.Cleanup(func() { runCodexTaskFn = orig })
 
@@ -3184,42 +3308,46 @@ func TestParallelNoSessionPersistenceRequiresClaudeBackend(t *testing.T) {
 			message: "cannot be used with resume",
 		},
 	} {
-		t.Run(testCase.name, func(t *testing.T) {
-			defer resetTestHooks()
-			cleanupLogsFn = func() (CleanupStats, error) { return CleanupStats{}, nil }
+		t.Run(
+			testCase.name, func(t *testing.T) {
+				defer resetTestHooks()
+				cleanupLogsFn = func() (cleanupStats, error) { return cleanupStats{}, nil }
 
-			oldArgs := os.Args
-			t.Cleanup(func() { os.Args = oldArgs })
-			os.Args = testCase.args
-			stdinReader = strings.NewReader(testCase.input)
+				oldArgs := os.Args
+				t.Cleanup(func() { os.Args = oldArgs })
+				os.Args = testCase.args
+				stdinReader = strings.NewReader(testCase.input)
 
-			stderr := captureStderr(t, func() {
-				if code := run(); code == 0 {
-					t.Fatalf("run exit = %d, want rejection", code)
+				stderr := captureStderr(
+					t, func() {
+						if code := run(); code == 0 {
+							t.Fatalf("run exit = %d, want rejection", code)
+						}
+					},
+				)
+				if !strings.Contains(stderr, testCase.message) {
+					t.Fatalf("stderr = %q, want %q", stderr, testCase.message)
 				}
-			})
-			if !strings.Contains(stderr, testCase.message) {
-				t.Fatalf("stderr = %q, want %q", stderr, testCase.message)
-			}
-		})
+			},
+		)
 	}
 }
 
 func TestParallelModelFlagPropagation(t *testing.T) {
 	defer resetTestHooks()
-	cleanupLogsFn = func() (CleanupStats, error) { return CleanupStats{}, nil }
+	cleanupLogsFn = func() (cleanupStats, error) { return cleanupStats{}, nil }
 
 	oldArgs := os.Args
 	t.Cleanup(func() { os.Args = oldArgs })
 
 	var mu sync.Mutex
-	seen := make(map[string]TaskSpec)
+	seen := make(map[string]taskSpec)
 	orig := runCodexTaskFn
-	runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
+	runCodexTaskFn = func(task taskSpec, timeout int) taskResult {
 		mu.Lock()
 		seen[task.ID] = task
 		mu.Unlock()
-		return TaskResult{TaskID: task.ID, ExitCode: 0, Message: "ok"}
+		return taskResult{TaskID: task.ID, ExitCode: 0, Message: "ok"}
 	}
 	t.Cleanup(func() { runCodexTaskFn = orig })
 
@@ -3283,11 +3411,11 @@ test`
 	stdinReader = strings.NewReader(jsonInput)
 	defer func() { stdinReader = os.Stdin }()
 
-	runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
-		return TaskResult{TaskID: task.ID, ExitCode: 0, Message: "test output"}
+	runCodexTaskFn = func(task taskSpec, timeout int) taskResult {
+		return taskResult{TaskID: task.ID, ExitCode: 0, Message: "test output"}
 	}
 	defer func() {
-		runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult { return runCodexTask(task, true, timeout) }
+		runCodexTaskFn = func(task taskSpec, timeout int) taskResult { return runCodexTask(task, true, timeout) }
 	}()
 
 	exitCode := run()
@@ -3298,7 +3426,7 @@ test`
 
 func TestRunParallelWithFullOutput(t *testing.T) {
 	defer resetTestHooks()
-	cleanupLogsFn = func() (CleanupStats, error) { return CleanupStats{}, nil }
+	cleanupLogsFn = func() (cleanupStats, error) { return cleanupStats{}, nil }
 
 	oldArgs := os.Args
 	t.Cleanup(func() { os.Args = oldArgs })
@@ -3313,8 +3441,8 @@ noop`,
 	t.Cleanup(func() { stdinReader = os.Stdin })
 
 	orig := runCodexTaskFn
-	runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
-		return TaskResult{TaskID: task.ID, ExitCode: 0, Message: "full output marker"}
+	runCodexTaskFn = func(task taskSpec, timeout int) taskResult {
+		return taskResult{TaskID: task.ID, ExitCode: 0, Message: "full output marker"}
 	}
 	t.Cleanup(func() { runCodexTaskFn = orig })
 
@@ -3342,11 +3470,18 @@ noop`,
 
 func TestRunParallelNoSessionPersistenceSuppressesSessionID(t *testing.T) {
 	defer resetTestHooks()
-	cleanupLogsFn = func() (CleanupStats, error) { return CleanupStats{}, nil }
+	cleanupLogsFn = func() (cleanupStats, error) { return cleanupStats{}, nil }
 
 	oldArgs := os.Args
 	t.Cleanup(func() { os.Args = oldArgs })
-	os.Args = []string{"codeagent-wrapper", "--parallel", "--full-output", "--backend", "claude", "--no-session-persistence"}
+	os.Args = []string{
+		"codeagent-wrapper",
+		"--parallel",
+		"--full-output",
+		"--backend",
+		"claude",
+		"--no-session-persistence",
+	}
 
 	stdinReader = strings.NewReader(
 		`---TASK---
@@ -3357,8 +3492,8 @@ noop`,
 	t.Cleanup(func() { stdinReader = os.Stdin })
 
 	orig := runCodexTaskFn
-	runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
-		return TaskResult{TaskID: task.ID, ExitCode: 0, Message: "review output", SessionID: "ephemeral-session"}
+	runCodexTaskFn = func(task taskSpec, timeout int) taskResult {
+		return taskResult{TaskID: task.ID, ExitCode: 0, Message: "review output", SessionID: "ephemeral-session"}
 	}
 	t.Cleanup(func() { runCodexTaskFn = orig })
 
@@ -3376,7 +3511,7 @@ noop`,
 
 func TestParallelInvalidBackend(t *testing.T) {
 	defer resetTestHooks()
-	cleanupLogsFn = func() (CleanupStats, error) { return CleanupStats{}, nil }
+	cleanupLogsFn = func() (cleanupStats, error) { return cleanupStats{}, nil }
 
 	stdinReader = strings.NewReader(
 		`---TASK---
@@ -3405,14 +3540,14 @@ noop`,
 	)
 
 	cleanupCalls := 0
-	cleanupLogsFn = func() (CleanupStats, error) {
+	cleanupLogsFn = func() (cleanupStats, error) {
 		cleanupCalls++
-		return CleanupStats{}, nil
+		return cleanupStats{}, nil
 	}
 
 	orig := runCodexTaskFn
-	runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
-		return TaskResult{TaskID: task.ID, ExitCode: 0, Message: "ok"}
+	runCodexTaskFn = func(task taskSpec, timeout int) taskResult {
+		return taskResult{TaskID: task.ID, ExitCode: 0, Message: "ok"}
 	}
 	defer func() { runCodexTaskFn = orig }()
 
@@ -3435,7 +3570,7 @@ func TestVersionFlag(t *testing.T) {
 		},
 	)
 
-	want := "codeagent-wrapper version 5.15.0-aug.1\n"
+	want := "codeagent-wrapper version 5.16.0-aug.1\n"
 
 	if output != want {
 		t.Fatalf("output = %q, want %q", output, want)
@@ -3453,7 +3588,7 @@ func TestVersionShortFlag(t *testing.T) {
 		},
 	)
 
-	want := "codeagent-wrapper version 5.15.0-aug.1\n"
+	want := "codeagent-wrapper version 5.16.0-aug.1\n"
 
 	if output != want {
 		t.Fatalf("output = %q, want %q", output, want)
@@ -3471,7 +3606,7 @@ func TestVersionLegacyAlias(t *testing.T) {
 		},
 	)
 
-	want := "codex-wrapper version 5.15.0-aug.1\n"
+	want := "codex-wrapper version 5.16.0-aug.1\n"
 
 	if output != want {
 		t.Fatalf("output = %q, want %q", output, want)
@@ -3497,9 +3632,9 @@ func TestRun_HelpShort(t *testing.T) {
 func TestRun_HelpDoesNotTriggerCleanup(t *testing.T) {
 	defer resetTestHooks()
 	os.Args = []string{"codex-wrapper", "--help"}
-	cleanupLogsFn = func() (CleanupStats, error) {
+	cleanupLogsFn = func() (cleanupStats, error) {
 		t.Fatalf("cleanup should not run for --help")
-		return CleanupStats{}, nil
+		return cleanupStats{}, nil
 	}
 
 	if code := run(); code != 0 {
@@ -3510,9 +3645,9 @@ func TestRun_HelpDoesNotTriggerCleanup(t *testing.T) {
 func TestVersionDoesNotTriggerCleanup(t *testing.T) {
 	defer resetTestHooks()
 	os.Args = []string{"codex-wrapper", "--version"}
-	cleanupLogsFn = func() (CleanupStats, error) {
+	cleanupLogsFn = func() (cleanupStats, error) {
 		t.Fatalf("cleanup should not run for --version")
-		return CleanupStats{}, nil
+		return cleanupStats{}, nil
 	}
 
 	if code := run(); code != 0 {
@@ -3530,14 +3665,14 @@ func TestVersionCoverageFullRun(t *testing.T) {
 				t.Fatalf("runCleanupMode exit = %d, want non-zero when cleanup is nil", code)
 			}
 
-			logger, err := NewLoggerWithSuffix("version-coverage")
+			logger, err := newLoggerWithSuffix("version-coverage")
 			if err != nil {
 				t.Fatalf("failed to create logger: %v", err)
 			}
 			setLogger(logger)
 
-			cleanupLogsFn = func() (CleanupStats, error) {
-				return CleanupStats{
+			cleanupLogsFn = func() (cleanupStats, error) {
+				return cleanupStats{
 					Scanned:      2,
 					Deleted:      1,
 					Kept:         1,
@@ -3548,13 +3683,13 @@ func TestVersionCoverageFullRun(t *testing.T) {
 			}
 			runStartupCleanup()
 
-			cleanupLogsFn = func() (CleanupStats, error) {
+			cleanupLogsFn = func() (cleanupStats, error) {
 				panic("panic cleanup")
 			}
 			runStartupCleanup()
 
-			cleanupLogsFn = func() (CleanupStats, error) {
-				return CleanupStats{
+			cleanupLogsFn = func() (cleanupStats, error) {
+				return cleanupStats{
 					Scanned:      2,
 					Deleted:      1,
 					Kept:         1,
@@ -3567,8 +3702,8 @@ func TestVersionCoverageFullRun(t *testing.T) {
 				t.Fatalf("runCleanupMode exit = %d, want 0", code)
 			}
 
-			cleanupLogsFn = func() (CleanupStats, error) {
-				return CleanupStats{}, fmt.Errorf("expected failure")
+			cleanupLogsFn = func() (cleanupStats, error) {
+				return cleanupStats{}, fmt.Errorf("expected failure")
 			}
 			if code := runCleanupMode(); code == 0 {
 				t.Fatalf("runCleanupMode exit = %d, want non-zero on error", code)
@@ -3577,7 +3712,7 @@ func TestVersionCoverageFullRun(t *testing.T) {
 			printHelp()
 
 			_ = closeLogger()
-			_ = logger.RemoveLogFile()
+			_ = logger.removeLogFile()
 			loggerPtr.Store(nil)
 		},
 	)
@@ -3585,16 +3720,16 @@ func TestVersionCoverageFullRun(t *testing.T) {
 	t.Run(
 		"parseArgsError", func(t *testing.T) {
 			defer resetTestHooks()
-			cleanupLogsFn = func() (CleanupStats, error) { return CleanupStats{}, nil }
+			cleanupLogsFn = func() (cleanupStats, error) { return cleanupStats{}, nil }
 
 			cleanupCalled := false
 			cleanupHook = func() { cleanupCalled = true }
 
-			selectBackendFn = func(name string) (Backend, error) {
+			selectBackendFn = func(name string) (backend, error) {
 				return testBackend{name: name, command: "echo"}, nil
 			}
-			runTaskFn = func(task TaskSpec, silent bool, timeout int) TaskResult {
-				return TaskResult{ExitCode: 0}
+			runTaskFn = func(task taskSpec, silent bool, timeout int) taskResult {
+				return taskResult{ExitCode: 0}
 			}
 
 			os.Args = []string{"codeagent-wrapper"}
@@ -3610,7 +3745,7 @@ func TestVersionCoverageFullRun(t *testing.T) {
 	t.Run(
 		"helpAndCleanup", func(t *testing.T) {
 			defer resetTestHooks()
-			cleanupLogsFn = func() (CleanupStats, error) { return CleanupStats{}, nil }
+			cleanupLogsFn = func() (cleanupStats, error) { return cleanupStats{}, nil }
 
 			os.Args = []string{"codeagent-wrapper", "--help"}
 			if code := run(); code != 0 {
@@ -3628,21 +3763,21 @@ func TestVersionCoverageFullRun(t *testing.T) {
 		"happyPath", func(t *testing.T) {
 			defer resetTestHooks()
 			cleanupHook = func() {}
-			cleanupLogsFn = func() (CleanupStats, error) { return CleanupStats{}, nil }
+			cleanupLogsFn = func() (cleanupStats, error) { return cleanupStats{}, nil }
 
-			selectBackendFn = func(name string) (Backend, error) {
+			selectBackendFn = func(name string) (backend, error) {
 				return testBackend{
 					name:    name,
 					command: "echo",
-					argsFn: func(cfg *Config, targetArg string) []string {
+					argsFn: func(cfg *config, targetArg string) []string {
 						return []string{"--task", targetArg, "--workdir", cfg.WorkDir}
 					},
 				}, nil
 			}
-			var gotTask TaskSpec
-			runTaskFn = func(task TaskSpec, silent bool, timeout int) TaskResult {
+			var gotTask taskSpec
+			runTaskFn = func(task taskSpec, silent bool, timeout int) taskResult {
 				gotTask = task
-				return TaskResult{TaskID: "task-id", ExitCode: 0, Message: "ok", SessionID: "sess-123"}
+				return taskResult{TaskID: "task-id", ExitCode: 0, Message: "ok", SessionID: "sess-123"}
 			}
 
 			stdinReader = strings.NewReader("task line with $ and \\\nnext line with `tick` and \"quote\" and 'single'")
@@ -3660,21 +3795,21 @@ func TestVersionCoverageFullRun(t *testing.T) {
 	t.Run(
 		"agyExplicitStdinPassesPromptDirect", func(t *testing.T) {
 			defer resetTestHooks()
-			cleanupLogsFn = func() (CleanupStats, error) { return CleanupStats{}, nil }
+			cleanupLogsFn = func() (cleanupStats, error) { return cleanupStats{}, nil }
 
 			var gotTargetArg string
-			selectBackendFn = func(name string) (Backend, error) {
+			selectBackendFn = func(name string) (backend, error) {
 				return testBackend{
 					name:    name,
 					command: "echo",
-					argsFn: func(cfg *Config, targetArg string) []string {
+					argsFn: func(cfg *config, targetArg string) []string {
 						gotTargetArg = targetArg
 						return []string{"--task", targetArg}
 					},
 				}, nil
 			}
-			runTaskFn = func(task TaskSpec, silent bool, timeout int) TaskResult {
-				return TaskResult{TaskID: "agy-stdin", ExitCode: 0, Message: "ok"}
+			runTaskFn = func(task taskSpec, silent bool, timeout int) taskResult {
+				return taskResult{TaskID: "agy-stdin", ExitCode: 0, Message: "ok"}
 			}
 
 			stdinReader = strings.NewReader("line1\nline2")
@@ -3696,21 +3831,21 @@ func TestVersionCoverageFullRun(t *testing.T) {
 		"agyExplicitStdinPassesPromptDirectOnWindows", func(t *testing.T) {
 			defer resetTestHooks()
 			t.Setenv("OS", "Windows_NT")
-			cleanupLogsFn = func() (CleanupStats, error) { return CleanupStats{}, nil }
+			cleanupLogsFn = func() (cleanupStats, error) { return cleanupStats{}, nil }
 
 			var gotTargetArg string
-			selectBackendFn = func(name string) (Backend, error) {
+			selectBackendFn = func(name string) (backend, error) {
 				return testBackend{
 					name:    name,
 					command: "echo",
-					argsFn: func(cfg *Config, targetArg string) []string {
+					argsFn: func(cfg *config, targetArg string) []string {
 						gotTargetArg = targetArg
 						return []string{"--task", targetArg}
 					},
 				}, nil
 			}
-			runTaskFn = func(task TaskSpec, silent bool, timeout int) TaskResult {
-				return TaskResult{TaskID: "agy-stdin-windows", ExitCode: 0, Message: "ok"}
+			runTaskFn = func(task taskSpec, silent bool, timeout int) taskResult {
+				return taskResult{TaskID: "agy-stdin-windows", ExitCode: 0, Message: "ok"}
 			}
 
 			stdinReader = strings.NewReader("line1\nline2")
@@ -3730,19 +3865,19 @@ func TestVersionCoverageFullRun(t *testing.T) {
 			defer resetTestHooks()
 			cleanupCalled := false
 			cleanupHook = func() { cleanupCalled = true }
-			cleanupLogsFn = func() (CleanupStats, error) { return CleanupStats{}, nil }
+			cleanupLogsFn = func() (cleanupStats, error) { return cleanupStats{}, nil }
 
-			selectBackendFn = func(name string) (Backend, error) {
+			selectBackendFn = func(name string) (backend, error) {
 				return testBackend{
 					name:    name,
 					command: "echo",
-					argsFn: func(cfg *Config, targetArg string) []string {
+					argsFn: func(cfg *config, targetArg string) []string {
 						return []string{"--task", targetArg}
 					},
 				}, nil
 			}
-			runTaskFn = func(task TaskSpec, silent bool, timeout int) TaskResult {
-				return TaskResult{TaskID: "fail", ExitCode: 2, Message: "error"}
+			runTaskFn = func(task taskSpec, silent bool, timeout int) taskResult {
+				return taskResult{TaskID: "fail", ExitCode: 2, Message: "error"}
 			}
 
 			stdinReader = strings.NewReader("")
@@ -3760,19 +3895,19 @@ func TestVersionCoverageFullRun(t *testing.T) {
 	t.Run(
 		"pipedTaskLongInput", func(t *testing.T) {
 			defer resetTestHooks()
-			cleanupLogsFn = func() (CleanupStats, error) { return CleanupStats{}, nil }
+			cleanupLogsFn = func() (cleanupStats, error) { return cleanupStats{}, nil }
 
-			selectBackendFn = func(name string) (Backend, error) {
+			selectBackendFn = func(name string) (backend, error) {
 				return testBackend{
 					name:    name,
 					command: "echo",
-					argsFn: func(cfg *Config, targetArg string) []string {
+					argsFn: func(cfg *config, targetArg string) []string {
 						return []string{"--task", targetArg}
 					},
 				}, nil
 			}
-			runTaskFn = func(task TaskSpec, silent bool, timeout int) TaskResult {
-				return TaskResult{TaskID: "piped", ExitCode: 0, Message: "ok"}
+			runTaskFn = func(task taskSpec, silent bool, timeout int) taskResult {
+				return taskResult{TaskID: "piped", ExitCode: 0, Message: "ok"}
 			}
 
 			stdinReader = strings.NewReader(strings.Repeat("x", 900))
@@ -3787,9 +3922,9 @@ func TestVersionCoverageFullRun(t *testing.T) {
 	t.Run(
 		"explicitStdinReadError", func(t *testing.T) {
 			defer resetTestHooks()
-			cleanupLogsFn = func() (CleanupStats, error) { return CleanupStats{}, nil }
-			runTaskFn = func(task TaskSpec, silent bool, timeout int) TaskResult {
-				return TaskResult{ExitCode: 0}
+			cleanupLogsFn = func() (cleanupStats, error) { return cleanupStats{}, nil }
+			runTaskFn = func(task taskSpec, silent bool, timeout int) taskResult {
+				return taskResult{ExitCode: 0}
 			}
 
 			stdinReader = errReader{err: errors.New("read-fail")}
@@ -3804,9 +3939,9 @@ func TestVersionCoverageFullRun(t *testing.T) {
 		"parallelFlow", func(t *testing.T) {
 			defer resetTestHooks()
 			cleanupHook = func() {}
-			cleanupLogsFn = func() (CleanupStats, error) { return CleanupStats{}, nil }
-			runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
-				return TaskResult{TaskID: task.ID, ExitCode: 0, Message: "ok"}
+			cleanupLogsFn = func() (cleanupStats, error) { return cleanupStats{}, nil }
+			runCodexTaskFn = func(task taskSpec, timeout int) taskResult {
+				return taskResult{TaskID: task.ID, ExitCode: 0, Message: "ok"}
 			}
 
 			stdinReader = strings.NewReader(
@@ -3831,7 +3966,7 @@ do two`,
 	t.Run(
 		"parallelErrors", func(t *testing.T) {
 			defer resetTestHooks()
-			cleanupLogsFn = func() (CleanupStats, error) { return CleanupStats{}, nil }
+			cleanupLogsFn = func() (cleanupStats, error) { return cleanupStats{}, nil }
 
 			os.Args = []string{"codeagent-wrapper", "--parallel", "extra"}
 			if code := run(); code == 0 {
@@ -3871,8 +4006,8 @@ func TestVersionMainWrapper(t *testing.T) {
 
 func TestBackendCleanupMode_Success(t *testing.T) {
 	defer resetTestHooks()
-	cleanupLogsFn = func() (CleanupStats, error) {
-		return CleanupStats{
+	cleanupLogsFn = func() (cleanupStats, error) {
+		return cleanupStats{
 			Scanned:      5,
 			Deleted:      3,
 			Kept:         2,
@@ -3890,7 +4025,10 @@ func TestBackendCleanupMode_Success(t *testing.T) {
 	if exitCode != 0 {
 		t.Fatalf("exit = %d, want 0", exitCode)
 	}
-	want := "Cleanup completed\nFiles scanned: 5\nFiles deleted: 3\n  - codex-wrapper-111.log\n  - codex-wrapper-222.log\n  - codex-wrapper-333.log\nFiles kept: 2\n  - codex-wrapper-444.log\n  - codex-wrapper-555.log\n"
+	want := "Cleanup completed\nFiles scanned: 5\nFiles deleted: 3\n  - " +
+		"codex-wrapper-111.log\n  - codex-wrapper-222.log\n  - " +
+		"codex-wrapper-333.log\nFiles kept: 2\n  - codex-wrapper-444.log\n  - " +
+		"codex-wrapper-555.log\n"
 	if output != want {
 		t.Fatalf("output = %q, want %q", output, want)
 	}
@@ -3898,8 +4036,8 @@ func TestBackendCleanupMode_Success(t *testing.T) {
 
 func TestBackendCleanupMode_SuccessWithErrorsLine(t *testing.T) {
 	defer resetTestHooks()
-	cleanupLogsFn = func() (CleanupStats, error) {
-		return CleanupStats{
+	cleanupLogsFn = func() (cleanupStats, error) {
+		return cleanupStats{
 			Scanned:      2,
 			Deleted:      1,
 			Kept:         0,
@@ -3917,7 +4055,8 @@ func TestBackendCleanupMode_SuccessWithErrorsLine(t *testing.T) {
 	if exitCode != 0 {
 		t.Fatalf("exit = %d, want 0", exitCode)
 	}
-	want := "Cleanup completed\nFiles scanned: 2\nFiles deleted: 1\n  - codex-wrapper-123.log\nFiles kept: 0\nDeletion errors: 1\n"
+	want := "Cleanup completed\nFiles scanned: 2\nFiles deleted: 1\n  - " +
+		"codex-wrapper-123.log\nFiles kept: 0\nDeletion errors: 1\n"
 	if output != want {
 		t.Fatalf("output = %q, want %q", output, want)
 	}
@@ -3926,9 +4065,9 @@ func TestBackendCleanupMode_SuccessWithErrorsLine(t *testing.T) {
 func TestBackendCleanupMode_ZeroStatsOutput(t *testing.T) {
 	defer resetTestHooks()
 	calls := 0
-	cleanupLogsFn = func() (CleanupStats, error) {
+	cleanupLogsFn = func() (cleanupStats, error) {
 		calls++
-		return CleanupStats{}, nil
+		return cleanupStats{}, nil
 	}
 
 	var exitCode int
@@ -3951,8 +4090,8 @@ func TestBackendCleanupMode_ZeroStatsOutput(t *testing.T) {
 
 func TestBackendCleanupMode_Error(t *testing.T) {
 	defer resetTestHooks()
-	cleanupLogsFn = func() (CleanupStats, error) {
-		return CleanupStats{}, fmt.Errorf("boom")
+	cleanupLogsFn = func() (cleanupStats, error) {
+		return cleanupStats{}, fmt.Errorf("boom")
 	}
 
 	var exitCode int
@@ -3995,9 +4134,9 @@ func TestRun_CleanupFlag(t *testing.T) {
 	os.Args = []string{"codex-wrapper", "--cleanup"}
 
 	calls := 0
-	cleanupLogsFn = func() (CleanupStats, error) {
+	cleanupLogsFn = func() (cleanupStats, error) {
 		calls++
-		return CleanupStats{Scanned: 1, Deleted: 1}, nil
+		return cleanupStats{Scanned: 1, Deleted: 1}, nil
 	}
 
 	var exitCode int
@@ -4076,7 +4215,7 @@ func TestRun_CommandFails(t *testing.T) {
 	os.Args = []string{"codeagent-wrapper", "task"}
 	stdinReader = strings.NewReader("")
 	isTerminalFn = func() bool { return true }
-	restore := withBackend("false", func(cfg *Config, targetArg string) []string { return []string{} })
+	restore := withBackend("false", func(cfg *config, targetArg string) []string { return []string{} })
 	defer restore()
 	if code := run(); code == 0 {
 		t.Errorf("expected non-zero")
@@ -4297,7 +4436,7 @@ func TestRun_CleanupHookAlwaysCalled(t *testing.T) {
 	cleanupHook = func() { called = true }
 	// Use a command that goes through normal flow, not --version which returns early
 	restore := withBackend(
-		"echo", func(cfg *Config, targetArg string) []string {
+		"echo", func(cfg *config, targetArg string) []string {
 			return []string{
 				`{"type":"thread.started","thread_id":"x"}
 {"type":"item.completed","item":{"type":"agent_message","text":"ok"}}`,
@@ -4323,7 +4462,7 @@ func TestBackendStartupCleanupNil(t *testing.T) {
 func TestBackendStartupCleanupErrorLogged(t *testing.T) {
 	defer resetTestHooks()
 
-	logger, err := NewLoggerWithSuffix("startup-error")
+	logger, err := newLoggerWithSuffix("startup-error")
 	if err != nil {
 		t.Fatalf("failed to create logger: %v", err)
 	}
@@ -4331,13 +4470,17 @@ func TestBackendStartupCleanupErrorLogged(t *testing.T) {
 	t.Cleanup(
 		func() {
 			logger.Flush()
-			logger.Close()
-			os.Remove(logger.Path())
+			if err := logger.Close(); err != nil {
+				t.Errorf("I/O operation failed: %v", err)
+			}
+			if err := os.Remove(logger.logPath()); err != nil && !errors.Is(err, os.ErrNotExist) {
+				t.Errorf("I/O operation failed: %v", err)
+			}
 		},
 	)
 
-	cleanupLogsFn = func() (CleanupStats, error) {
-		return CleanupStats{}, errors.New("zapped")
+	cleanupLogsFn = func() (cleanupStats, error) {
+		return cleanupStats{}, errors.New("zapped")
 	}
 
 	runStartupCleanup()
@@ -4349,7 +4492,7 @@ func TestRun_CleanupFailureDoesNotBlock(t *testing.T) {
 	defer restoreStdoutPipe(stdout)
 
 	cleanupCalled := 0
-	cleanupLogsFn = func() (CleanupStats, error) {
+	cleanupLogsFn = func() (cleanupStats, error) {
 		cleanupCalled++
 		panic("boom")
 	}
@@ -4430,7 +4573,7 @@ func TestRunTailBuffer(t *testing.T) {
 
 func TestRunLogWriter(t *testing.T) {
 	defer resetTestHooks()
-	logger, err := NewLoggerWithSuffix("logwriter")
+	logger, err := newLoggerWithSuffix("logwriter")
 	if err != nil {
 		t.Fatalf("failed to create logger: %v", err)
 	}
@@ -4446,9 +4589,11 @@ func TestRunLogWriter(t *testing.T) {
 	lw.Flush()
 
 	logger.Flush()
-	logger.Close()
+	if err := logger.Close(); err != nil {
+		t.Errorf("I/O operation failed: %v", err)
+	}
 
-	data, err := os.ReadFile(logger.Path())
+	data, err := os.ReadFile(logger.logPath())
 	if err != nil {
 		t.Fatalf("failed to read log file: %v", err)
 	}
@@ -4459,7 +4604,9 @@ func TestRunLogWriter(t *testing.T) {
 	if !strings.Contains(text, "TEST: world-i...") {
 		t.Fatalf("log missing truncated entry: %s", text)
 	}
-	os.Remove(logger.Path())
+	if err := os.Remove(logger.logPath()); err != nil && !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("I/O operation failed: %v", err)
+	}
 }
 
 func TestNewLogWriterDefaultLimit(t *testing.T) {
@@ -4514,8 +4661,7 @@ func TestRunForwardSignals(t *testing.T) {
 		execCmd.Wait()
 	}()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	forceKillDelay.Store(0)
 	defer forceKillDelay.Store(5)
@@ -4610,8 +4756,11 @@ func TestParallelLogPathInSerialMode(t *testing.T) {
 	stdinReader = strings.NewReader("")
 	isTerminalFn = func() bool { return true }
 	codexCommand = "echo"
-	buildCodexArgsFn = func(cfg *Config, targetArg string) []string {
-		return []string{`{"type":"thread.started","thread_id":"cli-session"}` + "\n" + `{"type":"item.completed","item":{"type":"agent_message","text":"ok"}}`}
+	buildCodexArgsFn = func(cfg *config, targetArg string) []string {
+		return []string{
+			`{"type":"thread.started","thread_id":"cli-session"}` + "\n" +
+				`{"type":"item.completed","item":{"type":"agent_message","text":"ok"}}`,
+		}
 	}
 
 	var exitCode int
@@ -4754,8 +4903,11 @@ func TestRun_CLI_Success(t *testing.T) {
 	isTerminalFn = func() bool { return true }
 
 	restore := withBackend(
-		"echo", func(cfg *Config, targetArg string) []string {
-			return []string{`{"type":"thread.started","thread_id":"cli-session"}` + "\n" + `{"type":"item.completed","item":{"type":"agent_message","text":"ok"}}`}
+		"echo", func(cfg *config, targetArg string) []string {
+			return []string{
+				`{"type":"thread.started","thread_id":"cli-session"}` + "\n" +
+					`{"type":"item.completed","item":{"type":"agent_message","text":"ok"}}`,
+			}
 		},
 	)
 	defer restore()
@@ -4778,8 +4930,11 @@ func TestRun_CLINoSessionPersistenceDoesNotOutputSessionID(t *testing.T) {
 	isTerminalFn = func() bool { return true }
 
 	restore := withBackend(
-		"echo", func(cfg *Config, targetArg string) []string {
-			return []string{`{"type":"system","subtype":"init","session_id":"ephemeral-session"}` + "\n" + `{"type":"result","result":"ok","session_id":"ephemeral-session"}`}
+		"echo", func(cfg *config, targetArg string) []string {
+			return []string{
+				`{"type":"system","subtype":"init","session_id":"ephemeral-session"}` + "\n" +
+					`{"type":"result","result":"ok","session_id":"ephemeral-session"}`,
+			}
 		},
 	)
 	defer restore()
@@ -4814,11 +4969,19 @@ func TestResolveMaxParallelWorkers(t *testing.T) {
 		t.Run(
 			tt.name, func(t *testing.T) {
 				if tt.envValue != "" {
-					os.Setenv("CODEAGENT_MAX_PARALLEL_WORKERS", tt.envValue)
+					if err := os.Setenv("CODEAGENT_MAX_PARALLEL_WORKERS", tt.envValue); err != nil {
+						t.Errorf("I/O operation failed: %v", err)
+					}
 				} else {
-					os.Unsetenv("CODEAGENT_MAX_PARALLEL_WORKERS")
+					if err := os.Unsetenv("CODEAGENT_MAX_PARALLEL_WORKERS"); err != nil {
+						t.Errorf("I/O operation failed: %v", err)
+					}
 				}
-				defer os.Unsetenv("CODEAGENT_MAX_PARALLEL_WORKERS")
+				defer func() {
+					if err := os.Unsetenv("CODEAGENT_MAX_PARALLEL_WORKERS"); err != nil {
+						t.Errorf("I/O operation failed: %v", err)
+					}
+				}()
 
 				got := resolveMaxParallelWorkers()
 				if got != tt.want {

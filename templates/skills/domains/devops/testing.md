@@ -77,78 +77,87 @@ pytest -x                   # 失败即停
 ## JavaScript (Jest/Vitest)
 
 ```javascript
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi } from 'vitest'
 
 // 基础测试
 describe('add', () => {
   it('should add two numbers', () => {
-    expect(add(1, 2)).toBe(3);
-  });
+    expect(add(1, 2)).toBe(3)
+  })
 
   it.each([
     [1, 2, 3],
     [0, 0, 0],
     [-1, 1, 0],
   ])('add(%i, %i) = %i', (a, b, expected) => {
-    expect(add(a, b)).toBe(expected);
-  });
-});
+    expect(add(a, b)).toBe(expected)
+  })
+})
 
 // Mock
 vi.mock('./api', () => ({
-  getUser: vi.fn().mockResolvedValue({ id: 1, name: 'test' })
-}));
+  getUser: vi.fn().mockResolvedValue({ id: 1, name: 'test' }),
+}))
 
 it('should fetch user', async () => {
-  const user = await fetchUser(1);
-  expect(user.name).toBe('test');
-});
+  const user = await fetchUser(1)
+  expect(user.name).toBe('test')
+})
 
 // Spy
-const spy = vi.spyOn(console, 'log');
-doSomething();
-expect(spy).toHaveBeenCalledWith('message');
+const spy = vi.spyOn(console, 'log')
+doSomething()
+expect(spy).toHaveBeenCalledWith('message')
 ```
 
 ## Go (testing)
+
+以下保存为 `add_test.go`，目标项目需提供示例使用的 `github.com/stretchr/testify/assert`
 
 ```go
 package main
 
 import (
-    "testing"
-    "github.com/stretchr/testify/assert"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
+func Add(a, b int) int {
+	return a + b
+}
+
 func TestAdd(t *testing.T) {
-    result := Add(1, 2)
-    assert.Equal(t, 3, result)
+	result := Add(1, 2)
+	assert.Equal(t, 3, result)
 }
 
-// 表驱动测试
+// TestAddTable 使用表驱动数据验证加法
 func TestAddTable(t *testing.T) {
-    tests := []struct {
-        name     string
-        a, b     int
-        expected int
-    }{
-        {"positive", 1, 2, 3},
-        {"zero", 0, 0, 0},
-        {"negative", -1, 1, 0},
-    }
+	tests := []struct {
+		name     string
+		a, b     int
+		expected int
+	}{
+		{"positive", 1, 2, 3},
+		{"zero", 0, 0, 0},
+		{"negative", -1, 1, 0},
+	}
 
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            assert.Equal(t, tt.expected, Add(tt.a, tt.b))
-        })
-    }
+	for _, tt := range tests {
+		t.Run(
+			tt.name, func(t *testing.T) {
+				assert.Equal(t, tt.expected, Add(tt.a, tt.b))
+			}
+		)
+	}
 }
 
-// Benchmark
+// BenchmarkAdd 测量加法开销
 func BenchmarkAdd(b *testing.B) {
-    for i := 0; i < b.N; i++ {
-        Add(1, 2)
-    }
+	for i := 0; i < b.N; i++ {
+		Add(1, 2)
+	}
 }
 ```
 
@@ -190,11 +199,11 @@ AAA:
 
 ### 测试金字塔比例
 
-| 层级    | 占比  | 执行时间   | 成本 |
-|-------|-----|--------|----|
-| 单元测试  | 70% | <1s    | 低  |
-| 集成测试  | 20% | 1-10s  | 中  |
-| E2E测试 | 10% | 10s-5m | 高  |
+| 层级     | 占比 | 执行时间 | 成本 |
+|----------|------|----------|------|
+| 单元测试 | 70%  | <1s      | 低   |
+| 集成测试 | 20%  | 1-10s    | 中   |
+| E2E测试  | 10%  | 10s-5m   | 高   |
 
 ### 测试左移 Checklist
 
@@ -239,12 +248,12 @@ CI阶段: 自动化测试、覆盖率门禁、性能基准测试
 
 ### Playwright vs Cypress
 
-| 特性          | Playwright              | Cypress               |
-|-------------|-------------------------|-----------------------|
+| 特性            | Playwright              | Cypress               |
+|-----------------|-------------------------|-----------------------|
 | 多浏览器        | Chromium/Firefox/WebKit | Chromium/Firefox/Edge |
-| 多标签页/iframe | 原生支持                    | 有限                    |
-| 并行执行        | 原生支持                    | 需付费                   |
-| 调试体验        | 一般                      | 优秀                    |
+| 多标签页/iframe | 原生支持                | 有限                  |
+| 并行执行        | 原生支持                | 需付费                |
+| 调试体验        | 一般                    | 优秀                  |
 
 ### 选择器优先级
 
@@ -280,4 +289,3 @@ CI集成:
   - retries: CI 环境 2 次重试
   - artifacts: 失败时保存截图/视频/trace
 ```
-

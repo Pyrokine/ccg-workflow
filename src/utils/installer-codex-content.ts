@@ -1,21 +1,21 @@
 import { homedir } from 'node:os'
 import { join } from 'pathe'
 import { parse as parseToml } from 'smol-toml'
-import type { InstallConfig } from './installer-context'
-import { injectConfigVariables } from './installer-template'
 import {
-  CODEX_MANAGED_BLOCK_START_PREFIX,
-  CODEX_MANAGED_BLOCK_START,
   CODEX_MANAGED_BLOCK_END,
+  CODEX_MANAGED_BLOCK_START,
+  CODEX_MANAGED_BLOCK_START_PREFIX,
   type JsonRecord,
 } from './installer-codex-files'
+import type { InstallConfig } from './installer-context'
+import { injectConfigVariables } from './installer-template'
 
 export function renderCodexPaths(content: string): string {
   const userHome = homedir().replace(/\\/g, '/')
   return content.replace(/~\//g, `${userHome}/`)
 }
 
-export function renderCodexTemplate(content: string, config: InstallConfig): string {
+function renderCodexTemplate(content: string, config: InstallConfig): string {
   return renderCodexPaths(injectConfigVariables(content, config))
 }
 
@@ -28,7 +28,9 @@ function markerOffsets(content: string, marker: string): number[] {
   let offset = 0
   while (offset < content.length) {
     const found = content.indexOf(marker, offset)
-    if (found < 0) break
+    if (found < 0) {
+      break
+    }
     offsets.push(found)
     offset = found + marker.length
   }
@@ -39,7 +41,9 @@ function locateCodexManagedBlock(content: string): { start: number; end: number 
   const startPrefixes = markerOffsets(content, CODEX_MANAGED_BLOCK_START_PREFIX)
   const starts = markerOffsets(content, CODEX_MANAGED_BLOCK_START)
   const ends = markerOffsets(content, CODEX_MANAGED_BLOCK_END)
-  if (startPrefixes.length === 0 && ends.length === 0) return null
+  if (startPrefixes.length === 0 && ends.length === 0) {
+    return null
+  }
   if (
     startPrefixes.length !== 1 ||
     starts.length !== 1 ||
@@ -70,27 +74,41 @@ export function renderCodexManagedBlock(template: string, config: InstallConfig)
 
   const prefix = rendered.slice(0, location.start).trim()
   const block = rendered.slice(location.start, location.end)
-  if (!prefix) return block
+  if (!prefix) {
+    return block
+  }
   const startMarkerEnd = block.indexOf('-->') + 3
   const body = block.slice(startMarkerEnd).replace(/^\s*/, '')
   return `${block.slice(0, startMarkerEnd)}\n\n${prefix}\n\n${body}`
 }
 
 export function mergeCodexManagedBlock(existing: string | null, block: string): string {
-  if (existing === null || existing.length === 0) return `${block}\n`
+  if (existing === null || existing.length === 0) {
+    return `${block}\n`
+  }
   const location = locateCodexManagedBlock(existing)
-  if (location) return `${existing.slice(0, location.start)}${block}${existing.slice(location.end)}`
+  if (location) {
+    return `${existing.slice(0, location.start)}${block}${existing.slice(location.end)}`
+  }
   const separator = existing.endsWith('\n') ? '\n' : '\n\n'
   return `${existing}${separator}${block}\n`
 }
 
 export function removeCodexManagedBlock(existing: string): { content: string; changed: boolean } {
   const location = locateCodexManagedBlock(existing)
-  if (!location) return { content: existing, changed: false }
+  if (!location) {
+    return { content: existing, changed: false }
+  }
   let content = `${existing.slice(0, location.start)}${existing.slice(location.end)}`
-  if (!content.trim()) return { content: '', changed: true }
-  if (content.startsWith('\n') && location.start === 0) content = content.slice(1)
-  if (content.endsWith('\n\n') && location.end === existing.length) content = content.slice(0, -1)
+  if (!content.trim()) {
+    return { content: '', changed: true }
+  }
+  if (content.startsWith('\n') && location.start === 0) {
+    content = content.slice(1)
+  }
+  if (content.endsWith('\n\n') && location.end === existing.length) {
+    content = content.slice(0, -1)
+  }
   return { content, changed: true }
 }
 
@@ -102,50 +120,72 @@ export function parseJsonRecord(content: string, label: string): JsonRecord {
     throw new Error(`${label} is invalid JSON`, { cause: error })
   }
   const record = asRecord(value)
-  if (!record) throw new Error(`${label} root must be an object`)
+  if (!record) {
+    throw new Error(`${label} root must be an object`)
+  }
   return record
 }
 
 function isCodexWorkflowHookCommand(command: unknown, codexHome: string): boolean {
-  if (typeof command !== 'string') return false
+  if (typeof command !== 'string') {
+    return false
+  }
   const normalized = command.replace(/\\/g, '/').trim()
-  const match = /^python3\s+(?:"([^"]+)"|'([^']+)'|(\S+))$/.exec(normalized)
+  const match = /^python3\s+(?:"(?<doubleQuoted>[^"]+)"|'(?<singleQuoted>[^']+)'|(?<bare>\S+))$/.exec(normalized)
   const scriptPath = match?.[1] || match?.[2] || match?.[3]
-  if (!scriptPath) return false
+  if (!scriptPath) {
+    return false
+  }
   const expected = join(codexHome, 'hooks', 'ccg-workflow.py').replace(/\\/g, '/')
   return scriptPath === expected || scriptPath === '~/.codex/hooks/ccg-workflow.py'
 }
 
 function removeCodexWorkflowHooks(root: JsonRecord, codexHome: string): { root: JsonRecord; changed: boolean } {
   const configuredHooks = root.hooks
-  if (configuredHooks === undefined) return { root: { ...root }, changed: false }
+  if (configuredHooks === undefined) {
+    return { root: { ...root }, changed: false }
+  }
   const hooks = asRecord(configuredHooks)
-  if (!hooks) throw new Error('Codex hooks.json hooks must be an object')
+  if (!hooks) {
+    throw new Error('Codex hooks.json hooks must be an object')
+  }
 
   const nextHooks: JsonRecord = { ...hooks }
   let changed = false
   for (const [event, value] of Object.entries(hooks)) {
-    if (!Array.isArray(value)) throw new Error(`Codex hooks.json hooks.${event} must be an array`)
+    if (!Array.isArray(value)) {
+      throw new Error(`Codex hooks.json hooks.${event} must be an array`)
+    }
     const entries = value
       .map((entry) => {
         const entryRecord = asRecord(entry)
-        if (!entryRecord || !Array.isArray(entryRecord.hooks)) return entry
+        if (!entryRecord || !Array.isArray(entryRecord.hooks)) {
+          return entry
+        }
         const kept = entryRecord.hooks.filter((hook) => {
           const hookRecord = asRecord(hook)
           return !hookRecord || !isCodexWorkflowHookCommand(hookRecord.command, codexHome)
         })
-        if (kept.length === entryRecord.hooks.length) return entry
+        if (kept.length === entryRecord.hooks.length) {
+          return entry
+        }
         changed = true
         return kept.length > 0 ? { ...entryRecord, hooks: kept } : null
       })
       .filter((entry) => entry !== null)
-    if (entries.length > 0) nextHooks[event] = entries
-    else delete nextHooks[event]
+    if (entries.length > 0) {
+      nextHooks[event] = entries
+    } else {
+      delete nextHooks[event]
+    }
   }
 
   const nextRoot = { ...root }
-  if (Object.keys(nextHooks).length > 0) nextRoot.hooks = nextHooks
-  else delete nextRoot.hooks
+  if (Object.keys(nextHooks).length > 0) {
+    nextRoot.hooks = nextHooks
+  } else {
+    delete nextRoot.hooks
+  }
   return { root: nextRoot, changed }
 }
 
@@ -198,17 +238,25 @@ export function removeCodexHookRegistration(
 }
 
 export function parseCodexConfig(content: string | null): JsonRecord {
-  if (content === null) return {}
+  if (content === null) {
+    return {}
+  }
   const config = asRecord(parseToml(content))
-  if (!config) throw new Error('Codex config.toml root must be a TOML table')
+  if (!config) {
+    throw new Error('Codex config.toml root must be a TOML table')
+  }
   return config
 }
 
 export function assertCodexModeFeatures(config: JsonRecord): void {
   const features = config.features
-  if (features === undefined) return
+  if (features === undefined) {
+    return
+  }
   const featureTable = asRecord(features)
-  if (!featureTable) throw new Error('Codex config.toml features must be a TOML table')
+  if (!featureTable) {
+    throw new Error('Codex config.toml features must be a TOML table')
+  }
   if (featureTable.hooks === false) {
     throw new Error('Codex config.toml explicitly disables the hooks feature required by CCG Codex mode')
   }

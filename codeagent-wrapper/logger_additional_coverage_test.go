@@ -9,11 +9,11 @@ import (
 )
 
 func TestLoggerNilReceiverNoop(t *testing.T) {
-	var logger *Logger
-	logger.Info("info")
-	logger.Warn("warn")
-	logger.Debug("debug")
-	logger.Error("error")
+	var logger *fileLogger
+	logger.info("info")
+	logger.warn("warn")
+	logger.debug("debug")
+	logger.error("error")
 	logger.Flush()
 	if err := logger.Close(); err != nil {
 		t.Fatalf("Close() on nil logger should return nil, got %v", err)
@@ -23,12 +23,16 @@ func TestLoggerNilReceiverNoop(t *testing.T) {
 func TestLoggerConcurrencyLogHelpers(t *testing.T) {
 	setTempDirEnv(t, t.TempDir())
 
-	logger, err := NewLoggerWithSuffix("concurrency")
+	logger, err := newLoggerWithSuffix("concurrency")
 	if err != nil {
 		t.Fatalf("NewLoggerWithSuffix error: %v", err)
 	}
 	setLogger(logger)
-	defer closeLogger()
+	defer func() {
+		if err := closeLogger(); err != nil {
+			t.Errorf("I/O operation failed: %v", err)
+		}
+	}()
 
 	logConcurrencyPlanning(0, 2)
 	logConcurrencyPlanning(3, 2)
@@ -36,7 +40,7 @@ func TestLoggerConcurrencyLogHelpers(t *testing.T) {
 	logConcurrencyState("done", "task-1", 0, 3)
 	logger.Flush()
 
-	data, err := os.ReadFile(logger.Path())
+	data, err := os.ReadFile(logger.logPath())
 	if err != nil {
 		t.Fatalf("failed to read log file: %v", err)
 	}

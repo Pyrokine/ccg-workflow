@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -14,7 +13,7 @@ import (
 )
 
 const (
-	version               = "5.15.0-aug.1"
+	version               = "5.16.0-aug.1"
 	defaultWorkdir        = "."
 	defaultTimeout        = 7200 // seconds (2 hours)
 	defaultCoverageTarget = 90.0
@@ -30,8 +29,6 @@ const (
 	stdoutCloseReasonCtx   = "context-cancel"
 	stdoutDrainTimeout     = 100 * time.Millisecond
 )
-
-var useASCIIMode = os.Getenv("CODEAGENT_ASCII_MODE") == "true"
 
 func defaultLiteMode() bool {
 	return os.Getenv("CODEAGENT_LITE_MODE") != "false"
@@ -59,12 +56,12 @@ var (
 	isTerminalFn           = defaultIsTerminal
 	codexCommand           = defaultCodexCommand
 	cleanupHook  func()
-	loggerPtr    atomic.Pointer[Logger]
+	loggerPtr    atomic.Pointer[fileLogger]
 
-	buildCodexArgsFn   = buildCodexArgs
-	selectBackendFn    = selectBackend
-	commandContext     = exec.CommandContext
-	jsonMarshal        = json.Marshal
+	buildCodexArgsFn = buildCodexArgs
+	selectBackendFn  = selectBackend
+	commandContext   = exec.CommandContext
+
 	cleanupLogsFn      = cleanupOldLogs
 	signalNotifyFn     = signal.Notify
 	signalStopFn       = signal.Stop
@@ -76,7 +73,7 @@ var (
 
 var forceKillDelay atomic.Int32
 
-// globalWebServer is the SSE web server for live streaming output
+// globalWebServer is the SSE web server for live-streaming output
 var globalWebServer *WebServer
 
 func init() {
@@ -103,32 +100,50 @@ func runStartupCleanup() {
 
 func runCleanupMode() int {
 	if cleanupLogsFn == nil {
-		fmt.Fprintln(os.Stderr, "Cleanup failed: log cleanup function not configured")
+		if _, err := fmt.Fprintln(os.Stderr, "Cleanup failed: log cleanup function not configured"); err != nil {
+			logWarn("I/O operation failed: " + err.Error())
+		}
 		return 1
 	}
 
 	stats, err := cleanupLogsFn()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Cleanup failed: %v\n", err)
+		if _, err := fmt.Fprintf(os.Stderr, "Cleanup failed: %v\n", err); err != nil {
+			logWarn("I/O operation failed: " + err.Error())
+		}
 		return 1
 	}
 
-	fmt.Println("Cleanup completed")
-	fmt.Printf("Files scanned: %d\n", stats.Scanned)
-	fmt.Printf("Files deleted: %d\n", stats.Deleted)
+	if _, err := fmt.Println("Cleanup completed"); err != nil {
+		logWarn("I/O operation failed: " + err.Error())
+	}
+	if _, err := fmt.Printf("Files scanned: %d\n", stats.Scanned); err != nil {
+		logWarn("I/O operation failed: " + err.Error())
+	}
+	if _, err := fmt.Printf("Files deleted: %d\n", stats.Deleted); err != nil {
+		logWarn("I/O operation failed: " + err.Error())
+	}
 	if len(stats.DeletedFiles) > 0 {
 		for _, f := range stats.DeletedFiles {
-			fmt.Printf("  - %s\n", f)
+			if _, err := fmt.Printf("  - %s\n", f); err != nil {
+				logWarn("I/O operation failed: " + err.Error())
+			}
 		}
 	}
-	fmt.Printf("Files kept: %d\n", stats.Kept)
+	if _, err := fmt.Printf("Files kept: %d\n", stats.Kept); err != nil {
+		logWarn("I/O operation failed: " + err.Error())
+	}
 	if len(stats.KeptFiles) > 0 {
 		for _, f := range stats.KeptFiles {
-			fmt.Printf("  - %s\n", f)
+			if _, err := fmt.Printf("  - %s\n", f); err != nil {
+				logWarn("I/O operation failed: " + err.Error())
+			}
 		}
 	}
 	if stats.Errors > 0 {
-		fmt.Printf("Deletion errors: %d\n", stats.Errors)
+		if _, err := fmt.Printf("Deletion errors: %d\n", stats.Errors); err != nil {
+			logWarn("I/O operation failed: " + err.Error())
+		}
 	}
 	return 0
 }
@@ -145,7 +160,9 @@ func run() (exitCode int) {
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
 		case "--version", "-v":
-			fmt.Printf("%s version %s\n", name, version)
+			if _, err := fmt.Printf("%s version %s\n", name, version); err != nil {
+				logWarn("I/O operation failed: " + err.Error())
+			}
 			return 0
 		case "--help", "-h":
 			printHelp()
@@ -156,9 +173,11 @@ func run() (exitCode int) {
 	}
 
 	// Initialize logger for all other commands
-	logger, err := NewLogger()
+	logger, err := newLogger()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "ERROR: failed to initialize logger: %v\n", err)
+		if _, err := fmt.Fprintf(os.Stderr, "ERROR: failed to initialize logger: %v\n", err); err != nil {
+			logWarn("I/O operation failed: " + err.Error())
+		}
 		return 1
 	}
 	setLogger(logger)
@@ -170,24 +189,32 @@ func run() (exitCode int) {
 		}
 		// Shutdown WebServer if it was started
 		if globalWebServer != nil {
-			_ = globalWebServer.Stop()
+			_ = globalWebServer.stop()
 			globalWebServer = nil
 		}
 		if err := closeLogger(); err != nil {
-			fmt.Fprintf(os.Stderr, "ERROR: failed to close logger: %v\n", err)
+			if _, err := fmt.Fprintf(os.Stderr, "ERROR: failed to close logger: %v\n", err); err != nil {
+				logWarn("I/O operation failed: " + err.Error())
+			}
 		}
 		// On failure, extract and display recent errors before removing log
 		if logger != nil {
 			if exitCode != 0 {
-				if errors := logger.ExtractRecentErrors(10); len(errors) > 0 {
-					fmt.Fprintln(os.Stderr, "\n=== Recent Errors ===")
-					for _, entry := range errors {
-						fmt.Fprintln(os.Stderr, entry)
+				if errors := logger.extractRecentErrors(10); len(errors) > 0 {
+					if _, err := fmt.Fprintln(os.Stderr, "\n=== Recent Errors ==="); err != nil {
+						logWarn("I/O operation failed: " + err.Error())
 					}
-					fmt.Fprintf(os.Stderr, "Log file: %s (deleted)\n", logger.Path())
+					for _, entry := range errors {
+						if _, err := fmt.Fprintln(os.Stderr, entry); err != nil {
+							logWarn("I/O operation failed: " + err.Error())
+						}
+					}
+					if _, err := fmt.Fprintf(os.Stderr, "Log file: %s (deleted)\n", logger.logPath()); err != nil {
+						logWarn("I/O operation failed: " + err.Error())
+					}
 				}
 			}
-			if err := logger.RemoveLogFile(); err != nil && !os.IsNotExist(err) {
+			if err := logger.removeLogFile(); err != nil && !os.IsNotExist(err) {
 				// Silently ignore removal errors
 			}
 		}
@@ -236,7 +263,9 @@ func run() (exitCode int) {
 					withMCP = true
 				case arg == "--backend":
 					if i+1 >= len(args) {
-						fmt.Fprintln(os.Stderr, "ERROR: --backend flag requires a value")
+						if _, err := fmt.Fprintln(os.Stderr, "ERROR: --backend flag requires a value"); err != nil {
+							logWarn("I/O operation failed: " + err.Error())
+						}
 						return 1
 					}
 					backendName = args[i+1]
@@ -244,19 +273,39 @@ func run() (exitCode int) {
 				case strings.HasPrefix(arg, "--backend="):
 					value := strings.TrimPrefix(arg, "--backend=")
 					if value == "" {
-						fmt.Fprintln(os.Stderr, "ERROR: --backend flag requires a value")
+						if _, err := fmt.Fprintln(os.Stderr, "ERROR: --backend flag requires a value"); err != nil {
+							logWarn("I/O operation failed: " + err.Error())
+						}
 						return 1
 					}
 					backendName = value
 				case arg == "--gemini-model" || strings.HasPrefix(arg, "--gemini-model="):
-					fmt.Fprintln(os.Stderr, "ERROR: --gemini-model is disabled because Gemini CLI consumer OAuth requests stopped being processed after 2026-06-18; use --backend antigravity")
+					if _, err := fmt.Fprintln(
+						os.Stderr, "ERROR: --gemini-model is disabled because Gemini CLI consumer OAuth "+
+							"requests stopped being processed after 2026-06-18; use --backend "+
+							"antigravity",
+					); err != nil {
+						logWarn("I/O operation failed: " + err.Error())
+					}
 					return 1
-				case arg == "--claude-model", arg == "--claude-effort", arg == "--grok-model", arg == "--kimi-model", arg == "--opencode-model":
+				case arg == "--claude-model",
+					arg == "--claude-effort",
+					arg == "--grok-model",
+					arg == "--kimi-model",
+					arg == "--opencode-model":
 					if i+1 >= len(args) || strings.TrimSpace(args[i+1]) == "" {
 						if arg == "--claude-effort" {
-							fmt.Fprintf(os.Stderr, "ERROR: %s flag requires a non-empty effort level\n", arg)
+							if _, err := fmt.Fprintf(
+								os.Stderr, "ERROR: %s flag requires a non-empty effort level\n", arg,
+							); err != nil {
+								logWarn("I/O operation failed: " + err.Error())
+							}
 						} else {
-							fmt.Fprintf(os.Stderr, "ERROR: %s flag requires a non-empty model name\n", arg)
+							if _, err := fmt.Fprintf(
+								os.Stderr, "ERROR: %s flag requires a non-empty model name\n", arg,
+							); err != nil {
+								logWarn("I/O operation failed: " + err.Error())
+							}
 						}
 						return 1
 					}
@@ -270,20 +319,32 @@ func run() (exitCode int) {
 						grokModel = value
 					case "--kimi-model":
 						kimiModel = value
-					case "--opencode-model":
+					default:
 						opencodeModel = value
 					}
 					i++
 				case arg == "--no-session-persistence":
 					noSessionPersistence = true
-				case strings.HasPrefix(arg, "--claude-model="), strings.HasPrefix(arg, "--claude-effort="), strings.HasPrefix(arg, "--grok-model="), strings.HasPrefix(arg, "--kimi-model="), strings.HasPrefix(arg, "--opencode-model="):
+				case strings.HasPrefix(arg, "--claude-model="),
+					strings.HasPrefix(arg, "--claude-effort="),
+					strings.HasPrefix(arg, "--grok-model="),
+					strings.HasPrefix(arg, "--kimi-model="),
+					strings.HasPrefix(arg, "--opencode-model="):
 					key, value, _ := strings.Cut(arg, "=")
 					value = strings.TrimSpace(value)
 					if value == "" {
 						if key == "--claude-effort" {
-							fmt.Fprintf(os.Stderr, "ERROR: %s flag requires a non-empty effort level\n", key)
+							if _, err := fmt.Fprintf(
+								os.Stderr, "ERROR: %s flag requires a non-empty effort level\n", key,
+							); err != nil {
+								logWarn("I/O operation failed: " + err.Error())
+							}
 						} else {
-							fmt.Fprintf(os.Stderr, "ERROR: %s flag requires a non-empty model name\n", key)
+							if _, err := fmt.Fprintf(
+								os.Stderr, "ERROR: %s flag requires a non-empty model name\n", key,
+							); err != nil {
+								logWarn("I/O operation failed: " + err.Error())
+							}
 						}
 						return 1
 					}
@@ -296,7 +357,7 @@ func run() (exitCode int) {
 						grokModel = value
 					case "--kimi-model":
 						kimiModel = value
-					case "--opencode-model":
+					default:
 						opencodeModel = value
 					}
 				default:
@@ -305,33 +366,53 @@ func run() (exitCode int) {
 			}
 
 			if len(extras) > 0 {
-				fmt.Fprintln(
+				if _, err := fmt.Fprintln(
 					os.Stderr,
 					"ERROR: --parallel reads task configuration from stdin; only recognized wrapper flags may be supplied.",
-				)
-				fmt.Fprintln(os.Stderr, "Usage examples:")
-				fmt.Fprintf(os.Stderr, "  %s --parallel < tasks.txt\n", name)
-				fmt.Fprintf(os.Stderr, "  echo '...' | %s --parallel\n", name)
-				fmt.Fprintf(os.Stderr, "  %s --parallel <<'EOF'\n", name)
-				fmt.Fprintf(os.Stderr, "  %s --parallel --full-output <<'EOF'  # include full task output\n", name)
+				); err != nil {
+					logWarn("I/O operation failed: " + err.Error())
+				}
+				if _, err := fmt.Fprintln(os.Stderr, "Usage examples:"); err != nil {
+					logWarn("I/O operation failed: " + err.Error())
+				}
+				if _, err := fmt.Fprintf(os.Stderr, "  %s --parallel < tasks.txt\n", name); err != nil {
+					logWarn("I/O operation failed: " + err.Error())
+				}
+				if _, err := fmt.Fprintf(os.Stderr, "  echo '...' | %s --parallel\n", name); err != nil {
+					logWarn("I/O operation failed: " + err.Error())
+				}
+				if _, err := fmt.Fprintf(os.Stderr, "  %s --parallel <<'EOF'\n", name); err != nil {
+					logWarn("I/O operation failed: " + err.Error())
+				}
+				if _, err := fmt.Fprintf(
+					os.Stderr, "  %s --parallel --full-output <<'EOF'  # include full task output\n", name,
+				); err != nil {
+					logWarn("I/O operation failed: " + err.Error())
+				}
 				return 1
 			}
 
 			backend, err := selectBackendFn(backendName)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
+				if _, err := fmt.Fprintf(os.Stderr, "ERROR: %v\n", err); err != nil {
+					logWarn("I/O operation failed: " + err.Error())
+				}
 				return 1
 			}
 			backendName = backend.Name()
 			data, err := io.ReadAll(stdinReader)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "ERROR: failed to read stdin: %v\n", err)
+				if _, err := fmt.Fprintf(os.Stderr, "ERROR: failed to read stdin: %v\n", err); err != nil {
+					logWarn("I/O operation failed: " + err.Error())
+				}
 				return 1
 			}
 
 			cfg, err := parseParallelConfig(data)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
+				if _, err := fmt.Fprintf(os.Stderr, "ERROR: %v\n", err); err != nil {
+					logWarn("I/O operation failed: " + err.Error())
+				}
 				return 1
 			}
 
@@ -343,22 +424,37 @@ func run() (exitCode int) {
 				}
 				taskBackend, err := selectBackendFn(cfg.Tasks[i].Backend)
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
+					if _, err := fmt.Fprintf(os.Stderr, "ERROR: %v\n", err); err != nil {
+						logWarn("I/O operation failed: " + err.Error())
+					}
 					return 1
 				}
 				cfg.Tasks[i].Backend = taskBackend.Name()
 				usesClaudeBackend = usesClaudeBackend || taskBackend.Name() == "claude"
 				if noSessionPersistence && cfg.Tasks[i].Mode == "resume" {
-					fmt.Fprintln(os.Stderr, "ERROR: --no-session-persistence cannot be used with resume")
+					if _, err := fmt.Fprintln(
+						os.Stderr, "ERROR: --no-session-persistence cannot be used with resume",
+					); err != nil {
+						logWarn("I/O operation failed: " + err.Error())
+					}
 					return 1
 				}
 				if noSessionPersistence && taskBackend.Name() != "claude" {
-					fmt.Fprintln(os.Stderr, "ERROR: --no-session-persistence is only supported by the claude backend")
+					if _, err := fmt.Fprintln(
+						os.Stderr, "ERROR: --no-session-persistence is only supported by the claude "+
+							"backend",
+					); err != nil {
+						logWarn("I/O operation failed: " + err.Error())
+					}
 					return 1
 				}
 			}
 			if usesClaudeBackend && !isValidClaudeEffort(claudeEffort) {
-				fmt.Fprintln(os.Stderr, "ERROR: --claude-effort must be one of: low, medium, high, xhigh, max")
+				if _, err := fmt.Fprintln(
+					os.Stderr, "ERROR: --claude-effort must be one of: low, medium, high, xhigh, max",
+				); err != nil {
+					logWarn("I/O operation failed: " + err.Error())
+				}
 				return 1
 			}
 			for i := range cfg.Tasks {
@@ -382,7 +478,9 @@ func run() (exitCode int) {
 			timeoutSec := resolveTimeout()
 			layers, err := topologicalSort(cfg.Tasks)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
+				if _, err := fmt.Fprintf(os.Stderr, "ERROR: %v\n", err); err != nil {
+					logWarn("I/O operation failed: " + err.Error())
+				}
 				return 1
 			}
 
@@ -418,7 +516,9 @@ func run() (exitCode int) {
 
 			// Default: summary mode (context-efficient)
 			// --full-output: legacy full output mode
-			fmt.Println(generateFinalOutputWithMode(results, !fullOutput))
+			if _, err := fmt.Println(generateFinalOutputWithMode(results, !fullOutput)); err != nil {
+				logWarn("I/O operation failed: " + err.Error())
+			}
 
 			exitCode = 0
 			for _, res := range results {
@@ -448,7 +548,8 @@ func run() (exitCode int) {
 	cfg.Backend = backend.Name()
 
 	cmdInjected := codexCommand != defaultCodexCommand
-	argsInjected := buildCodexArgsFn != nil && reflect.ValueOf(buildCodexArgsFn).Pointer() != reflect.ValueOf(defaultBuildArgsFn).Pointer()
+	argsInjected := buildCodexArgsFn != nil &&
+		reflect.ValueOf(buildCodexArgsFn).Pointer() != reflect.ValueOf(defaultBuildArgsFn).Pointer()
 
 	// Wire selected backend into runtime hooks for the rest of the execution,
 	// but preserve any injected test hooks for the default backend.
@@ -506,7 +607,9 @@ func run() (exitCode int) {
 	useStdin := cfg.ExplicitStdin || shouldUseStdin(taskText, piped)
 
 	targetArg := taskText
-	promptBackend := cfg.Backend == "antigravity" || cfg.Backend == "agy" || cfg.Backend == "grok" || cfg.Backend == "kimi" || cfg.Backend == "opencode"
+	promptBackend := cfg.Backend == "antigravity" || cfg.Backend == "agy" || cfg.Backend == "grok" ||
+		cfg.Backend == "kimi" ||
+		cfg.Backend == "opencode"
 	promptDirect := useStdin && promptBackend
 	if useStdin && !promptDirect {
 		targetArg = "-"
@@ -514,11 +617,23 @@ func run() (exitCode int) {
 	codexArgs := buildCodexArgsFn(cfg, targetArg)
 
 	// Print startup information to stderr
-	fmt.Fprintf(os.Stderr, "[%s]\n", name)
-	fmt.Fprintf(os.Stderr, "  Backend: %s\n", cfg.Backend)
-	fmt.Fprintf(os.Stderr, "  Command: %s %s\n", codexCommand, strings.Join(redactTaskArgs(codexArgs, taskText), " "))
-	fmt.Fprintf(os.Stderr, "  PID: %d\n", os.Getpid())
-	fmt.Fprintf(os.Stderr, "  Log: %s\n", logger.Path())
+	if _, err := fmt.Fprintf(os.Stderr, "[%s]\n", name); err != nil {
+		logWarn("I/O operation failed: " + err.Error())
+	}
+	if _, err := fmt.Fprintf(os.Stderr, "  Backend: %s\n", cfg.Backend); err != nil {
+		logWarn("I/O operation failed: " + err.Error())
+	}
+	if _, err := fmt.Fprintf(
+		os.Stderr, "  Command: %s %s\n", codexCommand, strings.Join(redactTaskArgs(codexArgs, taskText), " "),
+	); err != nil {
+		logWarn("I/O operation failed: " + err.Error())
+	}
+	if _, err := fmt.Fprintf(os.Stderr, "  PID: %d\n", os.Getpid()); err != nil {
+		logWarn("I/O operation failed: " + err.Error())
+	}
+	if _, err := fmt.Fprintf(os.Stderr, "  Log: %s\n", logger.logPath()); err != nil {
+		logWarn("I/O operation failed: " + err.Error())
+	}
 
 	if useStdin {
 		var reasons []string
@@ -556,7 +671,7 @@ func run() (exitCode int) {
 
 	logInfo(fmt.Sprintf("%s running...", cfg.Backend))
 
-	taskSpec := TaskSpec{
+	taskSpec := taskSpec{
 		Task:                 taskText,
 		WorkDir:              cfg.WorkDir,
 		Mode:                 cfg.Mode,
@@ -579,9 +694,13 @@ func run() (exitCode int) {
 		return result.ExitCode
 	}
 
-	fmt.Println(result.Message)
+	if _, err := fmt.Println(result.Message); err != nil {
+		logWarn("I/O operation failed: " + err.Error())
+	}
 	if result.SessionID != "" && !cfg.NoSessionPersistence {
-		fmt.Printf("\n---\nSESSION_ID: %s\n", result.SessionID)
+		if _, err := fmt.Printf("\n---\nSESSION_ID: %s\n", result.SessionID); err != nil {
+			logWarn("I/O operation failed: " + err.Error())
+		}
 	}
 
 	// CRITICAL: Windows-specific fix for Git Bash background process output capture
@@ -593,7 +712,7 @@ func run() (exitCode int) {
 	return 0
 }
 
-func setLogger(l *Logger) {
+func setLogger(l *fileLogger) {
 	loggerPtr.Store(l)
 }
 
@@ -605,25 +724,25 @@ func closeLogger() error {
 	return logger.Close()
 }
 
-func activeLogger() *Logger {
+func activeLogger() *fileLogger {
 	return loggerPtr.Load()
 }
 
 func logInfo(msg string) {
 	if logger := activeLogger(); logger != nil {
-		logger.Info(msg)
+		logger.info(msg)
 	}
 }
 
 func logWarn(msg string) {
 	if logger := activeLogger(); logger != nil {
-		logger.Warn(msg)
+		logger.warn(msg)
 	}
 }
 
 func logError(msg string) {
 	if logger := activeLogger(); logger != nil {
-		logger.Error(msg)
+		logger.error(msg)
 	}
 }
 
@@ -697,5 +816,7 @@ Exit Codes:
     130  Interrupted (Ctrl+C)
     *    Passthrough from backend process`, name,
 	)
-	fmt.Println(help)
+	if _, err := fmt.Println(help); err != nil {
+		logWarn("I/O operation failed: " + err.Error())
+	}
 }

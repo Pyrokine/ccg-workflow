@@ -305,15 +305,14 @@ myproject/
 
 ## 常用库
 
-| 库              | 用途       |
-|----------------|----------|
-| tokio          | 异步运行时    |
-| axum/actix-web | Web 框架   |
+| 库             | 用途        |
+|----------------|-------------|
+| tokio          | 异步运行时  |
+| axum/actix-web | Web 框架    |
 | serde          | 序列化      |
 | reqwest        | HTTP 客户端 |
 | sqlx           | 数据库      |
-| clap           | CLI      |
-| tracing        | 日志       |
+| clap           | CLI         |
+| tracing        | 日志        |
 
 ---
-

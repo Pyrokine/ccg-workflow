@@ -18,11 +18,11 @@ description: 成本优化秘典。FinOps框架、计算/存储/网络优化、�
 └───────────┴───────────┴─────────────┘
 ```
 
-| 阶段       | 目标    | 关键动作                |
-|----------|-------|---------------------|
+| 阶段     | 目标       | 关键动作                      |
+|----------|------------|-------------------------------|
 | Inform   | 成本可视化 | 标签策略、成本分摊、Dashboard |
-| Optimize | 降低浪费  | 右尺寸、预留、Spot、清理闲置    |
-| Operate  | 持续治理  | 预算告警、审批流程、定期审查      |
+| Optimize | 降低浪费   | 右尺寸、预留、Spot、清理闲置  |
+| Operate  | 持续治理   | 预算告警、审批流程、定期审查  |
 
 ---
 
@@ -73,12 +73,12 @@ aws ce get-rightsizing-recommendation \
 
 ### 预留实例 / Savings Plans
 
-| 类型                      | 折扣   | 灵活性 | 适用   |
-|-------------------------|------|-----|------|
-| Reserved Instance (1yr) | ~30% | 低   | 稳定负载 |
-| Reserved Instance (3yr) | ~50% | 低   | 长期稳定 |
-| Savings Plans (Compute) | ~30% | 高   | 跨实例族 |
-| Savings Plans (EC2)     | ~40% | 中   | 固定区域 |
+| 类型                    | 折扣 | 灵活性 | 适用     |
+|-------------------------|------|--------|----------|
+| Reserved Instance (1yr) | ~30% | 低     | 稳定负载 |
+| Reserved Instance (3yr) | ~50% | 低     | 长期稳定 |
+| Savings Plans (Compute) | ~30% | 高     | 跨实例族 |
+| Savings Plans (EC2)     | ~40% | 中     | 固定区域 |
 
 ### Spot 实例
 
@@ -107,7 +107,7 @@ aws ce get-rightsizing-recommendation \
 # Target Tracking (推荐)
 scaling_policy:
   type: TargetTrackingScaling
-  target_value: 70          # CPU 目标 70%
+  target_value: 70 # CPU 目标 70%
   scale_in_cooldown: 300
   scale_out_cooldown: 60
 
@@ -118,9 +118,9 @@ predictive_scaling:
 
 # 定时伸缩 (已知流量模式)
 scheduled_actions:
-  - schedule: "cron(0 8 * * MON-FRI)"   # 工作日早8点扩容
+  - schedule: 'cron(0 8 * * MON-FRI)' # 工作日早8点扩容
     min_capacity: 10
-  - schedule: "cron(0 20 * * MON-FRI)"  # 晚8点缩容
+  - schedule: 'cron(0 20 * * MON-FRI)' # 晚8点缩容
     min_capacity: 2
 ```
 
@@ -130,12 +130,12 @@ scheduled_actions:
 
 ### 存储分层
 
-| 层级              | 访问频率 | 成本  | 适用    |
-|-----------------|------|-----|-------|
-| S3 Standard     | 频繁   | $$$ | 活跃数据  |
-| S3 IA           | 月级   | $$  | 备份、日志 |
-| S3 Glacier      | 季度级  | $   | 归档    |
-| S3 Glacier Deep | 年级   | ¢   | 合规归档  |
+| 层级            | 访问频率 | 成本 | 适用       |
+|-----------------|----------|------|------------|
+| S3 Standard     | 频繁     | $$$  | 活跃数据   |
+| S3 IA           | 月级     | $$   | 备份、日志 |
+| S3 Glacier      | 季度级   | $    | 归档       |
+| S3 Glacier Deep | 年级     | ¢    | 合规归档   |
 
 ### 生命周期策略
 
@@ -144,13 +144,13 @@ scheduled_actions:
   "Rules": [
     {
       "ID": "log-lifecycle",
-      "Filter": {"Prefix": "logs/"},
+      "Filter": { "Prefix": "logs/" },
       "Transitions": [
-        {"Days": 30, "StorageClass": "STANDARD_IA"},
-        {"Days": 90, "StorageClass": "GLACIER"},
-        {"Days": 365, "StorageClass": "DEEP_ARCHIVE"}
+        { "Days": 30, "StorageClass": "STANDARD_IA" },
+        { "Days": 90, "StorageClass": "GLACIER" },
+        { "Days": 365, "StorageClass": "DEEP_ARCHIVE" }
       ],
-      "Expiration": {"Days": 2555}
+      "Expiration": { "Days": 2555 }
     }
   ]
 }
@@ -171,12 +171,12 @@ scheduled_actions:
 
 ## 网络优化
 
-| 优化项         | 方法              | 节省         |
-|-------------|-----------------|------------|
-| 跨 AZ 流量     | 同 AZ 优先路由       | ~$0.01/GB  |
-| 跨 Region 流量 | CDN + 边缘缓存      | ~$0.02/GB  |
-| NAT Gateway | 使用 VPC Endpoint | ~$0.045/GB |
-| 数据传输        | 压缩 + 批量         | 30-70%     |
+| 优化项         | 方法              | 节省       |
+|----------------|-------------------|------------|
+| 跨 AZ 流量     | 同 AZ 优先路由    | ~$0.01/GB  |
+| 跨 Region 流量 | CDN + 边缘缓存    | ~$0.02/GB  |
+| NAT Gateway    | 使用 VPC Endpoint | ~$0.045/GB |
+| 数据传输       | 压缩 + 批量       | 30-70%     |
 
 ```yaml
 VPC Endpoint 优先:
@@ -198,12 +198,12 @@ VPC Endpoint 优先:
 
 ### 架构降本
 
-| 模式         | 场景     | 节省          |
-|------------|--------|-------------|
+| 模式       | 场景        | 节省                   |
+|------------|-------------|------------------------|
 | Serverless | 低流量/突发 | 按调用付费，空闲零成本 |
-| 容器化        | 中等流量   | 提高资源利用率     |
-| 队列削峰       | 突发流量   | 减少峰值资源需求    |
-| 读写分离       | 读多写少   | 读副本用小实例     |
+| 容器化     | 中等流量    | 提高资源利用率         |
+| 队列削峰   | 突发流量    | 减少峰值资源需求       |
+| 读写分离   | 读多写少    | 读副本用小实例         |
 
 ### 代码级降本
 
@@ -249,23 +249,25 @@ VPC Endpoint 优先:
 
 ## 成本优化清单
 
-```yaml
+```markdown
 即时见效 (Quick Wins):
-  - [ ] 清理闲置资源 (未挂载 EBS、空闲 EIP、停止的实例)
-  - [ ] 删除未使用的快照和 AMI
-  - [ ] 右尺寸低利用率实例
-  - [ ] 启用 S3 生命周期策略
+
+- [ ] 清理闲置资源 (未挂载 EBS、空闲 EIP、停止的实例)
+- [ ] 删除未使用的快照和 AMI
+- [ ] 右尺寸低利用率实例
+- [ ] 启用 S3 生命周期策略
 
 中期优化:
-  - [ ] 购买 Savings Plans / Reserved Instances
-  - [ ] Spot 实例用于非关键负载
-  - [ ] 配置自动伸缩
-  - [ ] VPC Endpoint 替代 NAT Gateway
+
+- [ ] 购买 Savings Plans / Reserved Instances
+- [ ] Spot 实例用于非关键负载
+- [ ] 配置自动伸缩
+- [ ] VPC Endpoint 替代 NAT Gateway
 
 长期治理:
-  - [ ] 标签策略 100% 覆盖
-  - [ ] 成本分摊 Dashboard
-  - [ ] 月度成本审查会议
-  - [ ] 预算告警自动化
-```
 
+- [ ] 标签策略 100% 覆盖
+- [ ] 成本分摊 Dashboard
+- [ ] 月度成本审查会议
+- [ ] 预算告警自动化
+```

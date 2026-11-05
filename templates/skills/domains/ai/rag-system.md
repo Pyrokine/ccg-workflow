@@ -53,14 +53,14 @@ print(result["result"])
 
 ## 向量数据库对比
 
-| 数据库      | 类型 | 索引算法     | 适用场景        | 部署    |
-|----------|----|----------|-------------|-------|
-| Pinecone | 托管 | HNSW     | 生产级、高并发     | 云端    |
+| 数据库   | 类型 | 索引算法 | 适用场景        | 部署      |
+|----------|------|----------|-----------------|-----------|
+| Pinecone | 托管 | HNSW     | 生产级、高并发  | 云端      |
 | Weaviate | 开源 | HNSW     | 多模态、GraphQL | 自托管/云 |
-| Qdrant   | 开源 | HNSW     | 高性能、过滤      | 自托管/云 |
-| Chroma   | 开源 | HNSW     | 快速原型、本地     | 本地/内存 |
-| Milvus   | 开源 | IVF/HNSW | 大规模、分布式     | 自托管   |
-| Faiss    | 库  | IVF/PQ   | 研究、离线       | 本地    |
+| Qdrant   | 开源 | HNSW     | 高性能、过滤    | 自托管/云 |
+| Chroma   | 开源 | HNSW     | 快速原型、本地  | 本地/内存 |
+| Milvus   | 开源 | IVF/HNSW | 大规模、分布式  | 自托管    |
+| Faiss    | 库   | IVF/PQ   | 研究、离线      | 本地      |
 
 ### Pinecone 示例
 
@@ -112,13 +112,13 @@ results = vectorstore.similarity_search(
 
 ### 模型对比
 
-| 模型              | 维度   | 性能 | 成本 | 适用场景   |
-|-----------------|------|----|----|--------|
-| OpenAI ada-002  | 1536 | 高  | 中  | 通用、多语言 |
-| Cohere embed-v3 | 1024 | 高  | 中  | 多语言、压缩 |
-| BGE-large-zh    | 1024 | 高  | 免费 | 中文优化   |
-| E5-large-v2     | 1024 | 中  | 免费 | 开源、通用  |
-| text2vec-base   | 768  | 中  | 免费 | 中文、轻量  |
+| 模型            | 维度 | 性能 | 成本 | 适用场景     |
+|-----------------|------|------|------|--------------|
+| OpenAI ada-002  | 1536 | 高   | 中   | 通用、多语言 |
+| Cohere embed-v3 | 1024 | 高   | 中   | 多语言、压缩 |
+| BGE-large-zh    | 1024 | 高   | 免费 | 中文优化     |
+| E5-large-v2     | 1024 | 中   | 免费 | 开源、通用   |
+| text2vec-base   | 768  | 中   | 免费 | 中文、轻量   |
 
 ### 本地 Embedding
 
@@ -543,15 +543,15 @@ def raptor_indexing(documents, levels=3):
 
 ## 工具与框架
 
-| 工具         | 类型  | 特点                 |
-|------------|-----|--------------------|
-| LangChain  | 框架  | 生态丰富、组件化           |
-| LlamaIndex | 框架  | 索引优化、查询引擎          |
-| Haystack   | 框架  | 生产级、Pipeline       |
-| Pinecone   | 向量库 | 托管、高性能             |
-| Qdrant     | 向量库 | 开源、过滤强             |
-| Weaviate   | 向量库 | 多模态、GraphQL        |
-| Cohere     | API | Embedding + Rerank |
+| 工具       | 类型   | 特点               |
+|------------|--------|--------------------|
+| LangChain  | 框架   | 生态丰富、组件化   |
+| LlamaIndex | 框架   | 索引优化、查询引擎 |
+| Haystack   | 框架   | 生产级、Pipeline   |
+| Pinecone   | 向量库 | 托管、高性能       |
+| Qdrant     | 向量库 | 开源、过滤强       |
+| Weaviate   | 向量库 | 多模态、GraphQL    |
+| Cohere     | API    | Embedding + Rerank |
 
 ## 最佳实践
 

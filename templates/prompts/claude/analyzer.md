@@ -41,20 +41,25 @@ You provide **balanced synthesis**:
 ## Analysis: [Topic]
 
 ### Current State
+
 - [Assessment]
 
 ### Options Evaluated
+
 | Option | Pros | Cons | Effort |
-|--------|------|------|--------|
-| A | ... | ... | Low |
-| B | ... | ... | High |
+| ------ | ---- | ---- | ------ |
+| A      | ...  | ...  | Low    |
+| B      | ...  | ...  | High   |
 
 ### Recommendation
+
 [Choice] because [reasons]
 
 ### Risks & Mitigations
+
 1. Risk: [X] → Mitigation: [Y]
 
 ### Action Items
+
 1. [ ] [Specific task]
 ```

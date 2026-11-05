@@ -11,17 +11,17 @@
  * single role, or turns it off, through the plugin config.
  */
 
-import { isVolatile } from '@deepseek-ai/cosmokit'
+import { isVolatile } from '@deepseek-ai/cosmokit';
 
 /** Read a configuration snapshot without leaking runtime references into tools. */
 export function readConfig(config = {}) {
-  return Object.fromEntries(Object.entries(config).map(([key, value]) => [
-    key, isVolatile(value) ? value.get() : value,
-  ]))
+  return Object.fromEntries(
+    Object.entries(config).map(([key, value]) => [key, isVolatile(value) ? value.get() : value])
+  );
 }
 
 /** Model buckets a role can point at. */
-export const TIERS = ['strong', 'worker']
+export const TIERS = ['strong', 'worker'];
 
 export const ROLES = {
   analyzer: {
@@ -29,7 +29,7 @@ export const ROLES = {
     tier: 'strong',
     summary: 'read-only technical analysis: trade-offs, options, a ranked recommendation',
     persona: [
-      'You are CCG\'s senior systems analyst. READ-ONLY: never write or edit files.',
+      "You are CCG's senior systems analyst. READ-ONLY: never write or edit files.",
       'Work the problem in this order: current state and constraints; two or three',
       'candidate approaches with explicit pros, cons and effort; one ranked',
       'recommendation with its rationale; risks with mitigations; concrete next steps.',
@@ -43,7 +43,7 @@ export const ROLES = {
     tier: 'strong',
     summary: 'design blueprint: component boundaries, interface contracts, migration path',
     persona: [
-      'You are CCG\'s full-stack architect. Design contract-first: settle the interfaces',
+      "You are CCG's full-stack architect. Design contract-first: settle the interfaces",
       'between layers before the internals, and keep concerns separated.',
       'Weigh the constraints you were given before proposing structure, and trade ideal',
       'architecture against delivery cost out loud.',
@@ -58,7 +58,7 @@ export const ROLES = {
     tier: 'worker',
     summary: 'implement an agreed plan: complete, runnable code plus its verification command',
     persona: [
-      'You are CCG\'s implementation engineer. Turn an agreed plan into complete, runnable',
+      "You are CCG's implementation engineer. Turn an agreed plan into complete, runnable",
       'code — never a sketch, never a placeholder, never a "implement here" stub.',
       'Read the surrounding code first and match its style, naming and error handling.',
       'Cover edge cases; respect concurrency, transactions and indexes where they apply.',
@@ -72,7 +72,7 @@ export const ROLES = {
     tier: 'strong',
     summary: 'root-cause diagnosis: evidence, ranked hypotheses, the fix direction',
     persona: [
-      'You are CCG\'s debugger. Find the root cause, not the symptom, and do not patch',
+      "You are CCG's debugger. Find the root cause, not the symptom, and do not patch",
       'code — diagnosis only.',
       'Method: reproduce (steps, environment, intermittent or consistent); isolate (which',
       'component, when it started, what changed); analyse (read the stack trace and trace',
@@ -88,7 +88,7 @@ export const ROLES = {
     tier: 'worker',
     summary: 'performance work: measure, locate the bottleneck, targeted fix',
     persona: [
-      'You are CCG\'s performance engineer. Measure before optimising; never optimise on',
+      "You are CCG's performance engineer. Measure before optimising; never optimise on",
       'a hunch.',
       'Look for end-to-end latency, cross-layer bottlenecks (N+1 queries, over-fetching,',
       'redundant renders, cache coherency) and resource efficiency (bundle size, memory,',
@@ -105,7 +105,7 @@ export const ROLES = {
     tier: 'strong',
     summary: 'graded code review: Critical / Warning / Info findings with file:line anchors',
     persona: [
-      'You are CCG\'s code reviewer. READ-ONLY: comment, do not rewrite.',
+      "You are CCG's code reviewer. READ-ONLY: comment, do not rewrite.",
       'Review for correctness (logic, edge cases, types, error handling, races),',
       'maintainability (naming, responsibilities, duplication, test gaps), cross-cutting',
       'concerns (logging, error messages, configuration over hardcoding) and integration',
@@ -123,99 +123,108 @@ export const ROLES = {
     tier: 'worker',
     summary: 'tests: integration and contract coverage, edge cases',
     persona: [
-      'You are CCG\'s test engineer. Write tests, not implementation.',
+      "You are CCG's test engineer. Write tests, not implementation.",
       'Favour integration and contract tests: API endpoints, component integration,',
       'database interaction, mocked external services, request/response validation, type',
       'and schema boundaries.',
       'Cover the edges: boundary values, error paths, empty/null/undefined, concurrency.',
-      'Match the project\'s existing test framework and conventions — detect them, do not',
+      "Match the project's existing test framework and conventions — detect them, do not",
       'assume. Deliver the test code plus a short note on what is and is not covered.',
     ].join('\n'),
   },
-}
+};
 
 /** Stable role order for prompts and registration. */
-export const ROLE_NAMES = Object.keys(ROLES)
+export const ROLE_NAMES = Object.keys(ROLES);
 
 /**
  * Resolve the role matrix from config. Pure — no context, no side effects — so
  * the mapping that decides which model serves which role is unit-testable
  * without booting a harness.
  *
- * @param config - the validated plugin config (may be empty).
+ * @param config - the validated plugin config, with no overrides by default.
  * @returns one entry per enabled role, in declaration order.
- * @throws if `roles` names a role that does not exist, or a role points at a
+ * @throws {Error} If `roles` names a role that does not exist, or a role points at a
  * tier that does not exist. Both are typos that would otherwise silently
  * downgrade a child to the default model.
  */
 export function resolveRoles(config = {}) {
-  config = readConfig(config)
-  const overrides = config.roles ?? {}
+  config = readConfig(config);
+  const overrides = config.roles ?? {};
 
   for (const key of Object.keys(overrides)) {
     if (!ROLE_NAMES.includes(key)) {
-      throw new Error(
-        `ccg: unknown role "${key}" in config.roles; valid roles are ${ROLE_NAMES.join(', ')}`,
-      )
+      throw new Error(`ccg: unknown role "${key}" in config.roles; valid roles are ${ROLE_NAMES.join(', ')}`);
     }
   }
 
-  const resolved = []
+  const resolved = [];
   for (const roleName of ROLE_NAMES) {
-    const role = ROLES[roleName]
-    const override = overrides[roleName] ?? {}
-    if (override.enabled === false) continue
+    const role = ROLES[roleName];
+    const override = overrides[roleName] ?? {};
+    if (override.enabled === false) {
+      continue;
+    }
 
-    const tierName = override.tier ?? role.tier
+    const tierName = override.tier ?? role.tier;
     if (!TIERS.includes(tierName)) {
       throw new Error(
-        `ccg: role "${roleName}" points at unknown tier "${tierName}"; valid tiers are ${TIERS.join(', ')}`,
-      )
+        `ccg: role "${roleName}" points at unknown tier "${tierName}"; valid tiers are ${TIERS.join(', ')}`
+      );
     }
-    const tier = config[tierName] ?? {}
-    const maxTokens = override.maxTokens ?? tier.maxTokens
+    const tier = config[tierName] ?? {};
+    const maxTokens = override.maxTokens ?? tier.maxTokens;
 
     // A role may name any number of models. The list wins over a single pin,
     // which wins over the tier; nothing at all leaves the child on the
     // deployment default. Half a route is not a route — the child schema needs
     // both halves — so an incomplete pair is dropped rather than mounted as a
     // model it cannot reach.
-    const declared = Array.isArray(override.models) && override.models.length > 0
-      ? override.models
-      : [{
-        provider: override.provider ?? tier.provider,
-        model: override.model ?? tier.model,
-      }]
+    const declared =
+      Array.isArray(override.models) && override.models.length > 0
+        ? override.models
+        : [
+            {
+              provider: override.provider ?? tier.provider,
+              model: override.model ?? tier.model,
+            },
+          ];
 
-    const seen = new Set()
-    const members = []
+    const seen = new Set();
+    const members = [];
     for (const entry of declared) {
-      const provider = typeof entry?.provider === 'string' ? entry.provider.trim() : ''
-      const model = typeof entry?.model === 'string' ? entry.model.trim() : ''
-      if (provider === '' || model === '') continue
-      const key = `${provider}/${model}`
+      const provider = typeof entry?.provider === 'string' ? entry.provider.trim() : '';
+      const model = typeof entry?.model === 'string' ? entry.model.trim() : '';
+      if (provider === '' || model === '') {
+        continue;
+      }
+      const key = `${provider}/${model}`;
       // Two identical members would ask one model the same question twice.
-      if (seen.has(key)) continue
-      seen.add(key)
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
       members.push({
         provider,
         model,
         ...(typeof entry.maxTokens === 'number'
           ? { maxTokens: entry.maxTokens }
-          : typeof maxTokens === 'number' ? { maxTokens } : {}),
-      })
+          : typeof maxTokens === 'number'
+            ? { maxTokens }
+            : {}),
+      });
     }
 
     // Inheriting the conversation and answering independently are opposite
     // things. A panel whose members have read your reasoning is not a panel,
     // so this combination is refused rather than silently producing echoes.
-    const context = override.context ?? 'brief'
+    const context = override.context ?? 'brief';
     if (context === 'inherit' && members.length >= 2) {
       throw new Error(
-        `ccg: role "${roleName}" holds ${members.length} models AND inherits the conversation; `
-        + 'a panel is only worth running when its members answer independently — drop to one '
-        + 'model, or set context: brief',
-      )
+        `ccg: role "${roleName}" holds ${members.length} models AND inherits the conversation; ` +
+          'a panel is only worth running when its members answer independently — drop to one ' +
+          'model, or set context: brief'
+      );
     }
 
     resolved.push({
@@ -230,7 +239,7 @@ export function resolveRoles(config = {}) {
       // What a single-model role hands the official delegation tool; a role
       // running a panel has no one route and leaves this undefined.
       agentOptions: members.length === 1 ? members[0] : undefined,
-    })
+    });
   }
-  return resolved
+  return resolved;
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -20,7 +21,7 @@ type integrationSummary struct {
 }
 
 type integrationOutput struct {
-	Results []TaskResult       `json:"results"`
+	Results []taskResult       `json:"results"`
 	Summary integrationSummary `json:"summary"`
 }
 
@@ -32,11 +33,15 @@ func captureStdout(t *testing.T, fn func()) string {
 
 	fn()
 
-	w.Close()
+	if err := w.Close(); err != nil && !errors.Is(err, os.ErrClosed) {
+		t.Errorf("I/O operation failed: %v", err)
+	}
 	os.Stdout = old
 
 	var buf bytes.Buffer
-	io.Copy(&buf, r)
+	if _, err := io.Copy(&buf, r); err != nil {
+		t.Errorf("I/O operation failed: %v", err)
+	}
 	return buf.String()
 }
 
@@ -45,7 +50,7 @@ func parseIntegrationOutput(t *testing.T, out string) integrationOutput {
 	var payload integrationOutput
 
 	lines := strings.Split(out, "\n")
-	var currentTask *TaskResult
+	var currentTask *taskResult
 	inTaskResults := false
 
 	for _, line := range lines {
@@ -53,28 +58,40 @@ func parseIntegrationOutput(t *testing.T, out string) integrationOutput {
 
 		// Parse new format header: "X tasks | Y passed | Z failed"
 		if strings.Contains(line, "tasks |") && strings.Contains(line, "passed |") {
-			parts := strings.Split(line, "|")
-			for _, p := range parts {
+			parts := strings.SplitSeq(line, "|")
+			for p := range parts {
 				p = strings.TrimSpace(p)
 				if strings.HasSuffix(p, "tasks") {
-					fmt.Sscanf(p, "%d tasks", &payload.Summary.Total)
+					if _, err := fmt.Sscanf(p, "%d tasks", &payload.Summary.Total); err != nil {
+						t.Errorf("I/O operation failed: %v", err)
+					}
 				} else if strings.HasSuffix(p, "passed") {
-					fmt.Sscanf(p, "%d passed", &payload.Summary.Success)
+					if _, err := fmt.Sscanf(p, "%d passed", &payload.Summary.Success); err != nil {
+						t.Errorf("I/O operation failed: %v", err)
+					}
 				} else if strings.HasSuffix(p, "failed") {
-					fmt.Sscanf(p, "%d failed", &payload.Summary.Failed)
+					if _, err := fmt.Sscanf(p, "%d failed", &payload.Summary.Failed); err != nil {
+						t.Errorf("I/O operation failed: %v", err)
+					}
 				}
 			}
 		} else if strings.HasPrefix(line, "Total:") {
 			// Legacy format: "Total: X | Success: Y | Failed: Z"
-			parts := strings.Split(line, "|")
-			for _, p := range parts {
+			parts := strings.SplitSeq(line, "|")
+			for p := range parts {
 				p = strings.TrimSpace(p)
 				if strings.HasPrefix(p, "Total:") {
-					fmt.Sscanf(p, "Total: %d", &payload.Summary.Total)
+					if _, err := fmt.Sscanf(p, "Total: %d", &payload.Summary.Total); err != nil {
+						t.Errorf("I/O operation failed: %v", err)
+					}
 				} else if strings.HasPrefix(p, "Success:") {
-					fmt.Sscanf(p, "Success: %d", &payload.Summary.Success)
+					if _, err := fmt.Sscanf(p, "Success: %d", &payload.Summary.Success); err != nil {
+						t.Errorf("I/O operation failed: %v", err)
+					}
 				} else if strings.HasPrefix(p, "Failed:") {
-					fmt.Sscanf(p, "Failed: %d", &payload.Summary.Failed)
+					if _, err := fmt.Sscanf(p, "Failed: %d", &payload.Summary.Failed); err != nil {
+						t.Errorf("I/O operation failed: %v", err)
+					}
 				}
 			}
 		} else if line == "## Task Results" {
@@ -91,7 +108,7 @@ func parseIntegrationOutput(t *testing.T, out string) integrationOutput {
 			if currentTask != nil {
 				payload.Results = append(payload.Results, *currentTask)
 			}
-			currentTask = &TaskResult{}
+			currentTask = &taskResult{}
 
 			taskLine := strings.TrimPrefix(line, "### ")
 			success, warning, failed := getStatusSymbols()
@@ -121,17 +138,19 @@ func parseIntegrationOutput(t *testing.T, out string) integrationOutput {
 		} else if currentTask != nil && inTaskResults {
 			// Parse task details
 			if strings.HasPrefix(line, "Exit code:") {
-				fmt.Sscanf(line, "Exit code: %d", &currentTask.ExitCode)
+				if _, err := fmt.Sscanf(line, "Exit code: %d", &currentTask.ExitCode); err != nil {
+					t.Errorf("I/O operation failed: %v", err)
+				}
 			} else if strings.HasPrefix(line, "Error:") {
 				currentTask.Error = strings.TrimPrefix(line, "Error: ")
-			} else if strings.HasPrefix(line, "Log:") {
-				currentTask.LogPath = strings.TrimSpace(strings.TrimPrefix(line, "Log:"))
-			} else if strings.HasPrefix(line, "Did:") {
-				currentTask.KeyOutput = strings.TrimSpace(strings.TrimPrefix(line, "Did:"))
-			} else if strings.HasPrefix(line, "Detail:") {
+			} else if after, ok := strings.CutPrefix(line, "Log:"); ok {
+				currentTask.LogPath = strings.TrimSpace(after)
+			} else if after, ok := strings.CutPrefix(line, "Did:"); ok {
+				currentTask.KeyOutput = strings.TrimSpace(after)
+			} else if after, ok := strings.CutPrefix(line, "Detail:"); ok {
 				// Error detail for failed tasks
 				if currentTask.Message == "" {
-					currentTask.Message = strings.TrimSpace(strings.TrimPrefix(line, "Detail:"))
+					currentTask.Message = strings.TrimSpace(after)
 				}
 			}
 		} else if strings.HasPrefix(line, "--- Task:") {
@@ -139,15 +158,17 @@ func parseIntegrationOutput(t *testing.T, out string) integrationOutput {
 			if currentTask != nil {
 				payload.Results = append(payload.Results, *currentTask)
 			}
-			currentTask = &TaskResult{}
+			currentTask = &taskResult{}
 			currentTask.TaskID = strings.TrimSuffix(strings.TrimPrefix(line, "--- Task: "), " ---")
-		} else if currentTask != nil && !inTaskResults {
+		} else if currentTask != nil {
 			// Legacy format parsing
 			if strings.HasPrefix(line, "Status: SUCCESS") {
 				currentTask.ExitCode = 0
 			} else if strings.HasPrefix(line, "Status: FAILED") {
 				if strings.Contains(line, "exit code") {
-					fmt.Sscanf(line, "Status: FAILED (exit code %d)", &currentTask.ExitCode)
+					if _, err := fmt.Sscanf(line, "Status: FAILED (exit code %d)", &currentTask.ExitCode); err != nil {
+						t.Errorf("I/O operation failed: %v", err)
+					}
 				} else {
 					currentTask.ExitCode = 1
 				}
@@ -155,8 +176,8 @@ func parseIntegrationOutput(t *testing.T, out string) integrationOutput {
 				currentTask.Error = strings.TrimPrefix(line, "Error: ")
 			} else if strings.HasPrefix(line, "Session:") {
 				currentTask.SessionID = strings.TrimPrefix(line, "Session: ")
-			} else if strings.HasPrefix(line, "Log:") {
-				currentTask.LogPath = strings.TrimSpace(strings.TrimPrefix(line, "Log:"))
+			} else if after, ok := strings.CutPrefix(line, "Log:"); ok {
+				currentTask.LogPath = strings.TrimSpace(after)
 			}
 		}
 	}
@@ -169,33 +190,7 @@ func parseIntegrationOutput(t *testing.T, out string) integrationOutput {
 	return payload
 }
 
-func extractTaskBlock(t *testing.T, output, taskID string) string {
-	t.Helper()
-	header := fmt.Sprintf("--- Task: %s ---", taskID)
-	lines := strings.Split(output, "\n")
-	var block []string
-	collecting := false
-	for _, raw := range lines {
-		trimmed := strings.TrimSpace(raw)
-		if !collecting {
-			if trimmed == header {
-				collecting = true
-				block = append(block, trimmed)
-			}
-			continue
-		}
-		if strings.HasPrefix(trimmed, "--- Task: ") && trimmed != header {
-			break
-		}
-		block = append(block, trimmed)
-	}
-	if len(block) == 0 {
-		t.Fatalf("task block %s not found in output:\n%s", taskID, output)
-	}
-	return strings.Join(block, "\n")
-}
-
-func findResultByID(t *testing.T, payload integrationOutput, id string) TaskResult {
+func findResultByID(t *testing.T, payload integrationOutput, id string) taskResult {
 	t.Helper()
 	for _, res := range payload.Results {
 		if res.TaskID == id {
@@ -203,7 +198,7 @@ func findResultByID(t *testing.T, payload integrationOutput, id string) TaskResu
 		}
 	}
 	t.Fatalf("result for task %s not found", id)
-	return TaskResult{}
+	return taskResult{}
 }
 
 func TestRunParallelEndToEnd_OrderAndConcurrency(t *testing.T) {
@@ -244,16 +239,16 @@ task-e`
 	var mu sync.Mutex
 	starts := make(map[string]time.Time)
 	ends := make(map[string]time.Time)
-	var running int64
+	var running atomic.Int64
 	var maxParallel int64
 
-	runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
+	runCodexTaskFn = func(task taskSpec, timeout int) taskResult {
 		start := time.Now()
 		mu.Lock()
 		starts[task.ID] = start
 		mu.Unlock()
 
-		cur := atomic.AddInt64(&running, 1)
+		cur := running.Add(1)
 		for {
 			prev := atomic.LoadInt64(&maxParallel)
 			if cur <= prev {
@@ -270,8 +265,8 @@ task-e`
 		ends[task.ID] = time.Now()
 		mu.Unlock()
 
-		atomic.AddInt64(&running, -1)
-		return TaskResult{TaskID: task.ID, ExitCode: 0, Message: task.Task}
+		running.Add(-1)
+		return taskResult{TaskID: task.ID, ExitCode: 0, Message: task.Task}
 	}
 
 	var exitCode int
@@ -324,9 +319,9 @@ task-e`
 func TestRunParallelCycleDetectionStopsExecution(t *testing.T) {
 	defer resetTestHooks()
 	origRun := runCodexTaskFn
-	runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
+	runCodexTaskFn = func(task taskSpec, timeout int) taskResult {
 		t.Fatalf("task %s should not execute on cycle", task.ID)
-		return TaskResult{}
+		return taskResult{}
 	}
 	t.Cleanup(
 		func() {
@@ -378,8 +373,8 @@ func TestRunParallelOutputsIncludeLogPaths(t *testing.T) {
 		return filepath.Join(tempDir, fmt.Sprintf("%s.log", id))
 	}
 
-	runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
-		res := TaskResult{
+	runCodexTaskFn = func(task taskSpec, timeout int) taskResult {
+		res := taskResult{
 			TaskID:    task.ID,
 			Message:   fmt.Sprintf("result-%s", task.ID),
 			SessionID: fmt.Sprintf("session-%s", task.ID),
@@ -461,15 +456,15 @@ ok-d`
 	expectedLog := filepath.Join(tempDir, fmt.Sprintf("codex-wrapper-%d.log", os.Getpid()))
 
 	origRun := runCodexTaskFn
-	runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
+	runCodexTaskFn = func(task taskSpec, timeout int) taskResult {
 		path := expectedLog
-		if logger := activeLogger(); logger != nil && logger.Path() != "" {
-			path = logger.Path()
+		if logger := activeLogger(); logger != nil && logger.logPath() != "" {
+			path = logger.logPath()
 		}
 		if task.ID == "a" {
-			return TaskResult{TaskID: task.ID, ExitCode: 3, Error: "boom", LogPath: path}
+			return taskResult{TaskID: task.ID, ExitCode: 3, Error: "boom", LogPath: path}
 		}
-		return TaskResult{TaskID: task.ID, ExitCode: 0, Message: task.Task, LogPath: path}
+		return taskResult{TaskID: task.ID, ExitCode: 0, Message: task.Task, LogPath: path}
 	}
 	t.Cleanup(func() { runCodexTaskFn = origRun })
 
@@ -540,8 +535,12 @@ func TestRunNonParallelOutputsIncludeLogPathsIntegration(t *testing.T) {
 	stdinReader = strings.NewReader("")
 	isTerminalFn = func() bool { return true }
 	codexCommand = "echo"
-	buildCodexArgsFn = func(cfg *Config, targetArg string) []string {
-		return []string{`{"type":"thread.started","thread_id":"integration-session"}` + "\n" + `{"type":"item.completed","item":{"type":"agent_message","text":"done"}}`}
+	buildCodexArgsFn = func(cfg *config, targetArg string) []string {
+		return []string{
+			`{"type":"thread.started","thread_id":"integration-session"}` + "\n" +
+				"{\"type\":\"item.completed\",\"item\":{\"type\":\"agent_message\",\"text\":\"done\"" +
+				"}}",
+		}
 	}
 
 	var exitCode int
@@ -580,12 +579,12 @@ func TestRunParallelPartialFailureBlocksDependents(t *testing.T) {
 		return filepath.Join(tempDir, fmt.Sprintf("%s.log", id))
 	}
 
-	runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
+	runCodexTaskFn = func(task taskSpec, timeout int) taskResult {
 		path := logPathFor(task.ID)
 		if task.ID == "A" {
-			return TaskResult{TaskID: "A", ExitCode: 2, Error: "boom", LogPath: path}
+			return taskResult{TaskID: "A", ExitCode: 2, Error: "boom", LogPath: path}
 		}
-		return TaskResult{TaskID: task.ID, ExitCode: 0, Message: task.Task, LogPath: path}
+		return taskResult{TaskID: task.ID, ExitCode: 0, Message: task.Task, LogPath: path}
 	}
 
 	input := `---TASK---
@@ -666,17 +665,21 @@ func TestRunParallelTimeoutPropagation(t *testing.T) {
 		func() {
 			runCodexTaskFn = origRun
 			resetTestHooks()
-			os.Unsetenv("CODEX_TIMEOUT")
+			if err := os.Unsetenv("CODEX_TIMEOUT"); err != nil {
+				t.Errorf("I/O operation failed: %v", err)
+			}
 		},
 	)
 
 	var receivedTimeout int
-	runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
+	runCodexTaskFn = func(task taskSpec, timeout int) taskResult {
 		receivedTimeout = timeout
-		return TaskResult{TaskID: task.ID, ExitCode: 124, Error: "timeout"}
+		return taskResult{TaskID: task.ID, ExitCode: 124, Error: "timeout"}
 	}
 
-	os.Setenv("CODEX_TIMEOUT", "1")
+	if err := os.Setenv("CODEX_TIMEOUT", "1"); err != nil {
+		t.Errorf("I/O operation failed: %v", err)
+	}
 	input := `---TASK---
 id: T
 ---CONTENT---
@@ -719,9 +722,9 @@ func TestRunConcurrentSpeedupBenchmark(t *testing.T) {
 	)
 
 	var maxParallel int64
-	var current int64
-	runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
-		cur := atomic.AddInt64(&current, 1)
+	var current atomic.Int64
+	runCodexTaskFn = func(task taskSpec, timeout int) taskResult {
+		cur := current.Add(1)
 		for {
 			prev := atomic.LoadInt64(&maxParallel)
 			if cur <= prev || atomic.CompareAndSwapInt64(&maxParallel, prev, cur) {
@@ -729,15 +732,15 @@ func TestRunConcurrentSpeedupBenchmark(t *testing.T) {
 			}
 		}
 		time.Sleep(50 * time.Millisecond)
-		atomic.AddInt64(&current, -1)
-		return TaskResult{TaskID: task.ID}
+		current.Add(-1)
+		return taskResult{TaskID: task.ID}
 	}
 
-	tasks := make([]TaskSpec, 10)
+	tasks := make([]taskSpec, 10)
 	for i := range tasks {
-		tasks[i] = TaskSpec{ID: fmt.Sprintf("task-%d", i)}
+		tasks[i] = taskSpec{ID: fmt.Sprintf("task-%d", i)}
 	}
-	layers := [][]TaskSpec{tasks}
+	layers := [][]taskSpec{tasks}
 
 	serialStart := time.Now()
 	for _, task := range tasks {
@@ -816,7 +819,7 @@ func TestRunStartupCleanupConcurrentWrappers(t *testing.T) {
 	tempDir := setTempDirEnv(t, t.TempDir())
 
 	const totalLogs = 40
-	for i := 0; i < totalLogs; i++ {
+	for i := range totalLogs {
 		createTempLog(t, tempDir, fmt.Sprintf("codex-wrapper-%d.log", 9000+i))
 	}
 
@@ -831,13 +834,13 @@ func TestRunStartupCleanupConcurrentWrappers(t *testing.T) {
 	const instances = 5
 	start := make(chan struct{})
 
-	for i := 0; i < instances; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			<-start
-			runStartupCleanup()
-		}()
+	for range instances {
+		wg.Go(
+			func() {
+				<-start
+				runStartupCleanup()
+			},
+		)
 	}
 
 	close(start)
@@ -933,9 +936,9 @@ func TestRunCleanupFlagEndToEnd_FailureDoesNotAffectStartup(t *testing.T) {
 	tempDir := setTempDirEnv(t, t.TempDir())
 
 	calls := 0
-	cleanupLogsFn = func() (CleanupStats, error) {
+	cleanupLogsFn = func() (cleanupStats, error) {
 		calls++
-		return CleanupStats{Scanned: 1}, fmt.Errorf("permission denied")
+		return cleanupStats{Scanned: 1}, fmt.Errorf("permission denied")
 	}
 
 	os.Args = []string{"codex-wrapper", "--cleanup"}
@@ -964,8 +967,8 @@ func TestRunCleanupFlagEndToEnd_FailureDoesNotAffectStartup(t *testing.T) {
 		t.Fatalf("stat(%s) unexpected error: %v", currentLog, err)
 	}
 
-	cleanupLogsFn = func() (CleanupStats, error) {
-		return CleanupStats{}, nil
+	cleanupLogsFn = func() (cleanupStats, error) {
+		return cleanupStats{}, nil
 	}
 	codexCommand = createFakeCodexScript(t, "tid-cleanup-e2e", "ok")
 	stdinReader = strings.NewReader("")

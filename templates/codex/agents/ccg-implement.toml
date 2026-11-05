@@ -23,7 +23,10 @@ Read `<ccg-injected-context>` before the dispatch. Apply sources in this order:
 4. The approved plan in `<ccg-task-context>`
 5. Prior summaries or inference
 
-The dispatch must include the active task ID and revision. Compare them with `<ccg-active-task>`. Stop and report a mismatch. If a dispatch step or plan conflicts with a linked spec section or task contract, stop and report the exact source, field, stale value, and authoritative value. Do not scan `.ccg/spec/` or infer additional requirements from similar names.
+The dispatch must include the active task ID and revision. Compare them with `<ccg-active-task>`. Stop and
+report a mismatch. If a dispatch step or plan conflicts with a linked spec section or task contract, stop and
+report the exact source, field, stale value, and authoritative value. Do not scan `.ccg/spec/` or infer
+additional requirements from similar names.
 
 ## Execution
 

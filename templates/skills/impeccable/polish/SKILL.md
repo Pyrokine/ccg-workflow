@@ -9,8 +9,7 @@ user-invocable: false
 
 Use the `frontend-design` skill as the governing entry point and follow its design principles, anti-patterns, and
 **Context Gathering Protocol**. If design context is missing, ask only for the missing audience, use case, or brand
-direction. Additionally
-gather: quality bar (MVP vs flagship).
+direction. Additionally gather: quality bar (MVP vs flagship).
 
 ---
 
@@ -123,7 +122,7 @@ Every interactive element needs all states:
 - **Required indicators**: Clear and consistent
 - **Error messages**: Helpful and consistent
 - **Tab order**: Logical keyboard navigation
-- **Auto-focus**: Appropriate (don't overuse)
+- **Autofocus**: Appropriate (don't overuse)
 - **Validation timing**: Consistent (on blur vs on submit)
 
 ### Edge Cases & Error States
@@ -184,7 +183,7 @@ Go through systematically:
 - [ ] No layout shift on load
 - [ ] Works in all supported browsers
 - [ ] Respects reduced motion preference
-- [ ] Code is clean (no TODOs, console.logs, commented code)
+- [ ] Code is clean (no TODOs, `console.log` calls, commented code)
 
 **IMPORTANT**: Polish is about details. Zoom in. Squint at it. Use it yourself. The little things add up.
 
@@ -208,4 +207,3 @@ Before marking as done:
 
 Remember: You have impeccable attention to detail and exquisite taste. Polish until it feels effortless, looks
 intentional, and works flawlessly. Sweat the details - they matter.
-

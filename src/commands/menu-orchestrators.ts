@@ -20,15 +20,21 @@ export async function handleDshPlugin(): Promise<void> {
   console.log()
 
   const profiles = await findDshProfiles(dshHome)
-  if (!showDshProfiles(dshHome, profiles, isZh)) return
+  if (!showDshProfiles(dshHome, profiles, isZh)) {
+    return
+  }
   const action = await promptDshAction(isZh)
 
-  if (action === 'back') return
+  if (action === 'back') {
+    return
+  }
 
   let chosen: string[] | undefined
   if (action === 'pick') {
     const picked = await pickDshProfiles(profiles, isZh)
-    if (!picked?.length) return
+    if (!picked?.length) {
+      return
+    }
     chosen = picked
   }
 
@@ -47,7 +53,9 @@ export async function handleCodexMode(): Promise<void> {
   console.log()
   const action = await promptCodexAction(isZh)
 
-  if (action === 'back') return
+  if (action === 'back') {
+    return
+  }
 
   if (action === 'uninstall') {
     await removeCodexMode(isZh)
@@ -55,7 +63,9 @@ export async function handleCodexMode(): Promise<void> {
   }
   const confirm = await confirmCodexInstall(isZh)
 
-  if (!confirm) return
+  if (!confirm) {
+    return
+  }
   await installCodexFromMenu(isZh)
 }
 
@@ -154,7 +164,9 @@ function showDshResult(
     }
   } else {
     spinner.fail(isZh ? '操作失败' : 'Operation failed')
-    if (result.message) console.log(ansis.red(`  ${result.message}`))
+    if (result.message) {
+      console.log(ansis.red(`  ${result.message}`))
+    }
   }
 
   for (const warning of result.warnings) {
@@ -254,7 +266,11 @@ function dshProgressMessage(uninstalling: boolean, isZh: boolean): string {
 }
 
 function showCodexFiles(files: string[], mark: string): void {
-  if (!files.length) return
+  if (!files.length) {
+    return
+  }
   console.log()
-  for (const file of files) console.log(`  ${mark} ${file}`)
+  for (const file of files) {
+    console.log(`  ${mark} ${file}`)
+  }
 }

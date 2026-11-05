@@ -1,5 +1,7 @@
 # Typography
 
+Font-loading examples use placeholder asset paths; provide `font.woff2` in the target project.
+
 ## Classic Typography Principles
 
 ### Vertical Rhythm
@@ -82,10 +84,10 @@ The layout shift problem: fonts load late, text reflows, and users see content j
 @font-face {
   font-family: 'CustomFont-Fallback';
   src: local('Arial');
-  size-adjust: 105%;        /* Scale to match x-height */
-  ascent-override: 90%;     /* Match ascender height */
-  descent-override: 20%;    /* Match descender depth */
-  line-gap-override: 10%;   /* Match line spacing */
+  size-adjust: 105%; /* Scale to match x-height */
+  ascent-override: 90%; /* Match ascender height */
+  descent-override: 20%; /* Match descender depth */
+  line-gap-override: 10%; /* Match line spacing */
 }
 
 body {
@@ -117,19 +119,29 @@ Most developers don't know these exist. Use them for polish:
 
 ```css
 /* Tabular numbers for data alignment */
-.data-table { font-variant-numeric: tabular-nums; }
+.data-table {
+  font-variant-numeric: tabular-nums;
+}
 
 /* Proper fractions */
-.recipe-amount { font-variant-numeric: diagonal-fractions; }
+.recipe-amount {
+  font-variant-numeric: diagonal-fractions;
+}
 
 /* Small caps for abbreviations */
-abbr { font-variant-caps: all-small-caps; }
+abbr {
+  font-variant-caps: all-small-caps;
+}
 
 /* Disable ligatures in code */
-code { font-variant-ligatures: none; }
+code {
+  font-variant-ligatures: none;
+}
 
 /* Enable kerning (usually on by default, but be explicit) */
-body { font-kerning: normal; }
+body {
+  font-kerning: normal;
+}
 ```
 
 Check what features your font supports at [Wakamai Fondue](https://wakamaifondue.com/).

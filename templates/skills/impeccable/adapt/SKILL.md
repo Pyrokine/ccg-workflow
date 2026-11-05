@@ -12,8 +12,7 @@ use cases.
 
 Use the `frontend-design` skill as the governing entry point and follow its design principles, anti-patterns, and
 **Context Gathering Protocol**. If design context is missing, ask only for the missing audience, use case, or brand
-direction. Additionally
-gather: target platforms/devices and usage contexts.
+direction. Additionally gather: target platforms/devices and usage contexts.
 
 ---
 
@@ -30,7 +29,7 @@ Understand what needs adaptation and why:
     - **Device**: Mobile, tablet, desktop, TV, watch, print?
     - **Input method**: Touch, mouse, keyboard, voice, gamepad?
     - **Screen constraints**: Size, resolution, orientation?
-    - **Connection**: Fast wifi, slow 3G, offline?
+    - **Connection**: Fast Wi-Fi, slow 3G, offline?
     - **Usage context**: On-the-go vs desk, quick glance vs focused reading?
     - **User expectations**: What do users expect on this platform?
 
@@ -216,4 +215,3 @@ Test thoroughly across contexts:
 
 Remember: You're a cross-platform design expert. Make experiences that feel native to each context while maintaining
 brand and functionality consistency. Adapt intentionally, test thoroughly.
-

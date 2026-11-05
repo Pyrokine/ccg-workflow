@@ -2,17 +2,17 @@ import { spawnSync } from 'node:child_process'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
+import type { Analyze } from './language-checks-fixtures'
 import {
-  loadModule,
-  root,
   distributions,
-  limits,
-  fixture,
-  write,
   fakeExecutable,
   files,
+  fixture,
+  limits,
+  loadModule,
+  root,
+  write,
 } from './language-checks-fixtures'
-import type { Analyze } from './language-checks-fixtures'
 
 describe.each(distributions)('%s language tool execution', (distribution) => {
   const { runLanguageChecks } = loadModule(join(root, distribution, 'lib/language-checks.js')) as {
@@ -21,7 +21,9 @@ describe.each(distributions)('%s language tool execution', (distribution) => {
 
   it('uses existing Ruff project rules without cache or source writes', ({ skip }) => {
     const available = spawnSync('ruff', ['--version'], { encoding: 'utf8' })
-    if (available.error) return skip()
+    if (available.error) {
+      return skip()
+    }
     const directory = fixture()
     write(directory, 'ruff.toml', 'lint.select = ["F821"]\n')
     const source = write(directory, 'source file.py', 'print(undefined_name)\n')
@@ -55,16 +57,19 @@ describe.each(distributions)('%s language tool execution', (distribution) => {
       .split('\n')
       .map((line) => JSON.parse(line) as string[])
     expect(calls).toHaveLength(2)
-    for (const args of calls)
+    for (const args of calls) {
       expect(args.slice(args.indexOf('--target-version'), args.indexOf('--target-version') + 2)).toEqual([
         '--target-version',
         'py38',
       ])
+    }
   })
 
   it('reports Ruff exclusions and configuration failure', ({ skip }) => {
     const available = spawnSync('ruff', ['--version'], { encoding: 'utf8' })
-    if (available.error) return skip()
+    if (available.error) {
+      return skip()
+    }
     const directory = fixture()
     write(directory, 'ruff.toml', 'exclude = ["ignored.py"]\n')
     const clean = write(directory, 'clean.py', 'answer = 42\n')
@@ -181,9 +186,11 @@ describe.each(distributions)('%s language tool execution', (distribution) => {
       )
       const result = runLanguageChecks([source], limits)
       expect(result.checks[0].status).toBe(['error', 'warnings-as-errors'].includes(failure) ? 'failed' : 'unavailable')
-      if (failure === 'error' || failure === 'warnings-as-errors')
+      if (failure === 'error' || failure === 'warnings-as-errors') {
         expect(result.issues[0]).toMatchObject({ severity: 'error', rule_id: 'fixture-check' })
-      else expect(result.issues).toEqual([])
+      } else {
+        expect(result.issues).toEqual([])
+      }
       expect(JSON.stringify(result)).not.toContain('synthetic_credential')
     }
   )

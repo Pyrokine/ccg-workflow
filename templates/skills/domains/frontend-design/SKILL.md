@@ -59,11 +59,10 @@ both work — the key is intentionality, not intensity.
 
 Choose fonts that are beautiful, unique, and interesting. Pair a distinctive display font with a refined body font.
 
-**DO**: Use a modular type scale with fluid sizing (clamp) for display text; fixed rem scales for app UIs
-**DO**: Vary font weights and sizes to create clear visual hierarchy
-**DON'T**: Use overused fonts — Inter, Roboto, Arial, Open Sans, system defaults
-**DON'T**: Use monospace typography as lazy shorthand for "technical/developer" vibes
-**DON'T**: Put large icons with rounded corners above every heading — they rarely add value
+**DO**: Use a modular type scale with fluid sizing (clamp) for display text; fixed rem scales for app UIs **DO**: Vary
+font weights and sizes to create clear visual hierarchy **DON'T**: Use overused fonts — Inter, Roboto, Arial, Open Sans,
+system defaults **DON'T**: Use monospace typography as lazy shorthand for "technical/developer" vibes **DON'T**: Put
+large icons with rounded corners above every heading — they rarely add value
 
 ### Color & Theme
 
@@ -71,71 +70,62 @@ Choose fonts that are beautiful, unique, and interesting. Pair a distinctive dis
 
 Commit to a cohesive palette. Dominant colors with sharp accents outperform timid, evenly-distributed palettes.
 
-**DO**: Use OKLCH (not HSL) for perceptually uniform, maintainable palettes
-**DO**: Tint your neutrals toward your brand hue — even a subtle hint creates subconscious cohesion
-**DON'T**: Use gray text on colored backgrounds — use a shade of the background color instead
-**DON'T**: Use pure black (#000) or pure white (#fff) — always tint
-**DON'T**: Use the AI color palette: cyan-on-dark, purple-to-blue gradients, neon accents on dark backgrounds
-**DON'T**: Use gradient text for "impact" — it's decorative rather than meaningful
-**DON'T**: Default to dark mode with glowing accents
+**DO**: Use OKLCH (not HSL) for perceptually uniform, maintainable palettes **DO**: Tint your neutrals toward your brand
+hue — even a subtle hint creates subconscious cohesion **DON'T**: Use gray text on colored backgrounds — use a shade of
+the background color instead **DON'T**: Use pure black (#000) or pure white (#fff) — always tint **DON'T**: Use the AI
+color palette: cyan-on-dark, purple-to-blue gradients, neon accents on dark backgrounds **DON'T**: Use gradient text for
+"impact" — it's decorative rather than meaningful **DON'T**: Default to dark mode with glowing accents
 
 ### Layout & Space
 
 > _Consult [spatial reference](reference/spatial-design.md) for grids, rhythm, and container queries._
 
-**DO**: Create visual rhythm through varied spacing — tight groupings, generous separations
-**DO**: Use fluid spacing with clamp() that breathes on larger screens
-**DO**: Use asymmetry and unexpected compositions; break the grid intentionally
-**DON'T**: Wrap everything in cards — not everything needs a container
-**DON'T**: Nest cards inside cards — flatten the hierarchy
-**DON'T**: Use identical card grids — same-sized cards with icon + heading + text, repeated endlessly
-**DON'T**: Center everything — left-aligned text with asymmetric layouts feels more designed
-**DON'T**: Use the same spacing everywhere — without rhythm, layouts feel monotonous
+**DO**: Create visual rhythm through varied spacing — tight groupings, generous separations **DO**: Use fluid spacing
+with clamp () that breathes on larger screens **DO**: Use asymmetry and unexpected compositions; break the grid
+intentionally **DON'T**: Wrap everything in cards — not everything needs a container **DON'T**: Nest cards inside cards
+— flatten the hierarchy **DON'T**: Use identical card grids — same-sized cards with icon + heading + text, repeated
+endlessly **DON'T**: Center everything — left-aligned text with asymmetric layouts feels more designed **DON'T**: Use
+the same spacing everywhere — without rhythm, layouts feel monotonous
 
 ### Visual Details
 
-**DO**: Use intentional, purposeful decorative elements that reinforce brand
-**DON'T**: Use glassmorphism everywhere — blur effects used decoratively rather than purposefully
-**DON'T**: Use rounded elements with thick colored border on one side — a lazy accent
-**DON'T**: Use sparklines as decoration — tiny charts that convey nothing meaningful
-**DON'T**: Use rounded rectangles with generic drop shadows — safe, forgettable
-**DON'T**: Use modals unless there's truly no better alternative
+**DO**: Use intentional, purposeful decorative elements that reinforce brand **DON'T**: Use glassmorphism everywhere —
+blur effects used decoratively rather than purposefully **DON'T**: Use rounded elements with thick colored border on one
+side — a lazy accent **DON'T**: Use sparklines as decoration — tiny charts that convey nothing meaningful **DON'T**: Use
+rounded rectangles with generic drop shadows — safe, forgettable **DON'T**: Use modals unless there's truly no better
+alternative
 
 ### Motion
 
 > _Consult [motion reference](reference/motion-design.md) for timing, easing, and reduced motion._
 
-**DO**: Use motion to convey state changes — entrances, exits, feedback
-**DO**: Use exponential easing (ease-out-quart/quint/expo) for natural deceleration
-**DO**: For height animations, use grid-template-rows transitions
-**DON'T**: Animate layout properties (width, height, padding, margin) — use transform and opacity only
-**DON'T**: Use bounce or elastic easing — they feel dated and tacky
+**DO**: Use motion to convey state changes — entrances, exits, feedback **DO**: Use exponential easing
+(ease-out-quart/quint/expo) for natural deceleration **DO**: For height animations, use grid-template-rows transitions
+**DON'T**: Animate layout properties (width, height, padding, margin) — use transform and opacity only **DON'T**: Use
+bounce or elastic easing — they feel dated and tacky
 
 ### Interaction
 
 > _Consult [interaction reference](reference/interaction-design.md) for forms, focus, and loading patterns._
 
-**DO**: Use progressive disclosure — start simple, reveal sophistication through interaction
-**DO**: Design empty states that teach the interface, not just say "nothing here"
-**DO**: Make every interactive surface feel intentional and responsive
-**DON'T**: Repeat the same information — redundant headers, intros that restate the heading
-**DON'T**: Make every button primary — hierarchy matters
+**DO**: Use progressive disclosure — start simple, reveal sophistication through interaction **DO**: Design empty states
+that teach the interface, not just say "nothing here" **DO**: Make every interactive surface feel intentional and
+responsive **DON'T**: Repeat the same information — redundant headers, intros that restate the heading **DON'T**: Make
+every button primary — hierarchy matters
 
 ### Responsive
 
 > _Consult [responsive reference](reference/responsive-design.md) for mobile-first, fluid design, and container
 > queries._
 
-**DO**: Use container queries (@container) for component-level responsiveness
-**DO**: Adapt the interface for different contexts — don't just shrink it
-**DON'T**: Hide critical functionality on mobile — adapt, don't amputate
+**DO**: Use container queries (@container) for component-level responsiveness **DO**: Adapt the interface for different
+contexts — don't just shrink it **DON'T**: Hide critical functionality on mobile — adapt, don't amputate
 
 ### UX Writing
 
 > _Consult [ux-writing reference](reference/ux-writing.md) for labels, errors, and empty states._
 
-**DO**: Make every word earn its place
-**DON'T**: Repeat information users can already see
+**DO**: Make every word earn its place **DON'T**: Repeat information users can already see
 
 ---
 
@@ -155,7 +145,7 @@ Review the DON'T guidelines above — they are the fingerprints of AI-generated 
 Deep-dive reference documents for each design dimension:
 
 | Reference                                             | Covers                                                                          |
-| ----------------------------------------------------- | ------------------------------------------------------------------------------- |
+|-------------------------------------------------------|---------------------------------------------------------------------------------|
 | [typography](reference/typography.md)                 | Type systems, font pairing, modular scales, OpenType, web font loading          |
 | [color-and-contrast](reference/color-and-contrast.md) | OKLCH, tinted neutrals, dark mode, accessibility, 60-30-10                      |
 | [spatial-design](reference/spatial-design.md)         | 4pt spacing, grids, visual hierarchy, container queries, optical adjustments    |
@@ -167,7 +157,7 @@ Deep-dive reference documents for each design dimension:
 ## Extended Knowledge (Original)
 
 | Topic                | Document                                       | Covers                                                                      |
-| -------------------- | ---------------------------------------------- | --------------------------------------------------------------------------- |
+|----------------------|------------------------------------------------|-----------------------------------------------------------------------------|
 | UI Aesthetics        | [ui-aesthetics.md](ui-aesthetics.md)           | HSL color tokens, 8px grid CSS snippets, shadow scales, dark mode CSS       |
 | Component Patterns   | [component-patterns.md](component-patterns.md) | CSS Grid/Flexbox layouts, responsive nav, glass card, Framer Motion         |
 | UX Principles        | [ux-principles.md](ux-principles.md)           | Nielsen 10 heuristics, WCAG, ARIA, keyboard, loading patterns               |
@@ -179,7 +169,7 @@ Deep-dive reference documents for each design dimension:
 Specific style variant specs with CSS tokens and component patterns:
 
 | Style         | Document                                         | Aesthetic                                                            |
-| ------------- | ------------------------------------------------ | -------------------------------------------------------------------- |
+|---------------|--------------------------------------------------|----------------------------------------------------------------------|
 | Claymorphism  | [claymorphism/SKILL.md](claymorphism/SKILL.md)   | Soft clay, large radii, dual inner shadows, offset outer shadows     |
 | Glassmorphism | [glassmorphism/SKILL.md](glassmorphism/SKILL.md) | Frosted glass, backdrop-filter, translucency, blur layers            |
 | Neubrutalism  | [neubrutalism/SKILL.md](neubrutalism/SKILL.md)   | Thick borders, offset solid shadows, high saturation, minimal radius |
@@ -195,7 +185,7 @@ standalone slash commands.
 ### Quality and audit
 
 | Playbook           | What it does                                                                                   |
-| ------------------ | ---------------------------------------------------------------------------------------------- |
+|--------------------|------------------------------------------------------------------------------------------------|
 | `audit`            | Technical quality checks (a11y, performance, responsive, theming, anti-patterns) — scored 0-20 |
 | `critique`         | UX design review with Nielsen heuristics scoring (0-40), persona testing, cognitive load       |
 | `teach-impeccable` | Gather reusable design context and save it to `.impeccable.md`                                 |
@@ -203,7 +193,7 @@ standalone slash commands.
 ### Fix and align
 
 | Playbook    | What it does                                      |
-| ----------- | ------------------------------------------------- |
+|-------------|---------------------------------------------------|
 | `normalize` | Align with design system standards                |
 | `polish`    | Final pass before shipping — 20-item checklist    |
 | `distill`   | Strip to essence, remove unnecessary complexity   |
@@ -214,7 +204,7 @@ standalone slash commands.
 ### Style and expression
 
 | Playbook   | What it does                                            |
-| ---------- | ------------------------------------------------------- |
+|------------|---------------------------------------------------------|
 | `animate`  | Add purposeful motion and micro-interactions            |
 | `colorize` | Introduce strategic color to monochromatic designs      |
 | `bolder`   | Amplify boring designs with distinctive impact          |
@@ -224,7 +214,7 @@ standalone slash commands.
 ### Structure and components
 
 | Playbook    | What it does                                                        |
-| ----------- | ------------------------------------------------------------------- |
+|-------------|---------------------------------------------------------------------|
 | `extract`   | Pull into reusable components and design tokens                     |
 | `adapt`     | Adapt for different devices and contexts                            |
 | `onboard`   | Design onboarding flows and empty states                            |

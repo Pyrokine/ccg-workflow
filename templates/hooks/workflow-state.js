@@ -30,7 +30,9 @@ function isWrapperCall(input) {
 
 function isBackgroundLaunch(input) {
   const toolInput = input.tool_input || {};
-  if (toolInput.run_in_background === true) return true;
+  if (toolInput.run_in_background === true) {
+    return true;
+  }
 
   const response = input.tool_response;
   if (typeof response === 'string') {
@@ -38,9 +40,15 @@ function isBackgroundLaunch(input) {
       response
     );
   }
-  if (!response || typeof response !== 'object' || Array.isArray(response)) return false;
-  if (response.isAsync === true || response.background === true) return true;
-  if (['pending', 'running'].includes(String(response.status || '').toLowerCase())) return true;
+  if (!response || typeof response !== 'object' || Array.isArray(response)) {
+    return false;
+  }
+  if (response.isAsync === true || response.background === true) {
+    return true;
+  }
+  if (['pending', 'running'].includes(String(response.status || '').toLowerCase())) {
+    return true;
+  }
 
   const idKeys = ['task_id', 'taskId', 'agent_id', 'agentId', 'backgroundTaskId'];
   const hasTaskId = idKeys.some((key) => typeof response[key] === 'string' && response[key].trim());
@@ -52,11 +60,21 @@ function isBackgroundLaunch(input) {
 }
 
 function shouldRefresh(input, eventName) {
-  if (eventName === 'UserPromptSubmit') return true;
-  if (eventName === 'PostToolUseFailure') return input.tool_name === 'Agent' || isWrapperCall(input);
-  if (eventName !== 'PostToolUse') return false;
-  if (input.tool_name === 'TaskOutput') return true;
-  if (input.tool_name !== 'Agent' && !isWrapperCall(input)) return false;
+  if (eventName === 'UserPromptSubmit') {
+    return true;
+  }
+  if (eventName === 'PostToolUseFailure') {
+    return input.tool_name === 'Agent' || isWrapperCall(input);
+  }
+  if (eventName !== 'PostToolUse') {
+    return false;
+  }
+  if (input.tool_name === 'TaskOutput') {
+    return true;
+  }
+  if (input.tool_name !== 'Agent' && !isWrapperCall(input)) {
+    return false;
+  }
   return !isBackgroundLaunch(input);
 }
 
@@ -64,15 +82,21 @@ function main() {
   const input = readHookInput();
   const requestedEvent = typeof input.hook_event_name === 'string' ? input.hook_event_name : 'UserPromptSubmit';
   outputEventName = SUPPORTED_EVENTS.has(requestedEvent) ? requestedEvent : 'UserPromptSubmit';
-  if (!shouldRefresh(input, outputEventName)) return;
+  if (!shouldRefresh(input, outputEventName)) {
+    return;
+  }
 
   const cwd = input.cwd || process.env.CLAUDE_PROJECT_DIR || process.cwd();
   const root = findProjectRoot(cwd);
-  if (!root) return;
+  if (!root) {
+    return;
+  }
 
   const sessionKey = deriveSessionKey('claude', input.session_id);
   const snapshot = buildTaskSnapshot(root, { mode: 'authority', role: 'all', sessionKey });
-  if (snapshot.resolution.kind === 'none') return;
+  if (snapshot.resolution.kind === 'none') {
+    return;
+  }
 
   const context = renderTaskSnapshot(snapshot, 'authority', 'all', AUTHORITY_CONTEXT_LIMIT);
 

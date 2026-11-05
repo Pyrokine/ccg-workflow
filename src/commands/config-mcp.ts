@@ -1,6 +1,5 @@
 import ansis from 'ansis'
 import inquirer from 'inquirer'
-import { writeGrokPromptToRules } from './grok-search'
 import {
   installAceTool,
   installAceToolRs,
@@ -15,6 +14,7 @@ import {
   uninstallMcpServer,
   writeFastContextPrompt,
 } from '../utils/installer'
+import { writeGrokPromptToRules } from './grok-search'
 
 /**
  * Sync MCP mirrors to Codex after any install/uninstall.
@@ -25,7 +25,9 @@ async function syncMcpMirrors(): Promise<void> {
   if (codex.success && codex.synced.length > 0) {
     console.log(ansis.green(`✓ MCP 已同步到 Codex(${codex.synced.join(',')})`))
   }
-  if (!codex.success) console.log(ansis.yellow(`⚠ Codex 同步失败: ${codex.message}`))
+  if (!codex.success) {
+    console.log(ansis.yellow(`⚠ Codex 同步失败: ${codex.message}`))
+  }
 }
 
 /**
@@ -61,7 +63,9 @@ export async function configMcp(): Promise<void> {
     },
   ])
 
-  if (action === 'cancel') return
+  if (action === 'cancel') {
+    return
+  }
 
   if (action === 'code-retrieval') {
     await handleCodeRetrieval()
@@ -99,7 +103,9 @@ async function handleCodeRetrieval(): Promise<void> {
     },
   ])
 
-  if (tool === 'cancel') return
+  if (tool === 'cancel') {
+    return
+  }
 
   if (tool === 'contextweaver') {
     await handleInstallContextWeaver()
@@ -419,9 +425,17 @@ async function handleUninstall(): Promise<void> {
 
 function grokSearchEnv(answers: Record<string, string | undefined>): Record<string, string> {
   const env: Record<string, string> = {}
-  if (answers.grokApiUrl?.trim()) env.GROK_API_URL = answers.grokApiUrl.trim()
-  if (answers.grokApiKey?.trim()) env.GROK_API_KEY = answers.grokApiKey.trim()
-  if (answers.tavilyKey?.trim()) env.TAVILY_API_KEY = answers.tavilyKey.trim()
-  if (answers.firecrawlKey?.trim()) env.FIRECRAWL_API_KEY = answers.firecrawlKey.trim()
+  if (answers.grokApiUrl?.trim()) {
+    env.GROK_API_URL = answers.grokApiUrl.trim()
+  }
+  if (answers.grokApiKey?.trim()) {
+    env.GROK_API_KEY = answers.grokApiKey.trim()
+  }
+  if (answers.tavilyKey?.trim()) {
+    env.TAVILY_API_KEY = answers.tavilyKey.trim()
+  }
+  if (answers.firecrawlKey?.trim()) {
+    env.FIRECRAWL_API_KEY = answers.firecrawlKey.trim()
+  }
   return env
 }

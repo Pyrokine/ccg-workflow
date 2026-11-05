@@ -51,8 +51,8 @@ Space is a design material — use it with intention.
 
 ## Plan Layout Improvements
 
-Consult the [spatial design reference](reference/spatial-design.md) from the frontend-design skill for detailed guidance
-on grids, rhythm, and container queries.
+Consult the [spatial design reference](../../domains/frontend-design/reference/spatial-design.md) from the
+frontend-design skill for detailed guidance on grids, rhythm, and container queries.
 
 Create a systematic plan:
 

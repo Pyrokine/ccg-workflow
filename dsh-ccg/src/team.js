@@ -7,13 +7,13 @@
  * they finish. That is what CCG's `/ccg:team` does on Claude Code, and it is
  * the only one of the three that a one-shot delegation genuinely cannot fake —
  * a one-shot child answers once and is gone, so nothing can be handed to it
- * afterwards and nothing can arrive from it unasked.
+ * afterward and nothing can arrive from it unasked.
  *
  * The harness already owns every primitive this needs: continuable starts (rc)
  * or activations (alpha) keep a child resident, `send_message` opens its next
  * turn, reports or completion notifications carry its answer home,
  * `interrupt_agent` stops a turn that went wrong, `list_agents`
- * shows who is alive. What was missing is a way to hire one of those children
+ * shows who is alive. The hiring tool starts one of those children
  * AS A CCG ROLE — with that role's persona, that role's model, and the file
  * ownership that makes several of them safe to run at once. That is this file.
  *
@@ -23,20 +23,13 @@
  * answer, or a colleague?
  */
 
-import { defineTool } from '@deepseek-ai/dsh-tools'
+import { defineTool } from '@deepseek-ai/dsh-tools';
 
-import { ROLES, ROLE_NAMES } from './roles.js'
-import { startTeammate, usesActivations } from './subagent.js'
-import {
-  collisionsWith,
-  describeCollisions,
-  normaliseOwns,
-  rosterOf,
-  sweepStale,
-} from './memory.js'
+import { startTeammate, usesActivations } from './subagent.js';
+import { collisionsWith, describeCollisions, normaliseOwns, rosterOf, sweepStale } from './memory.js';
 
 /** Default tool name for hiring. */
-export const TEAM_TOOL = 'ccg_team'
+export const TEAM_TOOL = 'ccg_team';
 
 /**
  * What every teammate is told on top of its role persona.
@@ -52,7 +45,7 @@ const TEAM_FRAMING = [
   'How your turns work:',
   '- You stay alive between assignments. The coordinator will send you more work as the',
   '  job develops, and each message is a new turn with everything you already know intact.',
-  '- You cannot see the coordinator\'s conversation, only what they wrote to you. If an',
+  "- You cannot see the coordinator's conversation, only what they wrote to you. If an",
   '  assignment leaves out something you need — a decision, a constraint, a file — ask for it',
   '  rather than inventing a plausible version of it.',
   '- Nobody sees your work unless you `report` it. Report once when an assignment is done,',
@@ -61,8 +54,8 @@ const TEAM_FRAMING = [
   '  else should do: a shared contract you had to alter, a blocker, an assumption of yours',
   '  that turned out to be wrong. A late report is worth much less than a partial one.',
   '- Say what you did not do and what you are unsure about. The coordinator is integrating',
-  '  your work with other people\'s and cannot see your reasoning.',
-].join('\n')
+  "  your work with other people's and cannot see your reasoning.",
+].join('\n');
 
 /** The ownership rule, when the coordinator assigned paths. */
 function ownershipRule(owns) {
@@ -71,7 +64,7 @@ function ownershipRule(owns) {
       'You have not been given exclusive files. Other teammates may be editing this tree at',
       'the same time, so keep your edits tightly scoped to your assignment, and if the work',
       'needs a change in shared code, `report` the need rather than making it unilaterally.',
-    ].join('\n')
+    ].join('\n');
   }
   return [
     'You own these paths, and only these:',
@@ -82,7 +75,7 @@ function ownershipRule(owns) {
     'assignment cannot be finished without a change elsewhere, `report` exactly what you need',
     'and from whom, then continue with whatever else you can do. Reading outside your paths is',
     'fine and encouraged: understand the code you are integrating with.',
-  ].join('\n')
+  ].join('\n');
 }
 
 /**
@@ -98,9 +91,11 @@ function ownershipRule(owns) {
  * @returns the child's opening user message.
  */
 export function buildTeammatePrompt(brief, context) {
-  const parts = [`First assignment:\n${brief}`]
-  if (context) parts.push(`Shared context:\n${context}`)
-  return parts.join('\n\n')
+  const parts = [`First assignment:\n${brief}`];
+  if (context) {
+    parts.push(`Shared context:\n${context}`);
+  }
+  return parts.join('\n\n');
 }
 
 /**
@@ -109,20 +104,23 @@ export function buildTeammatePrompt(brief, context) {
  *
  * @param role - resolved role entry.
  * @param owns - paths this teammate holds exclusively.
+ * @param parentId - direct parent session for activation delivery, when present.
  * @returns the persona text shadowing the deployment persona for this child.
  */
 export function buildTeammatePersona(role, owns, parentId) {
-  if (parentId === undefined) return [role.persona, TEAM_FRAMING, ownershipRule(owns)].join('\n\n')
+  if (parentId === undefined) {
+    return [role.persona, TEAM_FRAMING, ownershipRule(owns)].join('\n\n');
+  }
   const framing = TEAM_FRAMING.replace(
     /- Nobody sees your work unless you `report` it\.[\s\S]*?partial one\./,
-    '- Your final answer is delivered to the coordinator automatically when your turn ends.\n'
-    + '  Finish every assignment with a self-contained account of what you changed and how to\n'
-    + '  verify it. Send EARLIER updates the moment you learn something that changes what\n'
-    + `  someone else should do, using send_message with agent_id "${parentId}".\n`
-    + '  Include shared contract changes, blockers and assumptions that turned out to be wrong.',
-  )
-  const ownership = ownershipRule(owns).replaceAll('`report`', 'send the coordinator a message about')
-  return [role.persona, framing, ownership].join('\n\n')
+    '- Your final answer is delivered to the coordinator automatically when your turn ends.\n' +
+      '  Finish every assignment with a self-contained account of what you changed and how to\n' +
+      '  verify it. Send EARLIER updates the moment you learn something that changes what\n' +
+      `  someone else should do, using send_message with agent_id "${parentId}".\n` +
+      '  Include shared contract changes, blockers and assumptions that turned out to be wrong.'
+  );
+  const ownership = ownershipRule(owns).replaceAll('`report`', 'send the coordinator a message about');
+  return [role.persona, framing, ownership].join('\n\n');
 }
 
 /**
@@ -136,12 +134,12 @@ export function buildTeammatePersona(role, owns, parentId) {
  * @returns `{provider, model, maxTokens?}`, or undefined for the deployment default.
  */
 export function teammateRoute(role) {
-  return role.members[0]
+  return role.members[0];
 }
 
 /** Name a route for a human reader. */
 function routeLabel(route) {
-  return route === undefined ? 'deployment default model' : `${route.provider} / ${route.model}`
+  return route === undefined ? 'deployment default model' : `${route.provider} / ${route.model}`;
 }
 
 /**
@@ -161,15 +159,17 @@ export function formatHireReport(value) {
       'That is an answer, not an error. Do this part yourself, or propose a different split —',
       'fewer people, different files, or a one-shot role tool instead of a colleague. Do not',
       'retry the same hire, and do not work around it by starting the same agent another way.',
-    ].join('\n')
+    ].join('\n');
   }
   const lines = [
     `${value.role} teammate hired: ${value.childId}`,
     `Running on ${value.route}. Working on: ${value.label}`,
-  ]
-  if (value.note) lines.push(value.note)
+  ];
+  if (value.note) {
+    lines.push(value.note);
+  }
   if (Array.isArray(value.owns) && value.owns.length > 0) {
-    lines.push(`Owns exclusively: ${value.owns.join(', ')}`)
+    lines.push(`Owns exclusively: ${value.owns.join(', ')}`);
   }
   lines.push(
     '',
@@ -182,22 +182,22 @@ export function formatHireReport(value) {
     '',
     `To give them more work later: send_message(${value.childId}, ...) — it becomes their next`,
     'turn and returns no reply. To stop a turn that has gone wrong:',
-    `interrupt_agent(${value.childId}). To see who is alive: list_agents.`,
-  )
-  return lines.join('\n')
+    `interrupt_agent(${value.childId}). To see who is alive: list_agents.`
+  );
+  return lines.join('\n');
 }
 
 /** Question id, so the answer can be matched rather than assumed to be first. */
-export const HIRE_QUESTION_ID = 'ccg-hire'
+export const HIRE_QUESTION_ID = 'ccg-hire';
 
 /** The option that hires. The intent names it, so no UI infers it from order. */
-export const HIRE_APPROVE = 'Hire'
+export const HIRE_APPROVE = 'Hire';
 
 /** The option that does not. */
-export const HIRE_DECLINE = 'Not now'
+export const HIRE_DECLINE = 'Not now';
 
 /** How much of the brief the approval shows before it stops being skimmable. */
-const BRIEF_PREVIEW = 600
+const BRIEF_PREVIEW = 600;
 
 /**
  * The confirmation shown before a teammate is started.
@@ -218,22 +218,21 @@ const BRIEF_PREVIEW = 600
  * @returns the question to ask.
  */
 export function hireApprovalQuestion(spec) {
-  const owns = spec.owns ?? []
-  const brief = String(spec.brief ?? '')
+  const owns = spec.owns ?? [];
+  const brief = String(spec.brief ?? '');
   const detail = [
     `**${spec.role}** · ${spec.label}`,
     '',
-    `Runs on **${spec.route}**, stays alive across turns, and can be given more work with `
-    + '`send_message`.',
+    `Runs on **${spec.route}**, stays alive across turns, and can be given more work with ` + '`send_message`.',
     owns.length > 0
-      ? `Writes only ${owns.map((path) => `\`${path}\``).join(', ')} — while it holds them, `
-        + 'nothing else may write those, including the coordinator.'
+      ? `Writes only ${owns.map((path) => `\`${path}\``).join(', ')} — while it holds them, ` +
+        'nothing else may write those, including the coordinator.'
       : 'Holds no files exclusively. If it is going to edit anything, it should be given files.',
     '',
     'First assignment:',
     '',
     brief.length > BRIEF_PREVIEW ? `${brief.slice(0, BRIEF_PREVIEW)}…` : brief,
-  ].join('\n')
+  ].join('\n');
 
   return {
     id: HIRE_QUESTION_ID,
@@ -247,7 +246,7 @@ export function hireApprovalQuestion(spec) {
     // Presentation only — the answer encoding is identical either way, so a UI
     // that does not know this intent still returns a readable verdict.
     intent: { kind: 'plan-review', approve: HIRE_APPROVE },
-  }
+  };
 }
 
 /**
@@ -261,8 +260,8 @@ export function hireApprovalQuestion(spec) {
  * @returns whether the user approved.
  */
 export function readApproval(answer) {
-  const item = (answer?.answers ?? []).find((entry) => entry?.id === HIRE_QUESTION_ID)
-  return Array.isArray(item?.selected) && item.selected.includes(HIRE_APPROVE)
+  const item = (answer?.answers ?? []).find((entry) => entry?.id === HIRE_QUESTION_ID);
+  return Array.isArray(item?.selected) && item.selected.includes(HIRE_APPROVE);
 }
 
 /**
@@ -273,7 +272,7 @@ export function readApproval(answer) {
  * deadlock rather than a guard — the same reason a foreign ownership claim
  * warns instead of refusing.
  */
-const UNANSWERABLE = new Set(['NO_PROVIDER', 'DELEGATED_CALLER', 'CALLER_NOT_LIVE'])
+const UNANSWERABLE = new Set(['NO_PROVIDER', 'DELEGATED_CALLER', 'CALLER_NOT_LIVE']);
 
 /**
  * Ask the user whether to hire, where anyone can be asked.
@@ -281,30 +280,38 @@ const UNANSWERABLE = new Set(['NO_PROVIDER', 'DELEGATED_CALLER', 'CALLER_NOT_LIV
  * @param userQuestions - the service, when the deployment has one.
  * @param question - output of {@link hireApprovalQuestion}.
  * @param exec - `{ agent, signal }` from the tool call.
- * @returns `{ approved, note? }`; `note` explains any hire made without a
+ * @returns the approval verdict and an optional note explaining a hire without a
  * confirmation, so a gate is never bypassed silently.
  */
 export async function confirmHire(userQuestions, question, exec) {
-  if (userQuestions?.ask === undefined) return { approved: true }
+  if (userQuestions?.ask === undefined) {
+    return { approved: true };
+  }
   try {
     return {
-      approved: readApproval(await userQuestions.ask({
-        questions: [question],
-        ...(exec?.agent ? { agent: exec.agent } : {}),
-        ...(exec?.signal ? { signal: exec.signal } : {}),
-      })),
-    }
+      approved: readApproval(
+        await userQuestions.ask({
+          questions: [question],
+          ...(exec?.agent ? { agent: exec.agent } : {}),
+          ...(exec?.signal ? { signal: exec.signal } : {}),
+        })
+      ),
+    };
   } catch (error) {
-    // A cancelled turn is not a declined hire; let it end the call.
-    if (exec?.signal?.aborted) throw error
-    if (UNANSWERABLE.has(error?.code)) return { approved: true }
+    // A canceled turn is not a declined hire; let it end the call.
+    if (exec?.signal?.aborted) {
+      throw error;
+    }
+    if (UNANSWERABLE.has(error?.code)) {
+      return { approved: true };
+    }
     // The seam exists but failed. Hiring anyway keeps a UI hiccup from bricking
     // teams, but it must say so — a confirmation that quietly did not happen is
     // worse than none at all.
     return {
       approved: true,
       note: `(Hired without a confirmation: the approval could not be shown — ${error?.message ?? error})`,
-    }
+    };
   }
 }
 
@@ -316,32 +323,34 @@ export async function confirmHire(userQuestions, question, exec) {
  * @returns the tool description.
  */
 export function describeTeam(resolved) {
-  const roster = resolved
-    .map((entry) => `${entry.role} (${routeLabel(teammateRoute(entry))})`)
-    .join(', ')
-  return 'Hire a CCG specialist as a live teammate: they keep working across turns, you can '
-    + 'send them more work, and they report back on their own as they finish. Available: '
-    + `${roster}. Use it when a job has parts that can genuinely proceed at the same time and `
-    + 'each part is substantial enough to be worth a colleague — then give each teammate the '
-    + 'files it alone may write. For a single question you want answered now, use that role\'s '
-    + 'own tool instead: a teammate returns no answer through this call.'
+  const roster = resolved.map((entry) => `${entry.role} (${routeLabel(teammateRoute(entry))})`).join(', ');
+  return (
+    'Hire a CCG specialist as a live teammate: they keep working across turns, you can ' +
+    'send them more work, and they report back on their own as they finish. Available: ' +
+    `${roster}. Use it when a job has parts that can genuinely proceed at the same time and ` +
+    'each part is substantial enough to be worth a colleague — then give each teammate the ' +
+    "files it alone may write. For a single question you want answered now, use that role's " +
+    'own tool instead: a teammate returns no answer through this call.'
+  );
 }
 
 /**
  * Register the hiring tool.
  *
  * @param ctx - a context carrying `tools`, and `subagents` by the time it runs.
- * @param spec - `{ resolved, toolName?, subagentProvider?, maxDepth? }`.
+ * @param spec - resolved roles, optional tool name, subagent provider and depth cap.
  * @returns the disposer removing the tool.
  */
 export function registerTeamTool(ctx, spec) {
-  return ctx.tools.register(teamToolDefinition({
-    ...spec,
-    getSubagents: () => ctx.get('subagents'),
-    // Optional service: read lazily, because a deployment may mount it after
-    // this tool registers, and a headless one may never mount it at all.
-    getUserQuestions: spec.getUserQuestions ?? (() => ctx.get('userQuestions')),
-  }))
+  return ctx.tools.register(
+    teamToolDefinition({
+      ...spec,
+      getSubagents: () => ctx.get('subagents'),
+      // Optional service: read lazily, because a deployment may mount it after
+      // this tool registers, and a headless one may never mount it at all.
+      getUserQuestions: spec.getUserQuestions ?? (() => ctx.get('userQuestions')),
+    })
+  );
 }
 
 /**
@@ -351,27 +360,27 @@ export function registerTeamTool(ctx, spec) {
  * validates its schemas while building, and a definition that throws takes the
  * entire tool table down — so a test compiles this exact definition.
  *
- * @param spec - `{ resolved, toolName?, subagentProvider?, maxDepth?, confirm?,
- * getSubagents, getUserQuestions? }`.
+ * @param spec - resolved roles and service getters, with optional tool name,
+ * provider, depth cap and hire confirmation policy.
  * @returns the registry-ready definition.
  */
 export function teamToolDefinition(spec) {
-  const resolved = spec.resolved ?? []
-  const toolName = spec.toolName ?? TEAM_TOOL
-  const provider = spec.subagentProvider ?? 'spawn'
-  const getSubagents = spec.getSubagents ?? (() => undefined)
+  const resolved = spec.resolved ?? [];
+  const toolName = spec.toolName ?? TEAM_TOOL;
+  const provider = spec.subagentProvider ?? 'spawn';
+  const getSubagents = spec.getSubagents ?? (() => undefined);
   // Hiring asks the user first unless a deployment turns that off.
-  const confirm = spec.confirm !== false
-  const getUserQuestions = spec.getUserQuestions ?? (() => undefined)
+  const confirm = spec.confirm !== false;
+  const getUserQuestions = spec.getUserQuestions ?? (() => undefined);
   // Durable ownership. Absent in a deployment with no storage form, in which
   // case hiring still works — it just cannot check or remember who holds what.
-  const getTable = spec.getTable ?? (() => undefined)
-  const now = spec.now ?? (() => Date.now())
+  const getTable = spec.getTable ?? (() => undefined);
+  const now = spec.now ?? (() => Date.now());
   // A teammate does one scoped job; it is not the one deciding who else gets
   // hired. Without this it could start a team the user never approved.
-  const toolFilter = spec.toolFilter
-  const byRole = new Map(resolved.map((entry) => [entry.role, entry]))
-  const hirable = resolved.map((entry) => entry.role)
+  const toolFilter = spec.toolFilter;
+  const byRole = new Map(resolved.map((entry) => [entry.role, entry]));
+  const hirable = resolved.map((entry) => entry.role);
 
   return defineTool({
     name: toolName,
@@ -383,8 +392,9 @@ export function teamToolDefinition(spec) {
         // A closed enum built from the resolved matrix: a role switched off in
         // config is not offered, so the model cannot hire something absent.
         enum: hirable,
-        description: 'Which CCG specialist to hire. Each carries that role\'s expert instructions '
-          + 'and runs on the model configured for it.',
+        description:
+          "Which CCG specialist to hire. Each carries that role's expert instructions " +
+          'and runs on the model configured for it.',
       },
       description: {
         type: 'string',
@@ -395,22 +405,21 @@ export function teamToolDefinition(spec) {
         type: 'string',
         required: true,
         description:
-          'Their first assignment, self-contained. They see none of this conversation: name the '
-          + 'files, the contracts they must honour, what "done" means, and how their part fits '
-          + 'the whole — a teammate who does not know the shape of the job integrates badly.',
+          'Their first assignment, self-contained. They see none of this conversation: name the ' +
+          'files, the contracts they must honour, what "done" means, and how their part fits ' +
+          'the whole — a teammate who does not know the shape of the job integrates badly.',
       },
       context: {
         type: 'string',
-        description: 'Optional background handed to them verbatim — a spec, a diff, an error, the '
-          + 'agreed design.',
+        description: 'Optional background handed to them verbatim — a spec, a diff, an error, the ' + 'agreed design.',
       },
       owns: {
         type: 'array',
         items: { type: 'string' },
         description:
-          'The files or directories this teammate alone may write, as paths or globs. Give every '
-          + 'concurrent teammate a disjoint set: two agents editing one file lose each other\'s '
-          + 'work silently. Omit only when this teammate is the sole writer.',
+          'The files or directories this teammate alone may write, as paths or globs. Give every ' +
+          "concurrent teammate a disjoint set: two agents editing one file lose each other's " +
+          'work silently. Omit only when this teammate is the sole writer.',
       },
     },
     // The value-schema DSL, not raw JSON Schema: `additionalProperties` is
@@ -434,35 +443,39 @@ export function teamToolDefinition(spec) {
       render: (args, value) => [{ type: 'text', text: formatHireReport(value) }],
     },
     async execute(args, exec) {
-      const subagents = getSubagents()
-      if (subagents === undefined) throw new Error('ccg: the subagents service is not available')
+      const subagents = getSubagents();
+      if (subagents === undefined) {
+        throw new Error('ccg: the subagents service is not available');
+      }
       if (!usesActivations(subagents) && typeof subagents.startContinuable !== 'function') {
         throw new Error(
-          'ccg: this deployment\'s subagent service cannot keep children alive, so a team cannot '
-          + 'be hired; use the one-shot role tools instead',
-        )
+          "ccg: this deployment's subagent service cannot keep children alive, so a team cannot " +
+            'be hired; use the one-shot role tools instead'
+        );
       }
-      const parent = exec?.agent
-      if (parent === undefined) throw new Error(`ccg: ${toolName} needs an agent session`)
+      const parent = exec?.agent;
+      if (parent === undefined) {
+        throw new Error(`ccg: ${toolName} needs an agent session`);
+      }
 
-      const role = byRole.get(String(args.role ?? ''))
+      const role = byRole.get(String(args.role ?? ''));
       if (role === undefined) {
-        throw new Error(
-          `ccg: no role "${args.role}" is registered; hirable roles are ${hirable.join(', ')}`,
-        )
+        throw new Error(`ccg: no role "${args.role}" is registered; hirable roles are ${hirable.join(', ')}`);
       }
-      const brief = String(args.prompt ?? '').trim()
-      if (brief === '') throw new Error('ccg: prompt is required — a teammate needs an assignment')
+      const brief = String(args.prompt ?? '').trim();
+      if (brief === '') {
+        throw new Error('ccg: prompt is required — a teammate needs an assignment');
+      }
 
-      const context = typeof args.context === 'string' ? args.context.trim() : ''
-      const owns = normaliseOwns(args.owns)
-      const label = String(args.description ?? role.role)
-      const route = teammateRoute(role)
+      const context = typeof args.context === 'string' ? args.context.trim() : '';
+      const owns = normaliseOwns(args.owns);
+      const label = String(args.description ?? role.role);
+      const route = teammateRoute(role);
 
       // Refuse BEFORE starting anything. One writer per file is this feature's
       // central claim, and a check that ran after the child was already working
       // would be a warning, not a rule.
-      const table = getTable()
+      const table = getTable();
       if (table !== undefined && owns.length > 0) {
         // Retire rows the harness no longer holds first, or an abandoned
         // teammate would block these files forever with no way to notice.
@@ -471,11 +484,13 @@ export function teamToolDefinition(spec) {
             table,
             [String(parent.id)],
             (parentId) => subagents.listChildren(parentId, exec?.signal),
-            now(),
-          )
+            now()
+          );
         }
-        const collisions = collisionsWith(rosterOf(table, String(parent.id)), owns)
-        if (collisions.length > 0) throw new Error(describeCollisions(collisions))
+        const collisions = collisionsWith(rosterOf(table, String(parent.id)), owns);
+        if (collisions.length > 0) {
+          throw new Error(describeCollisions(collisions));
+        }
       }
 
       // Asked after the collision check and before anything starts: there is no
@@ -483,14 +498,14 @@ export function teamToolDefinition(spec) {
       // point asking about one that has already begun.
       const approval = confirm
         ? await confirmHire(
-          getUserQuestions(),
-          hireApprovalQuestion({ role: role.role, label, route: routeLabel(route), owns, brief }),
-          exec,
-        )
-        : { approved: true }
+            getUserQuestions(),
+            hireApprovalQuestion({ role: role.role, label, route: routeLabel(route), owns, brief }),
+            exec
+          )
+        : { approved: true };
 
       if (!approval.approved) {
-        return { hired: false, role: role.role, label, route: routeLabel(route), ...(owns.length > 0 ? { owns } : {}) }
+        return { hired: false, role: role.role, label, route: routeLabel(route), ...(owns.length > 0 ? { owns } : {}) };
       }
 
       const { childId } = await startTeammate(subagents, {
@@ -505,9 +520,9 @@ export function teamToolDefinition(spec) {
           ...(toolFilter ? { toolFilter } : {}),
         },
         signal: exec?.signal,
-      })
+      });
 
-      const id = String(childId)
+      const id = String(childId);
       // Record after the child exists, so a failed start leaves no ghost owner.
       // A memory write that fails must not lose a teammate that is already
       // working — the hire is reported either way.
@@ -522,7 +537,7 @@ export function teamToolDefinition(spec) {
             ...(route ? { provider: route.provider, model: route.model } : {}),
             owns,
             hiredAt: now(),
-          })
+          });
         } catch {
           // Ownership goes unrecorded for this one; the roster stays truthful
           // about everyone else rather than failing the whole call.
@@ -537,9 +552,9 @@ export function teamToolDefinition(spec) {
         route: routeLabel(route),
         ...(owns.length > 0 ? { owns } : {}),
         ...(approval.note ? { note: approval.note } : {}),
-      }
+      };
     },
-  })
+  });
 }
 
 /**
@@ -547,7 +562,7 @@ export function teamToolDefinition(spec) {
  *
  * The primitives are already in the prompt — the harness publishes
  * `send_message`, `report` and `list_agents` on their own. What is missing, and
- * what this supplies, is the judgement around them: when a team beats a
+ * what this supplies, is the judgment around them: when a team beats a
  * delegation at all, and the two rules that decide whether concurrent agents
  * produce work or wreckage.
  *
@@ -557,7 +572,9 @@ export function teamToolDefinition(spec) {
  * @returns the system-prompt section text, or '' when nothing can be hired.
  */
 export function renderTeamPrompt(resolved, toolName = TEAM_TOOL, activations = false) {
-  if (resolved.length === 0) return ''
+  if (resolved.length === 0) {
+    return '';
+  }
   return [
     'CCG teams — several specialists working at once, kept alive between turns.',
     '',
@@ -586,7 +603,7 @@ export function renderTeamPrompt(resolved, toolName = TEAM_TOOL, activations = f
     '',
     'Two rules decide whether a team helps or corrupts the tree:',
     '- ONE WRITER PER FILE. Give every concurrent teammate a disjoint `owns` set before hiring.',
-    '  Two agents editing one file lose each other\'s work with no error. Where a change spans a',
+    "  Two agents editing one file lose each other's work with no error. Where a change spans a",
     '  shared file, one owner makes it and the others are told, in order.',
     '  This binds YOU too. While a teammate is alive, its files are its own: when integration',
     '  turns up a fault in one, `send_message` the owner — do not quietly fix it yourself. They',
@@ -617,10 +634,10 @@ export function renderTeamPrompt(resolved, toolName = TEAM_TOOL, activations = f
       : 'How to wait: do not. Never sleep, poll, or loop to pass the time — a report wakes you by',
     'itself, so finishing your turn IS how you wait, and it costs nothing. Say who is working on',
     'what and stop. You will be started again when the first one answers. Sleeping only burns the',
-    'user\'s money to arrive at the same moment.',
+    "user's money to arrive at the same moment.",
     'And do not invent filler work while they run. Reviewing, testing or analysing a file nobody',
     'has written yet costs a full delegation to examine a stub — it is worse than idling, because',
     'it also produces findings about code that will not exist. Prepare the integration you will',
     'need (the command that proves the whole thing works, the cases you will check) or stop.',
-  ].join('\n')
+  ].join('\n');
 }

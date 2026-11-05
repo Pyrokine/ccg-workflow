@@ -131,8 +131,8 @@ For each issue, document:
 - **WCAG/Standard**: Which standard it violates (if applicable)
 - **Recommendation**: How to fix it
 - **Suggested playbook**: Which focused playbook to use (`audit`, `critique`, `normalize`, `polish`, `distill`,
-  `clarify`, `optimize`, `harden`, `animate`, `colorize`, `bolder`, `quieter`, `delight`, `extract`, `adapt`,
-  `onboard`, `typeset`, `arrange`, `overdrive`, or `teach-impeccable`)
+  `clarify`, `optimize`, `harden`, `animate`, `colorize`, `bolder`, `quieter`, `delight`, `extract`, `adapt`, `onboard`,
+  `typeset`, `arrange`, `overdrive`, or `teach-impeccable`)
 
 ### Patterns & Systemic Issues
 

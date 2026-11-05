@@ -10,7 +10,7 @@ import (
 )
 
 // Config holds CLI configuration
-type Config struct {
+type config struct {
 	Mode                 string // "new" or "resume"
 	Task                 string
 	SessionID            string
@@ -31,13 +31,13 @@ type Config struct {
 }
 
 // ParallelConfig defines the JSON schema for parallel execution
-type ParallelConfig struct {
-	Tasks         []TaskSpec `json:"tasks"`
+type parallelConfig struct {
+	Tasks         []taskSpec `json:"tasks"`
 	GlobalBackend string     `json:"backend,omitempty"`
 }
 
 // TaskSpec describes an individual task entry in the parallel config
-type TaskSpec struct {
+type taskSpec struct {
 	ID                   string          `json:"id"`
 	Task                 string          `json:"task"`
 	WorkDir              string          `json:"workdir,omitempty"`
@@ -58,7 +58,7 @@ type TaskSpec struct {
 }
 
 // TaskResult captures the execution outcome of a task
-type TaskResult struct {
+type taskResult struct {
 	TaskID    string `json:"task_id"`
 	ExitCode  int    `json:"exit_code"`
 	Message   string `json:"message"`
@@ -76,23 +76,26 @@ type TaskResult struct {
 	sharedLog      bool
 }
 
-var backendRegistry = map[string]Backend{
-	"codex":       CodexBackend{},
-	"claude":      ClaudeBackend{},
-	"antigravity": AntigravityBackend{},
-	"agy":         AntigravityBackend{},
-	"grok":        GrokBackend{},
-	"kimi":        KimiBackend{},
-	"opencode":    OpencodeBackend{},
+var backendRegistry = map[string]backend{
+	"codex":       codexBackend{},
+	"claude":      claudeBackend{},
+	"antigravity": antigravityBackend{},
+	"agy":         antigravityBackend{},
+	"grok":        grokBackend{},
+	"kimi":        kimiBackend{},
+	"opencode":    opencodeBackend{},
 }
 
-func selectBackend(name string) (Backend, error) {
+func selectBackend(name string) (backend, error) {
 	key := strings.ToLower(strings.TrimSpace(name))
 	if key == "" {
 		key = defaultBackendName
 	}
 	if key == "gemini" {
-		return nil, fmt.Errorf("Gemini CLI is disabled: consumer OAuth requests stopped being processed after 2026-06-18; use --backend antigravity or --backend agy")
+		return nil, fmt.Errorf(
+			"gemini backend is disabled: consumer OAuth requests stopped being " +
+				"processed after 2026-06-18; use --backend antigravity or --backend agy",
+		)
 	}
 	if backend, ok := backendRegistry[key]; ok {
 		return backend, nil
@@ -135,14 +138,14 @@ func isValidClaudeEffort(value string) bool {
 	}
 }
 
-func parseParallelConfig(data []byte) (*ParallelConfig, error) {
+func parseParallelConfig(data []byte) (*parallelConfig, error) {
 	trimmed := bytes.TrimSpace(data)
 	if len(trimmed) == 0 {
 		return nil, fmt.Errorf("parallel config is empty")
 	}
 
 	tasks := strings.Split(string(trimmed), "---TASK---")
-	var cfg ParallelConfig
+	var cfg parallelConfig
 	seen := make(map[string]struct{})
 
 	taskIndex := 0
@@ -161,8 +164,8 @@ func parseParallelConfig(data []byte) (*ParallelConfig, error) {
 		meta := strings.TrimSpace(parts[0])
 		content := strings.TrimSpace(parts[1])
 
-		task := TaskSpec{WorkDir: defaultWorkdir}
-		for _, line := range strings.Split(meta, "\n") {
+		task := taskSpec{WorkDir: defaultWorkdir}
+		for line := range strings.SplitSeq(meta, "\n") {
 			line = strings.TrimSpace(line)
 			if line == "" {
 				continue
@@ -185,7 +188,7 @@ func parseParallelConfig(data []byte) (*ParallelConfig, error) {
 			case "backend":
 				task.Backend = value
 			case "dependencies":
-				for _, dep := range strings.Split(value, ",") {
+				for dep := range strings.SplitSeq(value, ",") {
 					dep = strings.TrimSpace(dep)
 					if dep != "" {
 						task.Dependencies = append(task.Dependencies, dep)
@@ -228,14 +231,16 @@ func unsupportedWrapperFlagHint(arg string) string {
 	case arg == "--add-dir", strings.HasPrefix(arg, "--add-dir="):
 		return "--add-dir is a backend CLI flag. Use: codeagent-wrapper --backend antigravity \"task\" <workdir>"
 	case arg == "-p", arg == "--print", arg == "--prompt", arg == "--prompt-interactive", arg == "-i":
-		return arg + " is a backend CLI flag. Use: codeagent-wrapper --backend antigravity \"task\" <workdir>, or codeagent-wrapper --backend antigravity - <workdir> <<'EOF'"
+		return arg + " is a backend CLI flag. Use: codeagent-wrapper --backend antigravity " +
+			"\"task\" <workdir>, or codeagent-wrapper --backend antigravity - " +
+			"<workdir> <<'EOF'"
 	case arg == "--print-timeout", strings.HasPrefix(arg, "--print-timeout="):
 		return "--print-timeout is managed by codeagent-wrapper timeout settings; do not pass backend CLI flags directly"
 	}
 	return ""
 }
 
-func parseArgs() (*Config, error) {
+func parseArgs() (*config, error) {
 	args := os.Args[1:]
 	if len(args) == 0 {
 		return nil, fmt.Errorf("task required")
@@ -276,8 +281,15 @@ func parseArgs() (*Config, error) {
 			backendName = value
 			continue
 		case arg == "--gemini-model" || strings.HasPrefix(arg, "--gemini-model="):
-			return nil, fmt.Errorf("--gemini-model is disabled because Gemini CLI consumer OAuth requests stopped being processed after 2026-06-18; use --backend antigravity")
-		case arg == "--claude-model", arg == "--claude-effort", arg == "--grok-model", arg == "--kimi-model", arg == "--opencode-model":
+			return nil, fmt.Errorf(
+				"--gemini-model is disabled because Gemini CLI consumer OAuth requests " +
+					"stopped being processed after 2026-06-18; use --backend antigravity",
+			)
+		case arg == "--claude-model",
+			arg == "--claude-effort",
+			arg == "--grok-model",
+			arg == "--kimi-model",
+			arg == "--opencode-model":
 			if i+1 >= len(args) || strings.TrimSpace(args[i+1]) == "" {
 				if arg == "--claude-effort" {
 					return nil, fmt.Errorf("%s flag requires a non-empty effort level", arg)
@@ -294,7 +306,7 @@ func parseArgs() (*Config, error) {
 				grokModel = value
 			case "--kimi-model":
 				kimiModel = value
-			case "--opencode-model":
+			default:
 				opencodeModel = value
 			}
 			i++
@@ -302,7 +314,11 @@ func parseArgs() (*Config, error) {
 		case arg == "--no-session-persistence":
 			noSessionPersistence = true
 			continue
-		case strings.HasPrefix(arg, "--claude-model="), strings.HasPrefix(arg, "--claude-effort="), strings.HasPrefix(arg, "--grok-model="), strings.HasPrefix(arg, "--kimi-model="), strings.HasPrefix(arg, "--opencode-model="):
+		case strings.HasPrefix(arg, "--claude-model="),
+			strings.HasPrefix(arg, "--claude-effort="),
+			strings.HasPrefix(arg, "--grok-model="),
+			strings.HasPrefix(arg, "--kimi-model="),
+			strings.HasPrefix(arg, "--opencode-model="):
 			key, value, _ := strings.Cut(arg, "=")
 			value = strings.TrimSpace(value)
 			if value == "" {
@@ -320,7 +336,7 @@ func parseArgs() (*Config, error) {
 				grokModel = value
 			case "--kimi-model":
 				kimiModel = value
-			case "--opencode-model":
+			default:
 				opencodeModel = value
 			}
 			continue
@@ -348,7 +364,7 @@ func parseArgs() (*Config, error) {
 	}
 	args = filtered
 
-	cfg := &Config{
+	cfg := &config{
 		WorkDir: defaultWorkdir, Backend: backendName, SkipPermissions: skipPermissions,
 		ClaudeModel: claudeModel, ClaudeEffort: claudeEffort, NoSessionPersistence: noSessionPersistence,
 		GrokModel: grokModel, KimiModel: kimiModel, OpencodeModel: opencodeModel, Progress: progress, WithMCP: withMCP,
@@ -376,14 +392,14 @@ func parseArgs() (*Config, error) {
 			return nil, fmt.Errorf("resume mode requires non-empty session_id")
 		}
 		cfg.Task = args[2]
-		cfg.ExplicitStdin = (args[2] == "-")
+		cfg.ExplicitStdin = args[2] == "-"
 		if len(args) > 3 {
 			cfg.WorkDir = args[3]
 		}
 	} else {
 		cfg.Mode = "new"
 		cfg.Task = args[0]
-		cfg.ExplicitStdin = (args[0] == "-")
+		cfg.ExplicitStdin = args[0] == "-"
 		if len(args) > 1 {
 			cfg.WorkDir = args[1]
 		}

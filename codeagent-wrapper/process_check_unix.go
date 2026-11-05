@@ -1,5 +1,4 @@
 //go:build unix || darwin || linux
-// +build unix darwin linux
 
 package main
 
@@ -87,8 +86,8 @@ func getBootTime() time.Time {
 		return time.Time{}
 	}
 
-	lines := strings.Split(string(data), "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(string(data), "\n")
+	for line := range lines {
 		if strings.HasPrefix(line, "btime ") {
 			fields := strings.Fields(line)
 			if len(fields) >= 2 {

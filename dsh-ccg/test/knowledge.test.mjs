@@ -10,11 +10,11 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
-  MEMORY_FILE,
-  NOTE_KINDS,
   appendNote,
   formatNote,
+  MEMORY_FILE,
   memoryPathOf,
+  NOTE_KINDS,
   readMemory,
   rememberToolDefinition,
   renderMemoryPrompt,
@@ -23,16 +23,23 @@ import {
 
 /** A filesystem seam recording what was written. */
 function stubFs(initial) {
+  /** @type {Map<string, string>} */
   const files = new Map(initial === undefined ? [] : [[initial.path, initial.text]])
   const made = []
   return {
     files,
     made,
     exists: (path) => files.has(path),
-    mkdir: (path) => { made.push(path) },
-    append: (path, text) => { files.set(path, (files.get(path) ?? '') + text) },
+    mkdir: (path) => {
+      made.push(path)
+    },
+    append: (path, text) => {
+      files.set(path, (files.get(path) ?? '') + text)
+    },
     read: (path) => {
-      if (!files.has(path)) throw new Error('ENOENT')
+      if (!files.has(path)) {
+        throw new Error('ENOENT')
+      }
       return files.get(path)
     },
   }
@@ -85,14 +92,18 @@ test('memory reads back, and an absent or empty one contributes nothing', () => 
   assert.equal(readMemory('/w/p', 8192, stubFs()), '')
   assert.equal(readMemory('/w/p', 8192, stubFs({ path, text: '   \n ' })), '')
   assert.equal(readMemory(undefined, 8192, stubFs()), '')
-  assert.equal(readMemory('/w/p', 8192, stubFs({ path, text: '# Project memory\n\n## A\n\nbody' })),
-    '# Project memory\n\n## A\n\nbody')
+  assert.equal(
+    readMemory('/w/p', 8192, stubFs({ path, text: '# Project memory\n\n## A\n\nbody' })),
+    '# Project memory\n\n## A\n\nbody'
+  )
 })
 
 test('over the cap the newest notes win, cut on a note boundary', () => {
   const path = `/w/p/${MEMORY_FILE}`
   const body = ['# Project memory', '']
-  for (let i = 0; i < 60; i += 1) body.push(`## Note ${i}`, '', 'x'.repeat(120), '')
+  for (let i = 0; i < 60; i += 1) {
+    body.push(`## Note ${i}`, '', 'x'.repeat(120), '')
+  }
   const text = readMemory('/w/p', 900, stubFs({ path, text: body.join('\n') }))
 
   assert.ok(Buffer.byteLength(text, 'utf8') < 1200)
@@ -130,29 +141,30 @@ test('the remember definition compiles — a bad schema takes the whole tool tab
   assert.match(block.text, /Remembered \(decision\): S/)
 })
 
-test('remembering writes into the calling session\'s workspace', async () => {
+test("remembering writes into the calling session's workspace", async () => {
   const fs = stubFs()
   const definition = rememberToolDefinition({ deps: fs, now: () => 0 })
   const result = await definition.execute(
     { kind: 'decision', subject: 'Storage', body: 'SQLite, because the data is relational.' },
-    { agent: { session: { header: { cwd: '/w/p' } } } },
+    { agent: { session: { header: { cwd: '/w/p' } } } }
   )
 
   assert.equal(result.path, `/w/p/${MEMORY_FILE}`)
   assert.match(fs.files.get(result.path), /SQLite, because the data is relational\./)
 })
 
-test('an empty note or a workspaceless session is refused', async () => {
+test('an empty note or a session without a workspace is refused', async () => {
   const definition = rememberToolDefinition({ deps: stubFs() })
   await assert.rejects(
     () => definition.execute({ kind: 'decision', subject: 'S', body: 'B' }, { agent: {} }),
-    /no workspace directory/,
+    /no workspace directory/
   )
   await assert.rejects(
-    () => definition.execute(
-      { kind: 'decision', subject: '  ', body: 'B' },
-      { agent: { session: { header: { cwd: '/w/p' } } } },
-    ),
-    /needs both a subject and a body/,
+    () =>
+      definition.execute(
+        { kind: 'decision', subject: '  ', body: 'B' },
+        { agent: { session: { header: { cwd: '/w/p' } } } }
+      ),
+    /needs both a subject and a body/
   )
 })

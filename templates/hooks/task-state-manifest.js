@@ -9,8 +9,12 @@ const { assertStateReadable, makeState } = require('./task-state-model.js');
 function readManifest(projectRoot, relativePath) {
   const location = assertRuntimePath(projectRoot, relativePath, { allowMissing: true, kind: 'file' });
   const parsed = readJsonDetailed(location.path, 256 * 1024);
-  if (!parsed.ok) fail('MIGRATION_MANIFEST_INVALID', `Cannot read ${relativePath}`);
-  if (!parsed.exists) return { path: location.path, manifest: null };
+  if (!parsed.ok) {
+    fail('MIGRATION_MANIFEST_INVALID', `Cannot read ${relativePath}`);
+  }
+  if (!parsed.exists) {
+    return { path: location.path, manifest: null };
+  }
   if (!parsed.data || typeof parsed.data !== 'object' || Array.isArray(parsed.data)) {
     fail('MIGRATION_MANIFEST_INVALID', `${relativePath} must contain an object`);
   }
@@ -59,8 +63,9 @@ function validateStateTransition(transition) {
   validateTransitionSource(transition);
   validateTransitionTarget(transition);
   const target = transition.targetState;
-  if (Object.prototype.hasOwnProperty.call(target, 'activeTaskId'))
+  if (Object.prototype.hasOwnProperty.call(target, 'activeTaskId')) {
     fail('MIGRATION_MANIFEST_INVALID', 'Migration manifest state transition is invalid');
+  }
   if (!transition.sourceExists && (transition.sourceStateId !== null || transition.sourceStateRevision !== 0)) {
     fail('MIGRATION_MANIFEST_INVALID', 'Migration source state is invalid');
   }
@@ -140,8 +145,9 @@ function validateTransitionSource(transition) {
         ))) ||
     !Number.isSafeInteger(transition.sourceStateRevision) ||
     transition.sourceStateRevision < 0
-  )
+  ) {
     fail('MIGRATION_MANIFEST_INVALID', 'Migration manifest state transition is invalid');
+  }
 }
 
 function validateTransitionTarget(transition) {
@@ -156,8 +162,9 @@ function validateTransitionTarget(transition) {
     !Number.isSafeInteger(target.revision) ||
     target.revision !== transition.sourceStateRevision + 1 ||
     !Number.isFinite(Date.parse(target.updatedAt))
-  )
+  ) {
     fail('MIGRATION_MANIFEST_INVALID', 'Migration manifest state transition is invalid');
+  }
 }
 
 function validateLegacyManifest(manifest) {
@@ -170,8 +177,12 @@ function validateLegacyManifest(manifest) {
   if (manifest.stateTransition !== undefined && manifest.stateTransition !== null) {
     validateStateTransition(manifest.stateTransition);
   }
-  if (manifest.stateApplied === undefined) manifest.stateApplied = manifest.status === 'applied';
-  if (manifest.stateTransition === undefined) manifest.stateTransition = null;
+  if (manifest.stateApplied === undefined) {
+    manifest.stateApplied = manifest.status === 'applied';
+  }
+  if (manifest.stateTransition === undefined) {
+    manifest.stateTransition = null;
+  }
 }
 
 module.exports = { readManifest, prepareLegacyManifest, validateStateTransition, applyManifestStateTransition };

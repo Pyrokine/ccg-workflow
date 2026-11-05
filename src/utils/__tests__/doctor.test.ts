@@ -1,8 +1,10 @@
+import fs from 'fs-extra'
 import { execFileSync } from 'node:child_process'
 import { stripVTControlCharacters } from 'node:util'
-import fs from 'fs-extra'
 import { join } from 'pathe'
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { doctor, status } from '../../commands/doctor'
+import { TASK_STATE_RUNTIME_FILES } from '../installer-data'
 
 const { testHome } = vi.hoisted(() => ({
   testHome: `/tmp/ccg-doctor-${process.pid}`,
@@ -16,9 +18,6 @@ vi.mock('node:child_process', async () => ({
   ...(await vi.importActual<typeof import('node:child_process')>('node:child_process')),
   execFileSync: vi.fn(),
 }))
-
-import { doctor, status } from '../../commands/doctor'
-import { TASK_STATE_RUNTIME_FILES } from '../installer-data'
 
 const execFileSyncMock = vi.mocked(execFileSync)
 const installDir = join(testHome, '.claude')
@@ -75,7 +74,7 @@ async function createInstalledFixture(): Promise<void> {
     join(installDir, '.ccg', 'config.toml'),
     [
       '[general]',
-      'version = "3.7.3-aug.2"',
+      'version = "3.7.4-aug.1"',
       'language = "zh-CN"',
       '',
       '[routing.frontend]',
@@ -137,7 +136,7 @@ beforeEach(async () => {
   await fs.ensureDir(projectRoot)
   delete process.env.CCG_SESSION_KEY
   execFileSyncMock.mockReset()
-  execFileSyncMock.mockReturnValue(Buffer.from('codeagent-wrapper version 5.15.0-aug.1\n'))
+  execFileSyncMock.mockReturnValue(Buffer.from('codeagent-wrapper version 5.16.0-aug.1\n'))
 })
 
 afterEach(() => {
@@ -157,7 +156,7 @@ describe('doctor', () => {
 
     const output = await captureConsole(doctor)
 
-    expect(output).toContain('CCG Doctor v3.7.3-aug.2')
+    expect(output).toContain('CCG Doctor v3.7.4-aug.1')
     expect(output).toContain(`${hookScripts.length}/${hookScripts.length} scripts`)
     expect(output).toContain('5/5 events')
     expect(output).toContain('No failures;')
@@ -303,9 +302,9 @@ describe('status', () => {
 
     const output = await captureConsole(status)
 
-    expect(output).toContain('3.7.3-aug.2')
+    expect(output).toContain('3.7.4-aug.1')
     expect(output).toContain('(matches)')
-    expect(output).toContain('v5.15.0-aug.1')
+    expect(output).toContain('v5.16.0-aug.1')
     expect(output).toContain('schema=v2, open=1, bindings=1')
     expect(output).not.toContain('Active task')
   })
@@ -324,7 +323,7 @@ describe('status', () => {
       if (String(command) === process.execPath && Array.isArray(args) && args.includes('resolve')) {
         return Buffer.from(`${JSON.stringify({ ok: true, kind: 'active', activeTaskId: 'session-task' })}\n`)
       }
-      return Buffer.from('codeagent-wrapper version 5.15.0-aug.1\n')
+      return Buffer.from('codeagent-wrapper version 5.16.0-aug.1\n')
     })
     process.chdir(projectRoot)
 

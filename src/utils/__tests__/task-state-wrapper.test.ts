@@ -1,9 +1,17 @@
-import { linkSpec, updateRequirements } from './task-state-fixtures'
-import { join } from 'node:path'
 import fs from 'fs-extra'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_SESSION_ID, createProject, runHook, resolve, startTask, hookOutput } from './task-state-fixtures'
 import type { JsonObject } from './task-state-fixtures'
+import {
+  createProject,
+  DEFAULT_SESSION_ID,
+  hookOutput,
+  linkSpec,
+  resolve,
+  runHook,
+  startTask,
+  updateRequirements,
+} from './task-state-fixtures'
 
 function wrapperCommands(root: string) {
   return {
@@ -186,9 +194,11 @@ describe('session and sub-agent Hooks', () => {
         tool_name: 'Bash',
         tool_input: { command },
       })
-      expect(result.status).toBe(0)
-      expect(result.stdout).toBe('')
-      expect(result.stderr).toBe('')
+      const output = hookOutput(result)
+      expect(output.additionalContext).toContain('<ccg-authority>')
+      expect(output.additionalContext).toContain('Complete wrapper-argument-task')
+      expect(output.updatedInput).toBeUndefined()
+      expect(output.permissionDecision).toBeUndefined()
     }
   })
 
@@ -222,7 +232,7 @@ describe('session and sub-agent Hooks', () => {
       })
     )
     const tabStrippedCommand = (tabStripped.updatedInput as JsonObject).command as string
-    const tabStrippedDelimiter = tabStrippedCommand.match(/<<-'(CCG_CONTEXT_[A-F0-9]+)'/)?.[1]
+    const tabStrippedDelimiter = tabStrippedCommand.match(/<<-'(?<delimiter>CCG_CONTEXT_[A-F0-9]+)'/)?.[1]
     expect(tabStrippedDelimiter).toBeTruthy()
     expect(tabStrippedCommand).toContain(`\t${tabStrippedDelimiter}\r\n`)
     expect(tabStrippedCommand).not.toContain(`\tE${tabStrippedDelimiter}`)

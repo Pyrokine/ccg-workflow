@@ -4,19 +4,22 @@ description: '管理项目共享规范、当前会话备注和提交级决策历
 
 # Context - 项目上下文管理
 
-管理 `.context/` 中的团队知识和本地会话备注。此命令不创建、选择或修改持久任务；当前 session 的 active task 只由 task controller 和 `.ccg/sessions/` binding 决定。
+管理 `.context/` 中的团队知识和本地会话备注。此命令不创建、选择或修改持久任务；当前 session 的 active task 只由 task
+controller 和 `.ccg/sessions/` binding 决定。
 
 ## 存储边界
 
 | 路径                                               | 性质                             | 用途                                                                   |
-| -------------------------------------------------- | -------------------------------- | ---------------------------------------------------------------------- |
+|----------------------------------------------------|----------------------------------|------------------------------------------------------------------------|
 | `.ccg/state.json`、`.ccg/sessions/`、`.ccg/tasks/` | 当前 worktree 本地运行态，不提交 | state 身份、session task binding、任务契约、阶段、计划、进度、审查记录 |
 | `.context/current/`                                | 本地会话信息，不提交             | 当前分支的临时备注和提交前摘要                                         |
 | `.context/prefs/`                                  | Git 跟踪，团队共享               | 编码规范和开发流程                                                     |
 | `.context/history/`                                | Git 跟踪，团队共享               | 已脱敏的提交级决策历史                                                 |
 | 项目文档、OpenSpec                                 | Git 跟踪，团队共享               | 成熟规范；持久任务通过 exact `path#section` 关联                       |
 
-`.context/` 不替代 `requirements.md`，也不从目录名、分支或历史记录推断 active task。每个 session 只自动加载自己的 binding；独立 worktree 各自拥有 `.ccg/` 运行态，共享 Git 跟踪的 prefs、history 和规范文档。
+`.context/` 不替代 `requirements.md`，也不从目录名、分支或历史记录推断 active
+task。每个 session 只自动加载自己的 binding；独立 worktree 各自拥有 `.ccg/`
+运行态，共享 Git 跟踪的 prefs、history 和规范文档。
 
 ## 使用方法
 
@@ -27,7 +30,7 @@ description: '管理项目共享规范、当前会话备注和提交级决策历
 ## 子命令
 
 | 子命令            | 说明                                    |
-| ----------------- | --------------------------------------- |
+|-------------------|-----------------------------------------|
 | `init`            | 初始化 `.context/` 目录和共享模板       |
 | `log <message>`   | 向当前分支的本地 `session.log` 追加备注 |
 | `show`            | 查看当前分支的本地备注                  |
@@ -182,7 +185,8 @@ Do not copy task contracts, full model transcripts, secrets, or linked spec bodi
 
 ## show
 
-Read `.context/current/branches/<branch>/session.log`. If it does not exist, report that the current branch has no local notes.
+Read `.context/current/branches/<branch>/session.log`. If it does not exist, report that the current branch has no local
+notes.
 
 ## compress
 
@@ -195,7 +199,8 @@ Read `.context/current/branches/<branch>/session.log`. If it does not exist, rep
 
 ## history
 
-Read `.context/history/commits.md`. When a file path is supplied, filter `commits.jsonl` entries whose `changes.files` contain that path.
+Read `.context/history/commits.md`. When a file path is supplied, filter `commits.jsonl` entries whose `changes.files`
+contain that path.
 
 ## squash
 

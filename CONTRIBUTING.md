@@ -41,7 +41,8 @@ dsh-ccg/                DeepSeek Harness plugin
 
 Use these commit prefixes: `feat`, `fix`, `docs`, `test`, `refactor`, and `chore`.
 
-A pull request should address one concern, include tests for changed behavior, and explain any user-visible compatibility effect.
+A pull request should address one concern, include tests for changed behavior, and explain any user-visible
+compatibility effect.
 
 ## Required checks
 
@@ -61,16 +62,24 @@ Go checks are required for wrapper changes. The other checks apply to every pull
 
 ## Public-content hygiene
 
-Tracked code, tests, fixtures, documentation, workflows, examples, commit metadata, and release material must be suitable for a public repository. Do not include organization-only names, private service addresses, real local home-directory paths, company email addresses, access tokens, cookies, authorization headers, or credential fragments.
+Tracked code, tests, fixtures, documentation, workflows, examples, commit metadata, and release material must be
+suitable for a public repository. Do not include organization-only names, private service addresses, real local
+home-directory paths, company email addresses, access tokens, cookies, authorization headers, or credential fragments.
 
-Use neutral fixtures such as `module-alpha`, `/home/user/`, and `USER`. Keep clone-local untracked paths in `.git/info/exclude`; `skip-worktree` and `assume-unchanged` are not ignore mechanisms.
+Use neutral fixtures such as `module-alpha`, `/home/user/`, and `USER`. Keep clone-local untracked paths in
+`.git/info/exclude`; `skip-worktree` and `assume-unchanged` are not ignore mechanisms.
 
-Repository maintenance instructions and local task state do not belong in commits. Do not commit project-maintainer `CLAUDE.md` files, `.ccg/`, local `.claude/` state, task contracts, plans, review artifacts, transcripts, migration data, or history-rewrite backups. Runtime templates that are intentionally shipped by the product remain part of the source tree.
+Repository maintenance instructions and local task state do not belong in commits. Do not commit project-maintainer
+`CLAUDE.md` files, `.ccg/`, local `.claude/` state, task contracts, plans, review artifacts, transcripts, migration
+data, or history-rewrite backups. Runtime templates that are intentionally shipped by the product remain part of the
+source tree.
 
 ## Releases
 
-Maintainers must follow [RELEASING.md](./RELEASING.md). Committing, pushing, tagging, and changing GitHub Releases require explicit approval for that release operation.
+Maintainers must follow [RELEASING.md](./RELEASING.md). Committing, pushing, tagging, and changing GitHub Releases
+require explicit approval for that release operation.
 
 ## Reporting issues
 
-Use the [issue tracker](https://github.com/Pyrokine/ccg-workflow/issues) for reproducible defects and feature proposals. Include the affected version, platform, command, expected behavior, and the smallest safe reproduction
+Use the [issue tracker](https://github.com/Pyrokine/ccg-workflow/issues) for reproducible defects and feature proposals.
+Include the affected version, platform, command, expected behavior, and the smallest safe reproduction

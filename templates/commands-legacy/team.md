@@ -9,10 +9,10 @@ description: 'Agent Teams 8 阶段企业级工作流 - 7 角色全流程统一�
 **禁止使用普通 Agent 子代理。本命令的所有角色必须通过 Agent Teams 创建：**
 
 1. **第一步永远是 TeamCreate** — 创建一个 team，获得 team_name
-2. **所有角色通过 Agent(team_name=..., name=...) spawn** — 这样它们才是真正的 teammates
+2. **所有角色通过 Agent (team_name=..., name=...) spawn** — 这样它们才是真正的 teammates
 3. **通过 TaskCreate/TaskUpdate 分配任务** — 共享任务板
 4. **通过 SendMessage 通信** — teammates 之间直接通信
-5. **禁止使用不带 team_name 的 Agent() 调用** — 那是普通子代理，不是 Agent Teams
+5. **禁止使用不带 team_name 的 Agent () 调用** — 那是普通子代理，不是 Agent Teams
 
 **正确示范（必须这样做）**:
 
@@ -45,22 +45,22 @@ TaskUpdate({ taskId: "1", owner: "architect" })
 - 单命令完成从需求到交付的完整流程，对标大厂工程团队编制。
 - Lead（你自己）是技术总监/PM，只做编排和决策，绝不写产品代码。
 - 所有专业角色（Architect、Dev、QA、Reviewer）均为 **Agent Teams 真实 teammates**。
-- 必须通过 TeamCreate 创建 team，再通过 Agent(team_name=...) spawn teammates。
+- 必须通过 TeamCreate 创建 team，再通过 Agent (team_name=...) spawn teammates。
 - 通过 SendMessage 通信，通过 TaskList/TaskCreate/TaskUpdate 协调。
 - 后端/前端模型 多模型分析只在 Architecture 和 Review 阶段作为"外援参考"注入。
 
 **角色编制（7 角色）**
 
-| 角色                      | 身份                    | spawn 方式                               | 模型                   | 职责                     |
-|-------------------------|-----------------------|----------------------------------------|----------------------|------------------------|
-| 🏛 Lead                 | 你自己（主对话）              | N/A（不需要 spawn）                         | Opus                 | 编排、用户沟通、审查材料准备           |
-| 🏗 Architect            | Agent Teams teammate  | `Agent(team_name=T, name="architect")` | Opus                 | 代码库扫描、架构蓝图、文件分配        |
-| 📜 Dev × N              | Agent Teams teammates | `Agent(team_name=T, name="dev-1")`     | Sonnet               | 并行编码，文件隔离              |
-| 🧪 QA                   | Agent Teams teammate  | `Agent(team_name=T, name="qa")`        | Sonnet               | 写测试、跑测试、lint、typecheck |
-| 🔬 Reviewer             | Agent Teams teammate  | `Agent(team_name=T, name="reviewer")`  | Sonnet               | 整合 GPT、Grok 报告并确认 finding |
-| 🔥 {{BACKEND_PRIMARY}}  | 外部模型（非 teammate）      | Bash + codeagent-wrapper               | {{BACKEND_PRIMARY}}  | 后端分析（Phase 2）            |
-| 🔮 {{FRONTEND_PRIMARY}} | 外部模型（非 teammate）      | Bash + codeagent-wrapper               | {{FRONTEND_PRIMARY}} | 前端分析（Phase 2）            |
-| 🔍 GPT / Grok           | 外部 reviewer（非 teammate） | Bash + codeagent-wrapper               | Claude Code provider | 后端与前端双视角审查（Phase 6） |
+| 角色                    | 身份                         | spawn 方式                             | 模型                 | 职责                              |
+|-------------------------|------------------------------|----------------------------------------|----------------------|-----------------------------------|
+| 🏛 Lead                 | 你自己（主对话）             | N/A（不需要 spawn）                    | Opus                 | 编排、用户沟通、审查材料准备      |
+| 🏗 Architect            | Agent Teams teammate         | `Agent(team_name=T, name="architect")` | Opus                 | 代码库扫描、架构蓝图、文件分配    |
+| 📜 Dev × N              | Agent Teams teammates        | `Agent(team_name=T, name="dev-1")`     | Sonnet               | 并行编码，文件隔离                |
+| 🧪 QA                   | Agent Teams teammate         | `Agent(team_name=T, name="qa")`        | Sonnet               | 写测试、跑测试、lint、typecheck   |
+| 🔬 Reviewer             | Agent Teams teammate         | `Agent(team_name=T, name="reviewer")`  | Sonnet               | 整合 GPT、Grok 报告并确认 finding |
+| 🔥 {{BACKEND_PRIMARY}}  | 外部模型（非 teammate）      | Bash + codeagent-wrapper               | {{BACKEND_PRIMARY}}  | 后端分析（Phase 2）               |
+| 🔮 {{FRONTEND_PRIMARY}} | 外部模型（非 teammate）      | Bash + codeagent-wrapper               | {{FRONTEND_PRIMARY}} | 前端分析（Phase 2）               |
+| 🔍 GPT / Grok           | 外部 reviewer（非 teammate） | Bash + codeagent-wrapper               | Claude Code provider | 后端与前端双视角审查（Phase 6）   |
 
 **8 阶段流水线**
 
@@ -100,7 +100,7 @@ Phase 8: INTEGRATION   → Lead 全量验证 + 报告 + 清理
     - 从任务描述中提取一个英文短横线命名的任务名（如 `todo-crud`），用于文件命名和 team 命名。
 
 3. **⛔ 立即创建 Team — 这是你的第一个工具调用动作**
-    - 你必须现在就调用 TeamCreate 工具。不是稍后，不是在 Phase 2，而是**现在**。
+    - 你必须现在就调用 TeamCreate 工具。不是稍后，不是在 Phase 2，而是 **现在**。
     - 调用 TeamCreate，参数：team_name 设为 `<任务名>-team`，description 设为任务描述。
     - 这一步创建了共享任务板和通信通道。后续所有 Agent 调用都必须带上这个 team_name。
     - 如果 TeamCreate 失败（Agent Teams 未启用），输出启用指引后终止。
@@ -149,6 +149,7 @@ Phase 8: INTEGRATION   → Lead 全量验证 + 报告 + 清理
     - **CRITICAL**: 必须在一条消息中同时发起两个 Bash 调用，`run_in_background: true`。
 
    **FIRST Bash call ({{BACKEND_PRIMARY}})**:
+
    ```
    Bash({
      command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend {{BACKEND_PRIMARY}} - \"{{WORKDIR}}\" <<'EOF'\nROLE_FILE: ~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/architect.md\n<TASK>\n需求：<PRD 内容>\n请分析后端架构：模块边界、API 设计、数据模型、依赖关系、实施建议。\n</TASK>\nEOF",
@@ -159,6 +160,7 @@ Phase 8: INTEGRATION   → Lead 全量验证 + 报告 + 清理
    ```
 
    **SECOND Bash call ({{FRONTEND_PRIMARY}}) - IN THE SAME MESSAGE**:
+
    ```
    Bash({
      command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend {{FRONTEND_PRIMARY}} - \"{{WORKDIR}}\" <<'EOF'\nROLE_FILE: ~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/architect.md\n<TASK>\n需求：<PRD 内容>\n请分析前端架构：组件拆分、状态管理、路由设计、UI/UX 要点、实施建议。\n</TASK>\nEOF",
@@ -169,21 +171,22 @@ Phase 8: INTEGRATION   → Lead 全量验证 + 报告 + 清理
    ```
 
    **等待结果**:
+
    ```
    TaskOutput({ task_id: "<codex_task_id>", block: true, timeout: 600000 })
    TaskOutput({ task_id: "<frontend_task_id>", block: true, timeout: 600000 })
    ```
 
-   ⛔ **前端模型失败必须重试**：若前端模型调用失败，最多重试 2 次（间隔 5 秒）。3 次全败才跳过。
-   ⛔ **后端模型结果必须等待**：后端模型执行 5-15 分钟属正常，超时后继续轮询，禁止跳过。
+   ⛔ **前端模型失败必须重试**：若前端模型调用失败，最多重试 2 次（间隔 5 秒）。3 次全败才跳过。⛔ **后端模型结果必须等待**
+   ：后端模型执行 5-15 分钟属正常，超时后继续轮询，禁止跳过。
 
 3. **Spawn Architect teammate**
     - 先调用 TaskCreate 工具，subject 为 "架构蓝图设计"。
-    - 然后调用 Agent 工具 spawn Architect。**你必须在 Agent 工具调用中设置以下参数**：
-        * **team_name**: 设为 Phase 0 创建的 team name（如 `todo-crud-team`）
-        * **name**: 设为 `"architect"`
-        * **model**: 设为 `"opus"`
-        * **prompt**: 包含 PRD 内容、后端/前端模型 分析摘要（如有）、WORKDIR、以及指令（扫描代码库→设计蓝图→输出文件分配矩阵→写入
+    - 然后调用 Agent 工具 spawn Architect。 **你必须在 Agent 工具调用中设置以下参数**：
+        - **team_name**: 设为 Phase 0 创建的 team name（如 `todo-crud-team`）
+        - **name**: 设为 `"architect"`
+        - **model**: 设为 `"opus"`
+        - **prompt**: 包含 PRD 内容、后端/前端模型 分析摘要（如有）、WORKDIR、以及指令（扫描代码库→设计蓝图→输出文件分配矩阵→写入
           .claude/team-plan/→标记 completed）
     - 调用 TaskUpdate 将任务 owner 设为 `"architect"`。
     - 等待 Architect 完成（它会自动发消息通知你）。
@@ -205,9 +208,9 @@ Phase 8: INTEGRATION   → Lead 全量验证 + 报告 + 清理
     - 读取蓝图中的文件分配矩阵。
     - 为每个 Dev 文件集合创建一个子任务。
     - 每个子任务必须包含：
-        * 精确的文件范围（从蓝图的文件分配矩阵）
-        * 具体的实施步骤（从蓝图的设计方案）
-        * 验收标准（从蓝图和 PRD）
+        - 精确的文件范围（从蓝图的文件分配矩阵）
+        - 具体的实施步骤（从蓝图的设计方案）
+        - 验收标准（从蓝图和 PRD）
 
 2. **确保文件隔离**
     - 校验：任何文件不出现在两个子任务中。
@@ -237,29 +240,27 @@ Phase 8: INTEGRATION   → Lead 全量验证 + 报告 + 清理
 
 **执行者**：Dev × N teammates（⛔ 必须并行）
 
-⛔ **核心规则：所有同 Layer 的 Dev 必须在同一条消息中同时 spawn，让它们并行跑。禁止串行（spawn dev-1 → 等完成 → spawn dev-2）。
-**
+⛔ **核心规则：所有同 Layer 的 Dev 必须在同一条消息中同时 spawn，让它们并行跑。禁止串行（spawn dev-1 → 等完成 → spawn
+dev-2）。**
 
 1. **一次性创建所有 Task + 设置依赖**
     - 为蓝图中的每个子任务调用 TaskCreate（在同一轮完成所有 TaskCreate）。
     - 如有 Layer 依赖：用 TaskUpdate 的 addBlockedBy 设置。
 
 2. **⛔ 在同一条消息中并行 spawn 所有同 Layer 的 Dev**
-    - 你必须在**一条消息中发起多个 Agent 工具调用**，每个 Dev 一个 Agent 调用。
+    - 你必须在 **一条消息中发起多个 Agent 工具调用**，每个 Dev 一个 Agent 调用。
     - 例如 3 个并行 Dev，你的这条消息应包含 3 个 Agent 工具调用，它们会同时启动。
     - 每个 Agent 调用必须设置：
-        * **team_name**: Phase 0 创建的 team name
-        * **name**: `"dev-1"`, `"dev-2"`, `"dev-3"` 等
-        * **model**: `"sonnet"`
-        * **prompt**: 包含该 Dev 的子任务内容、WORKDIR、文件范围约束、实施步骤、验收标准
+        - **team_name**: Phase 0 创建的 team name
+        - **name**: `"dev-1"`, `"dev-2"`, `"dev-3"` 等
+        - **model**: `"sonnet"`
+        - **prompt**: 包含该 Dev 的子任务内容、WORKDIR、文件范围约束、实施步骤、验收标准
     - spawn 后立即对每个 Task 调用 TaskUpdate 设 owner。
 
-   示意（3 个 Dev 并行）：
-   你的一条消息中同时包含：
-    - Agent(team_name=T, name="dev-1", prompt="...任务1...")
-    - Agent(team_name=T, name="dev-2", prompt="...任务2...")
-    - Agent(team_name=T, name="dev-3", prompt="...任务3...")
-      三个 Dev 同时启动，并行工作。
+   示意（3 个 Dev 并行）：你的一条消息中同时包含：
+    - Agent (team_name=T, name="dev-1", prompt="...任务1...")
+    - Agent (team_name=T, name="dev-2", prompt="...任务2...")
+    - Agent (team_name=T, name="dev-3", prompt="...任务3...") 三个 Dev 同时启动，并行工作。
 
 3. **等待所有 Dev 完成**
     - teammates 完成后会自动发消息通知，无需轮询。
@@ -283,11 +284,11 @@ Phase 8: INTEGRATION   → Lead 全量验证 + 报告 + 清理
 
 2. **Spawn QA teammate**
     - 调用 TaskCreate，subject 为 "QA: 全量测试验证"。
-    - 调用 Agent 工具，**必须设置以下参数**：
-        * **team_name**: Phase 0 创建的 team name
-        * **name**: `"qa"`
-        * **model**: `"sonnet"`
-        * **prompt**: 包含变更文件列表、验收标准、WORKDIR、以及指令（检测测试框架→写测试→跑全量→输出报告→标记 completed）
+    - 调用 Agent 工具， **必须设置以下参数**：
+        - **team_name**: Phase 0 创建的 team name
+        - **name**: `"qa"`
+        - **model**: `"sonnet"`
+        - **prompt**: 包含变更文件列表、验收标准、WORKDIR、以及指令（检测测试框架→写测试→跑全量→输出报告→标记 completed）
     - 调用 TaskUpdate 设 owner 为 `"qa"`。
     - 等待 QA 完成（它会自动发消息通知你）。
 
@@ -312,14 +313,13 @@ Phase 8: INTEGRATION   → Lead 全量验证 + 报告 + 清理
     - Lead 在同一条消息中启动 GPT、Grok 两个 `Bash` 调用，均设为 `run_in_background: true`。
     - 两个调用使用 `~/.claude/.ccg/prompts/claude/reviewer.md`。
 
-   | reviewer | wrapper 参数 | 重点 |
-   | --- | --- | --- |
-   | GPT | `--backend claude --no-session-persistence --claude-model {{REVIEW_GPT_MODEL}} --claude-effort {{REVIEW_GPT_EFFORT}}` | 后端逻辑、正确性、安全、回归与测试缺口 |
-   | Grok | `--backend claude --no-session-persistence --claude-model {{REVIEW_GROK_MODEL}} --claude-effort {{REVIEW_GROK_EFFORT}}` | 前端交互、可访问性、设计一致性与前端安全 |
-
-   - 使用 `TaskOutput` 等待两个结果。
-   - 单个 reviewer 失败时最多重试两次，随后仅标记该 reviewer 不可用。
-   - reviewer 不使用 `resume` 或保存 `SESSION_ID`。
+   | reviewer | wrapper 参数                                                                                                            | 重点                                     |
+      | -------- | ----------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+   | GPT      | `--backend claude --no-session-persistence --claude-model {{REVIEW_GPT_MODEL}} --claude-effort {{REVIEW_GPT_EFFORT}}`   | 后端逻辑、正确性、安全、回归与测试缺口   |
+   | Grok     | `--backend claude --no-session-persistence --claude-model {{REVIEW_GROK_MODEL}} --claude-effort {{REVIEW_GROK_EFFORT}}` | 前端交互、可访问性、设计一致性与前端安全 |
+    - 使用 `TaskOutput` 等待两个结果。
+    - 单个 reviewer 失败时最多重试两次，随后仅标记该 reviewer 不可用。
+    - reviewer 不使用 `resume` 或保存 `SESSION_ID`。
 
 3. **Spawn Reviewer teammate**
     - 调用 TaskCreate，subject 为 "Review: 整合外部审查报告"。
@@ -338,7 +338,7 @@ Phase 8: INTEGRATION   → Lead 全量验证 + 报告 + 清理
 
 ### Phase 7: FIX (Evaluator-Optimizer Loop)
 
-**执行者**：Dev teammate(s)，最多 2 轮
+**执行者**：Dev teammate (s)，最多 2 轮
 
 **FIX_ROUND = 0**
 
@@ -357,16 +357,16 @@ Phase 8: INTEGRATION   → Lead 全量验证 + 报告 + 清理
     - 根据 finding 的文件归属，分配给对应的 Dev。
     - 如果多个 finding 涉及同一文件 → 合并为一个修复任务。
 
-   c. **Spawn Fix Dev teammate(s)**
-    - 调用 Agent 工具，**必须设置以下参数**：
-        * **team_name**: Phase 0 创建的 team name
-        * **name**: `"fix-dev-1"`, `"fix-dev-2"`, ... 依次命名
-        * **model**: `"sonnet"`
-        * **prompt**: 包含 Critical findings（文件、行号、描述、修复建议）、文件范围约束、WORKDIR
+   c. **Spawn Fix Dev teammate (s)**
+    - 调用 Agent 工具， **必须设置以下参数**：
+        - **team_name**: Phase 0 创建的 team name
+        - **name**: `"fix-dev-1"`, `"fix-dev-2"`, ... 依次命名
+        - **model**: `"sonnet"`
+        - **prompt**: 包含 Critical findings（文件、行号、描述、修复建议）、文件范围约束、WORKDIR
 
    d. **等待修复完成**
 
-   e. **Shutdown Fix Dev(s)**
+   e. **Shutdown Fix Dev (s)**
 
    f. **轻量验证**
     - Lead 通过 Bash 运行测试命令验证修复：

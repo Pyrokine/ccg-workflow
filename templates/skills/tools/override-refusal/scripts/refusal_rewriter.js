@@ -47,8 +47,12 @@ function cwdToSlug(cwd) {
 
 function detectRuntime() {
   const scriptDir = __dirname;
-  if (scriptDir.includes('.codex')) return 'codex';
-  if (scriptDir.includes('.claude')) return 'claude';
+  if (scriptDir.includes('.codex')) {
+    return 'codex';
+  }
+  if (scriptDir.includes('.claude')) {
+    return 'claude';
+  }
 
   const home = os.homedir();
   const codexSessions = path.join(home, '.codex', 'sessions');
@@ -56,8 +60,12 @@ function detectRuntime() {
 
   const slug = cwdToSlug(process.cwd());
   const claudeProjectDir = path.join(claudeProjects, slug);
-  if (fs.existsSync(claudeProjectDir)) return 'claude';
-  if (fs.existsSync(codexSessions)) return 'codex';
+  if (fs.existsSync(claudeProjectDir)) {
+    return 'claude';
+  }
+  if (fs.existsSync(codexSessions)) {
+    return 'codex';
+  }
 
   return 'claude';
 }

@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"errors"
+	"io"
 	"testing"
 )
 
@@ -49,9 +51,12 @@ func TestFilteringWriter(t *testing.T) {
 			tt.name, func(t *testing.T) {
 				var buf bytes.Buffer
 				fw := newFilteringWriter(&buf, tt.patterns)
-				fw.Write([]byte(tt.input))
-				fw.Flush()
-
+				if _, err := fw.Write([]byte(tt.input)); err != nil {
+					t.Fatalf("Write: %v", err)
+				}
+				if err := fw.Flush(); err != nil {
+					t.Fatalf("Flush: %v", err)
+				}
 				if got := buf.String(); got != tt.want {
 					t.Errorf("got %q, want %q", got, tt.want)
 				}
@@ -65,11 +70,51 @@ func TestFilteringWriterPartialLines(t *testing.T) {
 	fw := newFilteringWriter(&buf, noisePatterns)
 
 	// Write partial line
-	fw.Write([]byte("Hello "))
-	fw.Write([]byte("World\n"))
-	fw.Flush()
-
+	if _, err := fw.Write([]byte("Hello ")); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	if _, err := fw.Write([]byte("World\n")); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	if err := fw.Flush(); err != nil {
+		t.Fatalf("Flush: %v", err)
+	}
 	if got := buf.String(); got != "Hello World\n" {
 		t.Errorf("got %q, want %q", got, "Hello World\n")
+	}
+}
+
+func TestFilteringWriterPropagatesWriteErrors(t *testing.T) {
+	for _, flush := range []bool{false, true} {
+		t.Run(
+			map[bool]string{false: "Write", true: "Flush"}[flush], func(t *testing.T) {
+				reader, writer := io.Pipe()
+				if err := reader.Close(); err != nil {
+					t.Fatalf("close reader: %v", err)
+				}
+				t.Cleanup(
+					func() {
+						if err := writer.Close(); err != nil {
+							t.Errorf("close writer: %v", err)
+						}
+					},
+				)
+				filter := newFilteringWriter(writer, nil)
+				text := "visible output\n"
+				if flush {
+					text = "visible output"
+				}
+				_, err := filter.Write([]byte(text))
+				if flush {
+					if err != nil {
+						t.Fatalf("buffer partial output: %v", err)
+					}
+					err = filter.Flush()
+				}
+				if !errors.Is(err, io.ErrClosedPipe) {
+					t.Fatalf("error = %v, want closed pipe", err)
+				}
+			},
+		)
 	}
 }

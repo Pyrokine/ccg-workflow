@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// CCG SubAgent Context Hook — PreToolUse (Bash|Agent matcher)
-// Injects task context into the actual Agent prompt or wrapper stdin.
+// CCG Task Context Hook — PreToolUse (Bash|Agent|Edit|Write matcher)
+// 刷新普通工具的任务要求，向 Agent prompt 和 wrapper stdin 注入任务上下文
 
 'use strict';
 
@@ -45,26 +45,46 @@ function denyTool(code, message, additionalContext) {
 }
 
 function explicitRole(value) {
-  const match = String(value || '').match(/(?:^|\n|\s)CCG_ROLE\s*[:=]\s*(research|implement|review|debug)(?:\s|$)/i);
+  const match = String(value || '').match(
+    /(?:^|\n|\s)CCG_ROLE\s*[:=]\s*(?<role>research|implement|review|debug)(?:\s|$)/i
+  );
   return match ? match[1].toLowerCase() : null;
 }
 
 function detectRole(isCodeagentCall, command, toolInput) {
   const explicit = explicitRole(isCodeagentCall ? command : toolInput.prompt);
-  if (explicit) return explicit;
+  if (explicit) {
+    return explicit;
+  }
 
   if (isCodeagentCall) {
-    const roleMatch = command.match(/ROLE_FILE\s*:\s*[^\n\r]*[/\\]([\w-]+)\.md/i);
+    const roleMatch = command.match(/ROLE_FILE\s*:\s*[^\n\r]*[/\\](?<role>[\w-]+)\.md/i);
     return roleMatch ? ROLE_FILE_MAP[roleMatch[1].toLowerCase()] || 'unknown' : 'unknown';
   }
 
   const agentName = String(toolInput.name || toolInput.subagent_type || '');
   for (const { pattern, role } of AGENT_NAME_PATTERNS) {
-    if (pattern.test(agentName)) return role;
+    if (pattern.test(agentName)) {
+      return role;
+    }
   }
   // A generic Agent has no reliable role label. Supplying every linked section
   // is preferable to silently omitting role-scoped authority from its prompt.
   return 'all';
+}
+
+function injectOrdinaryContext(input) {
+  const cwd = input.cwd || process.env.CLAUDE_PROJECT_DIR || process.cwd();
+  const root = findProjectRoot(cwd);
+  if (!root) {
+    return;
+  }
+  const sessionKey = deriveSessionKey('claude', input.session_id);
+  const snapshot = buildTaskSnapshot(root, { mode: 'authority', role: 'all', sessionKey });
+  if (snapshot.resolution.kind === 'none') {
+    return;
+  }
+  outputHook('PreToolUse', renderTaskSnapshot(snapshot, 'authority', 'all'));
 }
 
 function main() {
@@ -73,17 +93,26 @@ function main() {
   const command = typeof toolInput.command === 'string' ? toolInput.command : '';
   const isCodeagentCall = input.tool_name === 'Bash' && findCodeagentWrapperCalls(command).length > 0;
   const isAgentSpawn = input.tool_name === 'Agent' && typeof toolInput.prompt === 'string';
-  if (!isCodeagentCall && !isAgentSpawn) return;
+  if (!isCodeagentCall && !isAgentSpawn) {
+    if (['Bash', 'Edit', 'Write'].includes(input.tool_name)) {
+      injectOrdinaryContext(input);
+    }
+    return;
+  }
   protectExecution = true;
 
   const cwd = input.cwd || process.env.CLAUDE_PROJECT_DIR || process.cwd();
   const root = findProjectRoot(cwd);
-  if (!root) return;
+  if (!root) {
+    return;
+  }
 
   const role = detectRole(isCodeagentCall, command, toolInput);
   const sessionKey = deriveSessionKey('claude', input.session_id);
   const snapshot = buildTaskSnapshot(root, { mode: 'agent', role, sessionKey });
-  if (snapshot.resolution.kind === 'none') return;
+  if (snapshot.resolution.kind === 'none') {
+    return;
+  }
   if (snapshot.resolution.kind !== 'active' || snapshot.kind === 'invalid') {
     const code =
       snapshot.resolution.kind === 'active'
@@ -101,7 +130,11 @@ function main() {
     return;
   }
 
-  const injectedContext = `<ccg-injected-context>\n${renderTaskSnapshot(snapshot, 'agent', role)}\n</ccg-injected-context>`;
+  const injectedContext = [
+    '<ccg-injected-context>',
+    renderTaskSnapshot(snapshot, 'agent', role),
+    '</ccg-injected-context>',
+  ].join('\n');
   if (isAgentSpawn) {
     outputHook('PreToolUse', null, {
       updatedInput: {
@@ -119,7 +152,9 @@ function main() {
     denyTool(
       'CONTEXT_NOT_INJECTED',
       rewritten.message,
-      `<ccg-task-state>CONTEXT_NOT_INJECTED\n${escapeXml(rewritten.message)}\nThe wrapper request was blocked.</ccg-task-state>`
+      '<ccg-task-state>CONTEXT_NOT_INJECTED\n' +
+        escapeXml(rewritten.message) +
+        '\nThe wrapper request was blocked.</ccg-task-state>'
     );
     return;
   }
@@ -137,6 +172,9 @@ try {
 } catch (error) {
   const message = error instanceof Error ? error.message : String(error);
   const diagnostic = `<ccg-task-state>CCG_HOOK_ERROR\n${escapeXml(message)}</ccg-task-state>`;
-  if (protectExecution) denyTool('CCG_HOOK_ERROR', message, diagnostic);
-  else outputHook('PreToolUse', diagnostic);
+  if (protectExecution) {
+    denyTool('CCG_HOOK_ERROR', message, diagnostic);
+  } else {
+    outputHook('PreToolUse', diagnostic);
+  }
 }

@@ -5,20 +5,23 @@ import { homedir } from 'node:os'
 import { promisify } from 'node:util'
 import { join } from 'pathe'
 import { i18n } from '../i18n'
+import { uninstallWorkflows } from '../utils/installer'
 import { isWindows } from '../utils/platform'
 
 const execAsync = promisify(exec)
-
-import { uninstallWorkflows } from '../utils/installer'
 
 export async function handleInstallClaude(): Promise<void> {
   console.log()
   console.log(ansis.cyan.bold(`  ${i18n.t('menu:claude.title')}`))
   console.log()
-  if (!(await prepareClaudeInstall())) return
+  if (!(await prepareClaudeInstall())) {
+    return
+  }
   const method = await promptClaudeMethod()
 
-  if (method === 'cancel') return
+  if (method === 'cancel') {
+    return
+  }
 
   console.log()
   console.log(ansis.yellow(`  ⏳ ${i18n.t('menu:claude.installing')}`))

@@ -1,22 +1,22 @@
+import fs from 'fs-extra'
 import { randomUUID } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import fs from 'fs-extra'
 import { describe, expect, it } from 'vitest'
+import type { JsonObject, TaskValue } from './task-state-fixtures'
 import {
   cleanupPaths,
-  DEFAULT_SESSION_KEY,
   createProject,
+  DEFAULT_SESSION_KEY,
+  expectFailure,
+  expectSuccess,
+  hookOutput,
+  resolve,
   runController,
   runHook,
-  expectSuccess,
-  expectFailure,
-  resolve,
-  taskInput,
   startTask,
-  hookOutput,
+  taskInput,
 } from './task-state-fixtures'
-import type { JsonObject, TaskValue } from './task-state-fixtures'
 
 async function interruptCheckpoint(root: string) {
   startTask(root, 'transaction-task')

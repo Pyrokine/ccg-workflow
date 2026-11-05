@@ -111,8 +111,12 @@ higher blur to maintain readability.
 
 ```css
 /* Force a mode on a subtree */
-.light-glass { color-scheme: light; }
-.dark-glass  { color-scheme: dark; }
+.light-glass {
+  color-scheme: light;
+}
+.dark-glass {
+  color-scheme: dark;
+}
 ```
 
 ## Animations
@@ -122,8 +126,14 @@ Use spring-based easing for physical feel:
 ```css
 /* Entry */
 @keyframes glass-enter {
-  from { opacity: 0; transform: scale(0.95) translateY(8px); }
-  to   { opacity: 1; transform: scale(1) translateY(0); }
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 
 .glass-animate-in {

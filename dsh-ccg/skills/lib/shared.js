@@ -11,19 +11,33 @@ const path = require('path');
 // --- CLI 参数解析 ---
 
 function parseCliValue(result, args, index, name) {
-  const fields = { '--base': 'base', '--mode': 'mode', '--target-version': 'targetVersion' };
+  const fields = {
+    '--base': 'base',
+    '--target-ref': 'targetRef',
+    '--mode': 'mode',
+    '--target-version': 'targetVersion',
+  };
   const field = fields[name];
   if (!field || (field !== 'mode' && !Object.hasOwn(result, field))) {
     throw new Error('Unknown argument: ' + args[index]);
   }
   const inline = args[index].includes('=');
   const value = inline ? args[index].slice(name.length + 1) : args[++index];
-  const description = { base: 'a revision', mode: 'a value', targetVersion: 'a Ruff target version such as py38' }[
-    field
-  ];
-  if (!value || value.startsWith('-')) throw new Error(name + ' requires ' + description);
-  if (result[field] !== undefined) throw new Error(name + ' may only be supplied once');
-  if (field === 'targetVersion' && !/^py3\d+$/u.test(value)) throw new Error(name + ' requires ' + description);
+  const description = {
+    base: 'a revision',
+    targetRef: 'a revision',
+    mode: 'a value',
+    targetVersion: 'a Ruff target version such as py38',
+  }[field];
+  if (!value || value.startsWith('-')) {
+    throw new Error(name + ' requires ' + description);
+  }
+  if (result[field] !== undefined) {
+    throw new Error(name + ' may only be supplied once');
+  }
+  if (field === 'targetVersion' && !/^py3\d+$/u.test(value)) {
+    throw new Error(name + ' requires ' + description);
+  }
   result[field] = value;
   return index;
 }
@@ -32,9 +46,13 @@ function parseExcludes(result, args, index) {
   const inline = args[index].startsWith('--exclude=');
   const values = inline ? [args[index].slice(10)] : [];
   if (!inline) {
-    while (index + 1 < args.length && !args[index + 1].startsWith('-')) values.push(args[++index]);
+    while (index + 1 < args.length && !args[index + 1].startsWith('-')) {
+      values.push(args[++index]);
+    }
   }
-  if (!values.length || values.some((value) => !value)) throw new Error('--exclude requires a value');
+  if (!values.length || values.some((value) => !value)) {
+    throw new Error('--exclude requires a value');
+  }
   result.exclude = [...(result.exclude || []), ...values];
   return index;
 }
@@ -67,7 +85,9 @@ function visitDirectory(target, count, context) {
     return;
   }
   for (const entry of entries) {
-    if (!context.excluded.has(entry.name)) visitSource(path.join(target, entry.name), false, count, context);
+    if (!context.excluded.has(entry.name)) {
+      visitSource(path.join(target, entry.name), false, count, context);
+    }
   }
 }
 
@@ -111,9 +131,15 @@ function visitSource(target, explicit, count, context) {
     sourceError(context, target, error, 'STAT_FAILED');
     return;
   }
-  if (stat.isSymbolicLink()) return;
-  if (stat.isDirectory()) return visitDirectory(target, count, context);
-  if (stat.isFile()) return addSourceFile(target, explicit, count, context);
+  if (stat.isSymbolicLink()) {
+    return;
+  }
+  if (stat.isDirectory()) {
+    return visitDirectory(target, count, context);
+  }
+  if (stat.isFile()) {
+    return addSourceFile(target, explicit, count, context);
+  }
   if (explicit) {
     context.errors.push({
       path: target,
@@ -131,7 +157,9 @@ function reportOriginIssues(issues, verbose, groupBy) {
     ['existing', '既有问题'],
   ]) {
     const selected = issues.filter((issue) => issue.origin === origin);
-    if (!selected.length) continue;
+    if (!selected.length) {
+      continue;
+    }
     lines.push('\n' + label + ': ' + selected.length);
     if (origin === 'existing' && !verbose) {
       lines.push(
@@ -140,7 +168,11 @@ function reportOriginIssues(issues, verbose, groupBy) {
             .map(([level, count]) => level + ': ' + count)
             .join(' | ')
       );
-      lines.push('  使用 -v 展开位置与说明');
+      const errors = selected
+        .filter((entry) => entry.severity === 'error')
+        .map(({ origin: _origin, ...entry }) => entry);
+      lines.push(...reportIssues(errors, false, groupBy));
+      lines.push('  使用 -v 展开其余问题的位置与说明');
     } else {
       lines.push(
         ...reportIssues(
@@ -156,23 +188,42 @@ function reportOriginIssues(issues, verbose, groupBy) {
 
 function reportIssueLines(entry, verbose) {
   const icon = ICONS[entry.severity] || '\u2139';
-  const position = (entry.file_path || '') + (entry.line_number ? ':' + entry.line_number : '');
-  const lines = ['  ' + icon + ' ' + position, '    ' + entry.message];
-  if (entry.context) lines.push('    上下文: ' + entry.context + '，需复核实际用途');
-  if (verbose && entry.suggestion) lines.push('    \u{1F4A1} ' + entry.suggestion);
-  if (verbose && entry.recommendation) lines.push('    \u{1F4A1} ' + entry.recommendation);
+  const position = (entry.file_path || entry.path || '') + (entry.line_number ? ':' + entry.line_number : '');
+  const rule = entry.rule_id ? ' [' + entry.rule_id + ']' : '';
+  const lines = ['  ' + icon + ' ' + position + rule, '    ' + entry.message];
+  if (entry.context) {
+    lines.push('    上下文: ' + entry.context + '，需复核实际用途');
+  }
+  if (verbose && entry.suggestion) {
+    lines.push('    \u{1F4A1} ' + entry.suggestion);
+  }
+  if (verbose && entry.recommendation) {
+    lines.push('    \u{1F4A1} ' + entry.recommendation);
+  }
   return lines;
 }
 
 function reportIssueGroups(issues, verbose, groupBy) {
   const groups = {};
-  for (const entry of issues) (groups[entry[groupBy]] || (groups[entry[groupBy]] = [])).push(entry);
+  for (const entry of issues) {
+    (groups[entry[groupBy]] || (groups[entry[groupBy]] = [])).push(entry);
+  }
   const lines = [];
   for (const category of Object.keys(groups).sort()) {
     const items = groups[category];
     lines.push('\n【' + category + '】(' + items.length + ' 个)');
-    for (const entry of verbose ? items : items.slice(0, 10)) lines.push(...reportIssueLines(entry, verbose));
-    if (!verbose && items.length > 10) lines.push('  ... 及其他 ' + (items.length - 10) + ' 个问题');
+    let otherCount = 0;
+    for (const entry of items) {
+      if (entry.severity !== 'error') {
+        otherCount++;
+      }
+      if (verbose || entry.severity === 'error' || otherCount <= 10) {
+        lines.push(...reportIssueLines(entry, verbose));
+      }
+    }
+    if (!verbose && otherCount > 10) {
+      lines.push('  ... 及其他 ' + (otherCount - 10) + ' 个问题');
+    }
   }
   return lines;
 }
@@ -183,12 +234,19 @@ function parseCliArgs(argv, extraFlags) {
   let positional = false;
   for (let index = 0; index < args.length; index++) {
     const arg = args[index];
-    if (positional) result.targets.push(arg);
-    else if (arg === '--') positional = true;
-    else if (!arg.startsWith('-')) result.targets.push(arg);
-    else index = parseCliFlag(result, args, index);
+    if (positional) {
+      result.targets.push(arg);
+    } else if (arg === '--') {
+      positional = true;
+    } else if (!arg.startsWith('-')) {
+      result.targets.push(arg);
+    } else {
+      index = parseCliFlag(result, args, index);
+    }
   }
-  if (!result.targets.length) result.targets.push(result.target);
+  if (!result.targets.length) {
+    result.targets.push(result.target);
+  }
   result.targets = [...new Set(result.targets.map((target) => path.resolve(target)))];
   result.target = result.targets[0];
   return result;
@@ -199,8 +257,11 @@ function runCli(main) {
     main();
   } catch (error) {
     const result = { passed: false, complete: false, error: error.message || String(error) };
-    if (process.argv.includes('--json')) console.log(JSON.stringify(result, null, 2));
-    else console.error(result.error);
+    if (process.argv.includes('--json')) {
+      console.log(JSON.stringify(result, null, 2));
+    } else {
+      console.error(result.error);
+    }
     process.exitCode = 2;
   }
 }
@@ -241,7 +302,9 @@ const SOURCE_EXTENSIONS = new Set([
 
 function sourceExtension(filePath, content) {
   const ext = path.extname(filePath).toLowerCase();
-  if (ext) return ext;
+  if (ext) {
+    return ext;
+  }
   if (content === undefined) {
     const fd = fs.openSync(filePath, 'r');
     try {
@@ -300,14 +363,28 @@ function reportHeader(title, fields) {
 }
 
 function reportIssues(issues, verbose, groupBy) {
-  if (!issues.length) return [];
-  if (issues.some((issue) => issue.origin)) return reportOriginIssues(issues, verbose, groupBy);
+  if (!issues.length) {
+    return [];
+  }
+  if (issues.some((issue) => issue.origin)) {
+    return reportOriginIssues(issues, verbose, groupBy);
+  }
   const lines = ['\n' + DASH, '问题列表:', DASH];
-  if (groupBy) return [...lines, ...reportIssueGroups(issues, verbose, groupBy)];
+  if (groupBy) {
+    return [...lines, ...reportIssueGroups(issues, verbose, groupBy)];
+  }
   for (const entry of issues) {
     const icon = ICONS[entry.severity] || '\u2139';
     lines.push('  ' + icon + ' [' + entry.severity.toUpperCase() + '] ' + entry.message);
-    if (entry.path && verbose) lines.push('    路径: ' + entry.path);
+    if (verbose || entry.severity === 'error') {
+      const position = (entry.file_path || entry.path || '') + (entry.line_number ? ':' + entry.line_number : '');
+      if (position) {
+        lines.push('    路径: ' + position);
+      }
+      if (entry.rule_id) {
+        lines.push('    规则: ' + entry.rule_id);
+      }
+    }
   }
   return lines;
 }
@@ -342,7 +419,9 @@ function buildReport(title, fields, issues, verbose, groupBy) {
 function countBySeverity(issues, field) {
   field = field || 'severity';
   const counts = {};
-  for (const i of issues) counts[i[field]] = (counts[i[field]] || 0) + 1;
+  for (const i of issues) {
+    counts[i[field]] = (counts[i[field]] || 0) + 1;
+  }
   return counts;
 }
 
@@ -357,10 +436,7 @@ module.exports = {
   collectSourceFiles,
   sourceExtension,
   buildReport,
-  reportHeader,
-  reportIssues,
   reportBaselines,
-  reportFooter,
   countBySeverity,
   hasFatal,
   SEP,

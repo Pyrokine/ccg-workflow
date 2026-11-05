@@ -17,7 +17,7 @@ import {
   panelToolDefinition,
   resolvePanel,
 } from '../src/crosscheck.js'
-import { ROLES, resolveRoles } from '../src/roles.js'
+import { resolveRoles, ROLES } from '../src/roles.js'
 
 const TIERS = {
   strong: { provider: 'gw', model: 'big-model' },
@@ -28,23 +28,32 @@ test('alpha panels run all members concurrently and distinguish partial failure 
   const calls = []
   const pending = []
   const disposed = []
-  const members = ['complete', 'truncated', 'broken'].map(model => ({ provider: 'gw', model }))
+  const members = ['complete', 'truncated', 'broken'].map((model) => ({ provider: 'gw', model }))
   const signal = new AbortController().signal
-  const subagents = { async startActivation(spec) {
-    calls.push(spec)
-    return {
-      childId: spec.request.agentOptions.model,
-      result: new Promise(resolve => { pending.push(resolve) }),
-      async dispose() { disposed.push(spec.request.agentOptions.model) },
-    }
-  } }
+  const subagents = {
+    async startActivation(spec) {
+      calls.push(spec)
+      return {
+        childId: spec.request.agentOptions.model,
+        result: new Promise((resolve) => {
+          pending.push(resolve)
+        }),
+        async dispose() {
+          disposed.push(spec.request.agentOptions.model)
+        },
+      }
+    },
+  }
   const tool = panelToolDefinition({
-    toolName: 'ccg_crosscheck', description: 'crosscheck', members,
-    getSubagents: () => subagents, toolFilter: { deny: ['ccg_team'] },
+    toolName: 'ccg_crosscheck',
+    description: 'crosscheck',
+    members,
+    getSubagents: () => subagents,
+    toolFilter: { deny: ['ccg_team'] },
   })
   const running = tool.execute({ prompt: 'Review', description: 'review' }, { agent: { id: 'p' }, signal })
   // Every start is admitted before any result is available.
-  await new Promise(resolve => setImmediate(resolve))
+  await new Promise((resolve) => setImmediate(resolve))
   assert.equal(calls.length, 3)
   for (const spec of calls) {
     assert.equal(spec.delivery, 'caller')
@@ -66,25 +75,34 @@ test('alpha panels run all members concurrently and distinguish partial failure 
 test('a cancelled alpha panel disposes all members before rejecting the call', async () => {
   const controller = new AbortController()
   const disposed = []
-  const subagents = { async startActivation(spec) {
-    let finish
-    return {
-      result: new Promise(resolve => { finish = resolve }),
-      async dispose() {
-        disposed.push(spec.request.agentOptions.model)
-        finish({ stopReason: 'aborted', output: [] })
-      },
-    }
-  } }
+  const subagents = {
+    async startActivation(spec) {
+      let finish
+      return {
+        result: new Promise((resolve) => {
+          finish = resolve
+        }),
+        async dispose() {
+          disposed.push(spec.request.agentOptions.model)
+          finish({ stopReason: 'aborted', output: [] })
+        },
+      }
+    },
+  }
   const tool = panelToolDefinition({
-    toolName: 'ccg_crosscheck', description: 'crosscheck',
-    members: ['one', 'two'].map(model => ({ provider: 'gw', model })),
+    toolName: 'ccg_crosscheck',
+    description: 'crosscheck',
+    members: ['one', 'two'].map((model) => ({ provider: 'gw', model })),
     getSubagents: () => subagents,
   })
-  const pending = tool.execute({ description: 'review', prompt: 'Review' }, {
-    agent: { id: 'parent' }, signal: controller.signal,
-  })
-  await new Promise(resolve => setImmediate(resolve))
+  const pending = tool.execute(
+    { description: 'review', prompt: 'Review' },
+    {
+      agent: { id: 'parent' },
+      signal: controller.signal,
+    }
+  )
+  await new Promise((resolve) => setImmediate(resolve))
   controller.abort(new Error('cancel panel'))
   await assert.rejects(pending, /cancel panel/)
   assert.deepEqual(disposed.sort(), ['one', 'two'])
@@ -130,7 +148,10 @@ test('a role list drops duplicates and half-routes rather than mounting them', (
 })
 
 test('the standalone panel falls back to the two tiers and collapses clones', () => {
-  assert.deepEqual(resolvePanel(TIERS).map((member) => member.model), ['big-model', 'fast-model'])
+  assert.deepEqual(
+    resolvePanel(TIERS).map((member) => member.model),
+    ['big-model', 'fast-model']
+  )
 
   // Both tiers on one model is a single voice, not a panel.
   assert.equal(resolvePanel({ strong: TIERS.strong, worker: TIERS.strong }).length, 1)
@@ -149,14 +170,17 @@ test('an explicit panel wins, and may put one model behind two different lenses'
     ],
   })
   assert.equal(panel.length, 2)
-  assert.deepEqual(panel.map((member) => member.lens), ['correctness', 'cost'])
+  assert.deepEqual(
+    panel.map((member) => member.lens),
+    ['correctness', 'cost']
+  )
 })
 
 test('a malformed or mislabelled panel member is refused, never quietly dropped', () => {
   assert.throws(() => resolvePanel({ panel: [{ provider: 'gw' }] }), /needs both a provider and a model/)
   assert.throws(
     () => resolvePanel({ panel: [{ provider: 'gw', model: 'a', role: 'archtiect' }] }),
-    /unknown role "archtiect"/,
+    /unknown role "archtiect"/
   )
 })
 
@@ -176,7 +200,7 @@ test("a member's own role and lens override the panel persona", () => {
     { provider: 'gw', model: 'm', role: 'reviewer', lens: 'security only' },
     'Review this diff.',
     '',
-    ROLES.analyzer.persona,
+    ROLES.analyzer.persona
   )
   assert.match(prompt, /CCG's code reviewer/)
   assert.ok(!prompt.includes("CCG's senior systems analyst"))
@@ -201,7 +225,7 @@ test('a failed member thins the panel instead of hiding it', () => {
     { label: 'a', provider: 'gw', model: 'big', ok: true, answer: 'N+1 query.' },
     { label: 'b', provider: 'gw', model: 'fast', ok: false, error: 'timeout' },
   ])
-  assert.match(report, /\[no answer: timeout\]/)
+  assert.match(report, /\[no answer: timeout]/)
   assert.match(report, /Too few answers came back/)
 })
 
@@ -213,7 +237,10 @@ test('every panel definition compiles — a bad schema takes the whole tool tabl
   const [analyzer] = resolveRoles({
     roles: {
       analyzer: {
-        models: [{ provider: 'gw', model: 'big' }, { provider: 'rival', model: 'other' }],
+        models: [
+          { provider: 'gw', model: 'big' },
+          { provider: 'rival', model: 'other' },
+        ],
       },
     },
   }).filter((entry) => entry.role === 'analyzer')
@@ -245,7 +272,7 @@ test('every panel definition compiles — a bad schema takes the whole tool tabl
   // The render path runs on every result; a throw there is also a broken tool.
   const text = crosscheck.output.render(
     { description: 'q', prompt: 'q' },
-    { question: 'q', answered: 1, answers: [{ label: 'a', provider: 'gw', model: 'm', ok: true, answer: 'yes' }] },
+    { question: 'q', answered: 1, answers: [{ label: 'a', provider: 'gw', model: 'm', ok: true, answer: 'yes' }] }
   )
   assert.match(text[0].text, /Panel of 1 on: q/)
 })
@@ -254,7 +281,10 @@ test('tool descriptions name every member so the model knows who it is asking', 
   const [analyzer] = resolveRoles({
     roles: {
       analyzer: {
-        models: [{ provider: 'gw', model: 'big' }, { provider: 'rival', model: 'other' }],
+        models: [
+          { provider: 'gw', model: 'big' },
+          { provider: 'rival', model: 'other' },
+        ],
       },
     },
   }).filter((entry) => entry.role === 'analyzer')
@@ -270,8 +300,9 @@ test('tool descriptions name every member so the model knows who it is asking', 
 })
 
 test('inheriting the conversation is opt-in, and refused where it would fake a panel', () => {
-  const [builder] = resolveRoles({ roles: { builder: { context: 'inherit' } } })
-    .filter((entry) => entry.role === 'builder')
+  const [builder] = resolveRoles({ roles: { builder: { context: 'inherit' } } }).filter(
+    (entry) => entry.role === 'builder'
+  )
   assert.equal(builder.context, 'inherit')
 
   // Every role starts self-contained unless it asks not to.
@@ -280,14 +311,18 @@ test('inheriting the conversation is opt-in, and refused where it would fake a p
 
   // A panel whose members have read your reasoning is not a second opinion.
   assert.throws(
-    () => resolveRoles({
-      roles: {
-        analyzer: {
-          context: 'inherit',
-          models: [{ provider: 'a', model: 'b' }, { provider: 'a', model: 'c' }],
+    () =>
+      resolveRoles({
+        roles: {
+          analyzer: {
+            context: 'inherit',
+            models: [
+              { provider: 'a', model: 'b' },
+              { provider: 'a', model: 'c' },
+            ],
+          },
         },
-      },
-    }),
-    /answer independently/,
+      }),
+    /answer independently/
   )
 })

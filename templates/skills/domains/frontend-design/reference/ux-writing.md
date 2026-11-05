@@ -43,8 +43,7 @@ action. "No projects yet. Create your first one to get started." not just "No it
 
 ## Voice vs Tone
 
-**Voice** is your brand's personality—consistent everywhere.
-**Tone** adapts to the moment.
+**Voice** is your brand's personality—consistent everywhere. **Tone** adapts to the moment.
 
 | Moment              | Tone Shift                                                     |
 |---------------------|----------------------------------------------------------------|

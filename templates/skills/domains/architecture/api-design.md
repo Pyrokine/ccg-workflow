@@ -9,7 +9,7 @@ description: API 设计。RESTful、GraphQL、OpenAPI、版本管理。当用户
 
 ### 资源命名
 
-```yaml
+```text
 # 使用名词复数
 GET    /users          # 获取用户列表
 GET    /users/{id}     # 获取单个用户
@@ -52,33 +52,38 @@ POST   /createUser     # ❌ 动词
 
 ### 响应格式
 
+成功响应：
+
 ```json
-// 成功响应
 {
   "data": {
     "id": 1,
     "name": "Alice"
   }
 }
+```
 
-// 列表响应
+列表响应（`data` 数组元素省略）：
+
+```json
 {
-  "data": [...],
+  "data": [],
   "pagination": {
     "page": 1,
     "per_page": 20,
     "total": 100
   }
 }
+```
 
-// 错误响应
+错误响应：
+
+```json
 {
   "error": {
     "code": "VALIDATION_ERROR",
     "message": "Invalid email format",
-    "details": [
-      {"field": "email", "message": "Invalid format"}
-    ]
+    "details": [{ "field": "email", "message": "Invalid format" }]
   }
 }
 ```
@@ -197,7 +202,7 @@ query GetUser($id: ID!) {
 ```yaml
 策略:
   URL路径: /api/v1/users (推荐)
-  请求头: Accept: application/vnd.api+json;version=1
+  请求头: 'Accept: application/vnd.api+json;version=1'
   查询参数: /api/users?version=1
 
 原则:
@@ -224,4 +229,3 @@ query GetUser($id: ID!) {
   - 输入验证
   - HTTPS
 ```
-

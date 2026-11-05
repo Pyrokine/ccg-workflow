@@ -7,46 +7,36 @@
   ],
 
   "demo-fullstack": {
-    "panel":    "https://1.2.3.4:8888",
-    "key":      "YOUR_BT_API_KEY_HERE",
-    "local":    "/Users/you/Projects/demo",
-    "remote":   "/www/wwwroot/demo.example.com",
+    "panel": "https://1.2.3.4:8888",
+    "key": "YOUR_BT_API_KEY_HERE",
+    "local": "/Users/you/Projects/demo",
+    "remote": "/www/wwwroot/demo.example.com",
     "database": "demo_db",
-    "owner":    "www:www",
-    "backup":   true,
-    "exclude": [
-      "node_modules",
-      ".git",
-      ".env.local",
-      ".DS_Store",
-      "*.log",
-      "dist",
-      "__pycache__"
-    ],
-    "restart": [
-      "cd /www/wwwroot/demo.example.com && pm2 restart demo || pm2 start ecosystem.config.js"
-    ]
+    "owner": "www:www",
+    "backup": true,
+    "exclude": ["node_modules", ".git", ".env.local", ".DS_Store", "*.log", "dist", "__pycache__"],
+    "restart": ["cd /www/wwwroot/demo.example.com && pm2 restart demo || pm2 start ecosystem.config.js"]
   },
 
   "demo-static": {
-    "panel":  "https://1.2.3.4:8888",
-    "key":    "YOUR_BT_API_KEY_HERE",
-    "local":  "/Users/you/Projects/h5/dist",
+    "panel": "https://1.2.3.4:8888",
+    "key": "YOUR_BT_API_KEY_HERE",
+    "local": "/Users/you/Projects/h5/dist",
     "remote": "/www/wwwroot/h5.example.com",
-    "owner":  "www:www",
-    "clean":  true,
+    "owner": "www:www",
+    "clean": true,
     "exclude": [".git", "*.map"]
   },
 
   "demo-php": {
-    "panel":    "https://1.2.3.4:8888",
-    "key":      "YOUR_BT_API_KEY_HERE",
-    "local":    "/Users/you/Projects/php-app",
-    "remote":   "/www/wwwroot/api.example.com",
+    "panel": "https://1.2.3.4:8888",
+    "key": "YOUR_BT_API_KEY_HERE",
+    "local": "/Users/you/Projects/php-app",
+    "remote": "/www/wwwroot/api.example.com",
     "database": "api_db",
-    "owner":    "www:www",
-    "backup":   true,
-    "exclude":  ["vendor", ".git", "storage/logs/*", "*.log"],
-    "restart":  ["systemctl reload nginx", "systemctl restart php-fpm-74"]
+    "owner": "www:www",
+    "backup": true,
+    "exclude": ["vendor", ".git", "storage/logs/*", "*.log"],
+    "restart": ["systemctl reload nginx", "systemctl restart php-fpm-74"]
   }
 }

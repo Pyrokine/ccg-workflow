@@ -100,13 +100,22 @@ test('the projector is wired into the tool and survives a value it did not expec
 })
 
 test('the browser is told to claim exactly the tools that answer as a panel', () => {
-  const payload = buildConfigPayload({
-    ...TIERS,
-    roles: {
-      analyzer: { models: [{ provider: 'gw', model: 'a' }, { provider: 'rival', model: 'b' }] },
-      builder: { models: [{ provider: 'gw', model: 'a' }] },
+  const payload = buildConfigPayload(
+    {
+      ...TIERS,
+      roles: {
+        analyzer: {
+          models: [
+            { provider: 'gw', model: 'a' },
+            { provider: 'rival', model: 'b' },
+          ],
+        },
+        builder: { models: [{ provider: 'gw', model: 'a' }] },
+      },
     },
-  }, undefined, true)
+    undefined,
+    true
+  )
 
   const claimed = Object.keys(payload.panels).sort()
   // The analyzer holds two models; the builder holds one and stays a plain
@@ -129,18 +138,30 @@ test('a tool that is not mounted is never claimed', () => {
   // A disabled role does not mount a tool, so claiming its name would take over
   // a key nothing ever dispatches — or worse, one a later plugin owns.
   assert.deepEqual(
-    buildPanelIndex({}, [{ tool: 'ccg_analyze', enabled: false, members: [{ provider: 'a', model: 'b' }, { provider: 'a', model: 'c' }] }]),
-    {},
+    buildPanelIndex({}, [
+      {
+        tool: 'ccg_analyze',
+        enabled: false,
+        members: [
+          { provider: 'a', model: 'b' },
+          { provider: 'a', model: 'c' },
+        ],
+      },
+    ]),
+    {}
   )
 })
 
 test('the cross-check roster keeps the labels and lenses the role rows never carry', () => {
-  const panels = buildPanelIndex({
-    panel: [
-      { provider: 'gw', model: 'big-model', label: 'optimist', lens: 'why this works' },
-      { provider: 'gw', model: 'big-model', label: 'sceptic', lens: 'why this fails' },
-    ],
-  }, [])
+  const panels = buildPanelIndex(
+    {
+      panel: [
+        { provider: 'gw', model: 'big-model', label: 'optimist', lens: 'why this works' },
+        { provider: 'gw', model: 'big-model', label: 'sceptic', lens: 'why this fails' },
+      ],
+    },
+    []
+  )
 
   assert.deepEqual(panels[CROSSCHECK_TOOL], [
     { provider: 'gw', model: 'big-model', label: 'optimist', lens: 'why this works' },

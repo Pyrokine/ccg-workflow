@@ -1,5 +1,7 @@
 # Spatial Design
 
+CSS examples reuse the target spacing scale’s `--space-md` token.
+
 ## Spacing Systems
 
 ### Use 4pt Base, Not 8pt
@@ -88,7 +90,7 @@ Buttons can look small but need large touch targets (44px minimum). Use padding 
 
 ```css
 .icon-button {
-  width: 24px;  /* Visual size */
+  width: 24px; /* Visual size */
   height: 24px;
   position: relative;
 }
@@ -96,7 +98,7 @@ Buttons can look small but need large touch targets (44px minimum). Use padding 
 .icon-button::before {
   content: '';
   position: absolute;
-  inset: -10px;  /* Expand tap target to 44px */
+  inset: -10px; /* Expand tap target to 44px */
 }
 ```
 

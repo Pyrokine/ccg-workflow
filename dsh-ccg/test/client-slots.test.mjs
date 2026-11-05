@@ -7,9 +7,11 @@ import { resolve } from 'node:path'
 import vm from 'node:vm'
 
 // The release matrix can point this test at separate, unmodified npm installs.
-const require = createRequire(process.env.DSH_CLIENT_TEST_RUNTIME
-  ? resolve(process.env.DSH_CLIENT_TEST_RUNTIME, 'package.json')
-  : new URL('../package.json', import.meta.url))
+const require = createRequire(
+  process.env.DSH_CLIENT_TEST_RUNTIME
+    ? resolve(process.env.DSH_CLIENT_TEST_RUNTIME, 'package.json')
+    : new URL('../package.json', import.meta.url)
+)
 const { Context } = await import(require.resolve('@deepseek-ai/cordis'))
 const slotRuntime = await import(require.resolve('@deepseek-ai/dsh-client-ui-slots'))
 const React = require('react')
@@ -24,22 +26,36 @@ function browserModule(text, fetch = async () => ({ ok: true, json: async () => 
     head: { appendChild() {} },
   }
   vm.runInNewContext(text, {
-    window: { __ModuleLoader__: { load: (value) => { definition = value } } },
-    document, fetch, setInterval, clearInterval,
+    window: {
+      __ModuleLoader__: {
+        load: (value) => {
+          definition = value
+        },
+      },
+    },
+    document,
+    fetch,
+    setInterval,
+    clearInterval,
   })
   assert.ok(definition?.factory, 'browser module did not register a factory')
-  return definition.factory((id) => id === 'react' ? react : id === '@deepseek-ai/dsh-client-ui-slots'
-    ? slotRuntime
-    : id === '@deepseek-ai/cordis' ? { Context, Service: require('@deepseek-ai/cordis').Service }
-      : require(id))
+  return definition.factory((id) =>
+    id === 'react'
+      ? react
+      : id === '@deepseek-ai/dsh-client-ui-slots'
+        ? slotRuntime
+        : id === '@deepseek-ai/cordis'
+          ? { Context, Service: require('@deepseek-ai/cordis').Service }
+          : require(id)
+  )
 }
 
-const { SlotRegistry } = browserModule(readFileSync(
-  require.resolve('@deepseek-ai/dsh-client-ui-renderer/client'), 'utf8',
-))
-const pluginsModule = browserModule(readFileSync(
-  require.resolve('@deepseek-ai/dsh-client-ui-settings-plugins/client'), 'utf8',
-))
+const { SlotRegistry } = browserModule(
+  readFileSync(require.resolve('@deepseek-ai/dsh-client-ui-renderer/client'), 'utf8')
+)
+const pluginsModule = browserModule(
+  readFileSync(require.resolve('@deepseek-ai/dsh-client-ui-settings-plugins/client'), 'utf8')
+)
 
 /** Locale data is plugin-owned; the registration lifecycle remains real Cordis. */
 function locale() {
@@ -62,14 +78,17 @@ async function bench(payload = { panels: {} }, fetch, react) {
   const slots = ctx.get('slots')
   // Shell-owned ancestors. The Plugins child declaration itself must come
   // from the official plugin below, never a copied/mock declaration.
-  slots.register({
-    name: 'root',
-    children: {
-      'settings.section': { kind: 'list', scope: 'root' },
-      'tool.call.toolview': { kind: 'keyed', scope: 'session' },
-      'conversation.input.dock': { kind: 'list', scope: 'session' },
+  slots.register(
+    {
+      name: 'root',
+      children: {
+        'settings.section': { kind: 'list', scope: 'root' },
+        'tool.call.toolview': { kind: 'keyed', scope: 'session' },
+        'conversation.input.dock': { kind: 'list', scope: 'session' },
+      },
     },
-  }, () => null)
+    () => null
+  )
   const plugins = ctx.plugin(pluginsModule)
   await plugins.await()
   const ccgModule = browserModule(source, fetch ?? (async () => ({ ok: true, json: async () => payload })), react)
@@ -135,10 +154,13 @@ test('panel views render current preparation, start and persisted result phases'
     const html = render({
       phase: 'result',
       block: {
-        kind: 'tool-result', isError: false, call: null,
+        kind: 'tool-result',
+        isError: false,
+        call: null,
         content: [{ type: 'text', text: 'fallback' }],
         meta: {
-          kind: 'ccg.panel/1', question: 'Compare models',
+          kind: 'ccg.panel/1',
+          question: 'Compare models',
           answers: [
             { ok: true, label: 'one', provider: 'p', model: 'a', answer: 'First answer' },
             { ok: true, label: 'two', provider: 'p', model: 'b', answer: 'Second answer' },
@@ -164,21 +186,33 @@ function editorHooks() {
   const changed = (previous, deps) => !previous || deps.some((value, i) => !Object.is(value, previous[i]))
   const memo = (create, deps) => {
     const index = cursor++
-    if (changed(state[index]?.deps, deps)) state[index] = { deps, value: create() }
+    if (changed(state[index]?.deps, deps)) {
+      state[index] = { deps, value: create() }
+    }
     return state[index].value
   }
   const react = {
     ...React,
     useState: (initial) => {
       const index = cursor++
-      if (!(index in state)) state[index] = typeof initial === 'function' ? initial() : initial
-      return [state[index], (value) => { state[index] = typeof value === 'function' ? value(state[index]) : value }]
+      if (!(index in state)) {
+        state[index] = typeof initial === 'function' ? initial() : initial
+      }
+      return [
+        state[index],
+        (value) => {
+          state[index] = typeof value === 'function' ? value(state[index]) : value
+        },
+      ]
     },
     useMemo: memo,
     useCallback: (fn, deps) => memo(() => fn, deps),
     useEffect: (fn, deps) => {
       const index = cursor++
-      if (changed(state[index], deps)) { state[index] = deps; effects.push(fn) }
+      if (changed(state[index], deps)) {
+        state[index] = deps
+        effects.push(fn)
+      }
     },
   }
   return {
@@ -188,24 +222,37 @@ function editorHooks() {
       const tree = entry.component(entry.inject())
       const pending = effects
       effects = []
-      for (const effect of pending) effect()
+      for (const effect of pending) {
+        effect()
+      }
       return tree
     },
   }
 }
 
 function nodes(tree) {
-  if (!tree || typeof tree !== 'object') return []
+  if (!tree || typeof tree !== 'object') {
+    return []
+  }
   const children = Array.isArray(tree.props?.children) ? tree.props.children : [tree.props?.children]
-  return [tree, ...children.flatMap((child) => Array.isArray(child) ? child.flatMap(nodes) : nodes(child))]
+  return [tree, ...children.flatMap((child) => (Array.isArray(child) ? child.flatMap(nodes) : nodes(child)))]
 }
 
 test('saving sends the observed revision and rebases only edited fields after a conflict', async () => {
   const initial = {
-    revision: 1, writable: true, panels: {}, models: [], roles: [], team: { enabled: true },
+    revision: 1,
+    writable: true,
+    panels: {},
+    models: [],
+    roles: [],
+    team: { enabled: true },
     tiers: { strong: { provider: 'p', model: 'a' }, worker: { provider: 'p', model: 'b' } },
   }
-  const refreshed = { ...initial, revision: 2, tiers: { ...initial.tiers, worker: { provider: 'p', model: 'other-editor' } } }
+  const refreshed = {
+    ...initial,
+    revision: 2,
+    tiers: { ...initial.tiers, worker: { provider: 'p', model: 'other-editor' } },
+  }
   const requests = []
   const fetch = async (_url, options) => {
     if (options?.method === 'POST') {
@@ -214,7 +261,7 @@ test('saving sends the observed revision and rebases only edited fields after a 
         ? { status: 409, ok: false, json: async () => ({ error: 'settings revision mismatch' }) }
         : { status: 200, ok: true, json: async () => ({ ...refreshed, revision: 3 }) }
     }
-    return { ok: true, json: async () => requests.length ? refreshed : initial }
+    return { ok: true, json: async () => (requests.length ? refreshed : initial) }
   }
   const hooks = editorHooks()
   const { slots, ccg, plugins } = await bench(initial, fetch, hooks.react)
@@ -223,18 +270,27 @@ test('saving sends the observed revision and rebases only edited fields after a 
     hooks.render(entry)
     await new Promise((done) => setImmediate(done))
     let tree = hooks.render(entry)
-    nodes(tree).filter((node) => node.type === 'select')[0].props.onChange({ target: { value: '["p","my-edit"]' } })
+    nodes(tree)
+      .filter((node) => node.type === 'select')[0]
+      .props.onChange({ target: { value: '["p","my-edit"]' } })
     tree = hooks.render(entry)
-    await nodes(tree).find((node) => node.props?.children === 'Save').props.onClick()
+    await nodes(tree)
+      .find((node) => node.props?.children === 'Save')
+      .props.onClick()
     assert.equal(requests[0].expectedRevision, 1)
     assert.equal(requests[0].strong.model, 'my-edit')
     tree = hooks.render(entry)
     const selects = nodes(tree).filter((node) => node.type === 'select')
     assert.equal(selects[0].props.value, '["p","my-edit"]')
     assert.equal(selects[1].props.value, '["p","other-editor"]')
-    assert.ok(nodes(tree).some((node) => typeof node.props?.children === 'string'
-      && node.props.children.includes('settings revision mismatch')))
-    await nodes(tree).find((node) => node.props?.children === 'Save').props.onClick()
+    assert.ok(
+      nodes(tree).some(
+        (node) => typeof node.props?.children === 'string' && node.props.children.includes('settings revision mismatch')
+      )
+    )
+    await nodes(tree)
+      .find((node) => node.props?.children === 'Save')
+      .props.onClick()
     assert.equal(requests[1].expectedRevision, 2)
     assert.equal(requests[1].strong.model, 'my-edit')
     assert.equal(requests[1].worker, undefined, 'retry must not revert the other editor’s change')

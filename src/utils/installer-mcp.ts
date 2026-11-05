@@ -110,8 +110,12 @@ export async function installAceTool(config: AceToolConfig): Promise<McpInstallR
   const { baseUrl, token } = config
 
   const args = ['-y', 'ace-tool@latest']
-  if (baseUrl) args.push('--base-url', baseUrl)
-  if (token) args.push('--token', token)
+  if (baseUrl) {
+    args.push('--base-url', baseUrl)
+  }
+  if (token) {
+    args.push('--token', token)
+  }
 
   const serverConfig = buildMcpServerConfig({ type: 'stdio', command: 'npx', args })
   return configureMcpInClaude('ace-tool', serverConfig, 'ace-tool MCP')
@@ -125,8 +129,12 @@ export async function installAceToolRs(config: AceToolConfig): Promise<McpInstal
   const { baseUrl, token } = config
 
   const args = ['ace-tool-rs']
-  if (baseUrl) args.push('--base-url', baseUrl)
-  if (token) args.push('--token', token)
+  if (baseUrl) {
+    args.push('--base-url', baseUrl)
+  }
+  if (token) {
+    args.push('--token', token)
+  }
 
   const serverConfig = buildMcpServerConfig({
     type: 'stdio',
@@ -227,8 +235,12 @@ export async function installFastContext(config: FastContextConfig): Promise<Mcp
   const { apiKey, includeSnippets } = config
 
   const env: Record<string, string> = {}
-  if (apiKey) env.WINDSURF_API_KEY = apiKey
-  if (includeSnippets) env.FC_INCLUDE_SNIPPETS = 'true'
+  if (apiKey) {
+    env.WINDSURF_API_KEY = apiKey
+  }
+  if (includeSnippets) {
+    env.FC_INCLUDE_SNIPPETS = 'true'
+  }
 
   const serverConfig = buildMcpServerConfig({
     type: 'stdio',
@@ -341,8 +353,12 @@ function mirrorCcgServers(
  */
 function formatSyncMessage(target: string, synced: string[], removed: string[]): string {
   const parts: string[] = []
-  if (synced.length > 0) parts.push(`synced: ${synced.join(', ')}`)
-  if (removed.length > 0) parts.push(`removed: ${removed.join(', ')}`)
+  if (synced.length > 0) {
+    parts.push(`synced: ${synced.join(', ')}`)
+  }
+  if (removed.length > 0) {
+    parts.push(`removed: ${removed.join(', ')}`)
+  }
   return `${target} MCP mirror complete (${parts.join('; ')})`
 }
 

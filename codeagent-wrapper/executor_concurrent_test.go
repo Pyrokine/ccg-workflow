@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -153,9 +154,7 @@ func (f *execFakeRunner) SetEnv(env map[string]string) {
 	if f.env == nil {
 		f.env = make(map[string]string, len(env))
 	}
-	for k, v := range env {
-		f.env[k] = v
-	}
+	maps.Copy(f.env, env)
 }
 func (f *execFakeRunner) Process() processHandle {
 	if f.process != nil {
@@ -199,6 +198,11 @@ func TestExecutorHelperCoverage(t *testing.T) {
 			if err != nil {
 				t.Fatalf("StdoutPipe error: %v", err)
 			}
+			defer func() {
+				if err := stdoutPipe.Close(); err != nil && !errors.Is(err, os.ErrClosed) {
+					t.Errorf("close stdout pipe: %v", err)
+				}
+			}()
 			stdinPipe, err := rcProc.StdinPipe()
 			if err != nil {
 				t.Fatalf("StdinPipe error: %v", err)
@@ -239,23 +243,23 @@ func TestExecutorHelperCoverage(t *testing.T) {
 
 	t.Run(
 		"topologicalSortAndSkip", func(t *testing.T) {
-			layers, err := topologicalSort([]TaskSpec{{ID: "root"}, {ID: "child", Dependencies: []string{"root"}}})
+			layers, err := topologicalSort([]taskSpec{{ID: "root"}, {ID: "child", Dependencies: []string{"root"}}})
 			if err != nil || len(layers) != 2 {
 				t.Fatalf("unexpected topological sort result: layers=%d err=%v", len(layers), err)
 			}
-			if _, err := topologicalSort([]TaskSpec{{ID: "cycle", Dependencies: []string{"cycle"}}}); err == nil {
+			if _, err := topologicalSort([]taskSpec{{ID: "cycle", Dependencies: []string{"cycle"}}}); err == nil {
 				t.Fatalf("expected cycle detection error")
 			}
 
-			failed := map[string]TaskResult{"root": {ExitCode: 1}}
-			if skip, _ := shouldSkipTask(TaskSpec{ID: "child", Dependencies: []string{"root"}}, failed); !skip {
+			failed := map[string]taskResult{"root": {ExitCode: 1}}
+			if skip, _ := shouldSkipTask(taskSpec{ID: "child", Dependencies: []string{"root"}}, failed); !skip {
 				t.Fatalf("should skip when dependency failed")
 			}
-			if skip, _ := shouldSkipTask(TaskSpec{ID: "leaf"}, failed); skip {
+			if skip, _ := shouldSkipTask(taskSpec{ID: "leaf"}, failed); skip {
 				t.Fatalf("should not skip task without dependencies")
 			}
 			if skip, _ := shouldSkipTask(
-				TaskSpec{ID: "child-ok", Dependencies: []string{"root"}}, map[string]TaskResult{},
+				taskSpec{ID: "child-ok", Dependencies: []string{"root"}}, map[string]taskResult{},
 			); skip {
 				t.Fatalf("should not skip when dependencies succeeded")
 			}
@@ -283,11 +287,19 @@ func TestExecutorHelperCoverage(t *testing.T) {
 	t.Run(
 		"generateFinalOutputAndArgs", func(t *testing.T) {
 			const key = "CODEX_REQUIRE_APPROVAL"
-			t.Cleanup(func() { os.Unsetenv(key) })
-			os.Unsetenv(key)
+			t.Cleanup(
+				func() {
+					if err := os.Unsetenv(key); err != nil {
+						t.Errorf("I/O operation failed: %v", err)
+					}
+				},
+			)
+			if err := os.Unsetenv(key); err != nil {
+				t.Errorf("I/O operation failed: %v", err)
+			}
 
 			out := generateFinalOutput(
-				[]TaskResult{
+				[]taskResult{
 					{TaskID: "ok", ExitCode: 0},
 					{TaskID: "fail", ExitCode: 1, Error: "boom"},
 				},
@@ -297,7 +309,7 @@ func TestExecutorHelperCoverage(t *testing.T) {
 			}
 			// Test summary mode (default) - should have new format with ### headers
 			out = generateFinalOutput(
-				[]TaskResult{
+				[]taskResult{
 					{
 						TaskID: "rich", ExitCode: 0, SessionID: "sess", LogPath: "/tmp/log", Message: "hello",
 					},
@@ -308,7 +320,7 @@ func TestExecutorHelperCoverage(t *testing.T) {
 			}
 			// Test full output mode - should have Session and Message
 			out = generateFinalOutputWithMode(
-				[]TaskResult{
+				[]taskResult{
 					{
 						TaskID: "rich", ExitCode: 0, SessionID: "sess", LogPath: "/tmp/log", Message: "hello",
 					},
@@ -320,7 +332,7 @@ func TestExecutorHelperCoverage(t *testing.T) {
 				t.Fatalf("full output missing fields: %s", out)
 			}
 
-			args := buildCodexArgs(&Config{Mode: "new", WorkDir: "/tmp"}, "task")
+			args := buildCodexArgs(&config{Mode: "new", WorkDir: "/tmp"}, "task")
 			if !slices.Equal(
 				args, []string{
 					"e", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "-c", "mcp_servers={}",
@@ -330,7 +342,7 @@ func TestExecutorHelperCoverage(t *testing.T) {
 			) {
 				t.Fatalf("unexpected codex args: %+v", args)
 			}
-			args = buildCodexArgs(&Config{Mode: "resume", SessionID: "sess"}, "target")
+			args = buildCodexArgs(&config{Mode: "resume", SessionID: "sess"}, "target")
 			if !slices.Equal(
 				args, []string{
 					"e", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "-c", "mcp_servers={}",
@@ -347,7 +359,7 @@ func TestExecutorHelperCoverage(t *testing.T) {
 		"generateFinalOutputASCIIMode", func(t *testing.T) {
 			t.Setenv("CODEAGENT_ASCII_MODE", "true")
 
-			results := []TaskResult{
+			results := []taskResult{
 				{TaskID: "ok", ExitCode: 0, Coverage: "92%", CoverageNum: 92, CoverageTarget: 90, KeyOutput: "done"},
 				{TaskID: "warn", ExitCode: 0, Coverage: "80%", CoverageNum: 80, CoverageTarget: 90, KeyOutput: "did"},
 				{TaskID: "bad", ExitCode: 2, Error: "boom"},
@@ -371,7 +383,7 @@ func TestExecutorHelperCoverage(t *testing.T) {
 		"generateFinalOutputUnicodeMode", func(t *testing.T) {
 			t.Setenv("CODEAGENT_ASCII_MODE", "false")
 
-			results := []TaskResult{
+			results := []taskResult{
 				{TaskID: "ok", ExitCode: 0, Coverage: "92%", CoverageNum: 92, CoverageTarget: 90, KeyOutput: "done"},
 				{TaskID: "warn", ExitCode: 0, Coverage: "80%", CoverageNum: 80, CoverageTarget: 90, KeyOutput: "did"},
 				{TaskID: "bad", ExitCode: 2, Error: "boom"},
@@ -390,25 +402,31 @@ func TestExecutorHelperCoverage(t *testing.T) {
 		"executeConcurrentWrapper", func(t *testing.T) {
 			orig := runCodexTaskFn
 			defer func() { runCodexTaskFn = orig }()
-			runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
-				return TaskResult{TaskID: task.ID, ExitCode: 0, Message: "done"}
+			runCodexTaskFn = func(task taskSpec, timeout int) taskResult {
+				return taskResult{TaskID: task.ID, ExitCode: 0, Message: "done"}
 			}
-			os.Setenv("CODEAGENT_MAX_PARALLEL_WORKERS", "1")
-			defer os.Unsetenv("CODEAGENT_MAX_PARALLEL_WORKERS")
+			if err := os.Setenv("CODEAGENT_MAX_PARALLEL_WORKERS", "1"); err != nil {
+				t.Errorf("I/O operation failed: %v", err)
+			}
+			defer func() {
+				if err := os.Unsetenv("CODEAGENT_MAX_PARALLEL_WORKERS"); err != nil {
+					t.Errorf("I/O operation failed: %v", err)
+				}
+			}()
 
-			results := executeConcurrent([][]TaskSpec{{{ID: "wrap"}}}, 1)
+			results := executeConcurrent([][]taskSpec{{{ID: "wrap"}}}, 1)
 			if len(results) != 1 || results[0].TaskID != "wrap" {
 				t.Fatalf("unexpected wrapper results: %+v", results)
 			}
 
-			unbounded := executeConcurrentWithContext(context.Background(), [][]TaskSpec{{{ID: "unbounded"}}}, 1, 0)
+			unbounded := executeConcurrentWithContext(context.Background(), [][]taskSpec{{{ID: "unbounded"}}}, 1, 0)
 			if len(unbounded) != 1 || unbounded[0].ExitCode != 0 {
 				t.Fatalf("unexpected unbounded result: %+v", unbounded)
 			}
 
 			ctx, cancel := context.WithCancel(context.Background())
 			cancel()
-			cancelled := executeConcurrentWithContext(ctx, [][]TaskSpec{{{ID: "cancel"}}}, 1, 1)
+			cancelled := executeConcurrentWithContext(ctx, [][]taskSpec{{{ID: "cancel"}}}, 1, 1)
 			if cancelled[0].ExitCode == 0 {
 				t.Fatalf("expected cancelled result, got %+v", cancelled[0])
 			}
@@ -432,7 +450,13 @@ func TestExecutorRunCodexTaskWithContext(t *testing.T) {
 			}
 
 			res := runCodexTaskWithContext(
-				context.Background(), TaskSpec{Task: "payload", WorkDir: ".", Mode: "resume"}, nil, nil, false, false, 1,
+				context.Background(),
+				taskSpec{Task: "payload", WorkDir: ".", Mode: "resume"},
+				nil,
+				nil,
+				false,
+				false,
+				1,
 			)
 			if res.ExitCode == 0 || !strings.Contains(res.Error, "session_id") {
 				t.Fatalf("expected validation error, got %+v", res)
@@ -452,7 +476,7 @@ func TestExecutorRunCodexTaskWithContext(t *testing.T) {
 			}
 
 			res := runCodexTaskWithContext(
-				context.Background(), TaskSpec{ID: "task-1", Task: "payload", WorkDir: "."}, nil, nil, false, false, 1,
+				context.Background(), taskSpec{ID: "task-1", Task: "payload", WorkDir: "."}, nil, nil, false, false, 1,
 			)
 			if res.Error != "" || res.Message != "hello" || res.ExitCode != 0 {
 				t.Fatalf("unexpected result: %+v", res)
@@ -465,12 +489,12 @@ func TestExecutorRunCodexTaskWithContext(t *testing.T) {
 			}
 
 			orig := runCodexTaskFn
-			runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
-				return TaskResult{TaskID: task.ID, ExitCode: 0, Message: "ok"}
+			runCodexTaskFn = func(task taskSpec, timeout int) taskResult {
+				return taskResult{TaskID: task.ID, ExitCode: 0, Message: "ok"}
 			}
 			t.Cleanup(func() { runCodexTaskFn = orig })
 
-			if res := runCodexTask(TaskSpec{Task: "task-text", WorkDir: "."}, true, 1); res.ExitCode != 0 {
+			if res := runCodexTask(taskSpec{Task: "task-text", WorkDir: "."}, true, 1); res.ExitCode != 0 {
 				t.Fatalf("runCodexTask failed: %+v", res)
 			}
 
@@ -491,8 +515,13 @@ func TestExecutorRunCodexTaskWithContext(t *testing.T) {
 			}
 
 			res := runCodexTaskWithContext(
-				context.Background(), TaskSpec{ID: "task-agy", Task: "payload", WorkDir: ".", Backend: "agy"}, AntigravityBackend{}, nil,
-				false, false, 1,
+				context.Background(),
+				taskSpec{ID: "task-agy", Task: "payload", WorkDir: ".", Backend: "agy"},
+				antigravityBackend{},
+				nil,
+				false,
+				false,
+				1,
 			)
 			if res.Error != "" || res.Message != "OK" || res.ExitCode != 0 {
 				t.Fatalf("unexpected agy alias result: %+v", res)
@@ -512,8 +541,8 @@ func TestExecutorRunCodexTaskWithContext(t *testing.T) {
 
 			res := runCodexTaskWithContext(
 				context.Background(),
-				TaskSpec{ID: "task-agy-stdin", Task: "line1\nline2", WorkDir: ".", Backend: "agy", UseStdin: true},
-				AntigravityBackend{}, nil, false, false, 1,
+				taskSpec{ID: "task-agy-stdin", Task: "line1\nline2", WorkDir: ".", Backend: "agy", UseStdin: true},
+				antigravityBackend{}, nil, false, false, 1,
 			)
 			if res.ExitCode != 0 || res.Message != "OK" {
 				t.Fatalf("unexpected agy stdin result: %+v", res)
@@ -532,14 +561,16 @@ func TestExecutorRunCodexTaskWithContext(t *testing.T) {
 		"agyAuthenticationFailure", func(t *testing.T) {
 			newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
 				return &execFakeRunner{
-					stdout:  newReasonReadCloser("Authentication required. Please visit the URL to log in:\nError: authentication timed out.\n"),
+					stdout: newReasonReadCloser(
+						"Authentication required. Please visit the URL to log in:\nError: authentication timed out.\n",
+					),
 					process: &execFakeProcess{pid: 1234},
 				}
 			}
 
 			res := runCodexTaskWithContext(
-				context.Background(), TaskSpec{ID: "task-agy-auth", Task: "payload", WorkDir: ".", Backend: "agy"},
-				AntigravityBackend{}, nil, false, false, 1,
+				context.Background(), taskSpec{ID: "task-agy-auth", Task: "payload", WorkDir: ".", Backend: "agy"},
+				antigravityBackend{}, nil, false, false, 1,
 			)
 			if res.ExitCode == 0 || !strings.Contains(res.Error, "authentication") {
 				t.Fatalf("expected authentication failure, got %+v", res)
@@ -558,8 +589,13 @@ func TestExecutorRunCodexTaskWithContext(t *testing.T) {
 			}
 
 			res := runCodexTaskWithContext(
-				context.Background(), TaskSpec{ID: "task-agy-auth-stderr", Task: "payload", WorkDir: ".", Backend: "agy"},
-				AntigravityBackend{}, nil, false, false, 1,
+				context.Background(),
+				taskSpec{ID: "task-agy-auth-stderr", Task: "payload", WorkDir: ".", Backend: "agy"},
+				antigravityBackend{},
+				nil,
+				false,
+				false,
+				1,
 			)
 			if res.ExitCode == 0 || !strings.Contains(res.Error, "authentication") {
 				t.Fatalf("expected stderr authentication failure, got %+v", res)
@@ -579,8 +615,8 @@ func TestExecutorRunCodexTaskWithContext(t *testing.T) {
 			}
 
 			res := runCodexTaskWithContext(
-				context.Background(), TaskSpec{ID: "task-agy-auth-wait", Task: "payload", WorkDir: ".", Backend: "agy"},
-				AntigravityBackend{}, nil, false, false, 5,
+				context.Background(), taskSpec{ID: "task-agy-auth-wait", Task: "payload", WorkDir: ".", Backend: "agy"},
+				antigravityBackend{}, nil, false, false, 5,
 			)
 			if res.ExitCode == 0 || !strings.Contains(res.Error, "Antigravity authentication failed") {
 				t.Fatalf("expected authentication failure before wait error, got %+v", res)
@@ -599,8 +635,13 @@ func TestExecutorRunCodexTaskWithContext(t *testing.T) {
 			}
 
 			res := runCodexTaskWithContext(
-				context.Background(), TaskSpec{ID: "task-agy-auth-prefixed", Task: "payload", WorkDir: ".", Backend: "agy"},
-				AntigravityBackend{}, nil, false, false, 1,
+				context.Background(),
+				taskSpec{ID: "task-agy-auth-prefixed", Task: "payload", WorkDir: ".", Backend: "agy"},
+				antigravityBackend{},
+				nil,
+				false,
+				false,
+				1,
 			)
 			if res.ExitCode == 0 || !strings.Contains(res.Error, "Antigravity authentication failed") {
 				t.Fatalf("expected prefixed authentication failure, got %+v", res)
@@ -620,8 +661,13 @@ func TestExecutorRunCodexTaskWithContext(t *testing.T) {
 			}
 
 			res := runCodexTaskWithContext(
-				context.Background(), TaskSpec{ID: "task-agy-auth-timeout", Task: "payload", WorkDir: ".", Backend: "agy"},
-				AntigravityBackend{}, nil, false, false, 0,
+				context.Background(),
+				taskSpec{ID: "task-agy-auth-timeout", Task: "payload", WorkDir: ".", Backend: "agy"},
+				antigravityBackend{},
+				nil,
+				false,
+				false,
+				0,
 			)
 			if res.ExitCode != 1 || !strings.Contains(res.Error, "check agy login") {
 				t.Fatalf("expected authentication guidance on timeout, got %+v", res)
@@ -637,13 +683,16 @@ func TestExecutorRunCodexTaskWithContext(t *testing.T) {
 					process: &execFakeProcess{pid: 1234},
 				}
 			}
-			runAntigravityPTYRetryFn = func(context.Context, string, []string, string, map[string]string) (string, bool, error) {
-				return "", false, errors.New("script missing")
+			runAntigravityPTYRetryFn = func(context.Context, string, []string, string, map[string]string) (
+				parseResult,
+				error,
+			) {
+				return parseResult{}, errors.New("script missing")
 			}
 
 			res := runCodexTaskWithContext(
-				context.Background(), TaskSpec{ID: "task-agy-empty", Task: "payload", WorkDir: ".", Backend: "agy"},
-				AntigravityBackend{}, nil, false, false, 5,
+				context.Background(), taskSpec{ID: "task-agy-empty", Task: "payload", WorkDir: ".", Backend: "agy"},
+				antigravityBackend{}, nil, false, false, 5,
 			)
 			if res.ExitCode != 1 || !strings.Contains(res.Error, "drop stdout in non-interactive runs") {
 				t.Fatalf("expected empty output guidance, got %+v", res)
@@ -654,8 +703,8 @@ func TestExecutorRunCodexTaskWithContext(t *testing.T) {
 	t.Run(
 		"agyWaitErrorReportsLogDiagnostic", func(t *testing.T) {
 			err := exec.Command("false").Run()
-			exitErr, _ := err.(*exec.ExitError)
-			if exitErr == nil {
+			var exitErr *exec.ExitError
+			if !errors.As(err, &exitErr) {
 				t.Fatalf("expected exec.ExitError")
 			}
 			newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
@@ -672,14 +721,17 @@ func TestExecutorRunCodexTaskWithContext(t *testing.T) {
 					waitErr: exitErr,
 				}
 			}
-			runAntigravityPTYRetryFn = func(context.Context, string, []string, string, map[string]string) (string, bool, error) {
+			runAntigravityPTYRetryFn = func(context.Context, string, []string, string, map[string]string) (
+				parseResult,
+				error,
+			) {
 				t.Fatalf("PTY retry should not run when wait error log contains backend diagnostic")
-				return "", false, nil
+				return parseResult{}, nil
 			}
 
 			res := runCodexTaskWithContext(
-				context.Background(), TaskSpec{ID: "task-agy-wait-log", Task: "payload", WorkDir: ".", Backend: "agy"},
-				AntigravityBackend{}, nil, false, false, 5,
+				context.Background(), taskSpec{ID: "task-agy-wait-log", Task: "payload", WorkDir: ".", Backend: "agy"},
+				antigravityBackend{}, nil, false, false, 5,
 			)
 			if res.ExitCode != 1 || !strings.Contains(res.Error, "User location is not supported") {
 				t.Fatalf("expected wait error log diagnostic, got %+v", res)
@@ -702,14 +754,17 @@ func TestExecutorRunCodexTaskWithContext(t *testing.T) {
 					process: &execFakeProcess{pid: 1234},
 				}
 			}
-			runAntigravityPTYRetryFn = func(context.Context, string, []string, string, map[string]string) (string, bool, error) {
+			runAntigravityPTYRetryFn = func(context.Context, string, []string, string, map[string]string) (
+				parseResult,
+				error,
+			) {
 				t.Fatalf("PTY retry should not run when agy log contains backend diagnostic")
-				return "", false, nil
+				return parseResult{}, nil
 			}
 
 			res := runCodexTaskWithContext(
-				context.Background(), TaskSpec{ID: "task-agy-empty-log", Task: "payload", WorkDir: ".", Backend: "agy"},
-				AntigravityBackend{}, nil, false, false, 5,
+				context.Background(), taskSpec{ID: "task-agy-empty-log", Task: "payload", WorkDir: ".", Backend: "agy"},
+				antigravityBackend{}, nil, false, false, 5,
 			)
 			if res.ExitCode != 1 || !strings.Contains(res.Error, "User location is not supported") {
 				t.Fatalf("expected agy log diagnostic, got %+v", res)
@@ -731,15 +786,23 @@ func TestExecutorRunCodexTaskWithContext(t *testing.T) {
 					process: &execFakeProcess{pid: 1234},
 				}
 			}
-			runAntigravityPTYRetryFn = func(context.Context, string, []string, string, map[string]string) (string, bool, error) {
-				return "PTY OK", true, nil
+			runAntigravityPTYRetryFn = func(context.Context, string, []string, string, map[string]string) (
+				parseResult,
+				error,
+			) {
+				return parseResult{message: "PTY OK", threadID: "pty-conversation"}, nil
 			}
 
 			res := runCodexTaskWithContext(
-				context.Background(), TaskSpec{ID: "task-agy-empty-auth-log", Task: "payload", WorkDir: ".", Backend: "agy"},
-				AntigravityBackend{}, nil, false, false, 5,
+				context.Background(),
+				taskSpec{ID: "task-agy-empty-auth-log", Task: "payload", WorkDir: ".", Backend: "agy"},
+				antigravityBackend{},
+				nil,
+				false,
+				false,
+				5,
 			)
-			if res.ExitCode != 0 || res.Message != "PTY OK" {
+			if res.ExitCode != 0 || res.Message != "PTY OK" || res.SessionID != "pty-conversation" {
 				t.Fatalf("expected PTY retry despite early auth log, got %+v", res)
 			}
 		},
@@ -759,13 +822,21 @@ func TestExecutorRunCodexTaskWithContext(t *testing.T) {
 					process: &execFakeProcess{pid: 1234},
 				}
 			}
-			runAntigravityPTYRetryFn = func(context.Context, string, []string, string, map[string]string) (string, bool, error) {
-				return "PTY OK", true, nil
+			runAntigravityPTYRetryFn = func(context.Context, string, []string, string, map[string]string) (
+				parseResult,
+				error,
+			) {
+				return parseResult{message: "PTY OK", threadID: "pty-conversation"}, nil
 			}
 
 			res := runCodexTaskWithContext(
-				context.Background(), TaskSpec{ID: "task-agy-empty-quota-refresh", Task: "payload", WorkDir: ".", Backend: "agy"},
-				AntigravityBackend{}, nil, false, false, 5,
+				context.Background(),
+				taskSpec{ID: "task-agy-empty-quota-refresh", Task: "payload", WorkDir: ".", Backend: "agy"},
+				antigravityBackend{},
+				nil,
+				false,
+				false,
+				5,
 			)
 			if res.ExitCode != 0 || res.Message != "PTY OK" {
 				t.Fatalf("expected PTY retry despite quota refresh log, got %+v", res)
@@ -783,17 +854,17 @@ func TestExecutorRunCodexTaskWithContext(t *testing.T) {
 			}
 			runAntigravityPTYRetryFn = func(
 				ctx context.Context, name string, args []string, workDir string, env map[string]string,
-			) (string, bool, error) {
+			) (parseResult, error) {
 				if name != "agy" || workDir != "." || antigravityLogPathFromArgs(args) == "" ||
 					!slices.Equal(args[len(args)-2:], []string{"-p", "payload"}) {
 					t.Fatalf("unexpected PTY retry input: name=%q workDir=%q args=%#v", name, workDir, args)
 				}
-				return "PTY OK", true, nil
+				return parseResult{message: "PTY OK", threadID: "pty-conversation"}, nil
 			}
 
 			res := runCodexTaskWithContext(
-				context.Background(), TaskSpec{ID: "task-agy-empty-pty", Task: "payload", WorkDir: ".", Backend: "agy"},
-				AntigravityBackend{}, nil, false, false, 5,
+				context.Background(), taskSpec{ID: "task-agy-empty-pty", Task: "payload", WorkDir: ".", Backend: "agy"},
+				antigravityBackend{}, nil, false, false, 5,
 			)
 			if res.ExitCode != 0 || res.Message != "PTY OK" {
 				t.Fatalf("expected PTY retry output, got %+v", res)
@@ -809,15 +880,24 @@ func TestExecutorRunCodexTaskWithContext(t *testing.T) {
 					process: &execFakeProcess{pid: 1234},
 				}
 			}
-			runAntigravityPTYRetryFn = func(context.Context, string, []string, string, map[string]string) (string, bool, error) {
-				return "backend rejected", true, errors.New("exit status 1")
+			runAntigravityPTYRetryFn = func(context.Context, string, []string, string, map[string]string) (
+				parseResult,
+				error,
+			) {
+				return parseResult{message: "backend rejected"}, errors.New("exit status 1")
 			}
 
 			res := runCodexTaskWithContext(
-				context.Background(), TaskSpec{ID: "task-agy-empty-pty-error", Task: "payload", WorkDir: ".", Backend: "agy"},
-				AntigravityBackend{}, nil, false, false, 5,
+				context.Background(),
+				taskSpec{ID: "task-agy-empty-pty-error", Task: "payload", WorkDir: ".", Backend: "agy"},
+				antigravityBackend{},
+				nil,
+				false,
+				false,
+				5,
 			)
-			if res.ExitCode == 0 || res.Message == "backend rejected" || !strings.Contains(res.Error, "backend rejected") {
+			if res.ExitCode == 0 || res.Message == "backend rejected" ||
+				!strings.Contains(res.Error, "backend rejected") {
 				t.Fatalf("expected PTY retry error output to stay failed, got %+v", res)
 			}
 		},
@@ -827,14 +907,21 @@ func TestExecutorRunCodexTaskWithContext(t *testing.T) {
 		"agyAuthenticationPhraseInSuccessfulOutput", func(t *testing.T) {
 			newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
 				return &execFakeRunner{
-					stdout:  newReasonReadCloser("Review PASS\nQuoted error: Authentication required. Please visit the URL to log in.\n"),
+					stdout: newReasonReadCloser(
+						"Review PASS\nQuoted error: Authentication required. Please visit the URL to log in.\n",
+					),
 					process: &execFakeProcess{pid: 1234},
 				}
 			}
 
 			res := runCodexTaskWithContext(
-				context.Background(), TaskSpec{ID: "task-agy-auth-quote", Task: "payload", WorkDir: ".", Backend: "agy"},
-				AntigravityBackend{}, nil, false, false, 5,
+				context.Background(),
+				taskSpec{ID: "task-agy-auth-quote", Task: "payload", WorkDir: ".", Backend: "agy"},
+				antigravityBackend{},
+				nil,
+				false,
+				false,
+				5,
 			)
 			if res.ExitCode != 0 || !strings.Contains(res.Message, "Authentication required") {
 				t.Fatalf("expected successful output containing authentication phrase, got %+v", res)
@@ -850,7 +937,7 @@ func TestExecutorRunCodexTaskWithContext(t *testing.T) {
 				}
 			}
 			res := runCodexTaskWithContext(
-				context.Background(), TaskSpec{Task: "payload", WorkDir: "."}, nil, nil, false, false, 1,
+				context.Background(), taskSpec{Task: "payload", WorkDir: "."}, nil, nil, false, false, 1,
 			)
 			if res.ExitCode != 127 {
 				t.Fatalf("expected missing executable exit code, got %d", res.ExitCode)
@@ -860,7 +947,7 @@ func TestExecutorRunCodexTaskWithContext(t *testing.T) {
 				return &execFakeRunner{startErr: errors.New("start failed"), process: &execFakeProcess{pid: 2}}
 			}
 			res = runCodexTaskWithContext(
-				context.Background(), TaskSpec{Task: "payload", WorkDir: "."}, nil, nil, false, false, 1,
+				context.Background(), taskSpec{Task: "payload", WorkDir: "."}, nil, nil, false, false, 1,
 			)
 			if res.ExitCode == 0 {
 				t.Fatalf("expected non-zero exit on start failure")
@@ -872,13 +959,21 @@ func TestExecutorRunCodexTaskWithContext(t *testing.T) {
 		"timeoutAndPipes", func(t *testing.T) {
 			newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
 				return &execFakeRunner{
-					stdout:    newReasonReadCloser(`{"type":"item.completed","item":{"type":"agent_message","text":"slow"}}`),
+					stdout: newReasonReadCloser(
+						`{"type":"item.completed","item":{"type":"agent_message","text":"slow"}}`,
+					),
 					process:   &execFakeProcess{pid: 5},
 					waitDelay: 20 * time.Millisecond,
 				}
 			}
 			res := runCodexTaskWithContext(
-				context.Background(), TaskSpec{Task: "payload", WorkDir: ".", UseStdin: true}, nil, nil, false, false, 0,
+				context.Background(),
+				taskSpec{Task: "payload", WorkDir: ".", UseStdin: true},
+				nil,
+				nil,
+				false,
+				false,
+				0,
 			)
 			if res.ExitCode == 0 {
 				t.Fatalf("expected timeout result, got %+v", res)
@@ -892,7 +987,7 @@ func TestExecutorRunCodexTaskWithContext(t *testing.T) {
 				return &execFakeRunner{stdoutErr: errors.New("stdout fail"), process: &execFakeProcess{pid: 6}}
 			}
 			res := runCodexTaskWithContext(
-				context.Background(), TaskSpec{Task: "payload", WorkDir: "."}, nil, nil, false, false, 1,
+				context.Background(), taskSpec{Task: "payload", WorkDir: "."}, nil, nil, false, false, 1,
 			)
 			if res.ExitCode == 0 {
 				t.Fatalf("expected failure on stdout pipe error")
@@ -902,7 +997,13 @@ func TestExecutorRunCodexTaskWithContext(t *testing.T) {
 				return &execFakeRunner{stdinErr: errors.New("stdin fail"), process: &execFakeProcess{pid: 7}}
 			}
 			res = runCodexTaskWithContext(
-				context.Background(), TaskSpec{Task: "payload", WorkDir: ".", UseStdin: true}, nil, nil, false, false, 1,
+				context.Background(),
+				taskSpec{Task: "payload", WorkDir: ".", UseStdin: true},
+				nil,
+				nil,
+				false,
+				false,
+				1,
 			)
 			if res.ExitCode == 0 {
 				t.Fatalf("expected failure on stdin pipe error")
@@ -913,19 +1014,21 @@ func TestExecutorRunCodexTaskWithContext(t *testing.T) {
 	t.Run(
 		"waitExitError", func(t *testing.T) {
 			err := exec.Command("false").Run()
-			exitErr, _ := err.(*exec.ExitError)
-			if exitErr == nil {
+			var exitErr *exec.ExitError
+			if !errors.As(err, &exitErr) {
 				t.Fatalf("expected exec.ExitError")
 			}
 			newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
 				return &execFakeRunner{
-					stdout:  newReasonReadCloser(`{"type":"item.completed","item":{"type":"agent_message","text":"ignored"}}`),
+					stdout: newReasonReadCloser(
+						`{"type":"item.completed","item":{"type":"agent_message","text":"ignored"}}`,
+					),
 					process: &execFakeProcess{pid: 8},
 					waitErr: exitErr,
 				}
 			}
 			res := runCodexTaskWithContext(
-				context.Background(), TaskSpec{Task: "payload", WorkDir: "."}, nil, nil, false, false, 1,
+				context.Background(), taskSpec{Task: "payload", WorkDir: "."}, nil, nil, false, false, 1,
 			)
 			if res.ExitCode == 0 {
 				t.Fatalf("expected non-zero exit on wait error")
@@ -937,14 +1040,16 @@ func TestExecutorRunCodexTaskWithContext(t *testing.T) {
 		"contextCancelled", func(t *testing.T) {
 			newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
 				return &execFakeRunner{
-					stdout:    newReasonReadCloser(`{"type":"item.completed","item":{"type":"agent_message","text":"cancel"}}`),
+					stdout: newReasonReadCloser(
+						`{"type":"item.completed","item":{"type":"agent_message","text":"cancel"}}`,
+					),
 					process:   &execFakeProcess{pid: 9},
 					waitDelay: 10 * time.Millisecond,
 				}
 			}
 			ctx, cancel := context.WithCancel(context.Background())
 			cancel()
-			res := runCodexTaskWithContext(ctx, TaskSpec{Task: "payload", WorkDir: "."}, nil, nil, false, false, 1)
+			res := runCodexTaskWithContext(ctx, taskSpec{Task: "payload", WorkDir: "."}, nil, nil, false, false, 1)
 			if res.ExitCode == 0 {
 				t.Fatalf("expected cancellation result")
 			}
@@ -955,13 +1060,15 @@ func TestExecutorRunCodexTaskWithContext(t *testing.T) {
 		"silentLogger", func(t *testing.T) {
 			newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
 				return &execFakeRunner{
-					stdout:  newReasonReadCloser(`{"type":"item.completed","item":{"type":"agent_message","text":"quiet"}}`),
+					stdout: newReasonReadCloser(
+						`{"type":"item.completed","item":{"type":"agent_message","text":"quiet"}}`,
+					),
 					process: &execFakeProcess{pid: 10},
 				}
 			}
 			_ = closeLogger()
 			res := runCodexTaskWithContext(
-				context.Background(), TaskSpec{Task: "payload", WorkDir: "."}, nil, nil, false, true, 1,
+				context.Background(), taskSpec{Task: "payload", WorkDir: "."}, nil, nil, false, true, 1,
 			)
 			if res.ExitCode != 0 || res.LogPath == "" {
 				t.Fatalf("expected success with temp logger, got %+v", res)
@@ -974,26 +1081,28 @@ func TestExecutorRunCodexTaskWithContext(t *testing.T) {
 		"injectedLogger", func(t *testing.T) {
 			newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
 				return &execFakeRunner{
-					stdout:  newReasonReadCloser(`{"type":"item.completed","item":{"type":"agent_message","text":"injected"}}`),
+					stdout: newReasonReadCloser(
+						`{"type":"item.completed","item":{"type":"agent_message","text":"injected"}}`,
+					),
 					process: &execFakeProcess{pid: 12},
 				}
 			}
 			_ = closeLogger()
 
-			injected, err := NewLoggerWithSuffix("executor-injected")
+			injected, err := newLoggerWithSuffix("executor-injected")
 			if err != nil {
 				t.Fatalf("NewLoggerWithSuffix() error = %v", err)
 			}
 			defer func() {
 				_ = injected.Close()
-				_ = os.Remove(injected.Path())
+				_ = os.Remove(injected.logPath())
 			}()
 
 			ctx := withTaskLogger(context.Background(), injected)
 			res := runCodexTaskWithContext(
-				ctx, TaskSpec{ID: "task-injected", Task: "payload", WorkDir: "."}, nil, nil, false, true, 1,
+				ctx, taskSpec{ID: "task-injected", Task: "payload", WorkDir: "."}, nil, nil, false, true, 1,
 			)
-			if res.ExitCode != 0 || res.LogPath != injected.Path() {
+			if res.ExitCode != 0 || res.LogPath != injected.logPath() {
 				t.Fatalf("expected injected logger path, got %+v", res)
 			}
 			if activeLogger() != nil {
@@ -1001,7 +1110,7 @@ func TestExecutorRunCodexTaskWithContext(t *testing.T) {
 			}
 
 			injected.Flush()
-			data, err := os.ReadFile(injected.Path())
+			data, err := os.ReadFile(injected.logPath())
 			if err != nil {
 				t.Fatalf("failed to read injected log file: %v", err)
 			}
@@ -1015,28 +1124,37 @@ func TestExecutorRunCodexTaskWithContext(t *testing.T) {
 		"contextLoggerWithoutParent", func(t *testing.T) {
 			newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
 				return &execFakeRunner{
-					stdout:  newReasonReadCloser(`{"type":"item.completed","item":{"type":"agent_message","text":"ctx"}}`),
+					stdout: newReasonReadCloser(
+						`{"type":"item.completed","item":{"type":"agent_message","text":"ctx"}}`,
+					),
 					process: &execFakeProcess{pid: 14},
 				}
 			}
 			_ = closeLogger()
 
-			taskLogger, err := NewLoggerWithSuffix("executor-taskctx")
+			taskLogger, err := newLoggerWithSuffix("executor-taskctx")
 			if err != nil {
 				t.Fatalf("NewLoggerWithSuffix() error = %v", err)
 			}
 			t.Cleanup(
 				func() {
 					_ = taskLogger.Close()
-					_ = os.Remove(taskLogger.Path())
+					_ = os.Remove(taskLogger.logPath())
 				},
 			)
 
 			ctx := withTaskLogger(context.Background(), taskLogger)
 			res := runCodexTaskWithContext(
-				nil, TaskSpec{ID: "task-context", Task: "payload", WorkDir: ".", Context: ctx}, nil, nil, false, true, 1,
+				//lint:ignore SA1012 验证缺少 context 时的既有默认处理
+				nil,
+				taskSpec{ID: "task-context", Task: "payload", WorkDir: ".", Context: ctx},
+				nil,
+				nil,
+				false,
+				true,
+				1,
 			)
-			if res.ExitCode != 0 || res.LogPath != taskLogger.Path() {
+			if res.ExitCode != 0 || res.LogPath != taskLogger.logPath() {
 				t.Fatalf("expected task logger to be reused from spec context, got %+v", res)
 			}
 			if activeLogger() != nil {
@@ -1044,7 +1162,7 @@ func TestExecutorRunCodexTaskWithContext(t *testing.T) {
 			}
 
 			taskLogger.Flush()
-			data, err := os.ReadFile(taskLogger.Path())
+			data, err := os.ReadFile(taskLogger.logPath())
 			if err != nil {
 				t.Fatalf("failed to read task log: %v", err)
 			}
@@ -1059,7 +1177,9 @@ func TestExecutorRunCodexTaskWithContext(t *testing.T) {
 			var rc *execFakeRunner
 			newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
 				rc = &execFakeRunner{
-					stdout:  newReasonReadCloser(`{"type":"item.completed","item":{"type":"agent_message","text":"backend"}}`),
+					stdout: newReasonReadCloser(
+						`{"type":"item.completed","item":{"type":"agent_message","text":"backend"}}`,
+					),
 					process: &execFakeProcess{pid: 13},
 				}
 				return rc
@@ -1067,7 +1187,8 @@ func TestExecutorRunCodexTaskWithContext(t *testing.T) {
 
 			_ = closeLogger()
 			res := runCodexTaskWithContext(
-				nil, TaskSpec{ID: "task-backend", Task: "payload", WorkDir: "/tmp"}, ClaudeBackend{}, nil, false, false,
+				//lint:ignore SA1012 验证缺少 context 时的既有默认处理
+				nil, taskSpec{ID: "task-backend", Task: "payload", WorkDir: "/tmp"}, claudeBackend{}, nil, false, false,
 				1,
 			)
 			if res.ExitCode != 0 || res.Message != "backend" {
@@ -1088,7 +1209,7 @@ func TestExecutorRunCodexTaskWithContext(t *testing.T) {
 				}
 			}
 			res := runCodexTaskWithContext(
-				context.Background(), TaskSpec{Task: "payload", WorkDir: "."}, nil, nil, false, false, 1,
+				context.Background(), taskSpec{Task: "payload", WorkDir: "."}, nil, nil, false, false, 1,
 			)
 			if res.ExitCode == 0 {
 				t.Fatalf("expected failure when no agent_message returned")
@@ -1098,7 +1219,7 @@ func TestExecutorRunCodexTaskWithContext(t *testing.T) {
 }
 
 func TestExecutorParallelLogIsolation(t *testing.T) {
-	mainLogger, err := NewLoggerWithSuffix("executor-main")
+	mainLogger, err := newLoggerWithSuffix("executor-main")
 	if err != nil {
 		t.Fatalf("NewLoggerWithSuffix() error = %v", err)
 	}
@@ -1106,7 +1227,7 @@ func TestExecutorParallelLogIsolation(t *testing.T) {
 	t.Cleanup(
 		func() {
 			_ = closeLogger()
-			_ = os.Remove(mainLogger.Path())
+			_ = os.Remove(mainLogger.logPath())
 		},
 	)
 
@@ -1116,20 +1237,20 @@ func TestExecutorParallelLogIsolation(t *testing.T) {
 	markerB := "ISOLATION_MARKER:" + taskB
 
 	origRun := runCodexTaskFn
-	runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
+	runCodexTaskFn = func(task taskSpec, timeout int) taskResult {
 		logger := taskLoggerFromContext(task.Context)
 		if logger == nil {
-			return TaskResult{TaskID: task.ID, ExitCode: 1, Error: "missing task logger"}
+			return taskResult{TaskID: task.ID, ExitCode: 1, Error: "missing task logger"}
 		}
 		switch task.ID {
 		case taskA:
-			logger.Info(markerA)
+			logger.info(markerA)
 		case taskB:
-			logger.Info(markerB)
+			logger.info(markerB)
 		default:
-			logger.Info("unexpected task: " + task.ID)
+			logger.info("unexpected task: " + task.ID)
 		}
-		return TaskResult{TaskID: task.ID, ExitCode: 0}
+		return taskResult{TaskID: task.ID, ExitCode: 0}
 	}
 	t.Cleanup(func() { runCodexTaskFn = origRun })
 
@@ -1141,7 +1262,8 @@ func TestExecutorParallelLogIsolation(t *testing.T) {
 	os.Stderr = stderrW
 	defer func() { os.Stderr = oldStderr }()
 
-	results := executeConcurrentWithContext(nil, [][]TaskSpec{{{ID: taskA}, {ID: taskB}}}, 1, -1)
+	//lint:ignore SA1012 验证并行入口对空 context 的处理
+	results := executeConcurrentWithContext(nil, [][]taskSpec{{{ID: taskA}, {ID: taskB}}}, 1, -1)
 
 	_ = stderrW.Close()
 	os.Stderr = oldStderr
@@ -1167,7 +1289,7 @@ func TestExecutorParallelLogIsolation(t *testing.T) {
 		t.Fatalf("expected distinct task log paths, got %q", paths[taskA])
 	}
 
-	if strings.Contains(stderrOut, mainLogger.Path()) {
+	if strings.Contains(stderrOut, mainLogger.logPath()) {
 		t.Fatalf("stderr should not print main log path: %s", stderrOut)
 	}
 	if !strings.Contains(stderrOut, paths[taskA]) || !strings.Contains(stderrOut, paths[taskB]) {
@@ -1175,7 +1297,7 @@ func TestExecutorParallelLogIsolation(t *testing.T) {
 	}
 
 	mainLogger.Flush()
-	mainData, err := os.ReadFile(mainLogger.Path())
+	mainData, err := os.ReadFile(mainLogger.logPath())
 	if err != nil {
 		t.Fatalf("failed to read main log: %v", err)
 	}
@@ -1210,7 +1332,7 @@ func TestConcurrentExecutorParallelLogIsolationAndClosure(t *testing.T) {
 	os.Args = []string{defaultWrapperName}
 	t.Cleanup(func() { os.Args = oldArgs })
 
-	mainLogger, err := NewLoggerWithSuffix("concurrent-main")
+	mainLogger, err := newLoggerWithSuffix("concurrent-main")
 	if err != nil {
 		t.Fatalf("NewLoggerWithSuffix() error = %v", err)
 	}
@@ -1219,7 +1341,7 @@ func TestConcurrentExecutorParallelLogIsolationAndClosure(t *testing.T) {
 		func() {
 			mainLogger.Flush()
 			_ = closeLogger()
-			_ = os.Remove(mainLogger.Path())
+			_ = os.Remove(mainLogger.logPath())
 		},
 	)
 
@@ -1229,57 +1351,57 @@ func TestConcurrentExecutorParallelLogIsolationAndClosure(t *testing.T) {
 	const expectedTaskLines = writersPerTask * logsPerWriter
 
 	taskIDs := make([]string, 0, taskCount)
-	tasks := make([]TaskSpec, 0, taskCount)
-	for i := 0; i < taskCount; i++ {
+	tasks := make([]taskSpec, 0, taskCount)
+	for range taskCount {
 		id := nextExecutorTestTaskID("iso")
 		taskIDs = append(taskIDs, id)
-		tasks = append(tasks, TaskSpec{ID: id})
+		tasks = append(tasks, taskSpec{ID: id})
 	}
 
 	type taskLoggerInfo struct {
 		taskID string
-		logger *Logger
+		logger *fileLogger
 	}
 	loggerCh := make(chan taskLoggerInfo, taskCount)
 	readyCh := make(chan struct{}, taskCount)
 	startCh := make(chan struct{})
 
 	go func() {
-		for i := 0; i < taskCount; i++ {
+		for range taskCount {
 			<-readyCh
 		}
 		close(startCh)
 	}()
 
 	origRun := runCodexTaskFn
-	runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
+	runCodexTaskFn = func(task taskSpec, timeout int) taskResult {
 		readyCh <- struct{}{}
 
 		logger := taskLoggerFromContext(task.Context)
 		loggerCh <- taskLoggerInfo{taskID: task.ID, logger: logger}
 		if logger == nil {
-			return TaskResult{TaskID: task.ID, ExitCode: 1, Error: "missing task logger"}
+			return taskResult{TaskID: task.ID, ExitCode: 1, Error: "missing task logger"}
 		}
 
 		<-startCh
 
 		var wg sync.WaitGroup
 		wg.Add(writersPerTask)
-		for g := 0; g < writersPerTask; g++ {
+		for g := range writersPerTask {
 			go func(g int) {
 				defer wg.Done()
-				for i := 0; i < logsPerWriter; i++ {
-					logger.Info(fmt.Sprintf("TASK=%s g=%d i=%d", task.ID, g, i))
+				for i := range logsPerWriter {
+					logger.info(fmt.Sprintf("TASK=%s g=%d i=%d", task.ID, g, i))
 				}
 			}(g)
 		}
 		wg.Wait()
 
-		return TaskResult{TaskID: task.ID, ExitCode: 0}
+		return taskResult{TaskID: task.ID, ExitCode: 0}
 	}
 	t.Cleanup(func() { runCodexTaskFn = origRun })
 
-	results := executeConcurrentWithContext(context.Background(), [][]TaskSpec{tasks}, 1, 0)
+	results := executeConcurrentWithContext(context.Background(), [][]taskSpec{tasks}, 1, 0)
 
 	if len(results) != taskCount {
 		t.Fatalf("expected %d results, got %d", taskCount, len(results))
@@ -1323,8 +1445,8 @@ func TestConcurrentExecutorParallelLogIsolationAndClosure(t *testing.T) {
 		}
 	}
 
-	loggers := make(map[string]*Logger, taskCount)
-	for i := 0; i < taskCount; i++ {
+	loggers := make(map[string]*fileLogger, taskCount)
+	for range taskCount {
 		info := <-loggerCh
 		if info.taskID == "" {
 			t.Fatalf("missing taskID in logger info")
@@ -1354,7 +1476,7 @@ func TestConcurrentExecutorParallelLogIsolationAndClosure(t *testing.T) {
 	}
 
 	mainLogger.Flush()
-	mainData, err := os.ReadFile(mainLogger.Path())
+	mainData, err := os.ReadFile(mainLogger.logPath())
 	if err != nil {
 		t.Fatalf("failed to read main log: %v", err)
 	}
@@ -1407,19 +1529,20 @@ func TestConcurrentExecutorParallelLogIsolationAndClosure(t *testing.T) {
 
 func parseTaskIDFromLogLine(line string) (string, bool) {
 	const marker = "TASK="
-	idx := strings.Index(line, marker)
-	if idx == -1 {
+	_, after, ok := strings.Cut(line, marker)
+	if !ok {
 		return "", false
 	}
-	rest := line[idx+len(marker):]
-	end := strings.IndexByte(rest, ' ')
-	if end == -1 {
+	rest := after
+	before0, _, ok0 := strings.Cut(rest, " ")
+	if !ok0 {
 		return rest, rest != ""
 	}
-	return rest[:end], rest[:end] != ""
+	return before0, before0 != ""
 }
 
 func TestExecutorTaskLoggerContext(t *testing.T) {
+	//lint:ignore SA1012 验证空 context 返回空 logger
 	if taskLoggerFromContext(nil) != nil {
 		t.Fatalf("expected nil logger from nil context")
 	}
@@ -1427,13 +1550,13 @@ func TestExecutorTaskLoggerContext(t *testing.T) {
 		t.Fatalf("expected nil logger when context has no logger")
 	}
 
-	logger, err := NewLoggerWithSuffix("executor-taskctx")
+	logger, err := newLoggerWithSuffix("executor-taskctx")
 	if err != nil {
 		t.Fatalf("NewLoggerWithSuffix() error = %v", err)
 	}
 	defer func() {
 		_ = logger.Close()
-		_ = os.Remove(logger.Path())
+		_ = os.Remove(logger.logPath())
 	}()
 
 	ctx := withTaskLogger(context.Background(), logger)
@@ -1466,16 +1589,16 @@ func TestExecutorExecuteConcurrentWithContextBranches(t *testing.T) {
 			child := nextExecutorTestTaskID("child")
 
 			orig := runCodexTaskFn
-			runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
+			runCodexTaskFn = func(task taskSpec, timeout int) taskResult {
 				if task.ID == root {
-					return TaskResult{TaskID: task.ID, ExitCode: 1, Error: "boom"}
+					return taskResult{TaskID: task.ID, ExitCode: 1, Error: "boom"}
 				}
-				return TaskResult{TaskID: task.ID, ExitCode: 0}
+				return taskResult{TaskID: task.ID, ExitCode: 0}
 			}
 			t.Cleanup(func() { runCodexTaskFn = orig })
 
 			results := executeConcurrentWithContext(
-				context.Background(), [][]TaskSpec{
+				context.Background(), [][]taskSpec{
 					{{ID: root}},
 					{{ID: child, Dependencies: []string{root}}},
 				}, 1, 0,
@@ -1505,12 +1628,12 @@ func TestExecutorExecuteConcurrentWithContextBranches(t *testing.T) {
 			taskID := nextExecutorTestTaskID("panic")
 
 			orig := runCodexTaskFn
-			runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
+			runCodexTaskFn = func(task taskSpec, timeout int) taskResult {
 				panic("boom")
 			}
 			t.Cleanup(func() { runCodexTaskFn = orig })
 
-			results := executeConcurrentWithContext(context.Background(), [][]TaskSpec{{{ID: taskID}}}, 1, 0)
+			results := executeConcurrentWithContext(context.Background(), [][]taskSpec{{{ID: taskID}}}, 1, 0)
 			if len(results) != 1 {
 				t.Fatalf("expected 1 result, got %d", len(results))
 			}
@@ -1535,10 +1658,10 @@ func TestExecutorExecuteConcurrentWithContextBranches(t *testing.T) {
 			var startedOnce sync.Once
 
 			orig := runCodexTaskFn
-			runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
+			runCodexTaskFn = func(task taskSpec, timeout int) taskResult {
 				startedOnce.Do(func() { close(started) })
 				<-unblock
-				return TaskResult{TaskID: task.ID, ExitCode: 0}
+				return taskResult{TaskID: task.ID, ExitCode: 0}
 			}
 			t.Cleanup(func() { runCodexTaskFn = orig })
 
@@ -1549,7 +1672,7 @@ func TestExecutorExecuteConcurrentWithContextBranches(t *testing.T) {
 				close(unblock)
 			}()
 
-			results := executeConcurrentWithContext(parentCtx, [][]TaskSpec{{{ID: task1}, {ID: task2}}}, 1, 1)
+			results := executeConcurrentWithContext(parentCtx, [][]taskSpec{{{ID: task1}, {ID: task2}}}, 1, 1)
 			foundCancelled := false
 			for _, res := range results {
 				if res.LogPath != "" {
@@ -1570,12 +1693,12 @@ func TestExecutorExecuteConcurrentWithContextBranches(t *testing.T) {
 			taskID := nextExecutorTestTaskID("bad") + "/id"
 
 			orig := runCodexTaskFn
-			runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
-				return TaskResult{TaskID: task.ID, ExitCode: 0}
+			runCodexTaskFn = func(task taskSpec, timeout int) taskResult {
+				return taskResult{TaskID: task.ID, ExitCode: 0}
 			}
 			t.Cleanup(func() { runCodexTaskFn = orig })
 
-			results := executeConcurrentWithContext(context.Background(), [][]TaskSpec{{{ID: taskID}}}, 1, 0)
+			results := executeConcurrentWithContext(context.Background(), [][]taskSpec{{{ID: taskID}}}, 1, 0)
 			if len(results) != 1 || results[0].ExitCode != 0 {
 				t.Fatalf("unexpected results: %+v", results)
 			}
@@ -1589,7 +1712,7 @@ func TestExecutorExecuteConcurrentWithContextBranches(t *testing.T) {
 			writable := t.TempDir()
 			t.Setenv("TMPDIR", writable)
 
-			mainLogger, err := NewLoggerWithSuffix("shared-main")
+			mainLogger, err := newLoggerWithSuffix("shared-main")
 			if err != nil {
 				t.Fatalf("NewLoggerWithSuffix() error = %v", err)
 			}
@@ -1598,7 +1721,7 @@ func TestExecutorExecuteConcurrentWithContextBranches(t *testing.T) {
 				func() {
 					mainLogger.Flush()
 					_ = closeLogger()
-					_ = os.Remove(mainLogger.Path())
+					_ = os.Remove(mainLogger.logPath())
 				},
 			)
 
@@ -1612,13 +1735,13 @@ func TestExecutorExecuteConcurrentWithContextBranches(t *testing.T) {
 			taskB := nextExecutorTestTaskID("shared-b")
 
 			orig := runCodexTaskFn
-			runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
+			runCodexTaskFn = func(task taskSpec, timeout int) taskResult {
 				logger := taskLoggerFromContext(task.Context)
 				if logger != mainLogger {
-					return TaskResult{TaskID: task.ID, ExitCode: 1, Error: "unexpected logger"}
+					return taskResult{TaskID: task.ID, ExitCode: 1, Error: "unexpected logger"}
 				}
-				logger.Info("TASK=" + task.ID)
-				return TaskResult{TaskID: task.ID, ExitCode: 0}
+				logger.info("TASK=" + task.ID)
+				return taskResult{TaskID: task.ID, ExitCode: 0}
 			}
 			t.Cleanup(func() { runCodexTaskFn = orig })
 
@@ -1630,7 +1753,7 @@ func TestExecutorExecuteConcurrentWithContextBranches(t *testing.T) {
 			os.Stderr = stderrW
 
 			results := executeConcurrentWithContext(
-				context.Background(), [][]TaskSpec{{{ID: taskA}, {ID: taskB}}}, 1, 0,
+				context.Background(), [][]taskSpec{{{ID: taskA}, {ID: taskB}}}, 1, 0,
 			)
 
 			_ = stderrW.Close()
@@ -1646,8 +1769,8 @@ func TestExecutorExecuteConcurrentWithContextBranches(t *testing.T) {
 				if res.ExitCode != 0 || res.Error != "" {
 					t.Fatalf("task failed unexpectedly: %+v", res)
 				}
-				if res.LogPath != mainLogger.Path() {
-					t.Fatalf("shared log path mismatch: got %q want %q", res.LogPath, mainLogger.Path())
+				if res.LogPath != mainLogger.logPath() {
+					t.Fatalf("shared log path mismatch: got %q want %q", res.LogPath, mainLogger.logPath())
 				}
 				if !res.sharedLog {
 					t.Fatalf("expected sharedLog flag for %+v", res)
@@ -1664,7 +1787,7 @@ func TestExecutorExecuteConcurrentWithContextBranches(t *testing.T) {
 			}
 
 			mainLogger.Flush()
-			data, err := os.ReadFile(mainLogger.Path())
+			data, err := os.ReadFile(mainLogger.logPath())
 			if err != nil {
 				t.Fatalf("failed to read main log: %v", err)
 			}
@@ -1681,19 +1804,19 @@ func TestExecutorExecuteConcurrentWithContextBranches(t *testing.T) {
 			t.Setenv("TMPDIR", tempDir)
 
 			orig := runCodexTaskFn
-			runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
+			runCodexTaskFn = func(task taskSpec, timeout int) taskResult {
 				logger := taskLoggerFromContext(task.Context)
 				if logger == nil {
-					return TaskResult{TaskID: task.ID, ExitCode: 1, Error: "missing logger"}
+					return taskResult{TaskID: task.ID, ExitCode: 1, Error: "missing logger"}
 				}
-				logger.Info("TASK=" + task.ID)
-				return TaskResult{TaskID: task.ID, ExitCode: 0}
+				logger.info("TASK=" + task.ID)
+				return taskResult{TaskID: task.ID, ExitCode: 0}
 			}
 			t.Cleanup(func() { runCodexTaskFn = orig })
 
 			idA := "../bad id"
 			idB := "tab\tid"
-			results := executeConcurrentWithContext(context.Background(), [][]TaskSpec{{{ID: idA}, {ID: idB}}}, 1, 0)
+			results := executeConcurrentWithContext(context.Background(), [][]taskSpec{{{ID: idA}, {ID: idB}}}, 1, 0)
 
 			if len(results) != 2 {
 				t.Fatalf("expected 2 results, got %d", len(results))
@@ -1771,7 +1894,7 @@ func TestExecutorSignalAndTermination(t *testing.T) {
 	if ft == nil {
 		t.Fatalf("terminateCommand returned nil")
 	}
-	ft.Stop()
+	ft.stop()
 
 	cmdKill := &execFakeRunner{process: &execFakeProcess{pid: 50}}
 	ftKill := terminateCommand(cmdKill)
@@ -1779,7 +1902,7 @@ func TestExecutorSignalAndTermination(t *testing.T) {
 	if p, ok := cmdKill.process.(*execFakeProcess); ok && p.killed.Load() == 0 {
 		t.Fatalf("terminateCommand did not kill process")
 	}
-	ftKill.Stop()
+	ftKill.stop()
 
 	cmdKill2 := &execFakeRunner{process: &execFakeProcess{pid: 51}}
 	timer2 := terminateProcess(cmdKill2)
@@ -1842,16 +1965,16 @@ func TestExecutorCancelReasonAndCloseWithReason(t *testing.T) {
 func TestExecutorForceKillTimerStop(t *testing.T) {
 	done := make(chan struct{}, 1)
 	ft := &forceKillTimer{timer: time.AfterFunc(50*time.Millisecond, func() { done <- struct{}{} }), done: done}
-	ft.Stop()
+	ft.stop()
 
 	done2 := make(chan struct{}, 1)
 	ft2 := &forceKillTimer{timer: time.AfterFunc(0, func() { done2 <- struct{}{} }), done: done2}
 	time.Sleep(10 * time.Millisecond)
-	ft2.Stop()
+	ft2.stop()
 
 	var nilTimer *forceKillTimer
-	nilTimer.Stop()
-	(&forceKillTimer{}).Stop()
+	nilTimer.stop()
+	(&forceKillTimer{}).stop()
 }
 
 func TestExecutorForwardSignalsDefaults(t *testing.T) {
@@ -1888,14 +2011,14 @@ func TestExecutorSharedLogFalseWhenCustomLogPath(t *testing.T) {
 	t.Setenv("TMPDIR", tempDir)
 
 	// Setup: 创建主 logger
-	mainLogger, err := NewLoggerWithSuffix("shared-main")
+	mainLogger, err := newLoggerWithSuffix("shared-main")
 	if err != nil {
 		t.Fatalf("NewLoggerWithSuffix() error = %v", err)
 	}
 	setLogger(mainLogger)
 	defer func() {
 		_ = closeLogger()
-		_ = os.Remove(mainLogger.Path())
+		_ = os.Remove(mainLogger.logPath())
 	}()
 
 	// 模拟场景：task logger 创建失败（通过设置只读的 TMPDIR），
@@ -1909,9 +2032,9 @@ func TestExecutorSharedLogFalseWhenCustomLogPath(t *testing.T) {
 
 	orig := runCodexTaskFn
 	customLogPath := "/custom/path/to.log"
-	runCodexTaskFn = func(task TaskSpec, timeout int) TaskResult {
+	runCodexTaskFn = func(task taskSpec, timeout int) taskResult {
 		// 返回自定义 LogPath，不等于主 logger 的路径
-		return TaskResult{
+		return taskResult{
 			TaskID:   task.ID,
 			ExitCode: 0,
 			LogPath:  customLogPath,
@@ -1920,7 +2043,7 @@ func TestExecutorSharedLogFalseWhenCustomLogPath(t *testing.T) {
 	defer func() { runCodexTaskFn = orig }()
 
 	// 执行任务
-	results := executeConcurrentWithContext(context.Background(), [][]TaskSpec{{{ID: "task1"}}}, 1, 0)
+	results := executeConcurrentWithContext(context.Background(), [][]taskSpec{{{ID: "task1"}}}, 1, 0)
 
 	if len(results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(results))

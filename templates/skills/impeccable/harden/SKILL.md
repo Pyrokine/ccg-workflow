@@ -99,7 +99,7 @@ Systematically improve resilience:
 
 - Add 30-40% space budget for translations
 - Use flexbox/grid that adapts to content
-- Test with longest language (usually German)
+- Test with the longest language (usually German)
 - Avoid fixed widths on text containers
 
 ```jsx
@@ -114,12 +114,16 @@ Systematically improve resilience:
 
 ```css
 /* Use logical properties */
-margin-inline-start: 1rem; /* Not margin-left */
-padding-inline: 1rem; /* Not padding-left/right */
-border-inline-end: 1px solid; /* Not border-right */
+.logical-spacing {
+  margin-inline-start: 1rem; /* Not margin-left */
+  padding-inline: 1rem; /* Not padding-left/right */
+  border-inline-end: 1px solid; /* Not border-right */
+}
 
 /* Or use dir attribute */
-[dir="rtl"] .arrow { transform: scaleX(-1); }
+[dir='rtl'] .arrow {
+  transform: scaleX(-1);
+}
 ```
 
 **Character set support**:
@@ -133,20 +137,20 @@ border-inline-end: 1px solid; /* Not border-right */
 
 ```javascript
 // ✅ Use Intl API for proper formatting
-new Intl.DateTimeFormat('en-US').format(date); // 1/15/2024
-new Intl.DateTimeFormat('de-DE').format(date); // 15.1.2024
+new Intl.DateTimeFormat('en-US').format(date) // 1/15/2024
+new Intl.DateTimeFormat('de-DE').format(date) // 15.1.2024
 
 new Intl.NumberFormat('en-US', {
   style: 'currency',
-  currency: 'USD'
-}).format(1234.56); // $1,234.56
+  currency: 'USD',
+}).format(1234.56) // $1,234.56
 ```
 
 **Pluralization**:
 
 ```javascript
 // ❌ Bad: Assumes English pluralization
-`${count} item${count !== 1 ? 's' : ''}`
+;`${count} item${count !== 1 ? 's' : ''}`
 
 // ✅ Good: Use proper i18n library
 t('items', { count }) // Handles complex plural rules
@@ -264,16 +268,8 @@ t('items', { count }) // Handles complex plural rules
 
 ```html
 <!-- Set clear constraints -->
-<input
-  type="text"
-  maxlength="100"
-  pattern="[A-Za-z0-9]+"
-  required
-  aria-describedby="username-hint"
-/>
-<small id="username-hint">
-  Letters and numbers only, up to 100 characters
-</small>
+<input type="text" maxlength="100" pattern="[A-Za-z0-9]+" required aria-describedby="username-hint" />
+<small id="username-hint"> Letters and numbers only, up to 100 characters </small>
 ```
 
 ### Accessibility Resilience
@@ -330,10 +326,10 @@ t('items', { count }) // Handles complex plural rules
 
 ```javascript
 // Debounce search input
-const debouncedSearch = debounce(handleSearch, 300);
+const debouncedSearch = debounce(handleSearch, 300)
 
 // Throttle scroll handler
-const throttledScroll = throttle(handleScroll, 100);
+const throttledScroll = throttle(handleScroll, 100)
 ```
 
 ## Testing Strategies
@@ -385,4 +381,3 @@ Test thoroughly with edge cases:
 
 Remember: You're hardening for production reality, not demo perfection. Expect users to input weird data, lose
 connection mid-flow, and use your product in unexpected ways. Build resilience into every component.
-

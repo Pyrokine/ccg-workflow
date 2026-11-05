@@ -2,7 +2,6 @@ package main
 
 import (
 	"os"
-	"strings"
 	"testing"
 )
 
@@ -70,26 +69,4 @@ func TestInjectRoleFile_WindowsPathHandling(t *testing.T) {
 // Helper functions for tests
 func writeTestFile(path string, content []byte) error {
 	return os.WriteFile(path, content, 0644)
-}
-
-func convertToGitBashPath(path string) string {
-	// Simple conversion for testing (assumes path starts with drive letter)
-	if len(path) >= 2 && path[1] == ':' {
-		drive := strings.ToLower(string(path[0]))
-		return "/" + drive + path[2:]
-	}
-	return path
-}
-
-func contains(s, substr string) bool {
-	return len(substr) == 0 || len(s) >= len(substr) && (s == substr || len(s) > len(substr) && containsRec(s, substr))
-}
-
-func containsRec(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }

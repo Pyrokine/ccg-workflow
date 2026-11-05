@@ -28,7 +28,9 @@ function sleep(milliseconds) {
 
 function assertRuntimePath(projectRoot, relativePath, options) {
   const result = validateRuntimePath(projectRoot, relativePath, options);
-  if (!result.ok) fail('PATH_INVALID', result.message, null, 3);
+  if (!result.ok) {
+    fail('PATH_INVALID', result.message, null, 3);
+  }
   return result;
 }
 
@@ -50,7 +52,9 @@ function ensureRuntimeDirectory(projectRoot, relativePath) {
 }
 
 function processExists(pid) {
-  if (!Number.isSafeInteger(pid) || pid <= 0) return false;
+  if (!Number.isSafeInteger(pid) || pid <= 0) {
+    return false;
+  }
   try {
     process.kill(pid, 0);
     return true;
@@ -61,7 +65,9 @@ function processExists(pid) {
 
 function readLockOwner(lockPath) {
   const source = readFileBounded(lockPath, 4096);
-  if (!source.ok || source.truncated) return null;
+  if (!source.ok || source.truncated) {
+    return null;
+  }
   try {
     const value = JSON.parse(source.content);
     return value && typeof value === 'object' ? value : null;
@@ -73,12 +79,18 @@ function readLockOwner(lockPath) {
 function removeStaleLock(lockPath) {
   try {
     const stat = fs.lstatSync(lockPath);
-    if (!stat.isFile() || stat.isSymbolicLink() || Date.now() - stat.mtimeMs < LOCK_STALE_MS) return false;
+    if (!stat.isFile() || stat.isSymbolicLink() || Date.now() - stat.mtimeMs < LOCK_STALE_MS) {
+      return false;
+    }
     const owner = readLockOwner(lockPath);
-    if (owner && processExists(owner.pid)) return false;
+    if (owner && processExists(owner.pid)) {
+      return false;
+    }
     const nonce = owner && owner.nonce;
     const current = readLockOwner(lockPath);
-    if ((current && current.nonce) !== nonce) return false;
+    if ((current && current.nonce) !== nonce) {
+      return false;
+    }
     fs.unlinkSync(lockPath);
     return true;
   } catch {
@@ -116,7 +128,9 @@ function acquireLock(projectRoot) {
       if (!error || error.code !== 'EEXIST') {
         fail('IO_ERROR', `Cannot create task state lock: ${lockPath}`, null, 3);
       }
-      if (!removeStaleLock(lockPath)) sleep(LOCK_RETRY_MS);
+      if (!removeStaleLock(lockPath)) {
+        sleep(LOCK_RETRY_MS);
+      }
     }
   }
   fail('LOCK_TIMEOUT', `Task state is locked: ${lockPath}`, null, 3);
@@ -138,7 +152,9 @@ function withStateLock(projectRoot, callback, options) {
   const lock = acquireLock(projectRoot);
   try {
     const pending = readPendingTransaction(projectRoot);
-    if (!pending.ok) fail(pending.code, pending.message, null, 3);
+    if (!pending.ok) {
+      fail(pending.code, pending.message, null, 3);
+    }
     if (pending.exists && !(options && options.allowPendingTransaction)) {
       fail('RECOVERY_REQUIRED', 'An incomplete task transaction must be recovered before another mutation');
     }
@@ -166,7 +182,9 @@ function bindingForWrite(binding) {
 
 function writeBinding(projectRoot, sessionKey, binding) {
   const bindingPath = getBindingPath(projectRoot, sessionKey);
-  if (!bindingPath) fail('SESSION_KEY_INVALID', 'Cannot write an invalid session binding');
+  if (!bindingPath) {
+    fail('SESSION_KEY_INVALID', 'Cannot write an invalid session binding');
+  }
   try {
     assertRuntimePath(projectRoot, `.ccg/sessions/${sessionKey}.json`, { allowMissing: true, kind: 'file' });
     atomicWriteJson(bindingPath, bindingForWrite(binding));
@@ -187,7 +205,9 @@ function taskForWrite(task) {
 }
 
 function writeTask(projectRoot, task) {
-  if (!isValidTaskId(task.id)) fail('TASK_INVALID', `Invalid task id: ${task.id}`);
+  if (!isValidTaskId(task.id)) {
+    fail('TASK_INVALID', `Invalid task id: ${task.id}`);
+  }
   const taskPath = assertRuntimePath(projectRoot, `.ccg/tasks/${task.id}/task.json`, {
     allowMissing: true,
     kind: 'file',
@@ -224,7 +244,9 @@ function applyTaskTransaction(projectRoot, pending) {
     fs.unlinkSync(pending.path);
     fsyncDirectory(path.dirname(pending.path));
   } catch (error) {
-    if (error instanceof TaskStateError) throw error;
+    if (error instanceof TaskStateError) {
+      throw error;
+    }
     fail(
       'IO_ERROR',
       `Cannot complete ${transaction.operation} transaction: ${error instanceof Error ? error.message : String(error)}`,
@@ -271,8 +293,9 @@ function readWrittenTransaction(projectRoot, transaction) {
   if (!pending.ok || !pending.exists) {
     fail(pending.code || 'TRANSACTION_INVALID', pending.message || 'Task transaction was not persisted', null, 3);
   }
-  if (pending.transaction.transactionId !== transaction.transactionId)
+  if (pending.transaction.transactionId !== transaction.transactionId) {
     fail('TRANSACTION_CONFLICT', 'Task transaction identity changed before commit', null, 3);
+  }
   return pending;
 }
 

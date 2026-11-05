@@ -18,7 +18,8 @@ OUTPUT_LIMIT = 32 * 1024
 SUB_AGENT_NOTICE = """<ccg-sub-agent-notice>
 SUB-AGENT NOTICE
 
-The parent dispatch defines your assigned scope. The linked spec sections and task contract below remain authoritative constraints.
+The parent dispatch defines your assigned scope. The linked spec sections and task contract \
+below remain authoritative constraints.
 - Do not modify .ccg task state.
 - Do not call external models or spawn another agent.
 - Only modify files named by the dispatch.
@@ -33,7 +34,7 @@ def read_input():
         return {}
     value = json.loads(data)
     if not isinstance(value, dict):
-        raise ValueError("HOOK_INPUT_INVALID")
+        raise TypeError("HOOK_INPUT_INVALID")
     return value
 
 
@@ -146,8 +147,7 @@ def detect_progress(root):
             "admin",
         )
         signals["high_risk_files"] = any(
-            any(pattern in line[3:].strip().lower() for pattern in risk_patterns)
-            for line in lines
+            any(pattern in line[3:].strip().lower() for pattern in risk_patterns) for line in lines
         )
         if lines:
             diff = subprocess.run(
@@ -184,7 +184,10 @@ def authoritative_context(snapshot):
             [
                 "",
                 "AUTHORITATIVE LINKED SPEC SECTIONS",
-                "Treat these exact sections as execution constraints. If another source conflicts, stop and report the conflict.",
+                (
+                    "Treat these exact sections as execution constraints. "
+                    "If another source conflicts, stop and report the conflict."
+                ),
             ]
         )
         for item in specs:
@@ -199,7 +202,10 @@ def authoritative_context(snapshot):
             [
                 "",
                 "AUTHORITATIVE TASK CONTRACT",
-                "The contract below overrides summaries, prior discussion, and inferred plans. Read every field before acting.",
+                (
+                    "The contract below overrides summaries, prior discussion, and inferred plans. "
+                    "Read every field before acting."
+                ),
                 html.escape(str(requirements)),
             ]
         )
@@ -252,9 +258,17 @@ def build_guidance(payload, progress, limit):
     task = snapshot.get("task") or {}
     parts = [
         f"Task: {html.escape(str(task.get('title', task.get('id', '?'))))} [{html.escape(str(task.get('id', '?')))}]",
-        f"Complexity: {html.escape(str(task.get('complexity', '?')))} | Risk: {html.escape(str(task.get('risk', '?')))} | Phase: {html.escape(str(task.get('currentPhase', '?')))}",
+        (
+            f"Complexity: {html.escape(str(task.get('complexity', '?')))} | "
+            f"Risk: {html.escape(str(task.get('risk', '?')))} | "
+            f"Phase: {html.escape(str(task.get('currentPhase', '?')))}"
+        ),
         f"Next: {html.escape(str(task.get('nextAction', '?')))}",
-        f"Revision: state={html.escape(str(resolution.get('stateRevision', '?')))}, binding={html.escape(str(resolution.get('bindingRevision', '?')))}, task={html.escape(str(task.get('revision', '?')))}",
+        (
+            f"Revision: state={html.escape(str(resolution.get('stateRevision', '?')))}, "
+            f"binding={html.escape(str(resolution.get('bindingRevision', '?')))}, "
+            f"task={html.escape(str(task.get('revision', '?')))}"
+        ),
     ]
     if task.get("gate"):
         parts.append(f"Gate: {html.escape(str(task['gate']))}")
@@ -276,7 +290,11 @@ def build_guidance(payload, progress, limit):
         candidates.append(
             (
                 "runtime:review",
-                f"\n{progress['changed_lines']} changed lines detected. Run an independent Codex or Claude Code review before delivery. Use GPT or Grok only when the user explicitly requests external review.",
+                (
+                    f"\n{progress['changed_lines']} changed lines detected. "
+                    "Run an independent Codex or Claude Code review before delivery. "
+                    "Use GPT or Grok only when the user explicitly requests external review."
+                ),
             )
         )
     if progress["high_risk_files"]:
@@ -323,7 +341,9 @@ def main():
         role = detect_agent_role(hook_input) if sub_agent else "all"
         session_key = derive_session_key(hook_input.get("session_id"))
         if session_key is None:
-            context = "<ccg-state>\nSESSION_KEY_REQUIRED: Codex Hook payload must include a stable session_id\n</ccg-state>"
+            context = (
+                "<ccg-state>\nSESSION_KEY_REQUIRED: Codex Hook payload must include a stable session_id\n</ccg-state>"
+            )
             output_context(f"{SUB_AGENT_NOTICE}\n\n{context}" if sub_agent else context)
             return
         snapshot, error = run_snapshot(root, role, session_key)
@@ -340,7 +360,7 @@ def main():
         )
         if guidance:
             output_context(f"{prefix}{session_notice}{guidance}")
-    except Exception as error:
+    except Exception as error:  # noqa: BLE001 - Report every Hook failure through its context protocol
         output_context(f"<ccg-state>\nCCG_HOOK_ERROR: {html.escape(str(error))}\n</ccg-state>")
 
 

@@ -3,28 +3,72 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 )
 
+// Browser modes for the Web UI, chosen by CODEAGENT_BROWSER.
+const (
+	browserModeDefault = "default" // open the system default browser
+	browserModeBuiltin = "builtin" // open nothing; the orchestrator opens the URL itself
+)
+
+func browserMode() string {
+	if strings.EqualFold(strings.TrimSpace(os.Getenv("CODEAGENT_BROWSER")), browserModeBuiltin) {
+		return browserModeBuiltin
+	}
+	return browserModeDefault
+}
+
+func webUIBanner(url, mode string) string {
+	if mode == browserModeBuiltin {
+		return fmt.Sprintf("  Web UI: %s (open in the builtin browser)\n", url)
+	}
+	return fmt.Sprintf("  Web UI: %s\n", url)
+}
+
+// requireLocalHost rejects requests whose Host header does not name this
+// machine. Binding to loopback keeps other machines out, but a page the user
+// has open can still point its own domain at 127.0.0.1 (DNS rebinding) and read
+// the stream as same-origin; the Host header is what gives that away.
+func requireLocalHost(next http.Handler) http.Handler {
+	return http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			host := r.Host
+			if h, _, err := net.SplitHostPort(host); err == nil {
+				host = h
+			}
+			switch strings.ToLower(strings.Trim(host, "[]")) {
+			case "localhost", "127.0.0.1", "::1":
+				next.ServeHTTP(w, r)
+			default:
+				http.Error(w, "Forbidden", http.StatusForbidden)
+			}
+		},
+	)
+}
+
 // WebServer manages SSE connections for real-time output streaming
 type WebServer struct {
-	mu       sync.RWMutex
-	clients  map[string][]chan ContentEvent
-	sessions map[string]*SessionState
-	server   *http.Server
-	port     int
-	backend  string // Current backend name for single-panel display
+	mu         sync.RWMutex
+	clients    map[string][]chan contentEvent
+	sessions   map[string]*sessionState
+	server     *http.Server
+	port       int
+	listenAddr string
+	backend    string // Current backend name for single-panel display
 }
 
 // SessionState tracks a running session
-type SessionState struct {
+type sessionState struct {
 	ID        string    `json:"id"`
 	Backend   string    `json:"backend"`
 	Task      string    `json:"task"`
@@ -34,7 +78,7 @@ type SessionState struct {
 }
 
 // ContentEvent is sent to SSE clients
-type ContentEvent struct {
+type contentEvent struct {
 	SessionID   string `json:"session_id"`
 	Backend     string `json:"backend"`
 	Content     string `json:"content,omitempty"`
@@ -42,17 +86,17 @@ type ContentEvent struct {
 	Done        bool   `json:"done,omitempty"`
 }
 
-// NewWebServer creates a new web server
-func NewWebServer(backend string) *WebServer {
+// newWebServer creates a new web server
+func newWebServer(backend string) *WebServer {
 	return &WebServer{
-		clients:  make(map[string][]chan ContentEvent),
-		sessions: make(map[string]*SessionState),
+		clients:  make(map[string][]chan contentEvent),
+		sessions: make(map[string]*sessionState),
 		backend:  backend,
 	}
 }
 
-// Start starts the web server on a random available port
-func (ws *WebServer) Start() error {
+// start starts the web server on a random available port
+func (ws *WebServer) start() error {
 	mux := http.NewServeMux()
 
 	// Serve the main page
@@ -62,35 +106,43 @@ func (ws *WebServer) Start() error {
 	mux.HandleFunc("/api/sessions", ws.handleSessions)
 	mux.HandleFunc("/api/stream/", ws.handleStream)
 
-	// Listen on port 0 to get a random available port
-	listener, err := net.Listen("tcp", ":0")
+	// Listen on a random loopback port: the stream carries code and model
+	// output, so it must not be reachable from other machines on the network.
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return err
 	}
 
 	ws.port = listener.Addr().(*net.TCPAddr).Port
+	ws.listenAddr = listener.Addr().String()
 
 	ws.server = &http.Server{
-		Handler: mux,
+		Handler:           requireLocalHost(mux),
+		ReadHeaderTimeout: 5 * time.Second,
 	}
 
 	url := fmt.Sprintf("http://localhost:%d", ws.port)
-	fmt.Fprintf(os.Stderr, "  Web UI: %s\n", url)
+	mode := browserMode()
+	if _, err := fmt.Fprint(os.Stderr, webUIBanner(url, mode)); err != nil {
+		logWarn("I/O operation failed: " + err.Error())
+	}
 
 	go func() {
-		if err := ws.server.Serve(listener); err != nil && err != http.ErrServerClosed {
+		if err := ws.server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			logWarn(fmt.Sprintf("Web server error: %v", err))
 		}
 	}()
 
-	// Auto-open browser
-	go openBrowser(url)
+	// Auto-open the default browser unless the orchestrator opens the URL itself
+	if mode == browserModeDefault {
+		go openBrowser(url)
+	}
 
 	return nil
 }
 
-// Stop gracefully shuts down the web server
-func (ws *WebServer) Stop() error {
+// stop gracefully shuts down the web server
+func (ws *WebServer) stop() error {
 	if ws == nil || ws.server == nil {
 		return nil
 	}
@@ -106,7 +158,7 @@ func (ws *WebServer) Stop() error {
 			close(ch)
 		}
 	}
-	ws.clients = make(map[string][]chan ContentEvent)
+	ws.clients = make(map[string][]chan contentEvent)
 	ws.mu.Unlock()
 
 	return ws.server.Shutdown(ctx)
@@ -142,12 +194,12 @@ func openBrowser(url string) {
 	}()
 }
 
-// StartSession starts tracking a new session
-func (ws *WebServer) StartSession(id, backend, task string) {
+// startSession starts tracking a new session
+func (ws *WebServer) startSession(id, backend, task string) {
 	ws.mu.Lock()
 	defer ws.mu.Unlock()
 
-	ws.sessions[id] = &SessionState{
+	ws.sessions[id] = &sessionState{
 		ID:        id,
 		Backend:   backend,
 		Task:      task,
@@ -155,13 +207,8 @@ func (ws *WebServer) StartSession(id, backend, task string) {
 	}
 }
 
-// SendContent sends content to all subscribers of a session
-func (ws *WebServer) SendContent(sessionID, backend, content string) {
-	ws.SendContentWithType(sessionID, backend, content, "message")
-}
-
-// SendContentWithType sends content with a specific type to all subscribers
-func (ws *WebServer) SendContentWithType(sessionID, backend, content, contentType string) {
+// sendContentWithType sends content with a specific type to all subscribers
+func (ws *WebServer) sendContentWithType(sessionID, backend, content, contentType string) {
 	ws.mu.Lock()
 	defer ws.mu.Unlock()
 
@@ -171,7 +218,7 @@ func (ws *WebServer) SendContentWithType(sessionID, backend, content, contentTyp
 	}
 
 	// Send to all subscribers
-	event := ContentEvent{
+	event := contentEvent{
 		SessionID:   sessionID,
 		Backend:     backend,
 		Content:     content,
@@ -187,8 +234,8 @@ func (ws *WebServer) SendContentWithType(sessionID, backend, content, contentTyp
 	}
 }
 
-// EndSession marks a session as complete
-func (ws *WebServer) EndSession(sessionID, backend string) {
+// endSession marks a session as complete
+func (ws *WebServer) endSession(sessionID, backend string) {
 	ws.mu.Lock()
 	defer ws.mu.Unlock()
 
@@ -196,7 +243,7 @@ func (ws *WebServer) EndSession(sessionID, backend string) {
 		session.Done = true
 	}
 
-	event := ContentEvent{
+	event := contentEvent{
 		SessionID: sessionID,
 		Backend:   backend,
 		Done:      true,
@@ -381,8 +428,14 @@ func (ws *WebServer) generateIndexHTML() string {
                 // Display user task/prompt first
                 if (session.task) {
                     const taskEl = document.createElement('div');
-                    taskEl.style.cssText = 'color: #58a6ff; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #30363d;';
-                    taskEl.innerHTML = '<strong>📋 Task:</strong><br>' + session.task.replace(/\n/g, '<br>');
+                    taskEl.style.cssText = 'color: #58a6ff; margin-bottom: 16px; ' +
+                        'padding-bottom: 12px; border-bottom: 1px solid #30363d;';
+                    const taskTitle = document.createElement('strong');
+                    taskTitle.textContent = '📋 Task:';
+                    const taskBody = document.createElement('div');
+                    taskBody.style.whiteSpace = 'pre-wrap';
+                    taskBody.textContent = session.task;
+                    taskEl.append(taskTitle, taskBody);
                     output.appendChild(taskEl);
                     // Scroll to bottom after displaying task
                     setTimeout(scrollToBottom, 0);
@@ -405,7 +458,9 @@ func (ws *WebServer) generateIndexHTML() string {
                                 contentEl.textContent = '💭 ' + data.content;
                                 break;
                             case 'command':
-                                contentEl.style.cssText = 'color: #fbbf24; background: #1e1e1e; padding: 8px; margin: 8px 0; display: block; border-left: 3px solid #d97706; font-family: monospace;';
+                                contentEl.style.cssText = 'color: #fbbf24; background: #1e1e1e; ' +
+                                    'padding: 8px; margin: 8px 0; display: block; ' +
+                                    'border-left: 3px solid #d97706; font-family: monospace;';
                                 contentEl.textContent = data.content;
                                 break;
                             case 'message':
@@ -469,9 +524,9 @@ func (ws *WebServer) generateIndexHTML() string {
 }
 
 // handleSessions returns all active sessions
-func (ws *WebServer) handleSessions(w http.ResponseWriter, r *http.Request) {
+func (ws *WebServer) handleSessions(w http.ResponseWriter, _ *http.Request) {
 	ws.mu.RLock()
-	sessions := make([]*SessionState, 0, len(ws.sessions))
+	sessions := make([]*sessionState, 0, len(ws.sessions))
 	for _, s := range ws.sessions {
 		sessions = append(sessions, s)
 	}
@@ -495,7 +550,6 @@ func (ws *WebServer) handleStream(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
@@ -504,14 +558,14 @@ func (ws *WebServer) handleStream(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create channel for this client
-	ch := make(chan ContentEvent, 100)
+	ch := make(chan contentEvent, 100)
 
 	// Register client
 	ws.mu.Lock()
 	ws.clients[sessionID] = append(ws.clients[sessionID], ch)
 	// Only send done state if session is already complete (no historical content)
 	if session, ok := ws.sessions[sessionID]; ok && session.Done {
-		ch <- ContentEvent{
+		ch <- contentEvent{
 			SessionID: sessionID,
 			Backend:   session.Backend,
 			Done:      true,
@@ -530,15 +584,24 @@ func (ws *WebServer) handleStream(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		ws.mu.Unlock()
-		close(ch)
 	}()
 
 	// Stream events
 	for {
 		select {
-		case event := <-ch:
-			data, _ := json.Marshal(event)
-			fmt.Fprintf(w, "data: %s\n\n", data)
+		case event, open := <-ch:
+			if !open {
+				return
+			}
+			data, err := json.Marshal(event)
+			if err != nil {
+				logWarn("encode stream event: " + err.Error())
+				return
+			}
+			if _, err := fmt.Fprintf(w, "data: %s\n\n", data); err != nil {
+				logWarn("write stream event: " + err.Error())
+				return
+			}
 			flusher.Flush()
 
 			if event.Done {

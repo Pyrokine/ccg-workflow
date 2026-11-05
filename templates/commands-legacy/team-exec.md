@@ -3,6 +3,7 @@ description: 'Agent Teams 并行实施 - 读取计划文件，spawn Builder team
 ---
 
 <!-- CCG:TEAM:EXEC:START -->
+
 **Core Philosophy**
 
 - 实施是纯机械执行——所有决策已在 team-plan 阶段完成。
@@ -41,12 +42,12 @@ description: 'Agent Teams 并行实施 - 读取计划文件，spawn Builder team
       ```
 
 3. **使用 TeamCreate 创建 Team，然后 spawn teammates 加入该 Team**
-    - ⛔ **禁止使用普通 Agent 子代理。必须通过 TeamCreate 创建 team，再通过 Agent(team_name=...) spawn teammates 加入 team。
-      **
+    - ⛔ **禁止使用普通 Agent 子代理。必须通过 TeamCreate 创建 team，再通过 Agent (team_name=...) spawn
+      teammates 加入 team。**
     - 先调用 TeamCreate 创建 team。
     - 为每个子任务调用 TaskCreate 创建 task。
-    - 按 Layer 分组，通过 Agent(team_name=..., name="builder-N") spawn Builder teammates（Sonnet）。
-    - 通过 TaskUpdate(owner="builder-N") 将 task 分配给对应 Builder。
+    - 按 Layer 分组，通过 Agent (team_name=..., name="builder-N") spawn Builder teammates（Sonnet）。
+    - 通过 TaskUpdate (owner="builder-N") 将 task 分配给对应 Builder。
     - 每个 Builder 的 spawn prompt 必须包含：
 
    ```
@@ -82,11 +83,11 @@ description: 'Agent Teams 并行实施 - 读取计划文件，spawn Builder team
     - 通过 TaskList 查看各 task 状态，通过 SendMessage 与 Builder 沟通。
     - teammates 完成 task 后会自动发消息通知你，无需轮询。
     - 如果某个 Builder 遇到问题并发消息求助：
-        * 通过 SendMessage 回复指导建议
-        * 不要自己写代码替它完成
+        - 通过 SendMessage 回复指导建议
+        - 不要自己写代码替它完成
     - 如果某个 Builder 失败：
-        * 记录失败原因
-        * 不影响其他 Builder 继续执行
+        - 记录失败原因
+        - 不影响其他 Builder 继续执行
 
 5. **汇总 + 清理**
     - 所有 Builder 完成后，汇总报告：

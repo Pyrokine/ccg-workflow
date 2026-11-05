@@ -11,29 +11,29 @@ import (
 // Backend defines the contract for invoking different AI CLI backends.
 // Each backend is responsible for supplying the executable command and
 // building the argument list based on the wrapper config.
-type Backend interface {
+type backend interface {
 	Name() string
-	BuildArgs(cfg *Config, targetArg string) []string
+	BuildArgs(cfg *config, targetArg string) []string
 	Command() string
 }
 
-type CodexBackend struct{}
+type codexBackend struct{}
 
-func (CodexBackend) Name() string { return "codex" }
-func (CodexBackend) Command() string {
+func (codexBackend) Name() string { return "codex" }
+func (codexBackend) Command() string {
 	return "codex"
 }
-func (CodexBackend) BuildArgs(cfg *Config, targetArg string) []string {
+func (codexBackend) BuildArgs(cfg *config, targetArg string) []string {
 	return buildCodexArgs(cfg, targetArg)
 }
 
-type ClaudeBackend struct{}
+type claudeBackend struct{}
 
-func (ClaudeBackend) Name() string { return "claude" }
-func (ClaudeBackend) Command() string {
+func (claudeBackend) Name() string { return "claude" }
+func (claudeBackend) Command() string {
 	return "claude"
 }
-func (ClaudeBackend) BuildArgs(cfg *Config, targetArg string) []string {
+func (claudeBackend) BuildArgs(cfg *config, targetArg string) []string {
 	return buildClaudeArgs(cfg, targetArg)
 }
 
@@ -128,7 +128,7 @@ func loadRoutingProxyConfig() routingProxyConfig {
 		return cfg
 	}
 	inSection := false
-	for _, rawLine := range strings.Split(string(data), "\n") {
+	for rawLine := range strings.SplitSeq(string(data), "\n") {
 		line := strings.TrimSpace(rawLine)
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
@@ -194,7 +194,7 @@ func loadModelProxyEnv(backend string) map[string]string {
 	return env
 }
 
-func buildClaudeArgs(cfg *Config, targetArg string) []string {
+func buildClaudeArgs(cfg *config, targetArg string) []string {
 	if cfg == nil {
 		return nil
 	}
@@ -224,15 +224,15 @@ func buildClaudeArgs(cfg *Config, targetArg string) []string {
 	return args
 }
 
-type AntigravityBackend struct{}
+type antigravityBackend struct{}
 
-func (AntigravityBackend) Name() string    { return "antigravity" }
-func (AntigravityBackend) Command() string { return "agy" }
-func (AntigravityBackend) BuildArgs(cfg *Config, targetArg string) []string {
+func (antigravityBackend) Name() string    { return "antigravity" }
+func (antigravityBackend) Command() string { return "agy" }
+func (antigravityBackend) BuildArgs(cfg *config, targetArg string) []string {
 	return buildAntigravityArgs(cfg, targetArg)
 }
 
-func buildAntigravityArgs(cfg *Config, targetArg string) []string {
+func buildAntigravityArgs(cfg *config, targetArg string) []string {
 	if cfg == nil {
 		return nil
 	}
@@ -251,16 +251,21 @@ func buildAntigravityArgs(cfg *Config, targetArg string) []string {
 		args = append(args, "--add-dir", cfg.WorkDir)
 	}
 
+	if settings := strings.TrimSpace(os.Getenv("CODEAGENT_AGY_SETTINGS")); settings != "" {
+		args = append(args, "--settings", settings)
+	}
+	args = append(args, "--output-format", "stream-json")
+
 	// -p must come right before the prompt text (last positional arg)
 	args = append(args, "-p", targetArg)
 	return args
 }
 
-type GrokBackend struct{}
+type grokBackend struct{}
 
-func (GrokBackend) Name() string { return "grok" }
+func (grokBackend) Name() string { return "grok" }
 
-func (GrokBackend) Command() string {
+func (grokBackend) Command() string {
 	if _, err := exec.LookPath("grok"); err == nil {
 		return "grok"
 	}
@@ -278,11 +283,11 @@ func (GrokBackend) Command() string {
 	return "grok"
 }
 
-func (GrokBackend) BuildArgs(cfg *Config, targetArg string) []string {
+func (grokBackend) BuildArgs(cfg *config, targetArg string) []string {
 	return buildGrokArgs(cfg, targetArg)
 }
 
-func buildGrokArgs(cfg *Config, targetArg string) []string {
+func buildGrokArgs(cfg *config, targetArg string) []string {
 	if cfg == nil {
 		return nil
 	}
@@ -297,16 +302,16 @@ func buildGrokArgs(cfg *Config, targetArg string) []string {
 	return append(args, "-p", targetArg)
 }
 
-type KimiBackend struct{}
+type kimiBackend struct{}
 
-func (KimiBackend) Name() string    { return "kimi" }
-func (KimiBackend) Command() string { return "kimi" }
+func (kimiBackend) Name() string    { return "kimi" }
+func (kimiBackend) Command() string { return "kimi" }
 
-func (KimiBackend) BuildArgs(cfg *Config, targetArg string) []string {
+func (kimiBackend) BuildArgs(cfg *config, targetArg string) []string {
 	return buildKimiArgs(cfg, targetArg)
 }
 
-func buildKimiArgs(cfg *Config, targetArg string) []string {
+func buildKimiArgs(cfg *config, targetArg string) []string {
 	if cfg == nil {
 		return nil
 	}
@@ -321,16 +326,16 @@ func buildKimiArgs(cfg *Config, targetArg string) []string {
 	return append(args, "-p", targetArg)
 }
 
-type OpencodeBackend struct{}
+type opencodeBackend struct{}
 
-func (OpencodeBackend) Name() string    { return "opencode" }
-func (OpencodeBackend) Command() string { return "opencode" }
+func (opencodeBackend) Name() string    { return "opencode" }
+func (opencodeBackend) Command() string { return "opencode" }
 
-func (OpencodeBackend) BuildArgs(cfg *Config, targetArg string) []string {
+func (opencodeBackend) BuildArgs(cfg *config, targetArg string) []string {
 	return buildOpencodeArgs(cfg, targetArg)
 }
 
-func buildOpencodeArgs(cfg *Config, targetArg string) []string {
+func buildOpencodeArgs(cfg *config, targetArg string) []string {
 	if cfg == nil {
 		return nil
 	}

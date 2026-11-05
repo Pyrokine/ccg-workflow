@@ -3,18 +3,18 @@ import { mkdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import type { Report } from './quality-gates-fixtures'
 import {
-  packageRoot,
+  deny,
   distributions,
-  scripts,
   fixture,
-  write,
   git,
+  packageRoot,
   repository,
   run,
-  deny,
+  scripts,
+  write,
 } from './quality-gates-fixtures'
-import type { Report } from './quality-gates-fixtures'
 
 describe.each(distributions)('%s quality gates', (distribution) => {
   describe('change analysis', () => {
@@ -74,11 +74,15 @@ describe.each(distributions)('%s quality gates', (distribution) => {
         'src/name -> target.ts',
         'src/[x].ts',
       ]
-      for (const name of unusual) write(root, name, 'before\n')
+      for (const name of unusual) {
+        write(root, name, 'before\n')
+      }
       write(root, 'src/x.ts', 'before\n')
       git(root, 'add', '.')
       git(root, 'commit', '-qm', 'test: unusual names')
-      for (const name of unusual) write(root, name, 'after\n')
+      for (const name of unusual) {
+        write(root, name, 'after\n')
+      }
       write(root, 'src/x.ts', 'after\n')
       const result = run(distribution, 'change', [join(root, 'src')], root)
       expect(result.status).toBe(0)
@@ -110,6 +114,82 @@ describe.each(distributions)('%s quality gates', (distribution) => {
       expect(result.output.changes).toEqual([
         expect.objectContaining({ path: 'src/clean.ts', type: 'deleted', additions: 0, deletions: 1 }),
       ])
+    })
+
+    it('uses explicit historical refs for source, linked documents and Rust inline tests', () => {
+      const root = repository()
+      const source = 'module/src/lib.rs'
+      write(
+        root,
+        source,
+        'pub fn value() -> i32 { 1 }\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn value_test() {}\n}\n'
+      )
+      write(root, 'module/README.md', '# Module\n\n[Details](docs/details.md)\n')
+      write(root, 'module/docs/details.md', '# Details\n\nInitial\n')
+      git(root, 'add', '.')
+      git(root, 'commit', '-qm', 'test: historical module')
+      const base = git(root, 'rev-parse', 'HEAD')
+      write(
+        root,
+        source,
+        'pub fn value() -> i32 {\n' +
+          '    let _ = 1;\n'.repeat(60) +
+          '    2\n}\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn updated_test() {}\n}\n'
+      )
+      write(root, 'module/docs/details.md', '# Details\n\nUpdated\n')
+      git(root, 'add', '.')
+      git(root, 'commit', '-qm', 'test: compared target')
+      const target = git(root, 'rev-parse', 'HEAD')
+      git(root, 'rm', '-qr', 'module')
+      git(root, 'commit', '-qm', 'test: unrelated current tree')
+      const result = run(
+        distribution,
+        'change',
+        [join(root, source), '--mode', 'committed', '--base', base, '--target-ref', target],
+        tmpdir()
+      )
+      expect(result.status).toBe(0)
+      expect(result.output).toMatchObject({ complete: true, affected_modules: ['module'] })
+      expect(result.output.changes).toEqual([
+        expect.objectContaining({
+          path: source,
+          has_test_changes: true,
+          test_only: false,
+        }),
+      ])
+      expect(result.output.doc_sync).toMatchObject({
+        'module/README.md': { exists: true, updated: false },
+        'module/docs/details.md': { exists: true, updated: true },
+      })
+      expect(result.output.issues?.some((entry) => entry.message.includes('相关文档未更新'))).toBe(false)
+    })
+
+    it.each([
+      ['--base', 'HEAD'],
+      ['--target-ref', 'HEAD'],
+      ['--mode', 'working', '--base', 'HEAD', '--target-ref', 'HEAD'],
+      ['--mode', 'committed', '--base', 'HEAD', '--base', 'HEAD', '--target-ref', 'HEAD'],
+      ['--mode', 'committed', '--base', 'HEAD', '--target-ref', 'HEAD^{tree}'],
+      ['--mode', 'committed', '--base', 'missing-reference', '--target-ref', 'HEAD'],
+    ])('rejects an invalid explicit ref contract: %j', (...args) => {
+      const root = repository()
+      const result = run(distribution, 'change', [root, ...args], root)
+      expect(result.status).toBe(2)
+      expect(result.output).toMatchObject({ complete: false, passed: false })
+    })
+
+    it('rejects an explicit ref that is absent in one selected repository', () => {
+      const first = repository()
+      const second = repository()
+      git(first, 'tag', 'comparison-target')
+      const result = run(
+        distribution,
+        'change',
+        [first, second, '--mode', 'committed', '--base', 'HEAD', '--target-ref', 'comparison-target'],
+        tmpdir()
+      )
+      expect(result.status).toBe(2)
+      expect(result.output.complete).toBe(false)
     })
 
     it('reports embedded repositories without traversing their metadata', () => {
@@ -213,7 +293,9 @@ describe.each(distributions)('%s quality gates', (distribution) => {
 
     it.each([false, true])('scans without a baseline when Git HEAD is absent (repository=%s)', (initialized) => {
       const root = fixture()
-      if (initialized) git(root, 'init', '-q')
+      if (initialized) {
+        git(root, 'init', '-q')
+      }
       const source = write(root, 'source.ts', bad)
       const result = run(distribution, gate, [source], root)
       expect(result.output).toMatchObject({ complete: true, files_scanned: 1, origin_counts: { unclassified: 1 } })

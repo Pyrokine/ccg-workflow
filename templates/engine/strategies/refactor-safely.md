@@ -18,34 +18,16 @@ Read("~/.claude/.ccg/engine/model-router.md")
 
 ## 工作流状态机
 
-[phase-state:1-understand]
-当前阶段：理解现有代码
-📍 Next: 映射完依赖关系后建立测试基线
-[/phase-state:1-understand]
+[phase-state:1-understand] 当前阶段：理解现有代码 📍 Next: 映射完依赖关系后建立测试基线 [/phase-state:1-understand]
 
-[phase-state:2-baseline]
-当前阶段：建立基线
-Gate: 代码已理解 ✓
-📍 Next: 基线建立后进入规划
-[/phase-state:2-baseline]
+[phase-state:2-baseline] 当前阶段：建立基线 Gate: 代码已理解 ✓ 📍 Next: 基线建立后进入规划 [/phase-state:2-baseline]
 
-[phase-state:3-plan]
-当前阶段：规划重构步骤
-Gate: 测试基线已建立 ✓
-📍 Next: 计划确认后逐步执行
-[/phase-state:3-plan]
+[phase-state:3-plan] 当前阶段：规划重构步骤 Gate: 测试基线已建立 ✓ 📍 Next: 计划确认后逐步执行 [/phase-state:3-plan]
 
-[phase-state:4-execute]
-当前阶段：增量执行
-Gate: 用户已确认计划 ✓
-📍 Next: 每步执行后验证测试通过
-[/phase-state:4-execute]
+[phase-state:4-execute] 当前阶段：增量执行 Gate: 用户已确认计划 ✓ 📍
+Next: 每步执行后验证测试通过 [/phase-state:4-execute]
 
-[phase-state:5-verify]
-当前阶段：最终验证
-Gate: 所有步骤已执行 ✓
-📍 Next: 全部测试通过后报告结果
-[/phase-state:5-verify]
+[phase-state:5-verify] 当前阶段：最终验证 Gate: 所有步骤已执行 ✓ 📍 Next: 全部测试通过后报告结果 [/phase-state:5-verify]
 
 ---
 
@@ -53,7 +35,8 @@ Gate: 所有步骤已执行 ✓
 
 ### Phase 1: 理解 [required]
 
-使用 `checkpoint` 更新为 `1-understand`，下一动作设为“读取代码，映射依赖”。先逐字段核对 `requirements.md` 和 authoritative spec 中声明的不变量。
+使用 `checkpoint` 更新为 `1-understand`，下一动作设为“读取代码，映射依赖”。先逐字段核对 `requirements.md`
+和 authoritative spec 中声明的不变量。
 
 1. 读取所有涉及重构的文件
 2. 映射依赖关系（谁调用了这些代码？谁被这些代码调用？）
@@ -95,7 +78,8 @@ Gate: 所有步骤已执行 ✓
 
 对于 L/XL 任务，可选调用外部模型做架构审查。
 
-使用 `write-artifact` 写入 `plan.md`，再用 `checkpoint` 更新为 `3-plan`，`gate` 设为 `user_approval_required`。展示计划并等待用户确认。用户确认后，用 `checkpoint` 清除 Gate，阶段更新为 `4-execute`。
+使用 `write-artifact` 写入 `plan.md`，再用 `checkpoint` 更新为 `3-plan`，`gate` 设为
+`user_approval_required`。展示计划并等待用户确认。用户确认后，用 `checkpoint` 清除 Gate，阶段更新为 `4-execute`。
 
 ### Phase 4: 增量执行
 
@@ -126,8 +110,10 @@ Step [N/M]: [描述] — ✅ 测试通过 / ❌ 测试失败
 **⛔ 审查线程：**
 
 3. 获取变更：`git diff` 全量输出
-4. 创建独立 Claude Code 审查 Agent，使用完整 diff、相关文件和验收标准检查正确性、安全、回归与测试缺口，不调用 codeagent-wrapper 或外部 CLI
-5. 只有用户明确请求 GPT、Grok、双模型审查或 `/ccg:spec-review` 时，才启动对应外部 review profile。外部 reviewer 使用 `--no-session-persistence`，不使用 `resume` 或 `SESSION_ID`。Lead 汇总并确认 finding
+4. 创建独立 Claude
+   Code 审查 Agent，使用完整 diff、相关文件和验收标准检查正确性、安全、回归与测试缺口，不调用 codeagent-wrapper 或外部 CLI
+5. 只有用户明确请求 GPT、Grok、双模型审查或 `/ccg:spec-review` 时，才启动对应外部 review profile。外部 reviewer 使用
+   `--no-session-persistence`，不使用 `resume` 或 `SESSION_ID`。Lead 汇总并确认 finding
 
 **⛔ 质量关卡（必须逐个调用 Skill，不可跳过，不可用自己的判断替代）：**
 
@@ -149,18 +135,20 @@ Step [N/M]: [描述] — ✅ 测试通过 / ❌ 测试失败
 9. `git diff` 展示全部变更
 10. 对比基线，确认无回归
 11. 输出结果：
-   ```
-   ✅ 重构完成
-     步骤: [N] 步全部通过
-     变更: [文件数] 文件，[行数] 行
-     测试: 基线 [N] 通过 → 重构后 [N] 通过
-     审查: [N] 轮，[Critical: N, Warning: N, Info: N]
-     📍 Next: /ccg:commit 提交
-   ```
+
+```
+✅ 重构完成
+  步骤: [N] 步全部通过
+  变更: [文件数] 文件，[行数] 行
+  测试: 基线 [N] 通过 → 重构后 [N] 通过
+  审查: [N] 轮，[Critical: N, Warning: N, Info: N]
+  📍 Next: /ccg:commit 提交
+```
 
 #### Spec Evolution 与完成
 
-按 `phase-guide.md § 7` 检查重构模式和架构约定是否需要更新项目已有的 tracked 文档或 OpenSpec，并用 `set-spec-evolution` 记录结果。
+按 `phase-guide.md § 7` 检查重构模式和架构约定是否需要更新项目已有的 tracked 文档或 OpenSpec，并用 `set-spec-evolution`
+记录结果。
 
 完整测试、基线对比和审查完成后，用 `finish` 标记任务为 `completed`。任务目录保持原路径，不移动、不提交 `.ccg/`。
 

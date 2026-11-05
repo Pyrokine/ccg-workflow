@@ -1,20 +1,21 @@
 import { spawnSync } from 'node:child_process'
 import { mkdirSync, readFileSync, rmSync, symlinkSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import type { Gate } from './quality-gates-fixtures'
 import {
-  packageRoot,
+  completeModule,
+  deny,
   distributions,
-  scripts,
   fixture,
-  write,
   git,
+  packageRoot,
   repository,
   run,
-  deny,
-  completeModule,
+  scripts,
+  write,
 } from './quality-gates-fixtures'
-import type { Gate } from './quality-gates-fixtures'
 
 describe.each(distributions)('%s quality gates', (distribution) => {
   describe.each(['quality', 'security'] as const)('%s coverage', (gate) => {
@@ -270,6 +271,36 @@ describe.each(distributions)('%s quality gates', (distribution) => {
   })
 
   describe('module analysis', () => {
+    it.each([
+      ['test attribute', '#[test]\nfn works() {}\n', true],
+      ['test module', '#[cfg(test)]\nmod checks { fn works() {} }\n', true],
+      ['comments', '// #[test]\n/* #[cfg(test)] mod tests {} */\nfn works() {}\n', false],
+      ['strings', 'const A: &str = "#[test]";\nconst B: &str = r#"#[cfg(test)] mod tests {}"#;\n', false],
+      ['no tests', 'pub fn works() {}\n', false],
+      ['plain tests module', 'mod tests { fn helper() {} }\n', false],
+    ])('recognizes Rust inline tests: %s', (_name, content, found) => {
+      const root = fixture()
+      const target = completeModule(root, 'rust-module')
+      rmSync(join(target, 'tests'), { recursive: true })
+      write(target, 'src/lib.rs', content)
+      const result = run(distribution, 'module', [target], root)
+      expect(result.status).toBe(0)
+      expect(result.output.issues?.some((issue) => issue.message.includes('未找到测试目录或测试文件'))).toBe(!found)
+    })
+
+    it('keeps existing Rust change classification for a plain tests module', () => {
+      const root = fixture()
+      write(root, 'src/lib.rs', 'mod tests { fn helper() {} }\n')
+      const change = { path: 'src/lib.rs', type: 'added', is_test: false }
+      const { identifyInlineTests } = createRequire(import.meta.url)(
+        join(packageRoot, distribution, 'lib/change-tests.js')
+      ) as {
+        identifyInlineTests: (changes: object[], mode: string, root: string) => void
+      }
+      identifyInlineTests([change], 'working', root)
+      expect(change).toMatchObject({ has_test_changes: true, test_only: true })
+    })
+
     it('handles complete modules, multiple targets and missing required documentation', () => {
       const root = fixture()
       const first = completeModule(root, 'first')

@@ -11,7 +11,6 @@ argument-hint: <模块路径> [--force]
 
 # 📝 造典关卡 · 文档生成器
 
-
 ## 核心原则
 
 ```
@@ -29,7 +28,12 @@ argument-hint: <模块路径> [--force]
 node scripts/doc_generator.js <模块路径>
 node scripts/doc_generator.js <模块路径> --force  # 强制覆盖已存在的文档
 node scripts/doc_generator.js <模块路径> --json   # JSON 输出
+node scripts/doc_generator.js <模块路径> --readme-only  # 仅生成 README.md
+node scripts/doc_generator.js <模块路径> --design-only  # 仅生成 DESIGN.md
 ```
+
+`--readme-only` 与 `--design-only` 选择一项，均未指定时生成两份文档读取或写入失败时返回非零退出码，`--json` 报告在
+`messages` 中保留失败原因
 
 ## 生成内容
 
@@ -62,13 +66,13 @@ node scripts/doc_generator.js <模块路径> --json   # JSON 输出
 
 ### 支持的语言
 
-| 语言 | 分析能力 |
-|------|----------|
-| **Python** | 类、函数、文档字符串、依赖 |
-| **Go** | 目录结构、依赖 |
-| **TypeScript** | 目录结构、依赖 |
-| **Rust** | 目录结构、依赖 |
-| **其他** | 基础目录结构 |
+| 语言           | 分析能力                   |
+|----------------|----------------------------|
+| **Python**     | 类、函数、文档字符串、依赖 |
+| **Go**         | 目录结构、依赖             |
+| **TypeScript** | 目录结构、依赖             |
+| **Rust**       | 目录结构、依赖             |
+| **其他**       | 基础目录结构               |
 
 ### 提取的信息
 
@@ -82,9 +86,9 @@ node scripts/doc_generator.js <模块路径> --json   # JSON 输出
 
 ## 自动触发时机
 
-| 场景 | 触发条件 |
-|------|----------|
-| 新建模块 | 模块创建开始时 |
+| 场景     | 触发条件             |
+|----------|----------------------|
+| 新建模块 | 模块创建开始时       |
 | 缺失文档 | 检测到模块缺少文档时 |
 
 ## 使用流程
@@ -94,7 +98,7 @@ node scripts/doc_generator.js <模块路径> --json   # JSON 输出
 2. 填充 TODO 标记的内容
 3. 补充设计决策和理由
 4. 添加使用示例
-5. 运行 /verify-module 校验完整性
+5. 运行 /ccg:verify-module 校验完整性
 ```
 
 ## 生成后检查清单

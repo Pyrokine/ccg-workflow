@@ -1,11 +1,11 @@
 import fs from 'fs-extra'
+import { spawnSync } from 'node:child_process'
 import { readdirSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
-import { spawnSync } from 'node:child_process'
-import { TASK_STATE_RUNTIME_FILES } from '../installer-data'
 import { getAllCommandIds, installWorkflows, uninstallWorkflows } from '../installer'
+import { TASK_STATE_RUNTIME_FILES } from '../installer-data'
 
 function expectClaudeController(hookDir: string, root: string): void {
   const controller = spawnSync(
@@ -134,7 +134,7 @@ describe('installWorkflows — binary installation', () => {
     const binDir = join(tmpDir, 'bin')
     const binaryPath = join(binDir, binaryName)
     await fs.ensureDir(binDir)
-    await fs.writeFile(binaryPath, '#!/usr/bin/env sh\necho "codeagent-wrapper version 5.15.0-aug.1"\n', 'utf-8')
+    await fs.writeFile(binaryPath, '#!/usr/bin/env sh\necho "codeagent-wrapper version 5.16.0-aug.1"\n', 'utf-8')
     if (process.platform !== 'win32') {
       await fs.chmod(binaryPath, 0o755)
     }
@@ -217,7 +217,7 @@ describe('installWorkflows — persistent task Hooks', () => {
     ])
     expect(settings.hooks.PreToolUse).toEqual([
       {
-        matcher: 'Bash|Agent',
+        matcher: 'Bash|Agent|Edit|Write',
         hooks: [{ type: 'command', command: `node "${join(hookDir, 'subagent-context.js')}"`, timeout: 15 }],
       },
     ])

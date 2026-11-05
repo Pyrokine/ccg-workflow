@@ -1,11 +1,11 @@
-import { rename } from 'node:fs/promises'
 import fs from 'fs-extra'
+import { rename } from 'node:fs/promises'
 import { join } from 'pathe'
-import type { InstallContext } from './installer-context'
-import { lstatOptional } from './installer-codex-files'
 import { asRecord, parseJsonRecord } from './installer-codex-content'
-import { injectHookConfig } from './installer-template'
+import { lstatOptional } from './installer-codex-files'
+import type { InstallContext } from './installer-context'
 import { TASK_STATE_RUNTIME_FILES } from './installer-data'
+import { injectHookConfig } from './installer-template'
 
 export function isCcgHookCommand(command: unknown): boolean {
   return typeof command === 'string' && command.replace(/\\/g, '/').includes('/hooks/ccg/')
@@ -38,8 +38,9 @@ export async function installHookScripts(ctx: InstallContext): Promise<boolean> 
     let metadata: Record<string, unknown> = {}
     const current = await lstatOptional(boundary)
     if (current) {
-      if (!current.isFile() || current.isSymbolicLink())
+      if (!current.isFile() || current.isSymbolicLink()) {
         throw new Error('Hook package metadata is not a regular file; preserved')
+      }
       metadata = parseJsonRecord(await fs.readFile(boundary, 'utf-8'), 'Hook package metadata')
     }
     await fs.writeJson(boundary, { ...metadata, type: 'commonjs' }, { spaces: 2 })
@@ -48,7 +49,9 @@ export async function installHookScripts(ctx: InstallContext): Promise<boolean> 
       if (!(await fs.pathExists(src))) {
         throw new Error(`Required hook runtime file not found: ${src}`)
       }
-      if (file === 'package.json') continue
+      if (file === 'package.json') {
+        continue
+      }
       const content = await fs.readFile(src, 'utf-8')
       await fs.writeFile(join(hooksDestDir, file), injectHookConfig(content, ctx.config, ctx.installDir), 'utf-8')
     }
@@ -115,7 +118,7 @@ function ccgHookDefinitions(hooksDir: string): Record<string, Record<string, unk
       ],
     },
     PreToolUse: {
-      matcher: 'Bash|Agent',
+      matcher: 'Bash|Agent|Edit|Write',
       hooks: [
         { type: 'command', command: `node ${quoteCommandPath(join(hooksDir, 'subagent-context.js'))}`, timeout: 15 },
       ],
@@ -148,10 +151,14 @@ function preservedHookEntries(existing: Record<string, unknown>[]): Record<strin
       continue
     }
     const preservedCommands = commands.filter((hook) => {
-      if (!hook || typeof hook !== 'object' || Array.isArray(hook)) return true
+      if (!hook || typeof hook !== 'object' || Array.isArray(hook)) {
+        return true
+      }
       return !isCcgHookCommand((hook as Record<string, unknown>).command)
     })
-    if (preservedCommands.length > 0) preservedEntries.push({ ...entry, hooks: preservedCommands })
+    if (preservedCommands.length > 0) {
+      preservedEntries.push({ ...entry, hooks: preservedCommands })
+    }
   }
   return preservedEntries
 }
@@ -166,7 +173,9 @@ export async function registerHooksInSettings(ctx: InstallContext): Promise<void
 
   try {
     const settings = await readHookSettings(ctx)
-    if (!settings) return
+    if (!settings) {
+      return
+    }
     const hooks = { ...((settings.hooks || {}) as Record<string, unknown>) }
 
     for (const [event, definition] of Object.entries(ccgHookDefinitions(hooksDir))) {
