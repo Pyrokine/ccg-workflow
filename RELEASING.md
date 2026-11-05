@@ -31,6 +31,18 @@ create, move, delete, or upload `preset` assets manually.
 `.github/workflows/release-versions.yml` accepts only annotated `vX.Y.Z-aug.N` tags in this repository. It verifies the
 tag target and package version before creating a missing GitHub Release.
 
+## Commit structure
+
+Plan the functional and maintenance groups before staging files. Each implementation commit must contain one reviewable
+concern, its tests, and directly related documentation. Separate upstream integration, dependency and CI updates, bug
+fixes, and mechanical cleanup when they can be reviewed independently. Stage shared-file changes by their owning group.
+
+Complete the implementation commits before creating a separate version-metadata commit. That final commit contains only
+version declarations, matching version assertions, plugin metadata, release notes, and current-version documentation.
+
+Before pushing, inspect each staged diff and the complete commit sequence. Verify that every commit subject describes
+its actual scope and that the version-metadata commit follows the implementation commits.
+
 ## Required checks
 
 Run these checks from the repository root before a release:
@@ -67,13 +79,15 @@ the shared `.gitignore`; do not use `skip-worktree` or `assume-unchanged` as ign
 
 ## Release procedure
 
-1. Update package and wrapper versions where required, then update `CHANGELOG.md`, both READMEs, and plugin metadata
-2. Run every required check and review the complete diff
-3. Obtain explicit approval before committing, pushing, creating a tag, or changing a GitHub Release
-4. Push the release commit to `main`
-5. Create an annotated `vX.Y.Z-aug.N` tag on that commit and push only that tag
-6. Confirm that the version Release workflow created the matching ordinary Release with no binary assets
-7. If the wrapper changed, wait for the binary workflow and verify all six `preset` assets report
+1. Plan the implementation commit groups and the final version-metadata commit
+2. Obtain explicit approval before committing, pushing, creating a tag, or changing a GitHub Release
+3. Complete each implementation group with its tests and related documentation, and commit each group separately
+4. Update package and wrapper versions where required, then update `CHANGELOG.md`, both READMEs, and plugin metadata
+5. Run every required check, review the complete diff and commit sequence, and create the version-metadata commit
+6. Push the reviewed implementation commits and final version-metadata commit to `main`
+7. Create an annotated `vX.Y.Z-aug.N` tag on the version-metadata commit and push only that tag
+8. Confirm that the version Release workflow created the matching ordinary Release with no binary assets
+9. If the wrapper changed, wait for the binary workflow and verify all six `preset` assets report
    `EXPECTED_BINARY_VERSION`
 
 Never use `git push --all`, `git push --tags`, or `git push --mirror` for a release. Push only the intended branch and
