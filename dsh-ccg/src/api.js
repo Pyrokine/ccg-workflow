@@ -2,10 +2,9 @@
  * The card's data seam.
  *
  * The harness serves settings namespaces to the browser from a fixed allowlist
- * — `dsh-host-apiproxy` builds it from its own constants plus the configurable
- * model providers, so a third-party namespace is deliberately neither readable
- * nor writable over the wire ("a future registration does not become remotely
- * readable or writable by default"). This route serves the plugin’s section.
+ * built by `dsh-host-apiproxy` from its constants and configurable model providers.
+ * A third-party namespace has no remote read or write access by default.
+ * This route serves the plugin's section.
  * The Host owns each write through the settings scope beneath the profile patch.
  *
  * Writes are refused off-loopback. The harness gates its own configuration
@@ -19,7 +18,7 @@ import { resolveRoles, ROLE_NAMES, ROLES, TIERS } from './roles.js';
 import { directChildActivity } from './subagent.js';
 
 /** Route the card reads and writes. */
-export const API_PATH = '/api/ccg/config';
+const API_PATH = '/api/ccg/config';
 
 /** Route the team strip reads. */
 export const TEAM_API_PATH = '/api/ccg/team';

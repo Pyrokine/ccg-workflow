@@ -69,6 +69,24 @@ test('the domain declares a name the harness will accept', () => {
   assert.ok(TEAM_DOMAIN.tables.teammates)
 })
 
+test('team records retain their fields and reject missing or invalid ownership data', () => {
+  /** @type {{parse(value: unknown): unknown}} */
+  const schema = /** @type {{parse(value: unknown): unknown}} */ (TEAM_DOMAIN.tables.teammates.valueSchema)
+  const complete = row('child-a', ['src/a.js'], { workspace: '/w/p' })
+  assert.deepEqual(schema.parse(complete), complete)
+  const required = {
+    childId: 'child-b',
+    hiredBy: 'coordinator-1',
+    role: 'builder',
+    label: 'Parser',
+    owns: [],
+    hiredAt: 0,
+  }
+  assert.deepEqual(schema.parse(required), required)
+  assert.throws(() => schema.parse({ ...required, owns: undefined }))
+  assert.throws(() => schema.parse({ ...required, owns: [42] }))
+})
+
 test('paths that name the same file collide however they were spelled', () => {
   assert.equal(pathsCollide('src/a.js', 'src/a.js'), true)
   assert.equal(pathsCollide('./src/a.js', 'src/a.js'), true)
@@ -175,6 +193,7 @@ test('the roster definition compiles — a bad schema takes the whole tool table
   assert.deepEqual(definition.output.schema.required, ['action', 'count', 'text'])
   assert.equal(definition.output.schema.additionalProperties, false)
   const [block] = definition.output.render({}, { action: 'list', count: 0, text: 'hello' })
+  assert.ok(block.type === 'text')
   assert.equal(block.text, 'hello')
 })
 

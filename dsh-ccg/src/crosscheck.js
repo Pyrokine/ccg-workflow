@@ -18,10 +18,18 @@
  * leaves it: with the model holding the context.
  */
 
-import { defineTool } from '@deepseek-ai/dsh-tools';
+import { defineTool as compileTool } from '@deepseek-ai/dsh-tools';
 
 import { ROLES } from './roles.js';
 import { collectSubagentResult } from './subagent.js';
+
+/** @type {import('./tool-types.js').ToolCompiler} */
+const defineTool = /** @type {import('./tool-types.js').ToolCompiler} */ (compileTool);
+
+/**
+ * @typedef {{ label: string, provider: string, model: string } &
+ *   ({ ok: true, answer: string } | { ok: false, error: string })} PanelAnswer
+ */
 
 /** The standalone cross-check's tool name, named once for both halves. */
 export const CROSSCHECK_TOOL = 'ccg_crosscheck';
@@ -299,11 +307,22 @@ export function panelToolDefinition(spec) {
           },
         },
       },
-      render: (args, value) => [{ type: 'text', text: formatPanelReport(value.question, value.answers) }],
+      /**
+       * @param {unknown} args
+       * @param {{question: string, answered: number, answers: PanelAnswer[]}} value
+       * @returns {Array<{type: 'text', text: string}>}
+       */
+      render(args, value) {
+        return [{ type: 'text', text: formatPanelReport(value.question, value.answers) }];
+      },
       // What the conversation renders the answers side by side from. The
       // canonical value stays execution-local and is never replayed; this is.
       presentationMeta: (args, value) => panelPresentationMeta(value, members),
     },
+    /**
+     * @param {{description: string, prompt: string, context?: string}} args
+     * @param {import('./tool-types.js').InvocationContext} exec
+     */
     async execute(args, exec) {
       const subagents = getSubagents();
       if (subagents === undefined) {
@@ -323,59 +342,55 @@ export function panelToolDefinition(spec) {
 
       // Every member is started before any is awaited: a panel costs the
       // slowest answer, not the sum of them.
-      const runs = members.map(async (member) => {
-        const label = memberLabel(member);
-        try {
-          const result = await collectSubagentResult(subagents, provider, {
-            label: `${String(args.description ?? toolName)} · ${label}`,
-            prompt: [{ type: 'text', text: buildMemberPrompt(member, question, context, persona) }],
-            parent,
-            signal: exec?.signal,
-            agentOptions: {
-              provider: member.provider,
-              model: member.model,
-              ...(typeof member.maxTokens === 'number' ? { maxTokens: member.maxTokens } : {}),
-            },
-            ...(toolFilter ? { toolFilter } : {}),
-          });
-          const answer = contentText(result?.output).trim();
-          if (result?.stopReason !== 'completed' || answer === '') {
-            // The result seam carries no failure text, so say what the stop
-            // reason usually means: a route that lists a model in its catalog
-            // but does not actually serve it is the common cause.
-            const reason = result?.stopReason ?? 'unknown';
-            return {
-              ...member,
-              label,
-              ok: false,
-              error:
-                result?.diagnostic ||
-                (reason === 'error' && answer === ''
-                  ? 'the child ended with an error and produced nothing — ' +
-                    `check that ${member.provider} really serves ${member.model}`
-                  : answer === ''
-                    ? `no output (${reason})`
-                    : `the child did not complete (${reason}): ${answer}`),
-            };
+      /** @type {Promise<PanelAnswer>[]} */
+      const runs = members.map(
+        /** @returns {Promise<PanelAnswer>} */ async (member) => {
+          const label = memberLabel(member);
+          const route = { label, provider: member.provider, model: member.model };
+          try {
+            const result = await collectSubagentResult(subagents, provider, {
+              label: `${String(args.description ?? toolName)} · ${label}`,
+              prompt: [{ type: 'text', text: buildMemberPrompt(member, question, context, persona) }],
+              parent,
+              signal: exec?.signal,
+              agentOptions: {
+                provider: member.provider,
+                model: member.model,
+                ...(typeof member.maxTokens === 'number' ? { maxTokens: member.maxTokens } : {}),
+              },
+              ...(toolFilter ? { toolFilter } : {}),
+            });
+            const answer = contentText(result?.output).trim();
+            if (result?.stopReason !== 'completed' || answer === '') {
+              // The result seam carries no failure text, so say what the stop
+              // reason usually means: a route that lists a model in its catalog
+              // but does not actually serve it is the common cause.
+              const reason = result?.stopReason ?? 'unknown';
+              return {
+                ...route,
+                ok: false,
+                error:
+                  result?.diagnostic ||
+                  (reason === 'error' && answer === ''
+                    ? 'the child ended with an error and produced nothing — ' +
+                      `check that ${member.provider} really serves ${member.model}`
+                    : answer === ''
+                      ? `no output (${reason})`
+                      : `the child did not complete (${reason}): ${answer}`),
+              };
+            }
+            return { ...route, ok: true, answer };
+          } catch (error) {
+            // One member failing is a thinner panel, not a failed call — the
+            // reader still gets the answers that did come back.
+            return { ...route, ok: false, error: String(error?.message ?? error) };
           }
-          return { ...member, label, ok: true, answer };
-        } catch (error) {
-          // One member failing is a thinner panel, not a failed call — the
-          // reader still gets the answers that did come back.
-          return { ...member, label, ok: false, error: String(error?.message ?? error) };
         }
-      });
+      );
 
-      const settled = await Promise.all(runs);
+      const answers = await Promise.all(runs);
       // Every admitted child is cleaned up before a canceled panel ends.
       exec?.signal?.throwIfAborted();
-      const answers = settled.map((entry) => ({
-        label: entry.label,
-        provider: entry.provider,
-        model: entry.model,
-        ok: entry.ok,
-        ...(entry.ok ? { answer: entry.answer } : { error: entry.error }),
-      }));
 
       return { question, answered: answers.filter((entry) => entry.ok).length, answers };
     },

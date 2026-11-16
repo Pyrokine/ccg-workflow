@@ -28,7 +28,13 @@ test('alpha panels run all members concurrently and distinguish partial failure 
   const calls = []
   const pending = []
   const disposed = []
-  const members = ['complete', 'truncated', 'broken'].map((model) => ({ provider: 'gw', model }))
+  const members = ['complete', 'truncated', 'broken'].map((model) => ({
+    provider: 'gw',
+    model,
+    role: 'reviewer',
+    lens: 'correctness',
+    maxTokens: 256,
+  }))
   const signal = new AbortController().signal
   const subagents = {
     async startActivation(spec) {
@@ -66,9 +72,17 @@ test('alpha panels run all members concurrently and distinguish partial failure 
   pending[2]({ stopReason: 'error', diagnostic: 'model route unavailable', output: [] })
   const result = await running
   assert.equal(result.answered, 1)
+  assert.ok(result.answers[0].ok === true)
+  assert.ok(result.answers[1].ok === false)
+  assert.ok(result.answers[2].ok === false)
   assert.equal(result.answers[0].answer, 'Ship it')
   assert.match(result.answers[1].error, /max-tokens.*Unfinished answer/)
   assert.equal(result.answers[2].error, 'model route unavailable')
+  assert.deepEqual(Object.keys(result.answers[0]).sort(), ['answer', 'label', 'model', 'ok', 'provider'])
+  for (const answer of result.answers.slice(1)) {
+    assert.deepEqual(Object.keys(answer).sort(), ['error', 'label', 'model', 'ok', 'provider'])
+    assert.equal(answer.ok, false)
+  }
   assert.deepEqual(disposed.sort(), ['broken', 'complete', 'truncated'])
 })
 
@@ -179,8 +193,8 @@ test('an explicit panel wins, and may put one model behind two different lenses'
 test('a malformed or mislabelled panel member is refused, never quietly dropped', () => {
   assert.throws(() => resolvePanel({ panel: [{ provider: 'gw' }] }), /needs both a provider and a model/)
   assert.throws(
-    () => resolvePanel({ panel: [{ provider: 'gw', model: 'a', role: 'archtiect' }] }),
-    /unknown role "archtiect"/
+    () => resolvePanel({ panel: [{ provider: 'gw', model: 'a', role: 'unknown-role' }] }),
+    /unknown role "unknown-role"/
   )
 })
 
@@ -274,6 +288,7 @@ test('every panel definition compiles — a bad schema takes the whole tool tabl
     { description: 'q', prompt: 'q' },
     { question: 'q', answered: 1, answers: [{ label: 'a', provider: 'gw', model: 'm', ok: true, answer: 'yes' }] }
   )
+  assert.ok(text[0].type === 'text')
   assert.match(text[0].text, /Panel of 1 on: q/)
 })
 

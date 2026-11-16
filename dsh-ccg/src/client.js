@@ -18,10 +18,11 @@
  * factory its own `require`, so handwritten `React.createElement` needs no
  * build step, and what ships is what you can read.
  */
-window.__ModuleLoader__.load({
+/** @type {{load(definition: object): void}} */ (window['__ModuleLoader__']).load({
   id: 'dsh-ccg',
   factory: (require) => {
     const module = { exports: {} };
+    /** @type {import('./browser-types.js').BrowserReact} */
     const React = require('react');
 
     /**
@@ -37,9 +38,14 @@ window.__ModuleLoader__.load({
      *
      * So every borrowed piece has a fallback this file owns. The kit makes the
      * surfaces match the app exactly; its absence costs polish and nothing else.
+     *
+     * @returns {{StateDot?: import('react').ElementType,
+     *   Button?: import('react').ElementType, MarkdownText?: import('react').ElementType}}
      */
     function borrowKit() {
       try {
+        // The host static registry owns this optional browser module.
+        // noinspection NpmUsedModulesInstalled
         const kit = require('@deepseek-ai/dsh-client-ui-primitives');
         return kit !== null && typeof kit === 'object' ? kit : {};
       } catch {
@@ -378,6 +384,10 @@ window.__ModuleLoader__.load({
      */
     const Button =
       kit.Button ??
+      /**
+       * @param {import('react').ButtonHTMLAttributes<HTMLButtonElement> &
+       *   {variant?: string, size?: string, icon?: unknown}} props
+       */
       function Button(props) {
         const { variant, size, icon: _icon, className, children, ...rest } = props;
         return React.createElement(

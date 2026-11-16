@@ -3,7 +3,8 @@
  *
  * The stated principle is that every prompt is generated from the resolved
  * matrix, so it can never advertise something this deployment does not have.
- * That was honored for the per-role model names and NOT for the surrounding prose: with no tiers configured the routing preamble promised "several models
+ * That was honored for the per-role model names and NOT for the surrounding
+ * prose: with no tiers configured the routing preamble promised "several models
  * at once" while `ccg_crosscheck` was not even registered, and Deep described
  * panels that did not exist. A fresh installation is the configuration most users
  * see first and the one least likely to be checked, so it gets its own tests.

@@ -138,6 +138,7 @@ test('the remember definition compiles — a bad schema takes the whole tool tab
   assert.deepEqual(definition.parameters.properties.kind.enum, NOTE_KINDS)
   assert.deepEqual(definition.output.schema.required, ['path', 'kind', 'subject'])
   const [block] = definition.output.render({}, { path: '/w/p/x', kind: 'decision', subject: 'S' })
+  assert.ok(block.type === 'text')
   assert.match(block.text, /Remembered \(decision\): S/)
 })
 

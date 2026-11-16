@@ -92,7 +92,7 @@ test('half a route is refused: provider without model falls back to the default 
 })
 
 test('a typo in a role name or tier is refused loudly, never silently ignored', () => {
-  assert.throws(() => resolveRoles({ roles: { reviewrs: { enabled: false } } }), /unknown role "reviewrs"/)
+  assert.throws(() => resolveRoles({ roles: { 'unknown-role': { enabled: false } } }), /unknown role "unknown-role"/)
   assert.throws(() => resolveRoles({ roles: { reviewer: { tier: 'strongest' } } }), /unknown tier "strongest"/)
 })
 

@@ -91,6 +91,7 @@ test('the projector is wired into the tool and survives a value it did not expec
 
   assert.equal(typeof definition.output.presentationMeta, 'function')
   const meta = definition.output.presentationMeta({ prompt: 'q' }, VALUE)
+  assert.ok(meta && typeof meta === 'object' && 'answers' in meta && Array.isArray(meta.answers))
   assert.equal(meta.answers.length, 2)
 
   // Replay hands back whatever was logged. A projector that throws would take

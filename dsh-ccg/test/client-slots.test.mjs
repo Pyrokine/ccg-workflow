@@ -1,5 +1,5 @@
 /** Browser registrations exercised through the current official UI runtime. */
-import { test } from 'node:test'
+import { before, test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -12,13 +12,47 @@ const require = createRequire(
     ? resolve(process.env.DSH_CLIENT_TEST_RUNTIME, 'package.json')
     : new URL('../package.json', import.meta.url)
 )
-const { Context } = await import(require.resolve('@deepseek-ai/cordis'))
-const slotRuntime = await import(require.resolve('@deepseek-ai/dsh-client-ui-slots'))
+/** @type {new () => import('../src/browser-types.js').BrowserContext} */
+let Context
+/** @type {typeof import('@deepseek-ai/dsh-client-ui-slots')} */
+let slotRuntime
+/** @type {import('../src/browser-types.js').BrowserReact} */
 const React = require('react')
-const source = readFileSync(new URL('../src/client.js', import.meta.url), 'utf8')
+/** @type {string} */
+const source = readFileSync(new URL('../src/client.js', import.meta.url), { encoding: 'utf8' })
+let SlotRegistry
+let pluginsModule
 
-/** Load a browser factory exactly as the harness ModuleLoader does. */
-function browserModule(text, fetch = async () => ({ ok: true, json: async () => ({ panels: {} }) }), react = React) {
+before(async () => {
+  Context = /** @type {new () => import('../src/browser-types.js').BrowserContext} */ (
+    (await import(require.resolve('@deepseek-ai/cordis'))).Context
+  )
+  slotRuntime = await import(require.resolve('@deepseek-ai/dsh-client-ui-slots'))
+  SlotRegistry = /** @type {import('@deepseek-ai/cordis').Plugin} */ (
+    browserModule(readFileSync(require.resolve('@deepseek-ai/dsh-client-ui-renderer/client'), { encoding: 'utf8' }))
+      .SlotRegistry
+  )
+  pluginsModule = /** @type {import('@deepseek-ai/cordis').Plugin} */ (
+    browserModule(
+      readFileSync(require.resolve('@deepseek-ai/dsh-client-ui-settings-plugins/client'), { encoding: 'utf8' })
+    )
+  )
+})
+
+/**
+ * Load a browser factory exactly as the harness ModuleLoader does.
+ * @param {string} text
+ * @param {Function} [fetch]
+ * @param {object} [react]
+ * @param {object} [kit]
+ * @returns {Record<string, unknown>}
+ */
+function browserModule(
+  text,
+  fetch = async () => ({ ok: true, json: async () => ({ panels: {} }) }),
+  react = React,
+  kit
+) {
   let definition
   const document = {
     querySelector: () => null,
@@ -39,23 +73,22 @@ function browserModule(text, fetch = async () => ({ ok: true, json: async () => 
     clearInterval,
   })
   assert.ok(definition?.factory, 'browser module did not register a factory')
-  return definition.factory((id) =>
-    id === 'react'
+  return definition.factory((id) => {
+    if (id === '@deepseek-ai/dsh-client-ui-primitives') {
+      if (kit === undefined) {
+        throw new Error('optional host UI kit is not registered')
+      }
+      return kit
+    }
+    return id === 'react'
       ? react
       : id === '@deepseek-ai/dsh-client-ui-slots'
         ? slotRuntime
         : id === '@deepseek-ai/cordis'
           ? { Context, Service: require('@deepseek-ai/cordis').Service }
           : require(id)
-  )
+  })
 }
-
-const { SlotRegistry } = browserModule(
-  readFileSync(require.resolve('@deepseek-ai/dsh-client-ui-renderer/client'), 'utf8')
-)
-const pluginsModule = browserModule(
-  readFileSync(require.resolve('@deepseek-ai/dsh-client-ui-settings-plugins/client'), 'utf8')
-)
 
 /** Locale data is plugin-owned; the registration lifecycle remains real Cordis. */
 function locale() {
@@ -71,7 +104,7 @@ function locale() {
   }
 }
 
-async function bench(payload = { panels: {} }, fetch, react) {
+async function bench(payload = { panels: {} }, fetch, react, kit) {
   const ctx = new Context()
   await ctx.plugin(SlotRegistry).await()
   ctx.provide('locale', locale())
@@ -91,7 +124,9 @@ async function bench(payload = { panels: {} }, fetch, react) {
   )
   const plugins = ctx.plugin(pluginsModule)
   await plugins.await()
-  const ccgModule = browserModule(source, fetch ?? (async () => ({ ok: true, json: async () => payload })), react)
+  const ccgModule = /** @type {import('@deepseek-ai/cordis').Plugin} */ (
+    browserModule(source, fetch ?? (async () => ({ ok: true, json: async () => payload })), react, kit)
+  )
   const ccg = ctx.plugin(ccgModule)
   await ccg.await()
   // Panel claims arrive after one asynchronous configuration read.
@@ -145,7 +180,9 @@ test('panel views render current preparation, start and persisted result phases'
     const entry = slots.entries('tool.call.toolview')[0]
     const { renderToStaticMarkup } = require('react-dom/server')
     const injected = entry.inject()
-    const render = (props) => renderToStaticMarkup(React.createElement(entry.component, { ...injected, ...props }))
+    /** @type {import('react').FunctionComponent<Record<string, unknown>>} */
+    const Component = entry.component
+    const render = (props) => renderToStaticMarkup(React.createElement(Component, { ...injected, ...props }))
     for (const phase of ['preparing', 'start']) {
       const html = render({ phase, block: { argsRaw: '{"description":"Compare models"}' } })
       assert.match(html, /data-state="running"/)
@@ -177,6 +214,56 @@ test('panel views render current preparation, start and persisted result phases'
     await plugins.dispose()
   }
 })
+
+for (const available of [false, true]) {
+  test(`panel components render with the optional host UI kit ${available ? 'present' : 'absent'}`, async () => {
+    const kit = available
+      ? {
+          StateDot: ({ state }) => React.createElement('span', { 'data-host-dot': state }),
+          Button: ({ children }) => React.createElement('button', { 'data-host-button': true }, children),
+          MarkdownText: ({ text }) => React.createElement('div', { 'data-host-markdown': true }, text),
+        }
+      : undefined
+    const { slots, ccg, plugins } = await bench({ panels: { ccg_analyze: [] } }, undefined, React, kit)
+    try {
+      assert.equal(slots.entries('settings.plugins.tab').length, 1)
+      assert.equal(slots.entries('conversation.input.dock').length, 1)
+      const entry = slots.entries('tool.call.toolview')[0]
+      /** @type {import('react').FunctionComponent<Record<string, unknown>>} */
+      const Component = entry.component
+      const { renderToStaticMarkup } = require('react-dom/server')
+      const html = renderToStaticMarkup(
+        React.createElement(Component, {
+          ...entry.inject(),
+          phase: 'result',
+          block: {
+            kind: 'tool-result',
+            isError: false,
+            meta: {
+              kind: 'ccg.panel/1',
+              question: 'Read this answer',
+              answers: [{ ok: true, label: 'one', provider: 'p', model: 'a', answer: 'An answer. '.repeat(40) }],
+            },
+          },
+        })
+      )
+      assert.match(html, /An answer/)
+      if (available) {
+        assert.match(html, /data-host-dot="done"/)
+        assert.match(html, /data-host-button/)
+        assert.match(html, /data-host-markdown/)
+        assert.doesNotMatch(html, /class="ccg-plain"/)
+      } else {
+        assert.match(html, /class="ccg-dot"/)
+        assert.match(html, /class="ccg-btn/)
+        assert.match(html, /class="ccg-plain"/)
+      }
+    } finally {
+      await ccg.dispose()
+      await plugins.dispose()
+    }
+  })
+}
 
 /** Minimal deterministic Hooks runner for the editor's request/state seam. */
 function editorHooks() {

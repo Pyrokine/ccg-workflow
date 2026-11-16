@@ -8,10 +8,9 @@
  * compaction the map would have been gone entirely.
  *
  * So ownership moves out of the transcript and into `ctx.storageDomain` — the
- * harness's own durable KV, the same one the workspace registry uses. It costs
- * no tokens until the model asks for it, it survives compaction, restart and
- * resume, and it makes the plugin's central claim — one writer per file —
- * mechanical instead of a paragraph of prose that a model may or may not honor.
+ * harness's own durable KV, the same one the workspace registry uses. The map
+ * costs no tokens until the model asks for it and survives compaction, restart
+ * and resume. It enforces one writer per file, the plugin's central claim.
  *
  * Live status is NOT stored here. `ctx.subagents.listChildren()` already knows
  * whether a child is running, idle or resumable, and a second copy of that
@@ -21,8 +20,16 @@
 
 import { defineDomain, domainTable } from '@deepseek-ai/dsh-storage-domain';
 import { z } from 'zod';
-import { defineTool } from '@deepseek-ai/dsh-tools';
+import { defineTool as compileTool } from '@deepseek-ai/dsh-tools';
 import { directChildActivity } from './subagent.js';
+
+/** @type {import('./tool-types.js').ToolCompiler} */
+const defineTool = /** @type {import('./tool-types.js').ToolCompiler} */ (compileTool);
+
+/**
+ * @typedef {{childId: string, hiredBy: string, role: string, label: string,
+ *   owns: string[], hiredAt: number, workspace?: string, provider?: string, model?: string}} Teammate
+ */
 
 /** Default name of the roster tool. */
 export const ROSTER_TOOL = 'ccg_roster';
@@ -40,21 +47,23 @@ export const TEAM_DOMAIN = defineDomain({
   version: 1,
   tables: {
     teammates: domainTable(
-      z.object({
-        /** Durable session id of the hired child. */
-        childId: z.string(),
-        /** Session id of the agent that hired it; the roster is per coordinator. */
-        hiredBy: z.string(),
-        /** Workspace the hire happened in, so one machine can hold several teams. */
-        workspace: z.string().optional(),
-        role: z.string(),
-        label: z.string(),
-        provider: z.string().optional(),
-        model: z.string().optional(),
-        /** Paths this teammate alone may write. Empty means it was given none. */
-        owns: z.array(z.string()),
-        hiredAt: z.number(),
-      })
+      /** @type {import('@deepseek-ai/dsh-storage-domain').DomainTableSpec<string, Teammate>['valueSchema']} */ (
+        z.object({
+          /** Durable session id of the hired child. */
+          childId: z.string(),
+          /** Session id of the agent that hired it; the roster is per coordinator. */
+          hiredBy: z.string(),
+          /** Workspace the hire happened in, so one machine can hold several teams. */
+          workspace: z.string().optional(),
+          role: z.string(),
+          label: z.string(),
+          provider: z.string().optional(),
+          model: z.string().optional(),
+          /** Paths this teammate alone may write. Empty means it was given none. */
+          owns: z.array(z.string()),
+          hiredAt: z.number(),
+        })
+      )
     ),
   },
 });
@@ -373,7 +382,7 @@ function formatForeign(foreign) {
  * @param status - childId → live activity from `listChildren`, when readable.
  * @param foreign - claims held here by another conversation.
  * @param pruned - how many rows this read retired.
- * @returns the model-facing text.
+ * @returns {string} the model-facing text.
  */
 export function formatRoster(rows, status = {}, foreign = [], pruned = 0) {
   const swept =
@@ -471,8 +480,19 @@ export function rosterToolDefinition(spec) {
           text: { type: 'string', required: true },
         },
       },
-      render: (args, value) => [{ type: 'text', text: value.text }],
+      /**
+       * @param {unknown} args
+       * @param {{action: string, count: number, text: string, released?: string, pruned?: number}} value
+       * @returns {Array<{type: 'text', text: string}>}
+       */
+      render(args, value) {
+        return [{ type: 'text', text: value.text }];
+      },
     },
+    /**
+     * @param {{action?: string, subagent_id?: string}} args
+     * @param {import('./tool-types.js').InvocationContext} exec
+     */
     async execute(args, exec) {
       const table = getTable();
       if (table === undefined) {

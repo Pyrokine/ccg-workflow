@@ -4,16 +4,15 @@
  * Routing sends different work to different models. A panel puts several models
  * on the same work. A TEAM is neither: it is a set of colleagues that stay
  * alive across turns, each owning part of the change, each reporting back as
- * they finish. That is what CCG's `/ccg:team` does on Claude Code, and it is
- * the only one of the three that a one-shot delegation genuinely cannot fake —
- * a one-shot child answers once and is gone, so nothing can be handed to it
- * afterward and nothing can arrive from it unasked.
+ * they finish. That is what CCG's `/ccg:team` does on Claude Code.
+ * A one-shot child answers once and is gone. Teams keep children available for
+ * later assignments and let them report without being asked.
  *
  * The harness already owns every primitive this needs: continuable starts (rc)
  * or activations (alpha) keep a child resident, `send_message` opens its next
  * turn, reports or completion notifications carry its answer home,
- * `interrupt_agent` stops a turn that went wrong, `list_agents`
- * shows who is alive. The hiring tool starts one of those children
+ * `interrupt_agent` stops a turn that went wrong, and `list_agents` lists the
+ * live agents. The hiring tool starts one of those children
  * AS A CCG ROLE — with that role's persona, that role's model, and the file
  * ownership that makes several of them safe to run at once. That is this file.
  *
@@ -23,10 +22,13 @@
  * answer, or a colleague?
  */
 
-import { defineTool } from '@deepseek-ai/dsh-tools';
+import { defineTool as compileTool } from '@deepseek-ai/dsh-tools';
 
 import { startTeammate, usesActivations } from './subagent.js';
 import { collisionsWith, describeCollisions, normaliseOwns, rosterOf, sweepStale } from './memory.js';
+
+/** @type {import('./tool-types.js').ToolCompiler} */
+const defineTool = /** @type {import('./tool-types.js').ToolCompiler} */ (compileTool);
 
 /** Default tool name for hiring. */
 export const TEAM_TOOL = 'ccg_team';
@@ -440,8 +442,20 @@ export function teamToolDefinition(spec) {
           note: { type: 'string' },
         },
       },
-      render: (args, value) => [{ type: 'text', text: formatHireReport(value) }],
+      /**
+       * @param {unknown} args
+       * @param {{hired: boolean, role: string, label: string, route: string,
+       *   childId?: string, owns?: string[], note?: string}} value
+       * @returns {Array<{type: 'text', text: string}>}
+       */
+      render(args, value) {
+        return [{ type: 'text', text: formatHireReport(value) }];
+      },
     },
+    /**
+     * @param {{role: string, description: string, prompt: string, context?: string, owns?: string[]}} args
+     * @param {import('./tool-types.js').InvocationContext} exec
+     */
     async execute(args, exec) {
       const subagents = getSubagents();
       if (subagents === undefined) {
@@ -505,7 +519,13 @@ export function teamToolDefinition(spec) {
         : { approved: true };
 
       if (!approval.approved) {
-        return { hired: false, role: role.role, label, route: routeLabel(route), ...(owns.length > 0 ? { owns } : {}) };
+        return {
+          hired: false,
+          role: role.role,
+          label,
+          route: routeLabel(route),
+          ...(owns.length > 0 ? { owns } : {}),
+        };
       }
 
       const { childId } = await startTeammate(subagents, {
@@ -562,7 +582,7 @@ export function teamToolDefinition(spec) {
  *
  * The primitives are already in the prompt — the harness publishes
  * `send_message`, `report` and `list_agents` on their own. What is missing, and
- * what this supplies, is the judgment around them: when a team beats a
+ * what this supplies, is the surrounding judgment: when a team beats a
  * delegation at all, and the two rules that decide whether concurrent agents
  * produce work or wreckage.
  *

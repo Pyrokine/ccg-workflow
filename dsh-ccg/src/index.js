@@ -1,5 +1,5 @@
 /**
- * CCG for DeepSeek Harness — the multi-model role matrix as a mounted plugin.
+ * CCG for DeepSeek Harness, a role matrix for multiple models, mounted as a plugin.
  *
  * CCG's discipline on Claude Code is "different roles, different models": one
  * brain orchestrates and delegates each specialized turn to the model that

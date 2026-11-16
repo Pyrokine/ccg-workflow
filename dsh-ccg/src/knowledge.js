@@ -24,7 +24,10 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, isAbsolute, join } from 'node:path';
 
-import { defineTool } from '@deepseek-ai/dsh-tools';
+import { defineTool as compileTool } from '@deepseek-ai/dsh-tools';
+
+/** @type {import('./tool-types.js').ToolCompiler} */
+const defineTool = /** @type {import('./tool-types.js').ToolCompiler} */ (compileTool);
 
 /** Default name of the remember tool. */
 export const REMEMBER_TOOL = 'ccg_remember';
@@ -68,7 +71,7 @@ export function formatNote(note) {
 }
 
 /** The header a new memory file opens with. */
-export function memoryHeader() {
+function memoryHeader() {
   return [
     '# Project memory',
     '',
@@ -85,7 +88,7 @@ export function memoryHeader() {
  * @param workspace - absolute workspace root.
  * @param note - `{ kind, subject, body, at }`.
  * @param deps - injection seam for tests.
- * @returns the absolute path written.
+ * @returns {string} the absolute path written.
  */
 export function appendNote(workspace, note, deps = {}) {
   const io = {
@@ -233,15 +236,26 @@ export function rememberToolDefinition(spec = {}) {
           subject: { type: 'string', required: true },
         },
       },
-      render: (args, value) => [
-        {
-          type: 'text',
-          text:
-            `Remembered (${value.kind}): ${value.subject} → ${value.path}\n` +
-            'Later sessions in this workspace start with it already loaded.',
-        },
-      ],
+      /**
+       * @param {unknown} args
+       * @param {{path: string, kind: string, subject: string}} value
+       * @returns {Array<{type: 'text', text: string}>}
+       */
+      render(args, value) {
+        return [
+          {
+            type: 'text',
+            text:
+              `Remembered (${value.kind}): ${value.subject} → ${value.path}\n` +
+              'Later sessions in this workspace start with it already loaded.',
+          },
+        ];
+      },
     },
+    /**
+     * @param {{kind: string, subject: string, body: string}} args
+     * @param {import('./tool-types.js').InvocationContext} exec
+     */
     async execute(args, exec) {
       const workspace = workspaceOf(exec?.agent);
       if (workspace === undefined) {

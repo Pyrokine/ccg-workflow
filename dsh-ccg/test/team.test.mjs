@@ -50,8 +50,14 @@ function stubSubagents() {
   }
 }
 
-/** Compile the hiring tool over a resolved matrix, wired to a stub service. */
-function hiringTool(config = TIERS, subagents = stubSubagents(), extra = {}) {
+/**
+ * Compile the hiring tool over a resolved matrix and either subagent API.
+ * @template [T=ReturnType<typeof stubSubagents>]
+ * @param {object} [config]
+ * @param {T} [subagents]
+ * @param {object} [extra]
+ */
+function hiringTool(config = TIERS, subagents = /** @type {T} */ (stubSubagents()), extra = {}) {
   const definition = teamToolDefinition({
     resolved: resolveRoles(config),
     getSubagents: () => subagents,
@@ -102,6 +108,7 @@ test('the hiring definition compiles — a bad schema takes the whole tool table
       owns: ['src/parse/'],
     }
   )
+  assert.ok(block.type === 'text')
   assert.match(block.text, /builder teammate hired: child-42/)
 
   // Both arms render: a decline has no childId, and a report that tried to name
@@ -115,6 +122,7 @@ test('the hiring definition compiles — a bad schema takes the whole tool table
       route: 'gw / fast-model',
     }
   )
+  assert.ok(declined.type === 'text')
   assert.match(declined.text, /Not hired: the user declined/)
   assert.doesNotMatch(declined.text, /undefined/)
 })
@@ -342,7 +350,7 @@ test('hiring refuses what it cannot deliver instead of failing halfway', async (
   // here. The guard inside `execute` stays for direct calls, but this is the
   // message the model actually sees.
   await assert.rejects(
-    () => definition.execute({ role: 'buidler', description: 'x', prompt: 'y' }, { agent: {} }),
+    () => definition.execute({ role: 'unknown-role', description: 'x', prompt: 'y' }, { agent: {} }),
     /"role" must be one of .*builder/
   )
 })
