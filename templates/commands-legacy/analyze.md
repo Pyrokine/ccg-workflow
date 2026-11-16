@@ -36,14 +36,17 @@ description: '多模型技术分析（并行执行）：{{BACKEND_PRIMARY}} 后�
 
 ```
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend <{{BACKEND_PRIMARY}}|{{FRONTEND_PRIMARY}}> - \"{{WORKDIR}}\" <<'EOF'
-ROLE_FILE: <角色提示词路径>
-<TASK>
-需求：<增强后的需求（如未增强则用 $ARGUMENTS）>
-上下文：<前序阶段检索到的代码上下文>
-</TASK>
-OUTPUT: 期望输出格式
-EOF",
+  command: [
+    "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend " +
+      "<{{BACKEND_PRIMARY}}|{{FRONTEND_PRIMARY}}> - \"{{WORKDIR}}\" <<'EOF'",
+    "ROLE_FILE: <角色提示词路径>",
+    "<TASK>",
+    "需求：<增强后的需求（如未增强则用 $ARGUMENTS）>",
+    "上下文：<前序阶段检索到的代码上下文>",
+    "</TASK>",
+    "OUTPUT: 期望输出格式",
+    "EOF",
+  ].join('\n'),
   run_in_background: true,
   timeout: 3600000,
   description: "简短描述"
@@ -53,7 +56,7 @@ EOF",
 **角色提示词**：
 
 | 模型 | 提示词                                                    |
-|------|-----------------------------------------------------------|
+| ---- | --------------------------------------------------------- |
 | 后端 | `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/analyzer.md`  |
 | 前端 | `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/analyzer.md` |
 
@@ -85,7 +88,8 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 ### 🔍 阶段 0：Prompt 增强（可选）
 
 `[模式：准备]` - **Prompt 增强**（按 `/ccg:enhance`
-的逻辑执行）：分析 $ARGUMENTS 的意图、缺失信息、隐含假设，补全为结构化需求（明确目标、技术约束、范围边界、验收标准），**用增强结果替代原始 $
+的逻辑执行）：分析 $ARGUMENTS 的意图、缺失信息、隐含假设，补全为结构化需求（明确目标、技术约束、范围边界、验收标准），
+**用增强结果替代原始 $
 ARGUMENTS，后续调用后端/前端模型 时传入增强后的需求**
 
 ### 🔍 阶段 1：上下文检索
@@ -103,13 +107,13 @@ ARGUMENTS，后续调用后端/前端模型 时传入增强后的需求**
 **⚠️ 必须发起两个并行 Bash 调用**（参照上方调用规范）：
 
 1. **{{BACKEND_PRIMARY}} 后端分析**：`Bash({ command: "...--backend {{BACKEND_PRIMARY}}...", run_in_background: true })`
-    - ROLE_FILE: `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/analyzer.md`
-    - OUTPUT：技术可行性、架构影响、性能考量
+   - ROLE_FILE: `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/analyzer.md`
+   - OUTPUT：技术可行性、架构影响、性能考量
 
 2. **{{FRONTEND_PRIMARY}} 前端分析**：
    `Bash({ command: "...--backend {{FRONTEND_PRIMARY}}...", run_in_background: true })`
-    - ROLE_FILE: `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/analyzer.md`
-    - OUTPUT：UI/UX 影响、用户体验、视觉设计考量
+   - ROLE_FILE: `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/analyzer.md`
+   - OUTPUT：UI/UX 影响、用户体验、视觉设计考量
 
 用 `TaskOutput` 等待两个模型的完整结果。 **必须等所有模型返回后才能进入下一阶段**。
 
@@ -121,9 +125,9 @@ ARGUMENTS，后续调用后端/前端模型 时传入增强后的需求**
 
 1. 对比双方分析结果
 2. 识别：
-    - **一致观点**（强信号）
-    - **分歧点**（需权衡）
-    - **互补见解**（各自领域洞察）
+   - **一致观点**（强信号）
+   - **分歧点**（需权衡）
+   - **互补见解**（各自领域洞察）
 3. 按信任规则权衡：后端以 {{BACKEND_PRIMARY}} 为准，前端以 {{FRONTEND_PRIMARY}} 为准
 
 ### 📊 阶段 4：综合输出
@@ -162,7 +166,7 @@ ARGUMENTS，后续调用后端/前端模型 时传入增强后的需求**
 ## 适用场景
 
 | 场景     | 示例                    |
-|----------|-------------------------|
+| -------- | ----------------------- |
 | 技术选型 | "比较 Redux vs Zustand" |
 | 架构评估 | "评估微服务拆分方案"    |
 | 性能分析 | "分析 API 响应慢的原因" |

@@ -23,7 +23,7 @@ $ARGUMENTS
 **与 `/ccg:execute` 的区别**：
 
 | 维度          | `/ccg:execute`                                               | `/ccg:codex-exec`                |
-|---------------|--------------------------------------------------------------|----------------------------------|
+| ------------- | ------------------------------------------------------------ | -------------------------------- |
 | 代码实现      | Claude 重构 {{BACKEND_PRIMARY}}/{{FRONTEND_PRIMARY}} 的 Diff | **{{BACKEND_PRIMARY}} 直接实现** |
 | MCP 搜索      | Claude 调用 MCP                                              | **{{BACKEND_PRIMARY}} 调用 MCP** |
 | Claude 上下文 | 高（搜索结果 + 代码全进来）                                  | **极低（只看摘要 + diff）**      |
@@ -52,11 +52,14 @@ $ARGUMENTS
 
 ```
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --with-mcp --backend {{BACKEND_PRIMARY}} - \"{{WORKDIR}}\" <<'EXEC_EOF'
-<TASK>
-<指令内容>
-</TASK>
-EXEC_EOF",
+  command: [
+    "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --with-mcp --backend " +
+      "{{BACKEND_PRIMARY}} - \"{{WORKDIR}}\" <<'EXEC_EOF'",
+    "<TASK>",
+    "<指令内容>",
+    "</TASK>",
+    "EXEC_EOF",
+  ].join('\n'),
   run_in_background: true,
   timeout: 3600000,
   description: "简短描述"
@@ -67,11 +70,14 @@ EXEC_EOF",
 
 ```
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --with-mcp --backend {{BACKEND_PRIMARY}} resume <SESSION_ID> - \"{{WORKDIR}}\" <<'EXEC_EOF'
-<TASK>
-<指令内容>
-</TASK>
-EXEC_EOF",
+  command: [
+    "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --with-mcp --backend " +
+      "{{BACKEND_PRIMARY}} resume <SESSION_ID> - \"{{WORKDIR}}\" <<'EXEC_EOF'",
+    "<TASK>",
+    "<指令内容>",
+    "</TASK>",
+    "EXEC_EOF",
+  ].join('\n'),
   run_in_background: true,
   timeout: 3600000,
   description: "简短描述"
@@ -83,7 +89,7 @@ EXEC_EOF",
 在同一条消息中启动 GPT、Grok 两个 `Bash` 调用，每个调用接收完整 git diff、计划文件和相关完整文件：
 
 | reviewer | wrapper 参数                                                                                                            | 审查重点                                 |
-|----------|-------------------------------------------------------------------------------------------------------------------------|------------------------------------------|
+| -------- | ----------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
 | GPT      | `--backend claude --no-session-persistence --claude-model {{REVIEW_GPT_MODEL}} --claude-effort {{REVIEW_GPT_EFFORT}}`   | 后端逻辑、正确性、安全、回归与测试缺口   |
 | Grok     | `--backend claude --no-session-persistence --claude-model {{REVIEW_GROK_MODEL}} --claude-effort {{REVIEW_GROK_EFFORT}}` | 前端交互、可访问性、设计一致性与前端安全 |
 
@@ -95,7 +101,7 @@ reviewer 不使用
 **角色提示词**：
 
 | 阶段 | reviewer                                                                        |
-|------|---------------------------------------------------------------------------------|
+| ---- | ------------------------------------------------------------------------------- |
 | 审查 | `~/.claude/.ccg/prompts/claude/reviewer.md`，供 GPT、Grok 两个外部 profile 共用 |
 
 **等待后台任务**（最大超时 600000ms = 10 分钟）：
@@ -125,15 +131,15 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 `[模式：准备]`
 
 1. **识别输入类型**：
-    - 计划文件路径（如 `.claude/plan/xxx.md`）→ 读取并解析
-    - 直接的任务描述 → 提示用户先执行 `/ccg:plan`
+   - 计划文件路径（如 `.claude/plan/xxx.md`）→ 读取并解析
+   - 直接的任务描述 → 提示用户先执行 `/ccg:plan`
 
 2. **解析计划内容**，提取：
-    - 任务类型（前端/后端/全栈）
-    - 技术方案
-    - 实施步骤
-    - 关键文件列表
-    - SESSION_ID（`CODEX_SESSION` / `FRONTEND_SESSION`）
+   - 任务类型（前端/后端/全栈）
+   - 技术方案
+   - 实施步骤
+   - 关键文件列表
+   - SESSION_ID（`CODEX_SESSION` / `FRONTEND_SESSION`）
 
 3. **执行前确认**：向用户展示计划摘要，确认后执行：
 
@@ -161,59 +167,62 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 
 ```
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --with-mcp --backend {{BACKEND_PRIMARY}} resume <CODEX_SESSION> - \"{{WORKDIR}}\" <<'EXEC_EOF'
-<TASK>
-You are a full-stack execution agent. Implement the following plan end-to-end.
-
-## Implementation Plan
-<将 Phase 0 解析出的完整计划内容粘贴于此>
-
-## Your Instructions
-
-### Step 1: Context Verification
-Before coding, verify you have sufficient context:
-- Use ace-tool MCP (search_context) to search for relevant existing code patterns
-- Read the key files listed in the plan to understand current implementation
-- If the plan references external libraries/APIs, use context7 MCP to query their latest documentation
-- If latest information is needed, use grok-search MCP for web search
-
-### Step 2: Implementation
-Implement each step from the plan in order:
-<将计划的实施步骤逐条列出>
-
-Constraints:
-- Follow existing code conventions in this project
-- Handle edge cases and errors properly
-- Keep changes minimal and focused on the plan
-- Do NOT modify files outside the plan's scope
-
-### Step 3: Self-Verification
-After implementation:
-- Run lint/typecheck if available
-- Run existing tests: <从计划中提取测试命令，如无则 "run project's test suite">
-- Verify no regressions in touched modules
-
-## Output Format
-Respond with a structured report:
-
-### CONTEXT_GATHERED
-<What information was searched/found, key findings from MCP tools>
-
-### CHANGES_MADE
-For each file changed:
-- File path
-- What was changed and why
-- Lines added/removed
-
-### VERIFICATION_RESULTS
-- Lint/typecheck: pass/fail
-- Tests: pass/fail (details if fail)
-- Manual checks performed
-
-### REMAINING_ISSUES
-<Any unresolved issues, edge cases, or suggestions>
-</TASK>
-EXEC_EOF",
+  command: [
+    "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --with-mcp --backend " +
+      "{{BACKEND_PRIMARY}} resume <CODEX_SESSION> - \"{{WORKDIR}}\" <<'EXEC_EOF'",
+    "<TASK>",
+    "You are a full-stack execution agent. Implement the following plan end-to-end.",
+    "",
+    "## Implementation Plan",
+    "<将 Phase 0 解析出的完整计划内容粘贴于此>",
+    "",
+    "## Your Instructions",
+    "",
+    "### Step 1: Context Verification",
+    "Before coding, verify you have sufficient context:",
+    "- Use ace-tool MCP (search_context) to search for relevant existing code patterns",
+    "- Read the key files listed in the plan to understand current implementation",
+    "- If the plan references external libraries/APIs, use context7 MCP to query their latest documentation",
+    "- If latest information is needed, use grok-search MCP for web search",
+    "",
+    "### Step 2: Implementation",
+    "Implement each step from the plan in order:",
+    "<将计划的实施步骤逐条列出>",
+    "",
+    "Constraints:",
+    "- Follow existing code conventions in this project",
+    "- Handle edge cases and errors properly",
+    "- Keep changes minimal and focused on the plan",
+    "- Do NOT modify files outside the plan's scope",
+    "",
+    "### Step 3: Self-Verification",
+    "After implementation:",
+    "- Run lint/typecheck if available",
+    "- Run existing tests: <从计划中提取测试命令，如无则 \"run project's test suite\">",
+    "- Verify no regressions in touched modules",
+    "",
+    "## Output Format",
+    "Respond with a structured report:",
+    "",
+    "### CONTEXT_GATHERED",
+    "<What information was searched/found, key findings from MCP tools>",
+    "",
+    "### CHANGES_MADE",
+    "For each file changed:",
+    "- File path",
+    "- What was changed and why",
+    "- Lines added/removed",
+    "",
+    "### VERIFICATION_RESULTS",
+    "- Lint/typecheck: pass/fail",
+    "- Tests: pass/fail (details if fail)",
+    "- Manual checks performed",
+    "",
+    "### REMAINING_ISSUES",
+    "<Any unresolved issues, edge cases, or suggestions>",
+    "</TASK>",
+    "EXEC_EOF",
+  ].join('\n'),
   run_in_background: true,
   timeout: 3600000,
   description: "Codex 全权执行：<计划标题>"
@@ -253,21 +262,24 @@ EXEC_EOF",
 
 ```
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend {{BACKEND_PRIMARY}} resume <CODEX_EXEC_SESSION> - \"{{WORKDIR}}\" <<'FIXEOF'
-<TASK>
-The implementation needs corrections:
-
-## Issues Found
-1. <问题描述 + 具体文件:行号>
-2. <问题描述 + 具体文件:行号>
-
-## Required Fixes
-1. <具体修正要求>
-2. <具体修正要求>
-
-Apply fixes and re-run tests. Report results in the same format.
-</TASK>
-FIXEOF",
+  command: [
+    "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend {{BACKEND_PRIMARY}} " +
+      "resume <CODEX_EXEC_SESSION> - \"{{WORKDIR}}\" <<'FIXEOF'",
+    "<TASK>",
+    "The implementation needs corrections:",
+    "",
+    "## Issues Found",
+    "1. <问题描述 + 具体文件:行号>",
+    "2. <问题描述 + 具体文件:行号>",
+    "",
+    "## Required Fixes",
+    "1. <具体修正要求>",
+    "2. <具体修正要求>",
+    "",
+    "Apply fixes and re-run tests. Report results in the same format.",
+    "</TASK>",
+    "FIXEOF",
+  ].join('\n'),
   run_in_background: true,
   timeout: 3600000,
   description: "Codex 修正：<问题简述>"
@@ -292,25 +304,27 @@ FIXEOF",
 
 2. **并行调用 GPT、Grok reviewer**（`run_in_background: true`）：
 
-    - **GPT**：
-      `--backend claude --no-session-persistence --claude-model {{REVIEW_GPT_MODEL}} --claude-effort {{REVIEW_GPT_EFFORT}}`
-      ，关注后端逻辑、正确性、安全、回归与测试缺口
-    - **Grok**：
-      `--backend claude --no-session-persistence --claude-model {{REVIEW_GROK_MODEL}} --claude-effort {{REVIEW_GROK_EFFORT}}`
-      ，关注前端交互、可访问性、设计一致性与前端安全
+   - **GPT**：
+     `--backend claude --no-session-persistence --claude-model {{REVIEW_GPT_MODEL}}
+ --claude-effort {{REVIEW_GPT_EFFORT}}`
+     ，关注后端逻辑、正确性、安全、回归与测试缺口
+   - **Grok**：
+     `--backend claude --no-session-persistence --claude-model {{REVIEW_GROK_MODEL}}
+ --claude-effort {{REVIEW_GROK_EFFORT}}`
+     ，关注前端交互、可访问性、设计一致性与前端安全
 
    GPT、Grok 使用 `~/.claude/.ccg/prompts/claude/reviewer.md`，输入变更完整 diff、计划文件和相关完整文件。用
    `TaskOutput` 等待两个结果，不得 `resume` 或保存 reviewer `SESSION_ID`。
 
 3. **整合审查意见**：
-    - 合并 GPT、Grok 两份报告并去重，每项回到当前源码确认
-    - **Critical** → 必须修复
-    - **Warning** → 建议修复，报告给用户决定
-    - **Info** → 记录不处理
+   - 合并 GPT、Grok 两份报告并去重，每项回到当前源码确认
+   - **Critical** → 必须修复
+   - **Warning** → 建议修复，报告给用户决定
+   - **Info** → 记录不处理
 
 4. **执行修复**（如有 Critical）：
-    - 将已确认的 Critical finding 下发给 {{BACKEND_PRIMARY}} 修复
-    - 修复后重新执行 Phase 3
+   - 将已确认的 Critical finding 下发给 {{BACKEND_PRIMARY}} 修复
+   - 修复后重新执行 Phase 3
 
 ---
 
@@ -324,26 +338,30 @@ FIXEOF",
 ## ✅ 执行完成
 
 ### 执行摘要
-| 项目 | 详情 |
-|------|------|
-| 计划 | <计划文件路径> |
+
+| 项目 | 详情                                              |
+| ---- | ------------------------------------------------- |
+| 计划 | <计划文件路径>                                    |
 | 模式 | {{BACKEND_PRIMARY}} 全权执行 + GPT、Grok 外部审核 |
-| 搜索 | <Codex 使用了哪些 MCP 工具，关键发现> |
-| 变更 | <N 个文件，+X/-Y 行> |
-| 测试 | <通过/失败> |
-| 返工 | <0/1/2 轮> |
+| 搜索 | <Codex 使用了哪些 MCP 工具，关键发现>             |
+| 变更 | <N 个文件，+X/-Y 行>                              |
+| 测试 | <通过/失败>                                       |
+| 返工 | <0/1/2 轮>                                        |
 
 ### 变更清单
-| 文件 | 操作 | 说明 |
-|------|------|------|
+
+| 文件            | 操作      | 说明 |
+| --------------- | --------- | ---- |
 | path/to/file.ts | 修改/新增 | 描述 |
 
 ### 审核结果
+
 - GPT 审查：<通过/发现 N 个问题>
 - Grok 审查：<通过/发现 N 个问题>
 - 整合处理：<已修复 N 个 Critical，N 个 Warning 待用户决定>
 
 ### 后续建议
+
 1. [ ] <建议的测试步骤>
 2. [ ] <建议的验证步骤>
 ```

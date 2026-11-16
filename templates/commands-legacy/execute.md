@@ -32,14 +32,17 @@ $ARGUMENTS
 ```
 # 复用会话调用（推荐）- 原型生成（Implementation Prototype）
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend <{{BACKEND_PRIMARY}}|{{FRONTEND_PRIMARY}}> resume <SESSION_ID> - \"{{WORKDIR}}\" <<'EOF'
-ROLE_FILE: <角色提示词路径>
-<TASK>
-需求：<任务描述>
-上下文：<计划内容 + 目标文件>
-</TASK>
-OUTPUT: Unified Diff Patch ONLY. Strictly prohibit any actual modifications.
-EOF",
+  command: [
+    "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend " +
+      "<{{BACKEND_PRIMARY}}|{{FRONTEND_PRIMARY}}> resume <SESSION_ID> - \"{{WORKDIR}}\" <<'EOF'",
+    "ROLE_FILE: <角色提示词路径>",
+    "<TASK>",
+    "需求：<任务描述>",
+    "上下文：<计划内容 + 目标文件>",
+    "</TASK>",
+    "OUTPUT: Unified Diff Patch ONLY. Strictly prohibit any actual modifications.",
+    "EOF",
+  ].join('\n'),
   run_in_background: true,
   timeout: 3600000,
   description: "简短描述"
@@ -47,14 +50,17 @@ EOF",
 
 # 新会话调用 - 原型生成（Implementation Prototype）
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend <{{BACKEND_PRIMARY}}|{{FRONTEND_PRIMARY}}> - \"{{WORKDIR}}\" <<'EOF'
-ROLE_FILE: <角色提示词路径>
-<TASK>
-需求：<任务描述>
-上下文：<计划内容 + 目标文件>
-</TASK>
-OUTPUT: Unified Diff Patch ONLY. Strictly prohibit any actual modifications.
-EOF",
+  command: [
+    "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend " +
+      "<{{BACKEND_PRIMARY}}|{{FRONTEND_PRIMARY}}> - \"{{WORKDIR}}\" <<'EOF'",
+    "ROLE_FILE: <角色提示词路径>",
+    "<TASK>",
+    "需求：<任务描述>",
+    "上下文：<计划内容 + 目标文件>",
+    "</TASK>",
+    "OUTPUT: Unified Diff Patch ONLY. Strictly prohibit any actual modifications.",
+    "EOF",
+  ].join('\n'),
   run_in_background: true,
   timeout: 3600000,
   description: "简短描述"
@@ -66,7 +72,7 @@ EOF",
 在同一条消息中并行启动 GPT、Grok 两个 `Bash` 调用，每个调用接收完整 diff、完整相关文件和计划验收规则：
 
 | reviewer | wrapper 参数                                                                                                            | 审查重点                                 |
-|----------|-------------------------------------------------------------------------------------------------------------------------|------------------------------------------|
+| -------- | ----------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
 | GPT      | `--backend claude --no-session-persistence --claude-model {{REVIEW_GPT_MODEL}} --claude-effort {{REVIEW_GPT_EFFORT}}`   | 后端逻辑、正确性、安全、回归与测试缺口   |
 | Grok     | `--backend claude --no-session-persistence --claude-model {{REVIEW_GROK_MODEL}} --claude-effort {{REVIEW_GROK_EFFORT}}` | 前端交互、可访问性、设计一致性与前端安全 |
 
@@ -77,7 +83,7 @@ EOF",
 **角色提示词**：
 
 | 阶段 | 后端                                                                            | 前端                                                      |
-|------|---------------------------------------------------------------------------------|-----------------------------------------------------------|
+| ---- | ------------------------------------------------------------------------------- | --------------------------------------------------------- |
 | 实施 | `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/architect.md`                       | `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/frontend.md` |
 | 审查 | `~/.claude/.ccg/prompts/claude/reviewer.md`，供 GPT、Grok 两个外部 profile 共用 | 同左                                                      |
 
@@ -111,16 +117,16 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 `[模式：准备]`
 
 1. **识别输入类型**：
-    - 计划文件路径（如 `.claude/plan/xxx.md`）
-    - 直接的任务描述
+   - 计划文件路径（如 `.claude/plan/xxx.md`）
+   - 直接的任务描述
 
 2. **读取计划内容**：
-    - 若提供了计划文件路径，读取并解析
-    - 提取：任务类型、实施步骤、关键文件、SESSION_ID
+   - 若提供了计划文件路径，读取并解析
+   - 提取：任务类型、实施步骤、关键文件、SESSION_ID
 
 3. **执行前确认**：
-    - 若输入为"直接任务描述"或计划中缺失 `SESSION_ID` / 关键文件：先向用户确认补全信息
-    - 若无法确认用户是否已对计划回复 "Y"：必须二次询问确认后再进入下一阶段
+   - 若输入为"直接任务描述"或计划中缺失 `SESSION_ID` / 关键文件：先向用户确认补全信息
+   - 若无法确认用户是否已对计划回复 "Y"：必须二次询问确认后再进入下一阶段
 
 4. **任务类型判断**：
 
@@ -188,8 +194,8 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 #### Route C: 全栈 → 并行调用
 
 1. **并行调用**（`run_in_background: true`）：
-    - {{FRONTEND_PRIMARY}}：处理前端部分
-    - {{BACKEND_PRIMARY}}：处理后端部分
+   - {{FRONTEND_PRIMARY}}：处理前端部分
+   - {{BACKEND_PRIMARY}}：处理后端部分
 2. 用 `TaskOutput` 等待两个模型的完整结果
 3. 各自使用计划中对应的 `SESSION_ID` 进行 `resume`（若缺失则创建新会话）
 
@@ -206,27 +212,27 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 1. **读取 Diff**：解析外部模型返回的 Unified Diff Patch
 
 2. **思维沙箱**：
-    - 模拟应用 Diff 到目标文件
-    - 检查逻辑一致性
-    - 识别潜在冲突或副作用
+   - 模拟应用 Diff 到目标文件
+   - 检查逻辑一致性
+   - 识别潜在冲突或副作用
 
 3. **重构清理**：
-    - 将"脏原型"重构为 **高可读、高可维护性、企业发布级代码**
-    - 去除冗余代码
-    - 确保符合项目现有代码规范
-    - **非必要不生成注释与文档**，代码自解释
+   - 将"脏原型"重构为 **高可读、高可维护性、企业发布级代码**
+   - 去除冗余代码
+   - 确保符合项目现有代码规范
+   - **非必要不生成注释与文档**，代码自解释
 
 4. **最小作用域**：
-    - 变更仅限需求范围
-    - **强制审查**变更是否引入副作用
-    - 做针对性修正
+   - 变更仅限需求范围
+   - **强制审查**变更是否引入副作用
+   - 做针对性修正
 
 5. **应用变更**：
-    - 使用 Edit/Write 工具执行实际修改
-    - **仅修改必要的代码**，严禁影响用户现有的其他功能
+   - 使用 Edit/Write 工具执行实际修改
+   - **仅修改必要的代码**，严禁影响用户现有的其他功能
 6. **自检验证**（强烈建议）：
-    - 运行项目既有的 lint / typecheck / tests（优先最小相关范围）
-    - 若失败：优先修复回归，再继续进入 Phase 5
+   - 运行项目既有的 lint / typecheck / tests（优先最小相关范围）
+   - 若失败：优先修复回归，再继续进入 Phase 5
 
 ---
 
@@ -239,16 +245,18 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 **变更生效后，立即并行调用** GPT、Grok 两个 reviewer，输入变更的完整 Diff、目标完整文件和计划验收规则：
 
 1. **GPT**（`run_in_background: true`）：
-    -
-    `--backend claude --no-session-persistence --claude-model {{REVIEW_GPT_MODEL}} --claude-effort {{REVIEW_GPT_EFFORT}}`
-    - ROLE_FILE: `~/.claude/.ccg/prompts/claude/reviewer.md`
-    - 关注：后端逻辑、正确性、安全、回归与测试缺口
+   -
+
+   `--backend claude --no-session-persistence --claude-model {{REVIEW_GPT_MODEL}} --claude-effort {{REVIEW_GPT_EFFORT}}`
+   - ROLE_FILE: `~/.claude/.ccg/prompts/claude/reviewer.md`
+   - 关注：后端逻辑、正确性、安全、回归与测试缺口
 
 2. **Grok**（`run_in_background: true`）：
-    -
-    `--backend claude --no-session-persistence --claude-model {{REVIEW_GROK_MODEL}} --claude-effort {{REVIEW_GROK_EFFORT}}`
-    - ROLE_FILE: `~/.claude/.ccg/prompts/claude/reviewer.md`
-    - 关注：前端交互、可访问性、设计一致性与前端安全
+   -
+   `--backend claude --no-session-persistence --claude-model {{REVIEW_GROK_MODEL}}
+--claude-effort {{REVIEW_GROK_EFFORT}}`
+   - ROLE_FILE: `~/.claude/.ccg/prompts/claude/reviewer.md`
+   - 关注：前端交互、可访问性、设计一致性与前端安全
 
 用 `TaskOutput` 等待两个审查结果。reviewer 不使用 `resume` 或保存 `SESSION_ID`。
 

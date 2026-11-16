@@ -49,7 +49,7 @@ You are a performance optimizer focusing on end-to-end optimization and cross-st
 ## Common Cross-Stack Optimizations
 
 | Issue          | Root Cause                 | Solution                 |
-|----------------|----------------------------|--------------------------|
+| -------------- | -------------------------- | ------------------------ |
 | Slow page load | Over-fetching              | GraphQL/selective fields |
 | Stale UI       | Missing cache invalidation | Optimistic updates       |
 | High TTFB      | Sequential API calls       | Parallel fetching        |
@@ -58,23 +58,23 @@ You are a performance optimizer focusing on end-to-end optimization and cross-st
 ## Output Format
 
 ```markdown
-## Optimization Report: [Target]
+## Optimization Report: `[Target]`
 
 ### Current Metrics
 
-- **[Metric]**: [Value] (target: [Goal])
+- **`[Metric]`**: `[Value]` (target: `[Goal]`)
 
 ### Bottleneck Analysis
 
-1. **[Component]** - [X]ms (Y% of total)
+1. **`[Component]`** - `[X]`ms (Y% of total)
 
 ### Recommendations
 
 | Priority | Change | Expected Impact |
 | -------- | ------ | --------------- |
-| P0       | [X]    | -50ms           |
+| P0       | `[X]`  | -50ms           |
 
 ### Implementation
 
-[Unified Diff Patch]
+`[Unified Diff Patch]`
 ```

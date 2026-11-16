@@ -41,18 +41,21 @@ description: '多模型测试生成：智能路由 {{BACKEND_PRIMARY}} 后端测
 
 ```
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend <{{BACKEND_PRIMARY}}|{{FRONTEND_PRIMARY}}> - \"{{WORKDIR}}\" <<'EOF'
-ROLE_FILE: <角色提示词路径>
-<TASK>
-需求：为以下代码生成测试
-<代码内容>
-需求描述：<增强后的需求（如未增强则用 $ARGUMENTS）>
-要求：
-1. 使用项目现有测试框架
-2. 覆盖正常路径、边界条件、异常处理
-</TASK>
-OUTPUT: 完整测试代码
-EOF",
+  command: [
+    "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend " +
+      "<{{BACKEND_PRIMARY}}|{{FRONTEND_PRIMARY}}> - \"{{WORKDIR}}\" <<'EOF'",
+    "ROLE_FILE: <角色提示词路径>",
+    "<TASK>",
+    "需求：为以下代码生成测试",
+    "<代码内容>",
+    "需求描述：<增强后的需求（如未增强则用 $ARGUMENTS）>",
+    "要求：",
+    "1. 使用项目现有测试框架",
+    "2. 覆盖正常路径、边界条件、异常处理",
+    "</TASK>",
+    "OUTPUT: 完整测试代码",
+    "EOF",
+  ].join('\n'),
   run_in_background: true,
   timeout: 3600000,
   description: "简短描述"
@@ -62,14 +65,14 @@ EOF",
 **角色提示词**：
 
 | 模型 | 提示词                                                  |
-|------|---------------------------------------------------------|
+| ---- | ------------------------------------------------------- |
 | 后端 | `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/tester.md`  |
 | 前端 | `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/tester.md` |
 
 **智能路由**：
 
 | 代码类型 | 路由                 |
-|----------|----------------------|
+| -------- | -------------------- |
 | 后端     | {{BACKEND_PRIMARY}}  |
 | 前端     | {{FRONTEND_PRIMARY}} |
 | 全栈     | 并行执行两者         |
@@ -102,7 +105,8 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 ### 🔍 阶段 0：Prompt 增强（可选）
 
 `[模式：准备]` - **Prompt 增强**（按 `/ccg:enhance`
-的逻辑执行）：分析 $ARGUMENTS 的意图、缺失信息、隐含假设，补全为结构化需求（明确目标、技术约束、范围边界、验收标准），**用增强结果替代原始 $
+的逻辑执行）：分析 $ARGUMENTS 的意图、缺失信息、隐含假设，补全为结构化需求（明确目标、技术约束、范围边界、验收标准），
+**用增强结果替代原始 $
 ARGUMENTS，后续调用后端/前端模型 时传入增强后的需求**
 
 ### 🔍 阶段 1：测试分析
@@ -111,7 +115,7 @@ ARGUMENTS，后续调用后端/前端模型 时传入增强后的需求**
 
 1. 检索目标代码的完整实现
 2. 查找现有测试文件和测试框架配置
-3. 识别代码类型：[后端/前端/全栈]
+3. 识别代码类型：`[后端/前端/全栈]`
 4. 评估当前测试覆盖率和缺口
 
 ### 🔬 阶段 2：智能路由测试生成
@@ -121,14 +125,14 @@ ARGUMENTS，后续调用后端/前端模型 时传入增强后的需求**
 **⚠️ 根据代码类型必须调用对应模型**（参照上方调用规范）：
 
 - **后端代码** → `Bash({ command: "...--backend {{BACKEND_PRIMARY}}...", run_in_background: false })`
-    - ROLE_FILE: `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/tester.md`
+  - ROLE_FILE: `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/tester.md`
 - **前端代码** → `Bash({ command: "...--backend {{FRONTEND_PRIMARY}}...", run_in_background: false })`
-    - ROLE_FILE: `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/tester.md`
+  - ROLE_FILE: `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/tester.md`
 - **全栈代码** → 并行调用两者：
-    1. `Bash({ command: "...--backend {{BACKEND_PRIMARY}}...", run_in_background: true })`
-        - ROLE_FILE: `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/tester.md`
-    2. `Bash({ command: "...--backend {{FRONTEND_PRIMARY}}...", run_in_background: true })`
-        - ROLE_FILE: `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/tester.md` 用 `TaskOutput` 等待结果
+  1. `Bash({ command: "...--backend {{BACKEND_PRIMARY}}...", run_in_background: true })`
+     - ROLE_FILE: `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/tester.md`
+  2. `Bash({ command: "...--backend {{FRONTEND_PRIMARY}}...", run_in_background: true })`
+     - ROLE_FILE: `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/tester.md` 用 `TaskOutput` 等待结果
 
 OUTPUT：完整测试代码（使用项目现有测试框架，覆盖正常路径、边界条件、异常处理）
 
@@ -160,7 +164,7 @@ OUTPUT：完整测试代码（使用项目现有测试框架，覆盖正常路�
 
 ### 分析结果
 
-- 代码类型：[后端/前端/全栈]
+- 代码类型：`[后端/前端/全栈]`
 - 测试框架：<检测到的框架>
 
 ### 生成的测试

@@ -39,7 +39,7 @@ OUTPUT: 按 Critical/Warning/Info 分类列出问题。每项包含文件、行�
 ```
 
 | reviewer | wrapper 参数                                                                                                            | 审查重点                                 |
-|----------|-------------------------------------------------------------------------------------------------------------------------|------------------------------------------|
+| -------- | ----------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
 | GPT      | `--backend claude --no-session-persistence --claude-model {{REVIEW_GPT_MODEL}} --claude-effort {{REVIEW_GPT_EFFORT}}`   | 后端逻辑、正确性、安全、回归与测试缺口   |
 | Grok     | `--backend claude --no-session-persistence --claude-model {{REVIEW_GROK_MODEL}} --claude-effort {{REVIEW_GROK_EFFORT}}` | 前端交互、可访问性、设计一致性与前端安全 |
 
@@ -47,7 +47,17 @@ OUTPUT: 按 Critical/Warning/Info 分类列出问题。每项包含文件、行�
 
 ```text
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend claude --no-session-persistence --claude-model {{REVIEW_GPT_MODEL}} --claude-effort {{REVIEW_GPT_EFFORT}} - \"{{WORKDIR}}\" <<'EOF'\nROLE_FILE: ~/.claude/.ccg/prompts/claude/reviewer.md\n<TASK>审查以下代码变更：\n<完整 git diff 和文件上下文>\n</TASK>\nOUTPUT: Critical/Warning/Info JSON 报告\nEOF",
+  command: [
+    "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend claude " +
+      "--no-session-persistence --claude-model {{REVIEW_GPT_MODEL}} --claude-effort " +
+      "{{REVIEW_GPT_EFFORT}} - \"{{WORKDIR}}\" <<'EOF'",
+    "ROLE_FILE: ~/.claude/.ccg/prompts/claude/reviewer.md",
+    "<TASK>审查以下代码变更：",
+    "<完整 git diff 和文件上下文>",
+    "</TASK>",
+    "OUTPUT: Critical/Warning/Info JSON 报告",
+    "EOF",
+  ].join('\n'),
   run_in_background: true,
   timeout: 3600000,
   description: "GPT review"
@@ -71,15 +81,15 @@ GPT 与 Grok 使用独立临时会话，因此禁止使用 `resume`、保存或�
 
 ### Critical
 
-1. [GPT] `file.ts:42` — 问题描述
+1. `[GPT]` `file.ts:42` — 问题描述
 
 ### Warning
 
-1. [Grok] `file.ts:88` — 问题描述
+1. `[Grok]` `file.ts:88` — 问题描述
 
 ### Info
 
-1. [GPT] `file.ts:20` — 问题描述
+1. `[GPT]` `file.ts:20` — 问题描述
 ```
 
 ## 关键规则

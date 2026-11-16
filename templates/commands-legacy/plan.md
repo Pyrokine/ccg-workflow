@@ -31,14 +31,17 @@ $ARGUMENTS
 
 ```
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend <{{BACKEND_PRIMARY}}|{{FRONTEND_PRIMARY}}> - \"{{WORKDIR}}\" <<'EOF'
-ROLE_FILE: <角色提示词路径>
-<TASK>
-需求：<增强后的需求>
-上下文：<检索到的项目上下文>
-</TASK>
-OUTPUT: Step-by-step implementation plan with pseudocode. DO NOT modify any files.
-EOF",
+  command: [
+    "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend " +
+      "<{{BACKEND_PRIMARY}}|{{FRONTEND_PRIMARY}}> - \"{{WORKDIR}}\" <<'EOF'",
+    "ROLE_FILE: <角色提示词路径>",
+    "<TASK>",
+    "需求：<增强后的需求>",
+    "上下文：<检索到的项目上下文>",
+    "</TASK>",
+    "OUTPUT: Step-by-step implementation plan with pseudocode. DO NOT modify any files.",
+    "EOF",
+  ].join('\n'),
   run_in_background: true,
   timeout: 3600000,
   description: "简短描述"
@@ -48,7 +51,7 @@ EOF",
 **角色提示词**：
 
 | 阶段 | 后端                                                      | 前端                                                       |
-|------|-----------------------------------------------------------|------------------------------------------------------------|
+| ---- | --------------------------------------------------------- | ---------------------------------------------------------- |
 | 分析 | `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/analyzer.md`  | `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/analyzer.md`  |
 | 规划 | `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/architect.md` | `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/architect.md` |
 
@@ -83,7 +86,8 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 #### 1.1 Prompt 增强（必须首先执行）
 
 **Prompt 增强**（按 `/ccg:enhance`
-的逻辑执行）：分析 $ARGUMENTS 的意图、缺失信息、隐含假设，补全为结构化需求（明确目标、技术约束、范围边界、验收标准），**用增强结果替代原始 $
+的逻辑执行）：分析 $ARGUMENTS 的意图、缺失信息、隐含假设，补全为结构化需求（明确目标、技术约束、范围边界、验收标准），
+**用增强结果替代原始 $
 ARGUMENTS** 用于后续所有阶段。
 
 #### 1.2 上下文检索
@@ -123,14 +127,14 @@ ARGUMENTS** 用于后续所有阶段。
 将 **原始需求**（不带预设观点）分发给两个模型：
 
 1. **{{BACKEND_PRIMARY}} 后端分析**：
-    - ROLE_FILE: `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/analyzer.md`
-    - 关注：技术可行性、架构影响、性能考量、潜在风险
-    - OUTPUT: 多角度解决方案 + 优劣势分析
+   - ROLE_FILE: `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/analyzer.md`
+   - 关注：技术可行性、架构影响、性能考量、潜在风险
+   - OUTPUT: 多角度解决方案 + 优劣势分析
 
 2. **{{FRONTEND_PRIMARY}} 前端分析**：
-    - ROLE_FILE: `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/analyzer.md`
-    - 关注：UI/UX 影响、用户体验、视觉设计
-    - OUTPUT: 多角度解决方案 + 优劣势分析
+   - ROLE_FILE: `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/analyzer.md`
+   - 关注：UI/UX 影响、用户体验、视觉设计
+   - OUTPUT: 多角度解决方案 + 优劣势分析
 
 用 `TaskOutput` 等待两个模型的完整结果。 **📌 保存 SESSION_ID**（`CODEX_SESSION` 和 `FRONTEND_SESSION`）。
 
@@ -148,12 +152,12 @@ ARGUMENTS** 用于后续所有阶段。
 为降低 Claude 合成计划的遗漏风险，可并行让两个模型输出“计划草案”（仍然 **不允许**修改文件）：
 
 1. **{{BACKEND_PRIMARY}} 计划草案**（后端权威）：
-    - ROLE_FILE: `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/architect.md`
-    - OUTPUT: Step-by-step plan + pseudocode（重点：数据流/边界条件/错误处理/测试策略）
+   - ROLE_FILE: `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/architect.md`
+   - OUTPUT: Step-by-step plan + pseudocode（重点：数据流/边界条件/错误处理/测试策略）
 
 2. **{{FRONTEND_PRIMARY}} 计划草案**（前端权威）：
-    - ROLE_FILE: `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/architect.md`
-    - OUTPUT: Step-by-step plan + pseudocode（重点：信息架构/交互/可访问性/视觉一致性）
+   - ROLE_FILE: `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/architect.md`
+   - OUTPUT: Step-by-step plan + pseudocode（重点：信息架构/交互/可访问性/视觉一致性）
 
 用 `TaskOutput` 等待两个模型的完整结果，并记录其建议的关键差异点。
 
@@ -165,28 +169,34 @@ ARGUMENTS** 用于后续所有阶段。
 ## 📋 实施计划：<任务名称>
 
 ### 任务类型
+
 - [ ] 前端 (→ {{FRONTEND_PRIMARY}})
 - [ ] 后端 (→ {{BACKEND_PRIMARY}})
 - [ ] 全栈 (→ 并行)
 
 ### 技术方案
+
 <综合双模型分析的最优方案>
 
 ### 实施步骤
+
 1. <步骤 1> - 预期产物
 2. <步骤 2> - 预期产物
-...
+   ...
 
 ### 关键文件
-| 文件 | 操作 | 说明 |
-|------|------|------|
+
+| 文件                    | 操作 | 说明 |
+| ----------------------- | ---- | ---- |
 | path/to/file.ts:L10-L50 | 修改 | 描述 |
 
 ### 风险与缓解
+
 | 风险 | 缓解措施 |
-|------|----------|
+| ---- | -------- |
 
 ### SESSION_ID（供 /ccg:execute 使用）
+
 - CODEX_SESSION: <session_id>
 - FRONTEND_SESSION: <session_id>
 ```
@@ -204,8 +214,8 @@ ARGUMENTS** 用于后续所有阶段。
    **📋 计划已生成并保存至 `.claude/plan/实际功能名.md`**
 
    **请审查上述计划，您可以：**
-    - 🔧 **修改计划**：告诉我需要调整的部分，我会更新计划
-    - ▶️ **执行计划**：复制以下命令到新会话执行
+   - 🔧 **修改计划**：告诉我需要调整的部分，我会更新计划
+   - ▶️ **执行计划**：复制以下命令到新会话执行
 
    ```
    /ccg:execute .claude/plan/实际功能名.md

@@ -16,26 +16,68 @@
 
 import { readFileSync } from 'node:fs'
 import { join } from 'pathe'
+import ts from 'typescript'
 import { describe, expect, it } from 'vitest'
 import { PACKAGE_ROOT } from '../installer-template'
 
-/** Every wrapper invocation in a command template, one per line. */
+/** Read command values without executing the template's JavaScript examples. */
 function wrapperCalls(template: string): string[] {
-  return readFileSync(join(PACKAGE_ROOT, 'templates', template), 'utf-8')
-    .split('\n')
-    .filter((line) => line.includes('codeagent-wrapper'))
+  const text = readFileSync(join(PACKAGE_ROOT, 'templates', template), 'utf-8')
+  const commands: string[] = []
+  const readLiteral = (value: ts.Expression): string => {
+    if (ts.isStringLiteralLike(value)) {
+      return value.text
+    }
+    if (ts.isBinaryExpression(value) && value.operatorToken.kind === ts.SyntaxKind.PlusToken) {
+      return readLiteral(value.left) + readLiteral(value.right)
+    }
+    throw new Error(`Expected a literal command line in ${template}`)
+  }
+  for (const block of text.matchAll(/^ {0,3}```[^\n]*\n(?<code>[\s\S]*?)^ {0,3}```/gm)) {
+    const source = ts.createSourceFile('example.js', block.groups!.code, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS)
+    const visit = (node: ts.Node): void => {
+      if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'Bash') {
+        const argument = node.arguments[0]
+        if (!argument || !ts.isObjectLiteralExpression(argument)) {
+          throw new Error(`Expected a Bash object in ${template}`)
+        }
+        const property = argument.properties.find(
+          (entry) => ts.isPropertyAssignment(entry) && entry.name.getText(source) === 'command'
+        )
+        if (!property || !ts.isPropertyAssignment(property)) {
+          throw new Error(`Expected a command property in ${template}`)
+        }
+        const value = property.initializer
+        if (ts.isStringLiteralLike(value)) {
+          commands.push(value.text)
+        } else if (
+          ts.isCallExpression(value) &&
+          ts.isPropertyAccessExpression(value.expression) &&
+          value.expression.name.text === 'join' &&
+          ts.isArrayLiteralExpression(value.expression.expression) &&
+          value.arguments.length === 1 &&
+          ts.isStringLiteralLike(value.arguments[0])
+        ) {
+          commands.push(value.expression.expression.elements.map(readLiteral).join(value.arguments[0].text))
+        } else {
+          throw new Error(`Unsupported command expression in ${template}`)
+        }
+      }
+      ts.forEachChild(node, visit)
+    }
+    visit(source)
+  }
+  return commands.filter((command) => command.includes('codeagent-wrapper'))
 }
 
 /**
  * Lines that are inside a heredoc — i.e. text handed to the sub-agent rather
  * than instructions Claude follows itself.
  *
- * Paired by the opener's own tag: closers here are written `EOF",` inside a
- * JSON-ish Bash({...}) block, so matching a bare `EOF` word is not enough and
- * a stricter pattern silently never closes, swallowing the rest of the file.
+ * Pair the opener with its own tag in the decoded command value.
  */
 function payloadLines(template: string): string[] {
-  const lines = readFileSync(join(PACKAGE_ROOT, 'templates', template), 'utf-8').split('\n')
+  const lines = wrapperCalls(template).flatMap((command) => command.split('\n'))
   const payload: string[] = []
   let tag: string | undefined
   for (const line of lines) {

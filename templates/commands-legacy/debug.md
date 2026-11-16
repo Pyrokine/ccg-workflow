@@ -61,7 +61,7 @@ EOF
 **角色提示词**：
 
 | 模型 | 提示词                                                    |
-|------|-----------------------------------------------------------|
+| ---- | --------------------------------------------------------- |
 | 后端 | `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/debugger.md`  |
 | 前端 | `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/debugger.md` |
 
@@ -90,7 +90,8 @@ EOF
 ### 🔍 阶段 0：Prompt 增强（可选）
 
 `[模式：准备]` - **Prompt 增强**（按 `/ccg:enhance`
-的逻辑执行）：分析 $ARGUMENTS 的意图、缺失信息、隐含假设，补全为结构化需求（明确目标、技术约束、范围边界、验收标准），**用增强结果替代原始 $
+的逻辑执行）：分析 $ARGUMENTS 的意图、缺失信息、隐含假设，补全为结构化需求（明确目标、技术约束、范围边界、验收标准），
+**用增强结果替代原始 $
 ARGUMENTS，后续调用后端/前端模型 时传入增强后的需求**
 
 ### 🔍 阶段 1：上下文收集
@@ -99,7 +100,7 @@ ARGUMENTS，后续调用后端/前端模型 时传入增强后的需求**
 
 1. 调用 `{{MCP_SEARCH_TOOL}}` 检索相关代码（如可用）
 2. 收集错误日志、堆栈信息、复现步骤
-3. 识别问题类型：[后端/前端/全栈]
+3. 识别问题类型：`[后端/前端/全栈]`
 
 ### 🔬 阶段 2：并行诊断
 
@@ -108,13 +109,13 @@ ARGUMENTS，后续调用后端/前端模型 时传入增强后的需求**
 **⚠️ 必须发起两个并行 Bash 调用**（参照上方调用规范）：
 
 1. **{{BACKEND_PRIMARY}} 后端诊断**：`Bash({ command: "...--backend {{BACKEND_PRIMARY}}...", run_in_background: true })`
-    - ROLE_FILE: `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/debugger.md`
-    - OUTPUT：诊断假设（按可能性排序），每个假设包含原因、证据、修复建议
+   - ROLE_FILE: `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/debugger.md`
+   - OUTPUT：诊断假设（按可能性排序），每个假设包含原因、证据、修复建议
 
 2. **{{FRONTEND_PRIMARY}} 前端诊断**：
    `Bash({ command: "...--backend {{FRONTEND_PRIMARY}}...", run_in_background: true })`
-    - ROLE_FILE: `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/debugger.md`
-    - OUTPUT：诊断假设（按可能性排序），每个假设包含原因、证据、修复建议
+   - ROLE_FILE: `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/debugger.md`
+   - OUTPUT：诊断假设（按可能性排序），每个假设包含原因、证据、修复建议
 
 用 `TaskOutput` 等待两个模型的诊断结果。 **必须等所有模型返回后才能进入下一阶段**。
 

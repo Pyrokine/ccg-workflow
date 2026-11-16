@@ -22,14 +22,17 @@ $ARGUMENTS
 ```
 # 新会话调用
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend <{{BACKEND_PRIMARY}}|{{FRONTEND_PRIMARY}}> - \"{{WORKDIR}}\" <<'EOF'
-ROLE_FILE: <角色提示词路径>
-<TASK>
-需求：<增强后的需求（如未增强则用 $ARGUMENTS）>
-上下文：<前序阶段收集的项目上下文、计划文件内容等>
-</TASK>
-OUTPUT: 期望输出格式
-EOF",
+  command: [
+    "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend " +
+      "<{{BACKEND_PRIMARY}}|{{FRONTEND_PRIMARY}}> - \"{{WORKDIR}}\" <<'EOF'",
+    "ROLE_FILE: <角色提示词路径>",
+    "<TASK>",
+    "需求：<增强后的需求（如未增强则用 $ARGUMENTS）>",
+    "上下文：<前序阶段收集的项目上下文、计划文件内容等>",
+    "</TASK>",
+    "OUTPUT: 期望输出格式",
+    "EOF",
+  ].join('\n'),
   run_in_background: true,
   timeout: 3600000,
   description: "简短描述"
@@ -37,14 +40,17 @@ EOF",
 
 # 复用会话调用
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend <{{BACKEND_PRIMARY}}|{{FRONTEND_PRIMARY}}> resume <SESSION_ID> - \"{{WORKDIR}}\" <<'EOF'
-ROLE_FILE: <角色提示词路径>
-<TASK>
-需求：<增强后的需求（如未增强则用 $ARGUMENTS）>
-上下文：<前序阶段收集的项目上下文、计划文件内容等>
-</TASK>
-OUTPUT: 期望输出格式
-EOF",
+  command: [
+    "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend " +
+      "<{{BACKEND_PRIMARY}}|{{FRONTEND_PRIMARY}}> resume <SESSION_ID> - \"{{WORKDIR}}\" <<'EOF'",
+    "ROLE_FILE: <角色提示词路径>",
+    "<TASK>",
+    "需求：<增强后的需求（如未增强则用 $ARGUMENTS）>",
+    "上下文：<前序阶段收集的项目上下文、计划文件内容等>",
+    "</TASK>",
+    "OUTPUT: 期望输出格式",
+    "EOF",
+  ].join('\n'),
   run_in_background: true,
   timeout: 3600000,
   description: "简短描述"
@@ -54,7 +60,7 @@ EOF",
 **角色提示词**：
 
 | 阶段 | 后端                                                                            | 前端                                                       |
-|------|---------------------------------------------------------------------------------|------------------------------------------------------------|
+| ---- | ------------------------------------------------------------------------------- | ---------------------------------------------------------- |
 | 分析 | `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/analyzer.md`                        | `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/analyzer.md`  |
 | 规划 | `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/architect.md`                       | `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/architect.md` |
 | 实施 | `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/architect.md`                       | `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/frontend.md`  |
@@ -94,10 +100,10 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 
 ### 1. 输入类型判断
 
-**每次交互必须首先声明**：「我判断此次操作类型为：[具体类型]」
+**每次交互必须首先声明**：「我判断此次操作类型为：`[具体类型]`」
 
 | 类型         | 关键词                                   | 动作                      |
-|--------------|------------------------------------------|---------------------------|
+| ------------ | ---------------------------------------- | ------------------------- |
 | **需求规划** | 实现、开发、新增、添加、构建、设计       | → 步骤 2（完整规划）      |
 | **讨论迭代** | 调整、修改、优化、改进、包含计划文件路径 | → 读取现有计划 → 步骤 2.3 |
 | **执行实施** | 开始实施、执行计划、按照计划、根据计划   | → 步骤 3（直接实施）      |
@@ -109,7 +115,8 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 #### 2.0 Prompt 增强
 
 **Prompt 增强**（按 `/ccg:enhance`
-的逻辑执行）：分析 $ARGUMENTS 的意图、缺失信息、隐含假设，补全为结构化需求（明确目标、技术约束、范围边界、验收标准），**用增强结果替代原始 $
+的逻辑执行）：分析 $ARGUMENTS 的意图、缺失信息、隐含假设，补全为结构化需求（明确目标、技术约束、范围边界、验收标准），
+**用增强结果替代原始 $
 ARGUMENTS，后续调用后端/前端模型 时传入增强后的需求**
 
 #### 2.1 上下文检索
@@ -119,7 +126,7 @@ ARGUMENTS，后续调用后端/前端模型 时传入增强后的需求**
 #### 2.2 任务类型判断
 
 | 任务类型 | 判断依据                      | 调用流程                 |
-|----------|-------------------------------|--------------------------|
+| -------- | ----------------------------- | ------------------------ |
 | **前端** | 页面、组件、UI、样式、布局    | ui-ux-designer → planner |
 | **后端** | API、接口、数据库、逻辑、算法 | planner                  |
 | **全栈** | 同时包含前后端                | ui-ux-designer → planner |
@@ -206,8 +213,8 @@ git diff --name-status
 2. **文档一致性**：规划文档与实际执行保持同步
 3. **依赖关系管理**：前端任务必须确保 UI 设计完整性
 4. **多模型信任规则**：
-    - 前端以 {{FRONTEND_PRIMARY}} 为准
-    - 后端以 {{BACKEND_PRIMARY}} 为准
+   - 前端以 {{FRONTEND_PRIMARY}} 为准
+   - 后端以 {{BACKEND_PRIMARY}} 为准
 5. **用户沟通透明**：所有判断和动作都要明确告知用户
 
 ---

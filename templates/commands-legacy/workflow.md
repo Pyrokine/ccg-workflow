@@ -45,14 +45,17 @@ description: '多模型协作开发工作流（研究→构思→计划→执行
 ```
 # 新会话调用
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend <{{BACKEND_PRIMARY}}|{{FRONTEND_PRIMARY}}> - \"{{WORKDIR}}\" <<'EOF'
-ROLE_FILE: <角色提示词路径>
-<TASK>
-需求：<增强后的需求（如未增强则用 $ARGUMENTS）>
-上下文：<前序阶段收集的项目上下文、分析结果等>
-</TASK>
-OUTPUT: 期望输出格式
-EOF",
+  command: [
+    "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend " +
+      "<{{BACKEND_PRIMARY}}|{{FRONTEND_PRIMARY}}> - \"{{WORKDIR}}\" <<'EOF'",
+    "ROLE_FILE: <角色提示词路径>",
+    "<TASK>",
+    "需求：<增强后的需求（如未增强则用 $ARGUMENTS）>",
+    "上下文：<前序阶段收集的项目上下文、分析结果等>",
+    "</TASK>",
+    "OUTPUT: 期望输出格式",
+    "EOF",
+  ].join('\n'),
   run_in_background: true,
   timeout: 3600000,
   description: "简短描述"
@@ -60,14 +63,17 @@ EOF",
 
 # 复用会话调用
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend <{{BACKEND_PRIMARY}}|{{FRONTEND_PRIMARY}}> resume <SESSION_ID> - \"{{WORKDIR}}\" <<'EOF'
-ROLE_FILE: <角色提示词路径>
-<TASK>
-需求：<增强后的需求（如未增强则用 $ARGUMENTS）>
-上下文：<前序阶段收集的项目上下文、分析结果等>
-</TASK>
-OUTPUT: 期望输出格式
-EOF",
+  command: [
+    "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend " +
+      "<{{BACKEND_PRIMARY}}|{{FRONTEND_PRIMARY}}> resume <SESSION_ID> - \"{{WORKDIR}}\" <<'EOF'",
+    "ROLE_FILE: <角色提示词路径>",
+    "<TASK>",
+    "需求：<增强后的需求（如未增强则用 $ARGUMENTS）>",
+    "上下文：<前序阶段收集的项目上下文、分析结果等>",
+    "</TASK>",
+    "OUTPUT: 期望输出格式",
+    "EOF",
+  ].join('\n'),
   run_in_background: true,
   timeout: 3600000,
   description: "简短描述"
@@ -77,7 +83,7 @@ EOF",
 **角色提示词**：
 
 | 阶段 | 后端                                                                            | 前端                                                       |
-|------|---------------------------------------------------------------------------------|------------------------------------------------------------|
+| ---- | ------------------------------------------------------------------------------- | ---------------------------------------------------------- |
 | 分析 | `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/analyzer.md`                        | `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/analyzer.md`  |
 | 规划 | `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/architect.md`                       | `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/architect.md` |
 | 审查 | `~/.claude/.ccg/prompts/claude/reviewer.md`，供 GPT、Grok 两个外部 profile 共用 | 同左                                                       |
@@ -125,12 +131,13 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 `[模式：研究]` - 理解需求并收集上下文：
 
 1. **Prompt 增强**（按 `/ccg:enhance`
-   的逻辑执行）：分析 $ARGUMENTS 的意图、缺失信息、隐含假设，补全为结构化需求（明确目标、技术约束、范围边界、验收标准），**用增强结果替代原始 $
+   的逻辑执行）：分析 $ARGUMENTS 的意图、缺失信息、隐含假设，补全为结构化需求（明确目标、技术约束、范围边界、验收标准），
+   **用增强结果替代原始 $
    ARGUMENTS，后续调用后端/前端模型 时传入增强后的需求**
 2. **上下文检索**：调用 `{{MCP_SEARCH_TOOL}}`
 3. **需求完整性评分**（0-10 分）：
-    - 目标明确性（0-3）、预期结果（0-3）、边界范围（0-2）、约束条件（0-2）
-    - ≥7 分：继续 | <7 分：⛔ 停止，提出补充问题
+   - 目标明确性（0-3）、预期结果（0-3）、边界范围（0-2）、约束条件（0-2）
+   - ≥7 分：继续 | <7 分：⛔ 停止，提出补充问题
 
 ### 💡 阶段 2：方案构思
 
@@ -181,7 +188,8 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
   `--backend claude --no-session-persistence --claude-model {{REVIEW_GPT_MODEL}} --claude-effort {{REVIEW_GPT_EFFORT}}`
   ，关注后端逻辑、正确性、安全、回归与测试缺口
 - Grok：
-  `--backend claude --no-session-persistence --claude-model {{REVIEW_GROK_MODEL}} --claude-effort {{REVIEW_GROK_EFFORT}}`
+  `--backend claude --no-session-persistence --claude-model {{REVIEW_GROK_MODEL}}
+--claude-effort {{REVIEW_GROK_EFFORT}}`
   ，关注前端交互、可访问性、设计一致性与前端安全
 
 两个调用以 `run_in_background: true` 启动，使用

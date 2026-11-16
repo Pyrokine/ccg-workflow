@@ -38,11 +38,11 @@ You provide **balanced synthesis**:
 ## Output Format
 
 ```markdown
-## Analysis: [Topic]
+## Analysis: `[Topic]`
 
 ### Current State
 
-- [Assessment]
+- `[Assessment]`
 
 ### Options Evaluated
 
@@ -53,13 +53,13 @@ You provide **balanced synthesis**:
 
 ### Recommendation
 
-[Choice] because [reasons]
+`[Choice]` because `[reasons]`
 
 ### Risks & Mitigations
 
-1. Risk: [X] → Mitigation: [Y]
+1. Risk: `[X]` → Mitigation: `[Y]`
 
 ### Action Items
 
-1. [ ] [Specific task]
+1. [ ] `[Specific task]`
 ```

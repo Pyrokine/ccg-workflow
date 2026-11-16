@@ -42,14 +42,14 @@ concurrent tasks that may modify the same product files still use separate workt
 ## 2. Assess complexity, risk, and strategy
 
 | Complexity | Meaning                                                        |
-|------------|----------------------------------------------------------------|
+| ---------- | -------------------------------------------------------------- |
 | `S`        | One file, clear behavior, fewer than about 30 changed lines    |
 | `M`        | Two to five files in one module                                |
 | `L`        | More than five files or cross-module work                      |
 | `XL`       | Architecture, public API, Schema, or multi-module coordination |
 
 | Risk     | Meaning                                                                    |
-|----------|----------------------------------------------------------------------------|
+| -------- | -------------------------------------------------------------------------- |
 | `low`    | Reversible and no existing external behavior changes                       |
 | `medium` | Existing behavior changes and requires tests                               |
 | `high`   | Public contract, migration, authentication, authorization, or cryptography |
@@ -75,7 +75,8 @@ All mutations read one JSON request from stdin. Dynamic content never belongs in
 
 ```bash
 CCG_SESSION_KEY="<value from the latest ccg-session-key Hook block>"
-node ~/.codex/hooks/ccg/task-state.js start --root "$WORKDIR" --session-key "$CCG_SESSION_KEY" <<'CCG_TASK_JSON'
+node ~/.codex/hooks/ccg/task-state.js start --root "$WORKDIR" \
+  --session-key "$CCG_SESSION_KEY" <<'CCG_TASK_JSON'
 {
   "expected": {
     "stateId": null,
@@ -97,7 +98,8 @@ node ~/.codex/hooks/ccg/task-state.js start --root "$WORKDIR" --session-key "$CC
     "gate": null,
     "specEvolution": "pending"
   },
-  "requirements": "# Requirements\n\n## Objective\n...\n\n## Scope\n...\n\n## Constraints\n...\n\n## Acceptance criteria\n...\n"
+  "requirements":
+    "# Requirements\n\n## Objective\n...\n\n## Scope\n...\n\n## Constraints\n...\n\n## Acceptance criteria\n...\n"
 }
 CCG_TASK_JSON
 ```
@@ -194,7 +196,9 @@ Only when the user explicitly requests external review, GPT and Grok use indepen
 sessions:
 
 ```bash
-~/.claude/bin/codeagent-wrapper --lite --progress --backend claude --no-session-persistence --claude-model {{REVIEW_GPT_MODEL}} --claude-effort {{REVIEW_GPT_EFFORT}} - "$WORKDIR" <<'GPT_REVIEW_EOF'
+~/.claude/bin/codeagent-wrapper --lite --progress --backend claude --no-session-persistence \
+  --claude-model {{REVIEW_GPT_MODEL}} \
+  --claude-effort {{REVIEW_GPT_EFFORT}} - "$WORKDIR" <<'GPT_REVIEW_EOF'
 ROLE_FILE: ~/.claude/.ccg/prompts/claude/reviewer.md
 <TASK>
 Review the complete diff and files against the task contract and linked spec sections.
@@ -204,7 +208,9 @@ GPT_REVIEW_EOF
 ```
 
 ```bash
-~/.claude/bin/codeagent-wrapper --lite --progress --backend claude --no-session-persistence --claude-model {{REVIEW_GROK_MODEL}} --claude-effort {{REVIEW_GROK_EFFORT}} - "$WORKDIR" <<'GROK_REVIEW_EOF'
+~/.claude/bin/codeagent-wrapper --lite --progress --backend claude --no-session-persistence \
+  --claude-model {{REVIEW_GROK_MODEL}} \
+  --claude-effort {{REVIEW_GROK_EFFORT}} - "$WORKDIR" <<'GROK_REVIEW_EOF'
 ROLE_FILE: ~/.claude/.ccg/prompts/claude/reviewer.md
 <TASK>
 Review the complete diff and files against the task contract and linked spec sections.
@@ -219,7 +225,7 @@ current source before changing files.
 ## 6. Implementation modes
 
 | Complexity | Mode                                                    |
-|------------|---------------------------------------------------------|
+| ---------- | ------------------------------------------------------- |
 | `S-M`      | Inline, one file group at a time                        |
 | `L-XL`     | Parallel sub-agents with non-overlapping file ownership |
 
@@ -242,7 +248,14 @@ Each dispatch includes:
 spawn_agent(
   agent_type="ccg-implement",
   fork_turns="none",
-  message="Worktree: {WORKDIR}\nTask: {id}@{revision}\nWritable files: ...\nSteps: ...\nAcceptance: ...\nThe injected linked spec sections are authoritative. Stop and report any conflict."
+  message=(
+    "Worktree: {WORKDIR}\n"
+    "Task: {id}@{revision}\n"
+    "Writable files: ...\n"
+    "Steps: ...\n"
+    "Acceptance: ...\n"
+    "The injected linked spec sections are authoritative. Stop and report any conflict."
+  )
 )
 ```
 

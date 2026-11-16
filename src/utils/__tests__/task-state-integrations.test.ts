@@ -22,7 +22,10 @@ import {
 describe('default OpenSpec task authority', () => {
   it('labels wrapper roles and connects every phase to the shared task controller', () => {
     const research = readFileSync(join(packageRoot, 'templates', 'commands', 'spec-research.md'), 'utf-8')
-    const plan = readFileSync(join(packageRoot, 'templates', 'commands', 'spec-plan.md'), 'utf-8')
+    const plan = readFileSync(join(packageRoot, 'templates', 'commands', 'spec-plan.md'), 'utf-8').replace(
+      /\\\r?\n\s*/g,
+      ''
+    )
     const implementation = readFileSync(join(packageRoot, 'templates', 'commands', 'spec-impl.md'), 'utf-8')
 
     expect(research.match(/CCG_ROLE: research/g)).toHaveLength(2)

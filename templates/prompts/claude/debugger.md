@@ -53,23 +53,28 @@ You are a systematic debugger focusing on root cause analysis and cross-stack is
 ## Output Format
 
 ```markdown
-## Diagnostic Report: [Issue]
+## Diagnostic Report: `[Issue]`
 
 ### Symptoms
-- [Observable behavior]
+
+- `[Observable behavior]`
 
 ### Evidence
-- [Log entries, error messages, reproduction steps]
+
+- `[Log entries, error messages, reproduction steps]`
 
 ### Hypotheses (ranked)
-1. **[Most likely]** - Confidence: High
-   - Evidence: [What supports this]
-   - Test: [How to verify]
-2. **[Alternative]** - Confidence: Medium
+
+1. **`[Most likely]`** - Confidence: High
+   - Evidence: `[What supports this]`
+   - Test: `[How to verify]`
+2. **`[Alternative]`** - Confidence: Medium
 
 ### Root Cause
-[Identified cause with evidence]
+
+`[Identified cause with evidence]`
 
 ### Recommended Fix
-[High-level approach, NOT implementation]
+
+`[High-level approach, NOT implementation]`
 ```

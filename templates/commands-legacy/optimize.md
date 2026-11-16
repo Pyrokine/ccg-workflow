@@ -41,14 +41,17 @@ description: '多模型性能优化：{{BACKEND_PRIMARY}} 后端优化 + {{FRONT
 
 ```
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend <{{BACKEND_PRIMARY}}|{{FRONTEND_PRIMARY}}> - \"{{WORKDIR}}\" <<'EOF'
-ROLE_FILE: <角色提示词路径>
-<TASK>
-需求：<增强后的需求（如未增强则用 $ARGUMENTS）>
-上下文：<目标代码、现有性能指标等>
-</TASK>
-OUTPUT: 性能瓶颈列表、优化方案、预期收益
-EOF",
+  command: [
+    "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend " +
+      "<{{BACKEND_PRIMARY}}|{{FRONTEND_PRIMARY}}> - \"{{WORKDIR}}\" <<'EOF'",
+    "ROLE_FILE: <角色提示词路径>",
+    "<TASK>",
+    "需求：<增强后的需求（如未增强则用 $ARGUMENTS）>",
+    "上下文：<目标代码、现有性能指标等>",
+    "</TASK>",
+    "OUTPUT: 性能瓶颈列表、优化方案、预期收益",
+    "EOF",
+  ].join('\n'),
   run_in_background: true,
   timeout: 3600000,
   description: "简短描述"
@@ -58,7 +61,7 @@ EOF",
 **角色提示词**：
 
 | 模型 | 提示词                                                     |
-|------|------------------------------------------------------------|
+| ---- | ---------------------------------------------------------- |
 | 后端 | `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/optimizer.md`  |
 | 前端 | `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/optimizer.md` |
 
@@ -96,7 +99,8 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 ### 🔍 阶段 0：Prompt 增强（可选）
 
 `[模式：准备]` - **Prompt 增强**（按 `/ccg:enhance`
-的逻辑执行）：分析 $ARGUMENTS 的意图、缺失信息、隐含假设，补全为结构化需求（明确目标、技术约束、范围边界、验收标准），**用增强结果替代原始 $
+的逻辑执行）：分析 $ARGUMENTS 的意图、缺失信息、隐含假设，补全为结构化需求（明确目标、技术约束、范围边界、验收标准），
+**用增强结果替代原始 $
 ARGUMENTS，后续调用后端/前端模型 时传入增强后的需求**
 
 ### 🔍 阶段 1：性能基线
@@ -114,15 +118,15 @@ ARGUMENTS，后续调用后端/前端模型 时传入增强后的需求**
 **⚠️ 必须发起两个并行 Bash 调用**（参照上方调用规范）：
 
 1. **{{BACKEND_PRIMARY}} 后端分析**：`Bash({ command: "...--backend {{BACKEND_PRIMARY}}...", run_in_background: true })`
-    - ROLE_FILE: `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/optimizer.md`
-    - 需求：分析后端性能问题（$ARGUMENTS）
-    - OUTPUT：性能瓶颈列表、优化方案、预期收益
+   - ROLE_FILE: `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/optimizer.md`
+   - 需求：分析后端性能问题（$ARGUMENTS）
+   - OUTPUT：性能瓶颈列表、优化方案、预期收益
 
 2. **{{FRONTEND_PRIMARY}} 前端分析**：
    `Bash({ command: "...--backend {{FRONTEND_PRIMARY}}...", run_in_background: true })`
-    - ROLE_FILE: `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/optimizer.md`
-    - 需求：分析前端性能问题（Core Web Vitals）
-    - OUTPUT：性能瓶颈列表、优化方案、预期收益
+   - ROLE_FILE: `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/optimizer.md`
+   - 需求：分析前端性能问题（Core Web Vitals）
+   - OUTPUT：性能瓶颈列表、优化方案、预期收益
 
 用 `TaskOutput` 等待两个模型的完整结果。 **必须等所有模型返回后才能进入下一阶段**。
 
@@ -153,7 +157,7 @@ ARGUMENTS，后续调用后端/前端模型 时传入增强后的需求**
 ## 性能指标参考
 
 | 类型 | 指标       | 良好   | 需优化 |
-|------|------------|--------|--------|
+| ---- | ---------- | ------ | ------ |
 | 后端 | API 响应   | <100ms | >500ms |
 | 后端 | 数据库查询 | <50ms  | >200ms |
 | 前端 | LCP        | <2.5s  | >4s    |

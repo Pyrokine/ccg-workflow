@@ -42,14 +42,17 @@ description: '后端专项工作流（研究→构思→计划→执行→优化
 ```
 # 新会话调用
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend {{BACKEND_PRIMARY}} - \"{{WORKDIR}}\" <<'EOF'
-ROLE_FILE: <角色提示词路径>
-<TASK>
-需求：<增强后的需求（如未增强则用 $ARGUMENTS）>
-上下文：<前序阶段收集的项目上下文、分析结果等>
-</TASK>
-OUTPUT: 期望输出格式
-EOF",
+  command: [
+    "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend {{BACKEND_PRIMARY}} - " +
+      "\"{{WORKDIR}}\" <<'EOF'",
+    "ROLE_FILE: <角色提示词路径>",
+    "<TASK>",
+    "需求：<增强后的需求（如未增强则用 $ARGUMENTS）>",
+    "上下文：<前序阶段收集的项目上下文、分析结果等>",
+    "</TASK>",
+    "OUTPUT: 期望输出格式",
+    "EOF",
+  ].join('\n'),
   run_in_background: false,
   timeout: 3600000,
   description: "简短描述"
@@ -57,14 +60,17 @@ EOF",
 
 # 复用会话调用
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend {{BACKEND_PRIMARY}} resume <SESSION_ID> - \"{{WORKDIR}}\" <<'EOF'
-ROLE_FILE: <角色提示词路径>
-<TASK>
-需求：<增强后的需求（如未增强则用 $ARGUMENTS）>
-上下文：<前序阶段收集的项目上下文、分析结果等>
-</TASK>
-OUTPUT: 期望输出格式
-EOF",
+  command: [
+    "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend {{BACKEND_PRIMARY}} " +
+      "resume <SESSION_ID> - \"{{WORKDIR}}\" <<'EOF'",
+    "ROLE_FILE: <角色提示词路径>",
+    "<TASK>",
+    "需求：<增强后的需求（如未增强则用 $ARGUMENTS）>",
+    "上下文：<前序阶段收集的项目上下文、分析结果等>",
+    "</TASK>",
+    "OUTPUT: 期望输出格式",
+    "EOF",
+  ].join('\n'),
   run_in_background: false,
   timeout: 3600000,
   description: "简短描述"
@@ -74,7 +80,7 @@ EOF",
 **角色提示词**：
 
 | 阶段 | 后端                                                                            |
-|------|---------------------------------------------------------------------------------|
+| ---- | ------------------------------------------------------------------------------- |
 | 分析 | `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/analyzer.md`                        |
 | 规划 | `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/architect.md`                       |
 | 审查 | `~/.claude/.ccg/prompts/claude/reviewer.md`，供 GPT、Grok 两个外部 profile 共用 |
@@ -99,7 +105,8 @@ EOF",
 ### 🔍 阶段 0：Prompt 增强（可选）
 
 `[模式：准备]` - **Prompt 增强**（按 `/ccg:enhance`
-的逻辑执行）：分析 $ARGUMENTS 的意图、缺失信息、隐含假设，补全为结构化需求（明确目标、技术约束、范围边界、验收标准），**用增强结果替代原始 $
+的逻辑执行）：分析 $ARGUMENTS 的意图、缺失信息、隐含假设，补全为结构化需求（明确目标、技术约束、范围边界、验收标准），
+**用增强结果替代原始 $
 ARGUMENTS，后续调用 {{BACKEND_PRIMARY}} 时传入增强后的需求**
 
 ### 🔍 阶段 1：研究
@@ -155,7 +162,8 @@ Claude 综合规划，请求用户批准后存入 `.claude/plan/任务名.md`
   `--backend claude --no-session-persistence --claude-model {{REVIEW_GPT_MODEL}} --claude-effort {{REVIEW_GPT_EFFORT}}`
   ，重点审查后端逻辑、安全、性能、错误处理和 API 规范
 - Grok：
-  `--backend claude --no-session-persistence --claude-model {{REVIEW_GROK_MODEL}} --claude-effort {{REVIEW_GROK_EFFORT}}`
+  `--backend claude --no-session-persistence --claude-model {{REVIEW_GROK_MODEL}}
+--claude-effort {{REVIEW_GROK_EFFORT}}`
   ，重点审查前端交互、可访问性、设计一致性与前端安全
 
 两个调用使用 `~/.claude/.ccg/prompts/claude/reviewer.md`。等待两个结果后由主 Claude 汇总并确认 finding，禁止 `resume`
