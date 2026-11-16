@@ -451,7 +451,8 @@ func parseJSONStreamInternalWithContent(
 				notifyMessage()
 
 				if event.Type == "result" &&
-					(event.Status == "success" || event.Status == "error" || event.Status == "complete" || event.Status == "failed") {
+					(event.Status == "success" || event.Status == "error" ||
+						event.Status == "complete" || event.Status == "failed") {
 					notifyComplete()
 				}
 			}

@@ -623,6 +623,12 @@ func createFakeCodexScript(t *testing.T, threadID, message string) string {
 	scriptPath := filepath.Join(t.TempDir(), "codex.sh")
 	script := fmt.Sprintf(
 		`#!/bin/sh
+for argument in "$@"; do
+  if [ "$argument" = "-" ]; then
+    cat >/dev/null || exit 1
+    break
+  fi
+done
 printf '%%s\n' '{"type":"thread.started","thread_id":"%s"}'
 printf '%%s\n' '{"type":"item.completed","item":{"type":"agent_message","text":"%s"}}'
 `, threadID, message,
@@ -3388,12 +3394,14 @@ review with kimi`,
 	mu.Unlock()
 
 	if !grokOK || grokTask.Backend != "grok" || grokTask.GrokModel != "grok-4.5" ||
-		grokTask.KimiModel != "kimi-code" || grokTask.OpencodeModel != "anthropic/claude-opus-5" || !grokTask.Progress ||
+		grokTask.KimiModel != "kimi-code" || grokTask.OpencodeModel != "anthropic/claude-opus-5" ||
+		!grokTask.Progress ||
 		!grokTask.WithMCP {
 		t.Fatalf("grok task = %+v", grokTask)
 	}
 	if !kimiOK || kimiTask.Backend != "kimi" || kimiTask.GrokModel != "grok-4.5" ||
-		kimiTask.KimiModel != "kimi-code" || kimiTask.OpencodeModel != "anthropic/claude-opus-5" || !kimiTask.Progress ||
+		kimiTask.KimiModel != "kimi-code" || kimiTask.OpencodeModel != "anthropic/claude-opus-5" ||
+		!kimiTask.Progress ||
 		!kimiTask.WithMCP {
 		t.Fatalf("kimi task = %+v", kimiTask)
 	}

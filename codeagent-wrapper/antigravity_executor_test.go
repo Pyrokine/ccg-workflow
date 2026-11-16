@@ -56,7 +56,8 @@ func TestAntigravityExecutor_StreamResult(t *testing.T) {
 		{"success", agyStreamSample, false},
 		{
 			"error with response",
-			`{"event":"result","result":{"conversation_id":"failed-id","status":"ERROR","response":"partial text","error":"quota exhausted"}}`,
+			`{"event":"result","result":{"conversation_id":"failed-id","status":"ERROR",` +
+				`"response":"partial text","error":"quota exhausted"}}`,
 			true,
 		},
 		{"oversized stream", agyStreamSample + strings.Repeat("x", 11*1024*1024), true},
@@ -98,8 +99,9 @@ func TestExecutorRealPipe(t *testing.T) {
 	}{
 		{
 			backend: "agy",
-			delta:   "{\"event\":\"step_update\",\"step_update\":{\"step_type\":\"agent_response\",\"text_delta\":\"chunk\"}}\n",
-			result:  agyStreamSample,
+			delta: `{"event":"step_update","step_update":` +
+				`{"step_type":"agent_response","text_delta":"chunk"}}` + "\n",
+			result: agyStreamSample,
 		},
 		{
 			backend: "codex",
@@ -125,7 +127,8 @@ func TestExecutorRealPipe(t *testing.T) {
 							ID: "real-pipe", Task: "task", WorkDir: ".", Backend: tc.backend,
 						}, nil, nil, false, false, 5,
 					)
-					if result.ExitCode != 0 || result.Message != "Found 3 bugs." || result.SessionID != "602e61bb-d2a0" {
+					if result.ExitCode != 0 || result.Message != "Found 3 bugs." ||
+						result.SessionID != "602e61bb-d2a0" {
 						t.Fatalf(
 							"exit=%d messageBytes=%d session=%q error=%q", result.ExitCode, len(result.Message),
 							result.SessionID, result.Error,
@@ -151,7 +154,9 @@ func TestExecutorRealPipeCancelledWhileDraining(t *testing.T) {
 		t.Fatal(err)
 	}
 	newCommandRunner = func(ctx context.Context, _ string, _ ...string) commandRunner {
-		command := `(cat "$1"; while printf '%s\n' '{"event":"step_update","step_update":{"step_type":"agent_response","text_delta":"chunk"}}'; do sleep 0.01; done) 2>/dev/null &`
+		command := `(cat "$1"; while printf '%s\n' '{"event":"step_update",` +
+			`"step_update":{"step_type":"agent_response","text_delta":"chunk"}}'; ` +
+			`do sleep 0.01; done) 2>/dev/null &`
 		return &realCmd{cmd: exec.CommandContext(ctx, "sh", "-c", command, "sh", file)}
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
@@ -195,7 +200,8 @@ func TestAntigravityPTYRetry_StreamResult(t *testing.T) {
 		{"success", agyStreamSample, false},
 		{
 			"error with response",
-			`{"event":"result","result":{"conversation_id":"failed-id","status":"ERROR","response":"partial text","error":"quota exhausted"}}`,
+			`{"event":"result","result":{"conversation_id":"failed-id","status":"ERROR",` +
+				`"response":"partial text","error":"quota exhausted"}}`,
 			true,
 		},
 		{"oversized stream", agyStreamSample + strings.Repeat("x", 11*1024*1024), true},

@@ -1606,7 +1606,8 @@ waitLoop:
 }
 
 func antigravityAuthenticationFailureMessage() string {
-	return "Antigravity authentication failed; check agy login, real HOME, Linux/WSL keyring or DBus, and proxy settings"
+	return "Antigravity authentication failed; check agy login, real HOME, " +
+		"Linux/WSL keyring or DBus, and proxy settings"
 }
 
 func antigravityEmptyOutputMessage() string {

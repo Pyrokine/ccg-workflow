@@ -349,7 +349,8 @@ func TestLoadModelProxyEnv(t *testing.T) {
 		t.Fatalf("MkdirAll: %v", err)
 	}
 	data := []byte(
-		"[routing.proxy]\nmodels = [ \"gemini\" ]\nhttp = \"http://proxy.local:8891\"\nhttps = \"http://proxy.local:8892\"\n",
+		"[routing.proxy]\nmodels = [ \"gemini\" ]\n" +
+			"http = \"http://proxy.local:8891\"\nhttps = \"http://proxy.local:8892\"\n",
 	)
 	if err := os.WriteFile(filepath.Join(dir, "config.toml"), data, 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
@@ -365,7 +366,8 @@ func TestLoadModelProxyEnv(t *testing.T) {
 	}
 
 	data = []byte(
-		"[routing.proxy]\nmodels = [ \"agy\" ]\nhttp = \"http://proxy.local:8891\"\nhttps = \"http://proxy.local:8892\"\n",
+		"[routing.proxy]\nmodels = [ \"agy\" ]\n" +
+			"http = \"http://proxy.local:8891\"\nhttps = \"http://proxy.local:8892\"\n",
 	)
 	if err := os.WriteFile(filepath.Join(dir, "config.toml"), data, 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)

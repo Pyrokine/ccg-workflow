@@ -368,7 +368,8 @@ func run() (exitCode int) {
 			if len(extras) > 0 {
 				if _, err := fmt.Fprintln(
 					os.Stderr,
-					"ERROR: --parallel reads task configuration from stdin; only recognized wrapper flags may be supplied.",
+					"ERROR: --parallel reads task configuration from stdin; "+
+						"only recognized wrapper flags may be supplied.",
 				); err != nil {
 					logWarn("I/O operation failed: " + err.Error())
 				}

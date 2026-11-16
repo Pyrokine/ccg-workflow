@@ -5,13 +5,17 @@ import (
 	"testing"
 )
 
-const agyStreamSample = `{"event":"init","conversation_id":"602e61bb-d2a0","init":{"cwd":"/tmp/project"}}
-{"event":"step_update","step_update":{"conversation_id":"602e61bb-d2a0","step_index":0,"state":"DONE","step_type":"user_input"}}
-{"event":"step_update","step_update":{"conversation_id":"602e61bb-d2a0","step_index":1,"state":"ACTIVE","step_type":"agent_response","text_delta":"Found "}}
-{"event":"step_update","step_update":{"conversation_id":"602e61bb-d2a0","step_index":1,"state":"ACTIVE","step_type":"agent_response","text_delta":"3 bugs."}}
-{"event":"step_update","step_update":{"conversation_id":"602e61bb-d2a0","step_index":1,"state":"DONE","step_type":"agent_response","text_delta":"\n"}}
-{"event":"result","result":{"conversation_id":"602e61bb-d2a0","status":"SUCCESS","response":"Found 3 bugs.\n","num_turns":1}}
-`
+const agyStreamSample = `{"event":"init","conversation_id":"602e61bb-d2a0","init":{"cwd":"/tmp/project"}}` + "\n" +
+	`{"event":"step_update","step_update":{"conversation_id":"602e61bb-d2a0","step_index":0,` +
+	`"state":"DONE","step_type":"user_input"}}` + "\n" +
+	`{"event":"step_update","step_update":{"conversation_id":"602e61bb-d2a0","step_index":1,` +
+	`"state":"ACTIVE","step_type":"agent_response","text_delta":"Found "}}` + "\n" +
+	`{"event":"step_update","step_update":{"conversation_id":"602e61bb-d2a0","step_index":1,` +
+	`"state":"ACTIVE","step_type":"agent_response","text_delta":"3 bugs."}}` + "\n" +
+	`{"event":"step_update","step_update":{"conversation_id":"602e61bb-d2a0","step_index":1,` +
+	`"state":"DONE","step_type":"agent_response","text_delta":"\n"}}` + "\n" +
+	`{"event":"result","result":{"conversation_id":"602e61bb-d2a0","status":"SUCCESS",` +
+	`"response":"Found 3 bugs.\n","num_turns":1}}` + "\n"
 
 func TestAntigravityBuildArgs_UsesStreamJSON(t *testing.T) {
 	t.Setenv("CODEAGENT_AGY_SETTINGS", "")
@@ -146,9 +150,9 @@ func TestParseAntigravityStream_ProgressIsWholeLines(t *testing.T) {
 
 func TestParseAntigravityStream_FallsBackToDeltasWithoutResult(t *testing.T) {
 	// A denied tool can end the turn before a result event; keep what was said.
-	in := `{"event":"init","conversation_id":"c-1"}
-{"event":"step_update","step_update":{"conversation_id":"c-1","step_type":"agent_response","text_delta":"partial review"}}
-`
+	in := `{"event":"init","conversation_id":"c-1"}` + "\n" +
+		`{"event":"step_update","step_update":{"conversation_id":"c-1",` +
+		`"step_type":"agent_response","text_delta":"partial review"}}` + "\n"
 	msg, id, _ := parseAntigravityStream(strings.NewReader(in), agyStreamHandlers{})
 	if id != "c-1" || msg != "partial review" {
 		t.Fatalf("got (%q, %q), want (partial review, c-1)", msg, id)
@@ -157,8 +161,8 @@ func TestParseAntigravityStream_FallsBackToDeltasWithoutResult(t *testing.T) {
 
 func TestParseAntigravityStream_ReportsFailure(t *testing.T) {
 	// Captured from agy 1.4.2 with no login.
-	in := `{"event":"result","result":{"conversation_id":"","status":"ERROR","response":"","error":"authentication failed or timed out","num_turns":0}}
-`
+	in := `{"event":"result","result":{"conversation_id":"","status":"ERROR","response":"",` +
+		`"error":"authentication failed or timed out","num_turns":0}}` + "\n"
 	msg, id, failure := parseAntigravityStream(strings.NewReader(in), agyStreamHandlers{})
 	if msg != "" || id != "" {
 		t.Fatalf("got (%q, %q), want nothing", msg, id)

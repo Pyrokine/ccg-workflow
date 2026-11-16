@@ -235,7 +235,8 @@ func unsupportedWrapperFlagHint(arg string) string {
 			"\"task\" <workdir>, or codeagent-wrapper --backend antigravity - " +
 			"<workdir> <<'EOF'"
 	case arg == "--print-timeout", strings.HasPrefix(arg, "--print-timeout="):
-		return "--print-timeout is managed by codeagent-wrapper timeout settings; do not pass backend CLI flags directly"
+		return "--print-timeout is managed by codeagent-wrapper timeout settings; " +
+			"do not pass backend CLI flags directly"
 	}
 	return ""
 }
