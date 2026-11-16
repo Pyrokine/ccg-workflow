@@ -253,10 +253,12 @@ function injectPureClaudeDirective(content: string): string {
   const guidance = [
     'Both primary routes use Claude. This section overrides every later primary-route `codeagent-wrapper` example.',
     'Do not execute a later wrapper call that resolves to `--backend claude` without `--no-session-persistence`;',
-    'it is a non-Pure-Claude alternative. Use independent Claude Code Agent or Agent Teams work instead.',
-    'Set `CCG_ROLE: research` for research or analysis work and `CCG_ROLE: implement` for implementation work',
+    'Handle routine analysis, planning, implementation, and review in the main session.',
+    'Use Claude Code Agent or Agent Teams only for independent work with a clear benefit or an explicit user request.',
+    'When delegating, set `CCG_ROLE: research` for research or analysis work ' +
+      'and `CCG_ROLE: implement` for implementation',
     'so role-scoped specifications are injected. Review commands that explicitly use `--no-session-persistence`',
-    'remain enabled and must run in independent contexts.',
+    'remain enabled when the user requests external review and must run in independent contexts.',
   ].join(' ')
   const directive = `\n## Pure Claude Code mode\n\n${guidance}\n`
   const frontmatter = /^---\n[\s\S]*?\n---\n/

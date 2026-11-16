@@ -79,7 +79,7 @@ describe('live native skill activation', () => {
     await runSkillsCommand('install', ['quality'], { templatesDir, json: true })
     expect(await hookContext('Please explain redis caching')).toBe('')
     const patched = await fs.readFile(hookPath, 'utf8')
-    const withoutData = (text: string) => text.replace(/^\s*const routing = JSON\.parse\(.+\);$/m, '<DATA>')
+    const withoutData = (text: string) => text.replace(/^\s*const routing = JSON\.parse\(.+\);$/m, 'CCG_ROUTING_DATA')
     expect(withoutData(patched)).toBe(withoutData(original))
     expect(state.config.performance).toEqual({ skillsMode: 'native', skillsProfile: ['quality'] })
     const rulePath = join(installDir, 'rules/ccg-skills.md')
@@ -127,6 +127,33 @@ describe('live native skill activation', () => {
     expect(notes.join(' ')).toContain('Malformed')
     expect(await fs.readFile(first, 'utf8')).toContain('user edited incomplete block')
   })
+  it('installs native gate policy with the same triggers, evidence reuse, and incomplete states', async () => {
+    const names = ['gen-docs', 'verify-module', 'verify-change', 'verify-quality', 'verify-security']
+    expect(await activateNativeSkills({ installDir, names })).toEqual([])
+    const rules = await fs.readFile(join(installDir, 'rules/ccg-skills.md'), 'utf8')
+    const managed = rules.split('<!-- CCG_NATIVE_SKILLS_START -->')[1].split('<!-- CCG_NATIVE_SKILLS_END -->')[0]
+
+    for (const name of names) {
+      expect(managed).toContain(`/ccg-${name}: ${join(installDir, 'skills', `ccg-${name}`, 'SKILL.md')}`)
+    }
+    expect(managed).toContain('code changes exceeding 30 lines')
+    expect(managed).toContain('authentication, authorization, encryption, input validation')
+    expect(managed).toContain('refactoring needs verify-change, verify-quality, and verify-security')
+    expect(managed).toContain('new source module needs gen-docs at creation')
+    expect(managed).toContain('then verify-module and verify-security after development')
+    expect(managed).toContain('complete feature stage')
+    expect(managed).toContain('candidate, inputs, toolchain, arguments, configuration, and coverage')
+    expect(managed).toContain('rerun only affected checks')
+    expect(managed).toContain('Continue independent checks when another check fails')
+    expect(managed).toContain('failed, unavailable, timed-out, unsupported, and incomplete')
+    expect(managed).toContain('Critical or High findings require resolution before delivery')
+    expect(managed).toContain('Read-only reviews report findings without edits')
+    expect(managed).toContain('report unavailable checks and any remaining coverage as unverified')
+    expect(managed).toContain('The main session is the default executor')
+    expect(managed).not.toContain('skip if previous gate fails')
+    expect(rules).toContain(customRule)
+  })
+
   it('makes no framework files for standalone skills and rejects duplicate rule selections', async () => {
     const standalone = join(root, 'standalone')
     await fs.mkdir(standalone)

@@ -30,9 +30,10 @@ Gemini CLI 已禁用：2026-06-18 后 consumer OAuth 请求不再处理。不要
 当 `frontend.primary` 与 `backend.primary` 都是 `claude` 时：
 
 - 不调用 `codeagent-wrapper`，也不启动外部 CLI 执行前端或后端工作
-- 分析与 Builder 工作改由 Claude Code Agent 或 Agent Teams 完成
-- 分别创建独立上下文的 Agent，分配后端或前端视角
-- 常规审查使用独立 Claude Code Agent；仅用户明确请求 GPT、Grok、双模型审查或 `/ccg:spec-review` 时调用外部 profile
+- 分析、规划、实施和常规审查默认由主会话完成
+- 独立工作有明确收益、需要材料或工具隔离、高风险发现需要独立证据或用户要求协作时，再按 phase-guide § 6 委派
+- 普通事实查询、单文件读取和连续调用链由主会话直接处理，已有有效证据直接复用
+- 用户明确请求 GPT、Grok、双模型审查或 `/ccg:spec-review` 时调用外部 profile
 - 第 3 节的新会话与复用会话模板不用于前端或后端工作
 
 ## 2. 按阶段选择模型
@@ -40,7 +41,7 @@ Gemini CLI 已禁用：2026-06-18 后 consumer OAuth 请求不再处理。不要
 ### 分析/研究阶段
 
 | 任务领域  | 推荐模型                                                           | 角色提示词              |
-|-----------|--------------------------------------------------------------------|-------------------------|
+| --------- | ------------------------------------------------------------------ | ----------------------- |
 | 后端/架构 | backend 模型                                                       | `$BACKEND/analyzer.md`  |
 | 前端/UI   | frontend 模型                                                      | `$FRONTEND/analyzer.md` |
 | 全栈      | backend 模型，涉及前端、布局、界面、页面设计时再调用 frontend 模型 | 对应 analyzer           |
@@ -49,14 +50,14 @@ Gemini CLI 已禁用：2026-06-18 后 consumer OAuth 请求不再处理。不要
 ### 规划阶段
 
 | 任务领域   | 推荐模型                                                           | 角色提示词               |
-|------------|--------------------------------------------------------------------|--------------------------|
+| ---------- | ------------------------------------------------------------------ | ------------------------ |
 | 架构设计   | backend 模型                                                       | `$BACKEND/architect.md`  |
 | UI/UX 设计 | frontend 模型                                                      | `$FRONTEND/architect.md` |
 | 全栈       | backend 模型，涉及前端、布局、界面、页面设计时再调用 frontend 模型 | 对应 architect           |
 
 ### 审查阶段
 
-- 默认创建独立 Claude Code Agent 审查完整 diff、相关文件和验收规则，不调用外部 CLI
+- 默认由主会话审查完整 diff、相关文件和验收规则；独立复核有具体收益或用户要求时，按既定范围与预算安排
 - 用户明确请求 GPT、Grok、双模型审查或 `/ccg:spec-review` 时，按 `review.profiles` 启动对应外部 reviewer
 - 外部 reviewer 都通过 `~/.claude/bin/codeagent-wrapper --backend claude` 启动，实际 provider 与当前 Claude Code 相同
 - GPT 负责后端逻辑、正确性、安全、回归和测试缺口，Grok 负责前端交互、可访问性、设计一致性和前端安全
@@ -67,7 +68,7 @@ Gemini CLI 已禁用：2026-06-18 后 consumer OAuth 请求不再处理。不要
 ### 调试阶段
 
 | 任务领域 | 推荐模型                                                                   | 角色提示词              |
-|----------|----------------------------------------------------------------------------|-------------------------|
+| -------- | -------------------------------------------------------------------------- | ----------------------- |
 | 后端问题 | backend 模型优先                                                           | `$BACKEND/debugger.md`  |
 | 前端问题 | frontend 模型优先                                                          | `$FRONTEND/debugger.md` |
 | 不确定   | backend 模型优先，确认涉及前端、布局、界面、页面设计时再调用 frontend 模型 | 对应 debugger           |
@@ -84,7 +85,7 @@ Gemini CLI 已禁用：2026-06-18 后 consumer OAuth 请求不再处理。不要
 - Hook 将 active task、完整任务契约和按角色匹配的精确 spec section 注入实际 wrapper stdin
 - Builder 必须核对 task ID 和 revision；dispatch 或 plan 与 authoritative spec 冲突时停止并报告
 - 支持 `codex`、`antigravity`、`grok`、`kimi` 与 `opencode`
-- backend 为 `claude` 时使用 Agent Teams，不启动 wrapper
+- backend 为 `claude` 时由主会话或已安排的宿主 Agent 实施，需要持续协作时才使用 Team 能力
 - Claude 监控进度，准备 Claude Code 审查材料；用户明确请求外部审查时再准备对应 profile 材料
 - 适用于 M-L 复杂度、低中风险的明确实施任务
 
@@ -107,7 +108,7 @@ WORKDIR=$(pwd)
 route。根据选定 backend 添加对应的可选 model flag：
 
 | Backend    | routing 字段    | CLI 参数                            |
-|------------|-----------------|-------------------------------------|
+| ---------- | --------------- | ----------------------------------- |
 | `grok`     | `grokModel`     | `--grok-model <model>`              |
 | `kimi`     | `kimiModel`     | `--kimi-model <model>`              |
 | `opencode` | `opencodeModel` | `--opencode-model <provider/model>` |
@@ -116,7 +117,16 @@ route。根据选定 backend 添加对应的可选 model flag：
 
 ```
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend <MODEL_AND_OPTIONAL_FLAG> - \"$WORKDIR\" <<'CODEAGENT_EOF'\nROLE_FILE: ~/.claude/.ccg/prompts/$MODEL/$ROLE.md\n<TASK>\n$TASK_CONTENT\n</TASK>\nOUTPUT: $OUTPUT_FORMAT\nCODEAGENT_EOF",
+  command: [
+    "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend " +
+      "<MODEL_AND_OPTIONAL_FLAG> - \"$WORKDIR\" <<'CODEAGENT_EOF'",
+    "ROLE_FILE: ~/.claude/.ccg/prompts/$MODEL/$ROLE.md",
+    "<TASK>",
+    "$TASK_CONTENT",
+    "</TASK>",
+    "OUTPUT: $OUTPUT_FORMAT",
+    "CODEAGENT_EOF",
+  ].join('\n'),
   run_in_background: true,
   timeout: 3600000,
   description: "$SHORT_DESCRIPTION"
@@ -131,7 +141,7 @@ Bash({
 - `$OUTPUT_FORMAT`：期望输出格式
 - `$SHORT_DESCRIPTION`：简短描述（用于进度显示）
 
-纯 Claude Code 模式不填写 `$MODEL`，直接按第 1b 节创建独立 Claude Agent。
+纯 Claude Code 模式不填写 `$MODEL`，按第 1b 节由主会话默认执行，独立委派按实际收益安排
 
 ### 显式外部 route 的会话复用
 
@@ -141,7 +151,16 @@ Bash({
 
 ```
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend <MODEL_AND_OPTIONAL_FLAG> resume $SESSION_ID - \"$WORKDIR\" <<'CODEAGENT_EOF'\nROLE_FILE: ~/.claude/.ccg/prompts/$MODEL/$ROLE.md\n<TASK>\n$TASK_CONTENT\n</TASK>\nOUTPUT: $OUTPUT_FORMAT\nCODEAGENT_EOF",
+  command: [
+    "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend " +
+      "<MODEL_AND_OPTIONAL_FLAG> resume $SESSION_ID - \"$WORKDIR\" <<'CODEAGENT_EOF'",
+    "ROLE_FILE: ~/.claude/.ccg/prompts/$MODEL/$ROLE.md",
+    "<TASK>",
+    "$TASK_CONTENT",
+    "</TASK>",
+    "OUTPUT: $OUTPUT_FORMAT",
+    "CODEAGENT_EOF",
+  ].join('\n'),
   run_in_background: true,
   timeout: 3600000,
   description: "$SHORT_DESCRIPTION"
@@ -150,22 +169,23 @@ Bash({
 
 ### 条件双视角调用模式
 
-默认创建 backend Claude Code Agent。只有任务明确涉及前端、布局、界面、页面设计、UI/UX 时，才同时创建 frontend Claude
-Code Agent。两个 Agent 都使用独立上下文，不调用 codeagent-wrapper 或任何外部 CLI。
+默认由主会话分析；独立调查有明确收益或用户指定多模型时，再分配对应领域角色，实际涉及前端、布局、界面、页面设计或 UI/UX
+时才安排前端视角，独立 Agent 保持各自上下文和叶子限制
 
 用户已将某条 primary route 明确配置为 Codex、Antigravity、Grok、Kimi
 Code 或 OpenCode 时，才按该 route 的配置启动外部 CLI。混合路由中，Claude
-route 仍使用 Agent，外部 route 才使用 wrapper。外部 route 返回 task ID 时使用 `TaskOutput`
+route 保持主会话或已安排的 Agent，外部 route 才使用 wrapper，路由配置决定工具而非自动增加角色；外部 route 返回 task ID 时使用
+`TaskOutput`
 等待；Agent 完成后由运行时通知。
 
 ## 4. 等待与重试规则
 
-| 场景                        | 策略                                |
-|-----------------------------|-------------------------------------|
-| Claude Code Agent 运行中    | 等待完成通知，不轮询                |
-| 显式配置的外部 route 失败   | 重试最多 2 次，间隔 5s              |
-| 显式配置的外部 route 仍失败 | 报告失败，不自动切换到另一个 CLI    |
-| 外部 route 超时             | 600s 等待上限，超时后报告并询问用户 |
+| 场景                      | 策略                                                       |
+| ------------------------- | ---------------------------------------------------------- |
+| Claude Code Agent 运行中  | 等待完成通知，不轮询                                       |
+| 显式配置的外部 route 失败 | 读取实际错误，按可恢复原因决定重试，保留失败状态           |
+| 外部 route 无法恢复       | 报告具体限制，主会话继续原授权内的独立工作                 |
+| 外部 route 等待超时       | 复用现有任务和宿主等待机制，保留超时状态，需新决定时再询问 |
 
 ## 5. SESSION_ID 管理
 

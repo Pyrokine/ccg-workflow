@@ -14,49 +14,49 @@
 
 ## 工作流状态机
 
-[phase-state:1-locate]
+`[phase-state:1-locate]`
 当前阶段：定位问题代码
 Gate: 项目上下文已获取 ✓（由 /ccg Phase 1 完成）
 📍 Next: 找到问题代码后进入诊断阶段
-[/phase-state:1-locate]
+`[/phase-state:1-locate]`
 
-[phase-state:2-diagnose]
+`[phase-state:2-diagnose]`
 当前阶段：诊断根因
 Gate: 已找到相关代码 ✓
 📍 Next: 确定根因后进入修复阶段
-[/phase-state:2-diagnose]
+`[/phase-state:2-diagnose]`
 
-[phase-state:3-fix]
+`[phase-state:3-fix]`
 当前阶段：应用修复
 Gate: 根因已确定 ✓
 📍 Next: 修复完成后进入验证阶段
-[/phase-state:3-fix]
+`[/phase-state:3-fix]`
 
-[phase-state:4-verify]
+`[phase-state:4-verify]`
 当前阶段：验证修复
 Gate: 修复已应用 ✓
 📍 Next: 验证通过后报告结果，建议提交
-[/phase-state:4-verify]
+`[/phase-state:4-verify]`
 
 ---
 
 ## 阶段详情
 
-### Phase 1: 定位 [required]
+### Phase 1: 定位 `[required]`
 
 1. 从用户描述中提取关键信息：
-    - 错误消息（如果有）
-    - 发生位置（文件、功能、页面）
-    - 复现步骤
+   - 错误消息（如果有）
+   - 发生位置（文件、功能、页面）
+   - 复现步骤
 
 2. 搜索相关代码：
-    - 有错误消息 → `Grep` 搜索错误文本
-    - 有文件/函数名 → 直接 `Read` 目标文件
-    - 信息不足 → 用 MCP 搜索工具或 `Grep` 按关键词搜索
+   - 有错误消息 → `Grep` 搜索错误文本
+   - 有文件/函数名 → 直接 `Read` 目标文件
+   - 信息不足 → 用 MCP 搜索工具或 `Grep` 按关键词搜索
 
 3. 读取找到的代码文件，理解上下文
 
-### Phase 2: 诊断 [required]
+### Phase 2: 诊断 `[required]`
 
 1. 分析代码逻辑，找到 bug 的根因
 2. 如果有多个可能原因，按可能性排序
@@ -71,16 +71,16 @@ Gate: 修复已应用 ✓
 ### Phase 3: 修复
 
 1. 应用最小修复（只改必要的部分）
-2. 如果项目有测试 → 运行相关测试
-3. 如果没有测试 → 建议但不强制添加
+2. 完成同一范围内的修复，保留用于复现和区分原因的定向检查
+3. 相关测试与质量关卡在 Phase 4 合并执行，已有有效证据直接复用
 
 ### Phase 4: 验证
 
 1. `git diff` 展示变更
 2. 确认修复合理性：
-    - 变更范围是否最小？
-    - 是否引入新问题？
-    - 边界条件是否考虑？
+   - 变更范围是否最小？
+   - 是否引入新问题？
+   - 边界条件是否考虑？
 3. 如果修复涉及认证/输入处理/安全相关代码 → `/ccg:verify-security` 安全扫描
 4. 输出结果：
    ```

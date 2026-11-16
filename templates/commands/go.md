@@ -12,7 +12,7 @@ $ARGUMENTS
 
 你是 CCG Engine。你负责识别用户意图，恢复或创建持久任务，选择策略，并按策略执行。中文交流，技术术语保留原文。
 
-## Phase 0: 任务状态解析 [required]
+## Phase 0: 任务状态解析 `[required]`
 
 任何意图分析、快捷路由或文件操作之前，先获取工作目录并调用唯一状态控制器：
 
@@ -29,19 +29,21 @@ node ~/.claude/hooks/ccg/task-state.js resolve --root "$WORKDIR" --session-key "
 
 - `active`：当前 session 已认领一个 durable `open` task，对外有效状态为 `in_progress`；以本次真实用户请求判断
   `$ARGUMENTS` 是继续当前任务，还是一项新工作，旧任务材料只用于参考，不覆盖新请求
-    - 明确表示继续时，读取活动任务的 `strategy`、`requirements.md`、`progress.md` 和精确关联的 `specRefs`，从
-      `currentPhase` 与 `nextAction` 继续
-    - 新工作会中断当前任务时，向用户提供 `interrupt`、`replace`、新 worktree 三个选择
-    - `interrupt` 创建临时任务，完成后自动返回当前任务
-    - `replace` 保留旧任务为 suspended，新任务完成后不自动返回
-    - 可能并发改写同一产品文件时使用另一 worktree
+  - 明确表示继续时，读取活动任务的 `strategy`、`requirements.md`、`progress.md` 和精确关联的 `specRefs`，从
+    `currentPhase` 与 `nextAction` 继续
+  - 普通即时问答保持当前任务、phase 和绑定，直接回答
+  - 用户明确插入临时工作且无并发写入冲突时，直接使用 `interrupt` 创建临时任务，完成后恢复父任务
+  - 用户要替换目标或存在并发写入风险时，再让用户选择 `interrupt`、`replace` 或独立 worktree，worktree 操作保持实际授权检查
+  - `replace` 保留旧任务为 suspended，新任务完成后不自动返回
+  - `finish` 返回 `resumedTaskId` 后重新 `resolve`，读取父任务当前 requirements、精确 spec、`nextAction` 和 `gate`
+    ，按当前授权继续，后续 mutation 使用父任务新 CAS
 - `selection-required`：只展示候选任务元数据和 `claimed` 状态，让用户明确选择
-    - 未被其他 session 认领时调用 `activate`
-    - `claimed: true` 时默认停止；只有用户明确选择接管后才调用 `takeover`
+  - 未被其他 session 认领时调用 `activate`
+  - `claimed: true` 时默认停止；只有用户明确选择接管后才调用 `takeover`
 - `migration-required`：按错误码处理
-    - `STATE_MIGRATION_REQUIRED`：调用 `migrate-state` 把 schema v1 state 转为 v2；旧 `activeTaskId`
-      只作为重新认领提示，不自动绑定当前 session
-    - `TASK_MIGRATION_REQUIRED`：先处理 orphan，再调用 `migrate-legacy`；迁移完成后重新 `resolve`，由用户选择任务
+  - `STATE_MIGRATION_REQUIRED`：调用 `migrate-state` 把 schema v1 state 转为 v2；旧 `activeTaskId`
+    只作为重新认领提示，不自动绑定当前 session
+  - `TASK_MIGRATION_REQUIRED`：先处理 orphan，再调用 `migrate-legacy`；迁移完成后重新 `resolve`，由用户选择任务
 - `recovery-required`：展示当前 session 的恢复目标，用户确认后调用 `recover`
 - `invalid`：报告机器码和损坏文件，停止任务正文执行
 - `none`：继续 Phase 1
@@ -51,7 +53,7 @@ node ~/.claude/hooks/ccg/task-state.js resolve --root "$WORKDIR" --session-key "
 `taskRevision`；missing-target 和 incomplete-transaction `recover` 不带 task revision。遇到 state、binding、active
 task 或 task revision 冲突后重新 `resolve`，不得自动重放新的写入。
 
-## Phase 1: 意图分析 [required]
+## Phase 1: 意图分析 `[required]`
 
 ### 1.1 获取项目上下文
 
@@ -65,7 +67,7 @@ task 或 task revision 冲突后重新 `resolve`，不得自动重放新的写�
 ### 1.2 分类
 
 | 类型       | 典型意图                           |
-|------------|------------------------------------|
+| ---------- | ---------------------------------- |
 | `bug-fix`  | 修复报错、崩溃、失败行为           |
 | `feature`  | 新增功能或接口                     |
 | `refactor` | 调整结构、职责或命名               |
@@ -79,14 +81,14 @@ task 或 task revision 冲突后重新 `resolve`，不得自动重放新的写�
 ### 1.3 复杂度与风险
 
 | 复杂度 | 判定                                |
-|--------|-------------------------------------|
+| ------ | ----------------------------------- |
 | `S`    | 单文件、范围明确、预估少于 30 行    |
 | `M`    | 2 至 5 个文件，单模块内             |
 | `L`    | 5 个以上文件或跨模块                |
 | `XL`   | 架构、公共 API、Schema 或多模块协作 |
 
 | 风险     | 判定                             |
-|----------|----------------------------------|
+| -------- | -------------------------------- |
 | `low`    | 可逆且不改变既有外部行为         |
 | `medium` | 修改既有行为，需要测试确认       |
 | `high`   | 公共契约、迁移、认证、授权或加密 |
@@ -103,7 +105,7 @@ Next: [下一步]
 ```
 
 | 类型 \ 复杂度 | S                  | M                   | L / XL              |
-|---------------|--------------------|---------------------|---------------------|
+| ------------- | ------------------ | ------------------- | ------------------- |
 | `bug-fix`     | `direct-fix`       | `debug-investigate` | `debug-investigate` |
 | `feature`     | `quick-implement`  | `guided-develop`    | `full-collaborate`  |
 | `refactor`    | `direct-fix`       | `refactor-safely`   | `refactor-safely`   |
@@ -122,7 +124,7 @@ Next: [下一步]
 
 ### 持久策略
 
-以下策略必须使用任务状态：
+以下策略使用持久任务状态，`deep-research` 的普通即时查询除外：
 
 - `guided-develop`
 - `full-collaborate`
@@ -132,18 +134,28 @@ Next: [下一步]
 - `optimize-measure`
 - `review-audit`
 
-`direct-fix`、`quick-implement`、`git-action` 默认 taskless。执行中升级为持久策略时，必须先调用 `start`。
+`direct-fix`、`quick-implement`、`git-action` 默认 taskless；`deep-research`
+中的普通事实查询和简单研究同样由主会话直接完成，保持当前任务，无需新策略、固定两个角色或持久文件
 
-## Phase 3: 创建持久任务 [required for persistent strategies]
+长研究需要跨阶段记录与恢复时使用持久 `deep-research`；其他持久策略按当前任务继续或先调用 `start`
+，已有相同方案批准且约束未变时直接复用，默认由主会话实施
 
-把本次目标整理成 `requirements.md`，包含当前有效的目标、范围、约束、验收标准与规范来源正文按 UTF-8 最多 8
-KiB（8192 字节，含末尾换行），XML 转义后的正文也须在 8 KiB 内；详细论证和历史调查写入现有 research artifact，规范正文用
-`link-spec` 精确引用，精简时保留仍有效的要求任务 ID 必须是最多 80 字符的严格 kebab-case
+## Phase 3: 创建持久任务 `[required for persistent strategies]`
+
+把本次目标整理成 `requirements.md`，包含当前有效的目标、范围、约束、验收标准与规范来源，UTF-8 原文和 XML 转义后的正文各自最多
+8192 字节，包含末尾换行；`nextAction` 按 UTF-8 最多 1024 字节
+
+超限错误报告实际字节数和上限，写前拒绝并保留原文和 revision；保留仍有效要求，详细论证与历史调查移至现有
+research／progress，规范正文用 `link-spec` 精确引用，整理后重新调用 `update-requirements`
+
+用户新增或修正的有效约束同步到实际读取的 requirements 或精确 spec，progress 保存进展和历史；任务 ID 使用最多 80 字符的严格
+kebab-case
 
 调用控制器：
 
 ```bash
-node ~/.claude/hooks/ccg/task-state.js start --root "$WORKDIR" --session-key "$CCG_SESSION_KEY" <<'CCG_TASK_JSON'
+node ~/.claude/hooks/ccg/task-state.js start --root "$WORKDIR" \
+  --session-key "$CCG_SESSION_KEY" <<'CCG_TASK_JSON'
 {
   "expected": {
     "stateId": null,
@@ -165,13 +177,14 @@ node ~/.claude/hooks/ccg/task-state.js start --root "$WORKDIR" --session-key "$C
     "gate": null,
     "specEvolution": "pending"
   },
-  "requirements": "# Requirements\n\n## Objective\n...\n\n## Scope\n...\n\n## Constraints\n...\n\n## Acceptance criteria\n...\n"
+  "requirements":
+    "# Requirements\n\n## Objective\n...\n\n## Scope\n...\n\n## Constraints\n...\n\n## Acceptance criteria\n...\n"
 }
 CCG_TASK_JSON
 ```
 
-示例中的 `expected` 必须替换为当前 `resolve` 输出。存在活动任务时，`mode` 必须使用用户选择的 `interrupt` 或
-`replace`。创建 suspended 任务但暂不切换时使用 `inactive`。
+示例中的 `expected` 必须替换为当前 `resolve` 输出；存在活动任务且用户明确插入无冲突临时工作时使用 `interrupt`
+，替换目标或并发写入风险按用户决定处理；创建 suspended 任务但暂不转换当前绑定时使用 `inactive`
 
 控制器返回后保存新的 `stateId`、`stateRevision`、`bindingRevision`、`activeTaskId` 与
 `task.revision`，后续每次修改都使用最新值。`task.json.status` 仍为 `open`；只有当前 session 的 effective status 显示为
@@ -180,7 +193,8 @@ CCG_TASK_JSON
 如果已有 tracked Markdown 或 OpenSpec 是本任务的准确规范，逐个调用 `link-spec` 关联精确 section：
 
 ```bash
-node ~/.claude/hooks/ccg/task-state.js link-spec --root "$WORKDIR" --session-key "$CCG_SESSION_KEY" <<'CCG_TASK_JSON'
+node ~/.claude/hooks/ccg/task-state.js link-spec --root "$WORKDIR" \
+  --session-key "$CCG_SESSION_KEY" <<'CCG_TASK_JSON'
 {
   "expected": {
     "stateId": "state-id",
@@ -235,4 +249,7 @@ Read("~/.claude/.ccg/engine/strategies/{selected-strategy}.md")
    的优先级执行；spec、任务、计划与摘要均为参考材料，冲突时按当前授权更新材料，需要新决定时报告具体字段
 10. `resolve` 返回 `INCOMPLETE_TRANSACTION` 时，只能按当前 session 的 state/binding CAS 调用
     `recover`，不得删除 marker 或继续其他 mutation
-11. 计划包含执行模式选择时，写代码前必须让用户明确选择
+11. 默认由主会话实施，必要的新方案审批保留，已有相同方案批准复用；独立委派按实际收益和用户要求安排，执行者选择无需另设强制审批
+12. 完整功能阶段实施完成后按 `phase-guide.md § 9` 集中验收，复用候选、输入、工具链、参数、配置和覆盖仍有效的证据，修复后只复验影响项；独立检查继续完成，失败与未完成分别保留
+13. 只读规划由主会话直接检索，Agent 名称或研究角色保持真实权限与 session 绑定检查；Workflow 按宿主实际 schema 传递当前要求，返回后核对
+    authority

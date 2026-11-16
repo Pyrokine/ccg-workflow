@@ -174,6 +174,21 @@ describe('skill router Hook', () => {
       expect(source).toMatch(/用户明确请求|用户已将.*明确配置|user explicitly requests/i)
     }
   })
+
+  it('keeps planning and workflow guidance on actual host authority checks', () => {
+    for (const sourceFile of ['templates/engine/phase-guide.md', 'templates/commands/go.md']) {
+      const source = readFileSync(join(packageRoot, sourceFile), 'utf-8')
+      expect(source).toContain('Workflow')
+      expect(source).toContain('实际 schema')
+      expect(source).toMatch(/只读规划.*主会话/)
+      expect(source).toMatch(/角色.*权限.*绑定检查/)
+      expect(source).toContain('resumedTaskId')
+      expect(source).toContain('父任务')
+      expect(source).toContain('nextAction')
+      expect(source).toContain('gate')
+      expect(source).toContain('CAS')
+    }
+  })
 })
 
 describe('Codex shared task Hook', () => {

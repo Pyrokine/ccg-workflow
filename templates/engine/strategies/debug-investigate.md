@@ -1,144 +1,76 @@
 # Strategy: Debug Investigate — 深度调试
 
-> 适用于原因不明的复杂 bug，需要多模型并行诊断和交叉验证。
+适用于原因尚未明确的复杂错误，由主会话沿源码、错误栈和复现路径调查
 
 ## 适用条件
 
 - 复杂度 M 或以上
-- 错误原因不明确
-- 需要多角度诊断
+- 错误原因需要调查
+- 需要保留诊断、修复及验证证据
 
-## 前置加载
-
-```
-Read("~/.claude/.ccg/engine/model-router.md")
-```
-
----
+需要独立诊断或用户明确请求多模型时，再读取 `~/.claude/.ccg/engine/model-router.md`，按实际收益和授权委派
 
 ## 工作流状态机
 
-[phase-state:1-collect] 当前阶段：信息收集 📍 Next: 收集完错误信息后启动双模型诊断 [/phase-state:1-collect]
+`[phase-state:1-collect]` 当前阶段：信息收集 Next: 沿错误和源码调查 `[/phase-state:1-collect]`
 
-[phase-state:2-diagnose] 当前阶段：双模型并行诊断 Gate: 错误信息已收集 ✓ 📍
-Next: 双模型诊断返回后进入交叉验证 [/phase-state:2-diagnose]
+`[phase-state:2-diagnose]` 当前阶段：诊断 Gate: 错误信息已收集 Next: 取得可核实的诊断证据 `[/phase-state:2-diagnose]`
 
-[phase-state:3-validate] 当前阶段：交叉验证 Gate: 双模型诊断已返回 ✓ 📍
-Next: 假设排序后请用户确认修复方向 [/phase-state:3-validate]
+`[phase-state:3-validate]` 当前阶段：验证诊断 Gate: 已有诊断证据 Next: 核对修复方向和授权 `[/phase-state:3-validate]`
 
-[phase-state:4-confirm] 当前阶段：用户确认（HARD STOP）Gate: 假设已排序 ✓ 📍
-Next: 用户确认后进入修复 [/phase-state:4-confirm]
+`[phase-state:4-confirm]` 当前阶段：核对修复授权 Gate: 诊断已核实 Next:
+已授权且方案明确时直接修复，需要新决定时等待确认 `[/phase-state:4-confirm]`
 
-[phase-state:5-fix] 当前阶段：修复与验证 Gate: 用户已确认修复方向 ✓ 📍 Next: 修复完成后报告结果 [/phase-state:5-fix]
-
----
+`[phase-state:5-fix]` 当前阶段：修复与验证 Gate: 方案和授权明确 Next: 完成修复后集中验收 `[/phase-state:5-fix]`
 
 ## 阶段详情
 
-### Phase 1: 信息收集 [required]
+### Phase 1: 信息收集 `[required]`
 
-使用 `checkpoint` 更新为 `1-collect`，下一动作设为“收集错误信息”。把复现条件、错误消息和明确约束写入
-`requirements.md`，需要修改契约时调用 `update-requirements`。
+使用 `checkpoint` 记录 `1-collect`，将当前有效的复现条件、错误现象和约束通过 `update-requirements` 写入任务契约
 
-1. 收集错误上下文：
-    - 错误消息 / 堆栈跟踪
-    - 复现步骤（如果有）
-    - 最近的相关变更（`git log --oneline -10`）
-    - 环境信息（如相关）
+读取错误消息、堆栈、复现输入、相关环境和近期变更；按实际文件、函数和调用关系调查，复用已有有效证据
 
-2. 搜索相关代码（Grep/MCP）
-3. 读取可能相关的文件
+### Phase 2: 诊断 `[required]`
 
-### Phase 2: 双模型并行诊断 [required]
+主会话默认直接调查，比较源码行为与实际现象；必要时执行定向复现以区分候选原因
 
-**Gate check**: 错误信息已收集
+独立诊断有明确收益或用户指定协作时，按 `phase-guide.md § 6` 限定问题、文件范围、预算和停止条件，再使用模型路由
 
-**并行调用**（`run_in_background: true`）：
+外部结果成功或失败返回后，重新 `resolve` 并核对当前 requirements、精确 spec 和 revision；诊断与证据使用 `write-artifact` 写入
+`analysis.md`，记录 `2-diagnose`
 
-- **backend 模型**：debugger 角色
-  ```
-  <TASK>
-  需求：诊断以下问题
-  上下文：[错误信息、堆栈、相关代码]
-  </TASK>
-  OUTPUT: 诊断假设（按可能性排序，每个假设含：根因分析、证据、修复建议）
-  ```
-- **frontend 模型**：debugger 角色（相同格式）
+### Phase 3: 验证诊断 `[required]`
 
-等待双模型返回。返回后重新 `resolve`，确认 active task 和 revision 未变化。将诊断证据与假设使用 `write-artifact` 写入
-`analysis.md`，再用 `checkpoint` 更新为 `2-diagnose`，下一动作设为“交叉验证诊断假设”。
+1. 回到当前源码、输入或日志验证每个诊断，记录支持证据、反例和仍未解决的问题
+2. 对候选修复比较行为、接口、数据及权限影响，模型之间的共识仍需实际证据
+3. 更新 `analysis.md`，使用 `checkpoint` 记录 `3-validate`
 
-### Phase 3: 交叉验证
+### Phase 4: 核对修复授权 `[required]`
 
-**Gate check**: 双模型诊断已返回
+证据明确、修复方向唯一且属于已有授权时，记录依据，将 Gate 保持为 `null`，直接进入 `5-fix`
 
-1. 对比两个模型的诊断结果
-2. 找出共识点（两个模型都指出的问题 → 高可信度）
-3. 找出分歧点（只有一个模型指出 → 需要验证）
-4. 综合排序所有假设：
+存在授权缺口、高风险操作或会改变结果的未决选择时，展示具体方案与影响，使用 `checkpoint` 记录 `4-confirm`，设置
+`gate: user_approval_required` 并等待用户决定（HARD STOP）
 
-```
-🔍 诊断结果
+用户确认后记录所选方案并清除 Gate；已有相同方案的批准直接复用
 
-### 高可信度假设（双模型共识）
-1. [假设] — [证据]
-   修复方案: [具体方案]
+### Phase 5: 修复与集中验证
 
-### 待验证假设（单模型提出）
-2. [假设] — [来源模型] — [证据]
-   修复方案: [具体方案]
+1. 应用证据支持的修复，搜索并处理当前范围内同类问题
+2. 保留复现所需的定向检查，修复完整功能后按 `phase-guide.md § 9` 集中验收
+3. 复用候选、输入、工具链、参数、配置和覆盖仍适用的结果，修复后只复验影响项
+4. 独立检查继续完成，失败、超时和未完成状态分别保留
+5. 修复无效时检查实际错误，调整有证据支持的方向；需要恢复时只恢复本次已识别的变更并保留其他工作，需要新决定时返回 Phase 4
+6. 报告已确认的原因、功能变化及实际验证结果
 
-### 已排除
-- [假设] — [排除理由]
-```
+## Spec Evolution 与完成
 
-完成假设排序后，更新 `analysis.md` 并使用 `checkpoint` 记录 `3-validate`，下一动作设为“等待用户选择修复方向”。
+按 `phase-guide.md § 7` 处理规范演进；验收标准满足且 Gate 为 `null` 后调用 `finish`，有 `resumedTaskId` 时按 § 10
+重新读取并继续父任务
 
-### Phase 4: 用户确认 [required · HARD STOP]
+## 执行约束
 
-**Gate check**: 假设已排序
-
-展示诊断结果，请用户选择修复方向：
-
-- 按假设 1 修复
-- 按假设 2 修复
-- 需要更多调查
-- 其他方向
-
-使用 `checkpoint` 更新为 `4-confirm`，`gate` 设为 `user_approval_required`，下一动作设为“等待用户确认修复方向”。
-
-**必须等待用户明确确认**，不可自动选择。
-
-用户确认后，更新 `analysis.md` 记录选定假设，再用 `checkpoint` 将 `gate` 设为 `null`，阶段更新为 `5-fix`。
-
-### Phase 5: 修复与验证
-
-**Gate check**: 用户已确认
-
-1. 按确认的方向应用修复
-2. 运行测试验证
-3. 如果修复无效 → 回退，尝试下一个假设，或返回 Phase 4 重新确认
-4. 输出结果：
-   ```
-   ✅ 调试完成
-     根因: [确认的根因]
-     修复: [应用的修复]
-     验证: [测试结果]
-     📍 Next: /ccg commit 提交修复
-   ```
-
-#### Spec Evolution 与完成
-
-按 `phase-guide.md § 7` 检查根因和修复是否需要更新项目已有的 tracked 文档或 OpenSpec，并用 `set-spec-evolution`
-记录结果。
-
-验证通过且 Gate 为 `null` 后，用 `finish` 标记任务为 `completed`。任务目录保持原路径，不移动、不提交 `.ccg/`。
-
----
-
-## 铁律
-
-- **Phase 4 是 HARD STOP** — 不可自动决定修复方向
-- **双模型诊断必须并行** — 独立诊断才有交叉验证价值
-- **修复前必须有诊断** — 不可跳过 Phase 2-3 直接改代码
-- **修复无效时必须回退** — 不可在错误方向上继续深入
+- 诊断以当前源码、输入和实际输出为依据
+- 已授权的明确修复连续执行，需要新授权或方案决定时等待确认
+- 委派按实际收益安排，默认由主会话调查和实施

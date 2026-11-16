@@ -16,7 +16,7 @@ description: '管理 Git Worktree，并隔离 worktree 运行态与 session 任�
 ## 子命令
 
 | 命令                  | 说明                                             |
-|-----------------------|--------------------------------------------------|
+| --------------------- | ------------------------------------------------ |
 | `add <name>`          | 创建新 worktree                                  |
 | `list`                | 列出 worktree、分支和当前 session 的任务状态摘要 |
 | `remove <name\|path>` | 删除指定 worktree                                |
@@ -26,7 +26,7 @@ description: '管理 Git Worktree，并隔离 worktree 运行态与 session 任�
 ## 选项
 
 | 选项              | 说明                           |
-|-------------------|--------------------------------|
+| ----------------- | ------------------------------ |
 | `-b <branch>`     | 创建新分支                     |
 | `-o, --open`      | 创建后用 IDE 打开              |
 | `--from <source>` | 指定迁移源 worktree            |
@@ -70,20 +70,33 @@ parent-directory/
 task 默认只由一个 session 认领。不同 session 不会自动注入彼此的任务正文；可能并发改写同一产品文件的独立任务仍应放在不同
 worktree。
 
+## 核对锁定状态
+
+列出、删除或清理 worktree 前，同时读取 Git 列表和实际锁文件：
+
+1. 执行 `git rev-parse --git-common-dir` 取得共享 Git 管理目录，相对路径按命令执行目录解析
+2. 读取管理目录下每个 `worktrees/<id>/gitdir`，将其指向的 `.git` 文件映射到对应
+   worktree；相对指针按所在管理条目目录解析，使用映射关系识别目标，不根据分支名或 worktree 目录名推断 `<id>`
+3. 直接检查对应管理条目中的 `locked` 文件，存在即显示锁定，空文件也表示锁定；确认文件不存在时显示未锁定，有正文时显示锁原因，即使
+   porcelain 未报告锁定也保留该状态
+4. 锁文件或映射读取失败时显示“锁状态未验证”和具体错误，保留目标及管理条目，停止受影响的删除或清理操作
+5. 列表、dry-run 和状态读取保持只读；旧 agent 名称或锁内进程已退出不触发自动解锁，用户明确授权后才执行
+   `git worktree unlock <path>`，再按删除或清理流程处理
+
 ## list
 
-1. 执行 `git worktree list --porcelain`
+1. 执行 `git worktree list --porcelain`，按“核对锁定状态”读取实际锁文件后合并展示
 2. 要求当前 `CCG_SESSION_KEY` 有效；对每个可访问 worktree 调用：
    ```bash
    node ~/.claude/hooks/ccg/task-state.js resolve --root "<worktree>" --session-key "$CCG_SESSION_KEY"
    ```
 3. 显示路径、分支、HEAD、锁定状态和当前 session 在该 worktree 的以下任务状态之一：
-    - `in_progress: <task-id>@<revision>`
-    - `selection-required`
-    - `migration-required`
-    - `recovery-required`
-    - `invalid: <code>`
-    - `none`
+   - `in_progress: <task-id>@<revision>`
+   - `selection-required`
+   - `migration-required`
+   - `recovery-required`
+   - `invalid: <code>`
+   - `none`
 4. `selection-required` 只展示候选元数据与 `claimed` 状态，不展示其他 session key 或任务正文
 5. 不按分支名、目录名或修改时间推断任务
 
@@ -103,7 +116,7 @@ worktree。
 
 ## remove
 
-1. 解析并展示目标 worktree、分支和 `git status --short`
+1. 解析并展示目标 worktree、分支和 `git status --short`，按“核对锁定状态”显示实际锁文件状态与原因
 2. 使用当前 session key 调用目标 task controller `resolve`，并读取 session-neutral 的 open task 与 binding 数量
 3. 存在未提交改动、任何 open task、任何 session
    binding、待迁移数据、恢复状态或损坏状态时，说明会丢失的本地内容并等待明确确认
@@ -112,7 +125,8 @@ worktree。
 
 ## prune
 
-先执行 `git worktree prune --dry-run --verbose` 展示候选项。用户确认后再执行 `git worktree prune --verbose`。
+按“核对锁定状态”读取管理条目，执行 `git worktree prune --dry-run --verbose` 展示候选项与锁状态，保留锁定条目；用户确认后再执行
+`git worktree prune --verbose`，需要解锁的目标先取得明确授权
 
 ## 示例
 

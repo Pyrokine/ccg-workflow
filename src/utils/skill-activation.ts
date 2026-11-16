@@ -5,8 +5,11 @@ import { plainDirectory, statMaybe } from './skill-manager-files'
 
 const START = '<!-- CCG_NATIVE_SKILLS_START -->'
 const END = '<!-- CCG_NATIVE_SKILLS_END -->'
-const DATA_LINE =
-  /^(?<prefix>\s*const routing = JSON\.parse\()(?<config>"(?:\\.|[^"\\])*")(?<suffix>(?:\.replace\([^\r\n]*\))?\);?[^\S\r\n]*)$/gm
+const DATA_LINE = new RegExp(
+  String.raw`^(?<prefix>\s*const routing = JSON\.parse\()(?<config>"(?:\\.|[^"\\])*")` +
+    String.raw`(?<suffix>(?:\.replace\([^\r\n]*\))?\);?[^\S\r\n]*)$`,
+  'gm'
+)
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 
 /** The block qualifies obsolete legacy instructions without discarding user rules. */
@@ -28,8 +31,26 @@ export function generateNativeSkillRules(names: string[], installDir: string): s
     'Previous CCG skill lists in this file are superseded by this selection. ' +
       'Preserve other project and user instructions.',
     'Load a selected skill on demand and use the canonical resource directory stated in its instructions.',
-    'Run an automatic quality gate only if that skill is available. ' +
-      'Otherwise use project test, build and review commands.',
+    'Native mode keeps the same gate triggers: a new source module needs gen-docs at creation, ' +
+      'then verify-module and verify-security after development; code changes exceeding 30 lines need ' +
+      'verify-change and verify-quality; authentication, authorization, encryption, input validation, or ' +
+      'secrets management changes need verify-security; ' +
+      'refactoring needs verify-change, verify-quality, and verify-security.',
+    'After the complete feature stage, merge applicable triggers into one acceptance pass. ' +
+      'Keep targeted checks needed to reproduce a problem or validate intermediate behavior.',
+    'Reuse results while the candidate, inputs, toolchain, arguments, configuration, and coverage remain applicable. ' +
+      'After a repair, rerun only affected checks and retain valid results for unaffected areas.',
+    'Continue independent checks when another check fails; preserve failed, unavailable, timed-out, unsupported, ' +
+      'and incomplete results. Confirm findings against current source and callers, fix confirmed issues within ' +
+      'the authorized repair scope, and finish when acceptance criteria are met. ' +
+      'Critical or High findings require resolution ' +
+      'before delivery. Read-only reviews report findings without edits.',
+    'Run an automatic quality gate only if that skill is available in the current selection. ' +
+      'Otherwise use equivalent project test, build and review commands; report unavailable checks and any remaining ' +
+      'coverage as unverified. Record the command, scope, result, and incomplete coverage in the existing task record.',
+    'The main session is the default executor. Delegate only when independent work has a clear benefit, ' +
+      'isolation is needed, a high-risk finding needs independent verification, or the user requests collaboration. ' +
+      'File count alone does not require delegation.',
     '',
     ...names.map((name) => `- /ccg-${name}: ${join(installDir, 'skills', `ccg-${name}`, 'SKILL.md')}`),
     ...(names.length ? [] : ['No optional CCG native skills are selected.']),

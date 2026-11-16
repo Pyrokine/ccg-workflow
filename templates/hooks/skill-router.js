@@ -43,7 +43,11 @@ try {
   // Match the request outside delimited reference material; matches only suggest routes.
   const routingText = userMessage
     .replace(
-      /<(?<tag>agent-message|task-notification|cross-session-message|ccg-task-context|system-reminder)\b[^>]*>[\s\S]*?<\/\k<tag>\s*>/gi,
+      new RegExp(
+        '<(?<tag>agent-message|task-notification|cross-session-message|ccg-task-context|system-reminder)' +
+          String.raw`\b[^>]*>[\s\S]*?<\/\k<tag>\s*>`,
+        'gi'
+      ),
       ''
     )
     .replace(/^ {0,3}(?<fence>`{3,}|~{3,})[^\n]*\n[\s\S]*?^ {0,3}\k<fence>[^\n]*$/gm, '')

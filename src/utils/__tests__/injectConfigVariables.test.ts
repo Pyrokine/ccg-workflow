@@ -400,6 +400,9 @@ codeagent-wrapper --backend claude`,
       expect(result).toContain('This section overrides every later primary-route `codeagent-wrapper` example')
       expect(result).toContain('CCG_ROLE: research')
       expect(result).toContain('CCG_ROLE: implement')
+      expect(result).toContain('Handle routine analysis, planning, implementation, and review in the main session')
+      expect(result).toContain('independent work with a clear benefit or an explicit user request')
+      expect(result).not.toContain('Use independent Claude Code Agent or Agent Teams work instead')
     }
   })
 })

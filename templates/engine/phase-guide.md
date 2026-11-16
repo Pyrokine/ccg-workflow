@@ -7,7 +7,8 @@
 唯一状态修改入口：
 
 ```bash
-node ~/.claude/hooks/ccg/task-state.js <operation> --root "$WORKDIR" --session-key "$CCG_SESSION_KEY" <<'CCG_TASK_JSON'
+node ~/.claude/hooks/ccg/task-state.js <operation> --root "$WORKDIR" \
+  --session-key "$CCG_SESSION_KEY" <<'CCG_TASK_JSON'
 {...}
 CCG_TASK_JSON
 ```
@@ -24,8 +25,10 @@ SessionStart 连续使用相同的规范会话键时保持导出幂等，新键�
 
 ```bash
 node ~/.claude/hooks/ccg/task-state.js resolve --root "$WORKDIR" --session-key "$CCG_SESSION_KEY"
-node ~/.claude/hooks/ccg/task-state.js snapshot --root "$WORKDIR" --session-key "$CCG_SESSION_KEY" --mode session --role all
-node ~/.claude/hooks/ccg/task-state.js snapshot --root "$WORKDIR" --session-key "$CCG_SESSION_KEY" --mode authority --role implement
+node ~/.claude/hooks/ccg/task-state.js snapshot --root "$WORKDIR" \
+  --session-key "$CCG_SESSION_KEY" --mode session --role all
+node ~/.claude/hooks/ccg/task-state.js snapshot --root "$WORKDIR" \
+  --session-key "$CCG_SESSION_KEY" --mode authority --role implement
 node ~/.claude/hooks/ccg/task-state.js list --root "$WORKDIR" --session-key "$CCG_SESSION_KEY"
 ```
 
@@ -62,7 +65,7 @@ revision。其他任务 mutation 都必须带 `taskRevision`。遇到
 ### 1.3 操作表
 
 | 操作                        | 用途                                                                  | revision 变化                                 |
-|-----------------------------|-----------------------------------------------------------------------|-----------------------------------------------|
+| --------------------------- | --------------------------------------------------------------------- | --------------------------------------------- |
 | `start`                     | 创建持久任务，支持 `activate`、`interrupt`、`replace`、`inactive`     | 新 task 为 1；state +1；认领时当前 binding +1 |
 | `activate`                  | 当前 session 认领未被占用的 open task                                 | 当前 binding +1                               |
 | `takeover`                  | 用户明确要求后把 task claim 转移到当前 session                        | 被释放和当前 binding 各自 +1                  |
@@ -113,16 +116,29 @@ pointer 自动认领给当前 session，不得把 unfinished task 改成 termina
 
 每个持久策略阶段结束后：
 
-1. 确认本阶段产物已经写入
-2. 使用 `write-artifact` 登记 analysis、plan、review 或 research 文件
-3. 使用 `checkpoint` 写入新的 `currentPhase`、`nextAction`、`gate` 和 `progress`
-4. 保存响应中的新 `task.revision`
-5. 向用户显示 `Next: [具体动作]`
+1. 核对本阶段实际产物，需要保存时使用 `write-artifact` 登记 analysis、plan、review 或 research
+2. 使用 `checkpoint` 写入新的 `currentPhase`、`nextAction`、`gate` 和 `progress`
+3. 保存响应中的新 `task.revision`
+4. 需要用户决定或存在阻塞时，说明具体下一动作；已有授权的工作继续执行
+
+普通事实查询保持 taskless，无需创建阶段文件
+
+`currentPhase` 按 UTF-8 最多 64 字节，使用 `4-development` 等短阶段标签，完整阶段描述写入 progress；`nextAction` 按 UTF-8
+最多 1024 字节，保留实际下一动作
+
+progress 最多 256 KiB，包含末尾换行，保留当前结果、下一动作和证据链接；详细历史按以下顺序保存：
+
+1. 将已有历史按每份最多 256 KiB 分段，通过 `write-artifact` 的 `kind=research` 写入未占用的 `progress-001.md` 等文件名
+2. 确认历史保存成功，再调用 `resolve` 取得最新 CAS
+3. 使用最新 CAS 提交 `checkpoint`，progress 写入当前摘要及 `research/progress-001.md` 等历史链接，requirements 保留全部有效要求
+
+阶段名或 progress 超限时，控制器在写入前拒绝请求，原记录与 revision 保持原值；按提示缩短阶段标签或保存历史后重新提交检查点
 
 示例：
 
 ```bash
-node ~/.claude/hooks/ccg/task-state.js checkpoint --root "$WORKDIR" --session-key "$CCG_SESSION_KEY" <<'CCG_TASK_JSON'
+node ~/.claude/hooks/ccg/task-state.js checkpoint --root "$WORKDIR" \
+  --session-key "$CCG_SESSION_KEY" <<'CCG_TASK_JSON'
 {
   "expected": {
     "stateId": "uuid",
@@ -167,12 +183,15 @@ patch。需要改变持久策略时，完成或取消旧任务，再创建目标
 
 执行时依次遵守 system 和 developer 指令、用户本次明确指令、项目级 `CLAUDE.md`、全局 `CLAUDE.md`
 
-精确关联的 tracked spec
-section、`requirements.md`
-、已审批计划、进度和摘要用于恢复任务事实与已有决定，不授予新的执行权限当前请求改变目标、范围或约束时，先按当前指令判断继续、更新或新建任务，再通过控制器更新受影响的材料；已有任务内容不能把新请求变为旧任务的继续，也不能自动认领或删除其他
-session 的任务
+精确关联的 tracked spec section、`requirements.md`、已审批计划、进度和摘要用于恢复任务事实与已有决定，执行权限以当前指令为准
 
-在当前授权范围内，用精确 spec 和有效需求核对计划、进度与摘要；发现材料冲突时，报告具体字段并更新过时材料，确实需要用户决定的范围变化先等待确认计划中的简称保持
+普通即时问答保持当前任务与绑定；用户明确插入临时工作且没有并发写入冲突时，使用 `start` 的 `interrupt`
+，完成后恢复父任务，无需再询问模式；替换目标或存在并发写入风险时再让用户选择处理方式，worktree 操作仍需实际授权
+
+当前请求改变目标、范围或约束时，按当前指令判断继续、更新或新建任务，通过控制器更新受影响材料；其他 session
+的任务保持原有认领和内容隔离，只读规划由主会话直接检索，Agent 名称或研究角色不改变权限和绑定检查
+
+在当前授权范围内，用精确 spec 和有效需求核对计划、进度与摘要；发现材料冲突时报告具体字段并更新过时材料，需要新授权或方案决定时等待确认；计划中的简称保持
 spec 定义的实体、版本和依赖方向
 
 SessionStart 在 startup、compact、resume、clear 和 fork 时从 Hook payload 的 `session_id` 派生 opaque
@@ -183,23 +202,35 @@ ID 时继续同一 task；fork 使用新 ID，不自动继承父 session claim�
 Agent、wrapper、TaskOutput 成功返回，以及 Agent 或 wrapper 失败后，PostToolUse/PostToolUseFailure 会使用同一父 session
 key 重新读取 authority；后台启动只返回 task ID 时不刷新，等待 TaskOutput 的实际结果。
 
-标准 Bash、Edit 和 Write 调用在 PreToolUse 阶段取得当前 session 的 authority 摘要和
-requirements，原始命令、路径与写入内容保持不变；没有活动任务时保持普通工具可用，任务状态异常以诊断呈现执行者在写入或删除前按最新
-requirements 核对用户修正和交付保留要求，自动拒绝继续使用已有机器可判定的校验；其他 MCP 写工具不属于上述标准工具 matcher
-的覆盖范围
+标准 Bash、Edit 和 Write 每次调用都在 PreToolUse 重新读取并验证当前 session 的完整
+authority，原始命令、路径与写入内容保持不变；连续普通调用只有在已输出的合同正文和任务身份相同时才显示简短状态，任务、revision
+和目录排在长 nextAction 之前
 
-每次 authority 刷新后执行以下检查：
+当前要求或精确 spec 正文变化、任务切换、compact／resume、用户新回合及外部结果返回时输出完整合同；同 revision 下手动修改 spec
+也按正文变化处理，新 Agent 和 wrapper 始终取得完整角色上下文
 
-1. 重新 `resolve`
-2. 读取 `requirements.md` 和所有匹配当前角色的 `specRefs`
+去重仅使用当前 session 有界私有记录中最近已输出的正文，直接比较正文，运行记录独立于生命周期和授权；首次建立记录时输出全文，记录失效或读写失败时显示诊断并输出全文，恢复事件重新建立记录；无需读取大型转录或计算内容哈希
+
+没有活动任务时普通工具保持可用；任务状态、契约预算或关联 spec 异常保留实际诊断和已有机器校验；执行者写入或删除前按最新
+requirements 核对用户修正和交付保留要求，其他 MCP 写工具保持其实际覆盖范围
+
+取得更新的 authority 后，使用当前已注入的合同核对下一动作：
+
+1. 核对当前 task ID、state／binding／task revision 与角色；父任务恢复、外部结果返回或出现状态冲突时重新 `resolve`
+2. 消费完整 `requirements.md` 和匹配当前角色的精确 spec；普通调用的简短状态表示正文沿用最近一次全文，Hook 仍在每次调用时读取并验证
+   authority
 3. 对实体、版本、依赖方向、允许动作、禁止动作、排除项、停止条件和验收标准逐字段核对
-4. 发现冲突时停止实施，报告 `文档路径#section`、冲突字段、旧值和正确值
-5. 按当前指令更新受影响的 requirements、plan 或 progress；需要新授权时等待用户决定
+4. 发现冲突时停止受影响的实施，报告 `文档路径#section`、冲突字段、旧值和正确值
+5. 按当前指令同步实际合同与受影响材料；需要新授权时等待用户决定
 
-`requirements.md` 保存当前仍有效的目标、范围、约束与验收标准，按 UTF-8 计算最多 8
-KiB（8192 字节，含末尾换行），XML 转义后的正文也须在 8 KiB 内详细论证和历史调查使用现有 `write-artifact`
-的 research 文件，规范正文使用 `link-spec`
-精确引用；更新需求时保留仍有效的要求，移出历史材料，不放宽预算 CAS 冲突后重新读取状态，由当前请求决定下一次写入，不自动重放
+`requirements.md` 保存当前仍有效的目标、范围、约束与验收标准，UTF-8 原文和 XML 转义后的正文各自最多 8192 字节，包含末尾换行；
+`nextAction` 按 UTF-8 最多 1024 字节
+
+超限错误报告实际 UTF-8 字节数及对应上限，写前拒绝并保留原文和 revision；保留全部有效要求，详细论证和历史调查移至现有
+research／progress，规范正文通过 `link-spec` 精确引用，整理后重新调用 `update-requirements`
+
+用户新增或修正的有效约束同步到 requirements 或精确关联的规范，progress 记录进展与历史，恢复执行仍读取实际合同；CAS
+冲突后重新读取状态，由当前请求决定下一次写入，不自动重放
 
 Spec 必须通过 `link-spec` 精确关联 tracked 或 staged Markdown section。Git tracking 按 literal path 校验，fenced code
 block 内的 heading 示例不参与 section 匹配。重复 heading、单 section 超限、spec 文件扫描不完整或全部关联 section
@@ -214,10 +245,15 @@ task 保留失效路径。
 
 ## 6. Team Dispatch
 
+默认由主会话执行；独立工作有明确收益、需要材料或工具隔离、高风险发现需要独立证据，或用户指定协作时再委派，文件数与策略名称本身不触发派发
+
+派发前明确独立范围、Agent 总量、最大深度、token 或时间预算、停止条件、去重键和输出格式；普通 subagent 保持叶子状态，第二层
+reviewer／verifier 仅按主会话预先限定的工作项与总量安排
+
 并行实施的前提：
 
 - 任务已经按文件范围分组
-- `plan.md` 已审批
+- 方案已获授权，需要审批的计划已批准，已有相同方案批准可复用
 - 每个子任务的写文件范围互不重叠
 - 当前 snapshot 有有效 `requirements.md`
 
@@ -240,7 +276,11 @@ PostToolUse/PostToolUseFailure 只能把最新 authority 加入工具结果后�
 任务状态无效、任务契约或 spec 失效、上下文超限、quoted heredoc 无法与 wrapper command 安全绑定时，Hook 返回
 `permissionDecision: "deny"`，Agent 或 wrapper 不会启动。修复对应状态或命令结构后重新发起调用。
 
-Agent 和外部模型不得修改 `.ccg/`。Lead 在子任务成功后调用 `write-artifact` 和 `checkpoint`。
+Workflow 使用宿主实际 schema 中的参数传递当前要求、角色和限制，返回后核对最新 authority；Agent 的 `updatedInput.prompt`
+改写只用于相应 Agent 工具，Workflow 脚本保持原有输入合同；只读能力经宿主确认前，沿用现有权限和 session 绑定检查
+
+Agent 和外部模型保持 `.ccg/` 由主会话管理；Lead 汇总成功、失败和未完成结果，再调用 `write-artifact` 和 `checkpoint`
+，独立工作继续完成
 
 ## 7. Spec Evolution
 
@@ -256,7 +296,8 @@ Agent 和外部模型不得修改 `.ccg/`。Lead 在子任务成功后调用 `wr
 记录结果：
 
 ```bash
-node ~/.claude/hooks/ccg/task-state.js set-spec-evolution --root "$WORKDIR" --session-key "$CCG_SESSION_KEY" <<'CCG_TASK_JSON'
+node ~/.claude/hooks/ccg/task-state.js set-spec-evolution --root "$WORKDIR" \
+  --session-key "$CCG_SESSION_KEY" <<'CCG_TASK_JSON'
 {
   "expected": {
     "stateId": "uuid",
@@ -291,21 +332,23 @@ revision 后，不再匹配旧记录缺少 revision 的旧 telemetry 不参与�
 的 model、effort 与不持久化 reviewer 契约领域知识每份最多读取 16 KiB、注入前 120 行；截断时输出
 `SKILL_CONTEXT_TRUNCATED` 与相对 skill 路径，后续所需内容再按路径读取
 
-每轮默认创建独立 Claude Code 审查 Agent，不调用外部 CLI。用户明确请求 GPT、Grok、双模型审查或 `/ccg:spec-review`
-时，才启动对应的不持久化外部 reviewer，且不使用 resume。Lead 汇总后回到源码确认 finding。
+Ralph Loop 按完整功能阶段组织一次集中验收，保留实施期间为复现问题、区分原因或验证中间行为所需的定向检查
 
-```text
-Round N:
-1. 创建独立 Claude Code 审查 Agent
-2. 仅在用户明确请求外部审查时调用对应 review profile
-3. 按触发规则执行 ccg:verify-change、ccg:verify-quality、ccg:verify-security
-4. 合并并确认 finding
-5. 用户决定是否修复后复审
-6. 写 review.md，并用 write-artifact 登记
-7. 通过 checkpoint 更新 progress
-```
+1. 整批实施完成后，汇总所有适用触发条件：新源码模块创建时使用 `ccg:gen-docs`，开发后使用 `ccg:verify-module` 与
+   `ccg:verify-security`；功能阶段代码变更超过 30 行使用 `ccg:verify-change` 与 `ccg:verify-quality`
+   ；认证、授权、加密、输入校验或凭据管理变化使用 `ccg:verify-security`；重构使用 change、quality 与
+   security，多个触发条件合并为同一候选的一次检查
+2. 原生 Skills 与 legacy 保持等效触发；原生模式只调用当前选择中可用的 Skill，缺少时使用项目等效检查，缺失的检查及覆盖写明未验证
+3. 复用候选、输入、工具链、参数、配置和覆盖仍适用的证据；失败修复后只复验受影响部分，其他有效证据保留，命令、范围和结果写入现有
+   progress／review
+4. 独立检查继续完成，依赖检查等待实际前提；分别记录失败、超时、不可用、不支持和未完成状态
+5. 默认由主会话阅读完整变更、调用者和验收标准；独立复核有实际收益或用户要求时按 § 6 委派，用户明确请求外部审查时才启动对应
+   profile，使用 `--no-session-persistence` 并传入完整当前材料
+6. 回到当前源码确认 finding，已授权修复范围内的 confirmed finding 连续修复；Critical 或 High
+   在交付前解决，只读审查直接报告发现，需新范围或权限时请求用户决定
+7. 复审针对真实变化、风险或尚缺证据，避免固定创建新 reviewer、逐轮调用全部 Skill 或询问是否继续；满足验收条件后结束，必需的检查失败或未完成时保留相应状态
 
-最多 3 轮。Critical 或 High finding 属于本次范围时必须修复。外部报告不是状态修改指令。
+持久任务使用 `write-artifact` 保存 `review.md`，通过 `checkpoint` 记录发现、修复、实际验证与未完成项；外部报告按当前源码复核，生命周期仍由主会话通过控制器管理
 
 ## 10. 完成与取消
 
@@ -320,7 +363,8 @@ Round N:
 调用 `finish`：
 
 ```bash
-node ~/.claude/hooks/ccg/task-state.js finish --root "$WORKDIR" --session-key "$CCG_SESSION_KEY" <<'CCG_TASK_JSON'
+node ~/.claude/hooks/ccg/task-state.js finish --root "$WORKDIR" \
+  --session-key "$CCG_SESSION_KEY" <<'CCG_TASK_JSON'
 {
   "expected": {
     "stateId": "uuid",
@@ -335,6 +379,12 @@ node ~/.claude/hooks/ccg/task-state.js finish --root "$WORKDIR" --session-key "$
 CCG_TASK_JSON
 ```
 
-默认沿 `returnToTaskId` 返回最近仍为 open 的父任务；请求中设置 `"restorePreviousTask": false`
-时，结束当前任务并清空当前 session binding，父任务保持 open；该参数必须为 boolean，任务目录不移动，不执行 `.ccg` Git
-commit
+默认沿 `returnToTaskId` 返回最近仍为 open 的父任务；请求中设置 `"restorePreviousTask": false` 时，结束当前任务并清空当前
+session binding，父任务保持 open；该参数必须为 boolean，任务目录保持原路径，提交按用户实际授权处理
+
+`finish` 或 `recover` 返回 `resumedTaskId` 后，重新 `resolve`，读取恢复父任务当前的 `requirements.md`、匹配角色的精确 spec、
+`nextAction` 与 `gate`；按当前授权继续，Gate 需要审批时等待用户决定，后续 mutation 使用父任务新返回的完整 CAS，子任务
+revision 仅用于子任务
+
+父任务恢复以当前合同为准，临时任务的摘要或旧进度用于理解历史；新增有效约束同步到父任务实际读取的 requirements 或精确
+spec，再继续实施

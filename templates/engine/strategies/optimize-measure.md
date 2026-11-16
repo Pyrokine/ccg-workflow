@@ -18,40 +18,40 @@ Read("~/.claude/.ccg/engine/model-router.md")
 
 ## 工作流状态机
 
-[phase-state:1-baseline]
+`[phase-state:1-baseline]`
 当前阶段：性能基线度量
 📍 Next: 基线建立后进入分析
-[/phase-state:1-baseline]
+`[/phase-state:1-baseline]`
 
-[phase-state:2-analyze]
+`[phase-state:2-analyze]`
 当前阶段：瓶颈分析
 Gate: 基线已建立 ✓
 📍 Next: 瓶颈识别后进入优化
-[/phase-state:2-analyze]
+`[/phase-state:2-analyze]`
 
-[phase-state:3-optimize]
+`[phase-state:3-optimize]`
 当前阶段：针对性优化
 Gate: 瓶颈已识别 ✓
 📍 Next: 优化完成后重新度量
-[/phase-state:3-optimize]
+`[/phase-state:3-optimize]`
 
-[phase-state:4-measure]
+`[phase-state:4-measure]`
 当前阶段：优化后度量
 Gate: 优化已应用 ✓
 📍 Next: 对比基线验证效果
-[/phase-state:4-measure]
+`[/phase-state:4-measure]`
 
 ---
 
 ## 阶段详情
 
-### Phase 1: 性能基线 [required]
+### Phase 1: 性能基线 `[required]`
 
 1. 确定度量指标：
-    - 响应时间？吞吐量？内存使用？包大小？加载时间？
-2. 运行基线测试：
-    - `time` 命令 / benchmark / profiler
-    - 记录具体数值
+   - 响应时间？吞吐量？内存使用？包大小？加载时间？
+2. 复用同候选、输入、工具链、参数、配置和覆盖仍适用的基线，缺少时执行定向基线测试：
+   - `time` 命令 / benchmark / profiler
+   - 记录具体数值
 3. 输出基线：
    ```
    📊 性能基线
@@ -65,8 +65,8 @@ Gate: 优化已应用 ✓
 
 1. 分析代码找出瓶颈
 2. 对于 M+ 复杂度，可选调用外部模型：
-    - backend 模型: optimizer 角色 — 服务端/算法优化建议
-    - frontend 模型: optimizer 角色 — 前端/加载优化建议
+   - backend 模型: optimizer 角色 — 服务端/算法优化建议
+   - frontend 模型: optimizer 角色 — 前端/加载优化建议
 3. 按影响大小排序瓶颈：
    ```
    🔍 瓶颈分析
@@ -84,7 +84,7 @@ Gate: 优化已应用 ✓
 3. 简要说明做了什么
 4. 如果涉及算法变更，确保正确性
 
-### Phase 4: 优化后度量 [required]
+### Phase 4: 优化后度量 `[required]`
 
 1. 使用与 Phase 1 **完全相同的方式**重新度量
 2. 对比基线：
@@ -98,7 +98,9 @@ Gate: 优化已应用 ✓
    ```
 3. 如果效果不明显 → 回退优化，尝试下一个瓶颈
 4. 用 `checkpoint` 记录 `4-measure` 和基线对比结果
-5. 按 `phase-guide.md § 7` 记录 Spec Evolution；任务达到用户目标后调用 `finish`，未达到时回到 Phase 2
+5. 同一功能阶段完成后按 `phase-guide.md § 9` 集中验收，复用有效证据，失败修复只复验影响项，独立检查继续完成并保留失败和未完成状态
+6. 按 `phase-guide.md § 7` 记录 Spec Evolution；任务达到用户目标后调用 `finish`，未达到时回到 Phase 2；有 `resumedTaskId`
+   时按 § 10 重新读取父任务当前契约、精确 spec、nextAction 和 Gate
 
 ---
 
