@@ -6,10 +6,18 @@ compatibility: node>=18
 user-invocable: true
 disable-model-invocation: false
 allowed-tools: Bash, Read, Grep
-argument-hint: <扫描路径> [--base ref]
+argument-hint: <扫描路径> [--python-file 文件] [--base ref]
 ---
 
 # 代码安全校验
+
+## 验收时机与证据复用
+
+按完整功能阶段汇总触发条件，整批实施完成后集中验收，同一候选的多个触发条件合并为一次检查；保留复现问题或确认中间行为所需的定向检查
+
+候选、输入、工具链、参数、配置和覆盖仍适用时复用结果，修复后只复验受影响部分；独立检查继续完成，失败、超时、不可用、不支持和未完成状态分别保留
+
+回到当前源码与调用者确认 finding，在已授权修复范围内连续处理；只读审查交付发现，需要新范围或权限时请求决定，验收条件满足后结束
 
 ## 执行扫描
 
@@ -19,6 +27,7 @@ argument-hint: <扫描路径> [--base ref]
 node /path/to/verify-security/scripts/security_scanner.js src --json
 node /path/to/verify-security/scripts/security_scanner.js src/main.ts src/components -v
 node /path/to/verify-security/scripts/security_scanner.js src --base HEAD~1 --exclude vendor
+node /path/to/verify-security/scripts/security_scanner.js BUILD_CONFIG src/native.cc --python-file BUILD_CONFIG --json
 ```
 
 支持单文件、目录和多个目标，目标相对当前工作目录解析，省略目标时扫描当前目录，重叠文件只扫描一次
@@ -31,10 +40,21 @@ node /path/to/verify-security/scripts/security_scanner.js src --base HEAD~1 --ex
 规则按源码后缀匹配，`.mjs`／`.cjs` 使用 JavaScript 规则，`.mts`／`.cts` 使用 TypeScript 规则；无后缀 Shell 文件按
 `sh`、`bash`、`dash`、`ksh` 或 `zsh` 的 shebang 识别，也支持 `/usr/bin/env` 和 `env -S`
 
+`--python-file <文件>` 为直接列入位置目标的一个普通文件启用 Python 安全模式，支持无后缀文件，并可与 C／C++
+等其他目标同批扫描；目录、仅包含在父目录目标中的文件、重复参数和缺值均返回未完成
+
+只有指定的精确路径采用 Python 规则，其他文件和默认目录扫描沿用原有类型识别；扫描读取源码及 Git
+基线内容，不执行指定文件，构建配置专用语义由项目另行检查
+
+JSON 的 `python_file` 给出选中的绝对路径，未指定时为 `null`；文本报告显示对应模式文件，当前内容及 Git 基线沿用这一选择，包括
+rename 前的文件名
+
 Rust 当前检查硬编码凭证、AWS Key、私钥及 `Command::new` 调用命令解释器的模式；Shell 当前检查硬编码凭证、AWS
 Key、私钥及含变量的 `eval`／`sh -c` 类调用，结果只代表这些模式的检查范围
 
-C／C++ 覆盖 `.c`、`.cc`、`.cpp`、`.cxx`、`.h`、`.hh`、`.hpp` 和 `.hxx`，检查硬编码凭证、动态 `system`／`popen`
+Perl 的 `.pl`／`.pm` 和 PowerShell 的 `.ps1` 检查硬编码凭证、AWS Key 与私钥，语言专有命令和数据流分析仍属未覆盖范围
+
+C／C++ 覆盖 `.c`、`.cc`、`.cpp`、`.cxx`、`.h`、`.hh`、`.hpp`、`.hxx`、`.cu`、`.cuh` 和 `.inc`，检查硬编码凭证、动态 `system`／`popen`
 调用、`gets`
 及字面格式中未限宽的 scanf 字符串转换，过滤注释、普通字符串与原始字符串中的调用示例；规则按单行模式识别，缓冲区容量与输入来源通过调用链复核
 
@@ -45,7 +65,7 @@ JSON 的 `supported_file_types`
 发现属于待复核的代码模式，结合调用链判断输入来源、已有校验和最终效果
 
 | 类别       | 检查模式                                                      | 严重度         |
-|------------|---------------------------------------------------------------|----------------|
+| ---------- | ------------------------------------------------------------- | -------------- |
 | 注入       | 动态 SQL、shell 调用、执行用户输入                            | Critical       |
 | 敏感信息   | 硬编码密码或 token、AWS Key、私钥                             | High／Critical |
 | XSS        | innerHTML、outerHTML、document.write、dangerouslySetInnerHTML | High／Medium   |
@@ -65,6 +85,9 @@ JSON 的 `supported_file_types`
 
 构造 `Path` 或比较 `readlink` 目标本身不作为文件访问，来自输入的 `open`、`Path(...).read_text()` 等文件操作继续报告
 
+Python 源码直接 `import gdb` 后，`gdb.execute` 按 GDB 调试接口处理；SQL 注入规则继续检查同一文件及同一行中的其他动态 SQL
+调用，其他安全规则照常检查
+
 复核安全发现时，沿调用链确认真实行为，并在项目已有设计或安全文档中记录威胁、决策、信任边界和接受的限制
 
 ## 新增与既有问题
@@ -81,13 +104,15 @@ blob，按规则、上下文和出现次数比较，支持行号移动与 Git �
 ## 报告与退出码
 
 | 退出码 | 结果                            | 处理                                                                     |
-|--------|---------------------------------|--------------------------------------------------------------------------|
+| ------ | ------------------------------- | ------------------------------------------------------------------------ |
 | 0      | 扫描完成，未命中 Critical／High | 继续复核 Medium／Low／Info                                               |
 | 1      | 扫描完成，命中 Critical／High   | 验证发现，修复范围内的真实问题                                           |
 | 2      | 扫描未完成                      | 处理缺失路径、读取失败、不支持的源码、零覆盖或显式基线错误，保留部分结果 |
 
 JSON 保留 `passed`、`files_scanned`、`counts`、`findings`，并提供
 `complete`、`requested_paths`、`coverage`、`scan_errors`、`baseline` 和 `origin_counts`
+
+`scan_path` 保留单个目标路径，多个目标显示为 `N 个目标`；完整清单保存在 `requested_paths`，JSON 优先展示状态、统计和发现
 
 `coverage[].eligible_files` 是候选文件数，`files_scanned`
 只统计成功读取并分析的文件；每个目标都必须覆盖受支持源码，未完成时 `complete` 和 `passed` 均为 `false`

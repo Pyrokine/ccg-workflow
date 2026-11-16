@@ -162,6 +162,105 @@ describe.each(distributions)('%s quality gates', (distribution) => {
 
   describe('analysis regressions', () => {
 
+    it.each(['pl', 'pm', 'ps1', 'inc'])('scans credentials in %s files without disclosing their value', (ext) => {
+      const root = fixture()
+      const source = write(root, `source.${ext}`, 'password = "synthetic-credential-12345"\n')
+      const result = run(distribution, 'security', [source], root)
+      expect(result.status).toBe(1)
+      expect(result.output.findings).toContainEqual(expect.objectContaining({ rule_id: 'HARDCODED_SECRET' }))
+      expect(result.stdout).not.toContain('synthetic-credential-12345')
+    })
+
+    it('distinguishes GDB debugger commands from dynamic SQL calls', () => {
+      const root = fixture()
+      const source = write(
+        root,
+        'debugger.py',
+        [
+          'import gdb',
+          "gdb.execute('hbreak *' + hex(address), to_string=True)",
+          "gdb.execute('condition 1 ' + condition, to_string=True)",
+          'gdb.execute(f"hbreak *{map_address}", to_string=True)',
+          'gdb . execute("hbreak *%s" % address, to_string=True)',
+          'gdb.execute("hbreak *{}".format(address), to_string=True)',
+          'gdb.execute("hbreak *" + address); gdb.execute("condition 1 " + condition)',
+          '',
+        ].join('\n')
+      )
+      const result = run(distribution, 'security', [source], root)
+      expect(result.status).toBe(0)
+      expect(result.output).toMatchObject({ complete: true, passed: true, files_scanned: 1 })
+      expect(result.output.findings).toEqual([])
+    })
+
+    it.each([
+      ['py', 'cursor.execute(f"SELECT * FROM records WHERE id = {value}")'],
+      ['py', 'connection.execute("SELECT * FROM records WHERE id = " + value)'],
+      ['py', 'session.execute("SELECT * FROM records WHERE id = %s" % value)'],
+      ['py', 'execute("SELECT * FROM records WHERE id = {}".format(value))'],
+      ['py', 'gdb.execute("SELECT * FROM records WHERE id = " + value)'],
+      ['py', '# import gdb\ngdb.execute("SELECT * FROM records WHERE id = " + value)'],
+      ['py', 'text = "import gdb"\ngdb.execute("SELECT * FROM records WHERE id = " + value)'],
+      ['py', 'import gdb; gdb.query("SELECT * FROM records WHERE id = " + value)'],
+      ['py', 'import gdb; gdb.raw("SELECT * FROM records WHERE id = " + value)'],
+      ['py', 'import gdb; gdb.Execute("SELECT * FROM records WHERE id = " + value)'],
+      ['py', 'import gdb; other.gdb.execute("SELECT * FROM records WHERE id = " + value)'],
+      ['py', 'import gdb; δgdb.execute("SELECT * FROM records WHERE id = " + value)'],
+      ['js', 'gdb.execute("SELECT * FROM records WHERE id = " + value)'],
+      ['ts', 'db.query("SELECT * FROM records WHERE id = " + value)'],
+      ['go', 'db.query("SELECT * FROM records WHERE id = " + value)'],
+      ['java', 'db.execute("SELECT * FROM records WHERE id = " + value)'],
+      ['php', 'query("SELECT * FROM records WHERE id = " + value)'],
+      [
+        'py',
+        'import gdb; gdb.execute("hbreak *" + address); cursor.execute("SELECT * FROM records WHERE id = " + value)',
+      ],
+      [
+        'py',
+        'import gdb; gdb.execute("hbreak *" + address); ' +
+          'gdb.execute("condition 1 " + condition); raw("SELECT " + value)',
+      ],
+      [
+        'py',
+        'import gdb; cursor.execute("SELECT * FROM records WHERE id = " + value); gdb.execute("hbreak *" + address)',
+      ],
+    ])('retains dynamic SQL detection in %s: %s', (ext, content) => {
+      const root = fixture()
+      const source = write(root, `query.${ext}`, `${content}\n`)
+      const result = run(distribution, 'security', [source], root)
+      expect(result.status).toBe(1)
+      expect(result.output).toMatchObject({ complete: true, passed: false })
+      expect(result.output.findings).toContainEqual(
+        expect.objectContaining({
+          rule_id: 'SQL_INJECTION_DYNAMIC',
+          severity: 'critical',
+          line_number: content.split('\n').length,
+        })
+      )
+    })
+
+    it('keeps parameterized SQL safe and other security findings beside GDB calls', () => {
+      const root = fixture()
+      const safe = write(
+        root,
+        'parameterized.py',
+        'import gdb\ngdb.execute("hbreak *" + hex(address))\n' +
+          'cursor.execute("SELECT * FROM records WHERE id = ?", (value,))\n'
+      )
+      expect(run(distribution, 'security', [safe], root).output.findings).toEqual([])
+      const unsafe = write(
+        root,
+        'process.py',
+        'import gdb\ngdb.execute("hbreak *" + hex(address))\nsubprocess.run(command, shell=True)\n'
+      )
+      const result = run(distribution, 'security', [unsafe], root)
+      expect(result.status).toBe(1)
+      expect(result.output.findings).toContainEqual(
+        expect.objectContaining({ rule_id: 'COMMAND_INJECTION', severity: 'critical', line_number: 3 })
+      )
+      expect(result.output.findings?.some((finding) => finding.rule_id === 'SQL_INJECTION_DYNAMIC')).toBe(false)
+    })
+
     it('leaves normal CLI output to the project lint policy', () => {
       const root = fixture()
       const source = write(root, 'cli.ts', 'console.log("done")\n')

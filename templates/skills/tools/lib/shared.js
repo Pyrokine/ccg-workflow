@@ -16,6 +16,9 @@ function parseCliValue(result, args, index, name) {
     '--target-ref': 'targetRef',
     '--mode': 'mode',
     '--target-version': 'targetVersion',
+    '--eslint-config': 'eslintConfig',
+    '--compilation-database': 'compilationDatabase',
+    '--python-file': 'pythonFile',
   };
   const field = fields[name];
   if (!field || (field !== 'mode' && !Object.hasOwn(result, field))) {
@@ -28,6 +31,9 @@ function parseCliValue(result, args, index, name) {
     targetRef: 'a revision',
     mode: 'a value',
     targetVersion: 'a Ruff target version such as py38',
+    eslintConfig: 'an ESLint configuration file',
+    compilationDatabase: 'a compile_commands.json file',
+    pythonFile: 'an explicitly requested Python source file',
   }[field];
   if (!value || value.startsWith('-')) {
     throw new Error(name + ' requires ' + description);
@@ -94,7 +100,7 @@ function visitDirectory(target, count, context) {
 function addSourceFile(target, explicit, count, context) {
   let ext;
   try {
-    ext = sourceExtension(target);
+    ext = target === context.pythonFile ? '.py' : sourceExtension(target);
   } catch (error) {
     sourceError(context, target, error, 'READ_FAILED');
     return;
@@ -118,8 +124,10 @@ function addSourceFile(target, explicit, count, context) {
     return;
   }
   if (!context.seen.has(canonical)) {
-    context.seen.add(canonical);
+    context.seen.set(canonical, context.files.length);
     context.files.push(target);
+  } else if (target === context.pythonFile) {
+    context.files[context.seen.get(canonical)] = target;
   }
 }
 
@@ -228,6 +236,15 @@ function reportIssueGroups(issues, verbose, groupBy) {
   return lines;
 }
 
+/**
+ * @template {object} [T=object]
+ * @param {string[]} argv
+ * @param {T} [extraFlags]
+ * @returns {{
+ *   target: string, targets: string[], verbose: boolean, json: boolean,
+ *   help?: boolean, mode?: string, exclude?: string[]
+ * } & T}
+ */
 function parseCliArgs(argv, extraFlags) {
   const args = argv.slice(2);
   const result = { target: '.', targets: [], verbose: false, json: false, ...(extraFlags || {}) };
@@ -293,6 +310,11 @@ const SOURCE_EXTENSIONS = new Set([
   '.hxx',
   '.php',
   '.rb',
+  '.pl',
+  '.pm',
+  '.cu',
+  '.cuh',
+  '.inc',
   '.sh',
   '.bash',
   '.ps1',
@@ -300,6 +322,11 @@ const SOURCE_EXTENSIONS = new Set([
   '.swift',
 ]);
 
+/**
+ * @param {string} filePath
+ * @param {string} [content]
+ * @returns {string}
+ */
 function sourceExtension(filePath, content) {
   const ext = path.extname(filePath).toLowerCase();
   if (ext) {
@@ -320,9 +347,20 @@ function sourceExtension(filePath, content) {
     : '';
 }
 
-function collectSourceFiles(targets, extensions, excludes) {
-  const context = { files: [], errors: [], seen: new Set(), excluded: new Set(excludes), extensions };
+function collectSourceFiles(targets, extensions, excludes, pythonFile) {
   const requested = [...new Set(targets.map((target) => path.resolve(target)))];
+  const pythonTarget = pythonFile === undefined ? undefined : path.resolve(pythonFile);
+  if (pythonTarget !== undefined && !requested.includes(pythonTarget)) {
+    throw new Error('--python-file must name an explicitly requested file');
+  }
+  const context = {
+    files: [],
+    errors: [],
+    seen: new Map(),
+    excluded: new Set(excludes),
+    extensions,
+    pythonFile: pythonTarget,
+  };
   const coverage = [];
   for (const target of requested) {
     const count = { value: 0 };
@@ -439,7 +477,5 @@ module.exports = {
   reportBaselines,
   countBySeverity,
   hasFatal,
-  SEP,
   DASH,
-  ICONS,
 };

@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 
 const SEVERITY_ORDER = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
-const CPP_EXTENSIONS = ['.c', '.cc', '.cpp', '.cxx', '.h', '.hh', '.hpp', '.hxx'];
+const CPP_EXTENSIONS = ['.c', '.cc', '.cpp', '.cxx', '.h', '.hh', '.hpp', '.hxx', '.cu', '.cuh', '.inc'];
 
 // prettier-ignore
 const SECURITY_RULES = [
@@ -48,12 +48,12 @@ const SECURITY_RULES = [
     id: 'HARDCODED_SECRET', category: '敏感信息',
     severity: 'high',
     pattern: new RegExp(
-      String.raw`(?<!\w)(password|passwd|pwd|secret|api_key|apikey|token|auth_token)` +
+      String.raw`(?<!\w)(?:password|passwd|pwd|secret|api_key|apikey|token|auth_token)` +
       String.raw`\s*(?:\[\s*\d*\s*\])?\s*(?::\s*&?(?:str|String)\s*)?=\s*["'][^"']{8,}["']`, 'i'),
-    excludePattern: /(?:example|placeholder|changeme|xxx|your[_-]|TODO|FIXME|<.*>|\*{3,})/i,
+    excludePattern: /example|placeholder|changeme|xxx|your[_-]|TODO|FIXME|<.*>|\*{3,}/i,
     extensions: [
       '.py', '.js', '.ts', '.go', '.java', '.php',
-      '.rb', '.rs', '.sh', '.bash', '.yaml', '.yml', '.json', '.env', ...CPP_EXTENSIONS,
+      '.rb', '.rs', '.sh', '.bash', '.pl', '.pm', '.ps1', '.yaml', '.yml', '.json', '.env', ...CPP_EXTENSIONS,
     ],
     message: '可能存在硬编码密钥/密码',
     recommendation: '使用环境变量或密钥管理服务',
@@ -117,16 +117,16 @@ const SECURITY_RULES = [
     id: 'PATH_TRAVERSAL', category: '路径遍历',
     severity: 'high',
     pattern: new RegExp(
-      '\\b(open|read|write|os\\.path\\.join)\\s*\\([^\\n]*' +
-      '(request|input|argv|args|params|query|form|path_param)\\b', 'i'),
+      '\\b(?:open|read|write|os\\.path\\.join)\\s*\\([^\\n]*' +
+      '(?:request|input|argv|args|params|query|form|path_param)\\b', 'i'),
     extensions: ['.py'],
     message: '可能存在路径遍历风险',
     recommendation: '验证并规范化用户输入的路径',
   },
   {
     id: 'PATHLIB_INPUT_IO', category: '路径遍历', severity: 'high',
-    pattern: new RegExp(String.raw`\bPath\s*\([^\n]*(request|input|argv|args|params|query|form|path_param)\b` +
-      String.raw`[^\n]*\)\s*\.(open|read_text|read_bytes|write_text|write_bytes|unlink|rmdir)\s*\(`, 'i'),
+    pattern: new RegExp(String.raw`\bPath\s*\([^\n]*(?:request|input|argv|args|params|query|form|path_param)\b` +
+      String.raw`[^\n]*\)\s*\.(?:open|read_text|read_bytes|write_text|write_bytes|unlink|rmdir)\s*\(`, 'i'),
     extensions: ['.py'],
     message: '来自输入的 Path 被用于文件操作',
     recommendation: '验证并限制文件访问范围',
@@ -173,7 +173,7 @@ const SECURITY_RULES = [
   {
     id: 'C_UNBOUNDED_SCANF_SOURCE', category: '输入', severity: 'high',
     pattern: new RegExp(String.raw`(?<![\w.])(?:fscanf|sscanf|fwscanf|swscanf)\s*\(\s*` +
-      String.raw`(?:[^,"()]+|L?"(?:\\.|[^"\\])*")\s*,\s*L?"((?:\\.|[^"\\])*)"`),
+      String.raw`(?:[^,"()]+|L?"(?:\\.|[^"\\])*")\s*,\s*L?"(?<format>(?:\\.|[^"\\])*)"`),
     extensions: CPP_EXTENSIONS,
     codePrefix: true,
     unboundedFormat: true,
@@ -183,8 +183,8 @@ const SECURITY_RULES = [
   {
     id: 'SSRF', category: 'SSRF', severity: 'high',
     pattern: new RegExp(
-      '(requests\\.(get|post|put|delete|head)|urllib\\.request\\.urlopen)' +
-      '\\s*\\([^\\n]*(request|input|argv|args|params|query|url)\\b', 'i'),
+      '(?:requests\\.(?:get|post|put|delete|head)|urllib\\.request\\.urlopen)' +
+      '\\s*\\([^\\n]*(?:request|input|argv|args|params|query|url)\\b', 'i'),
     extensions: ['.py'],
     message: '可能存在 SSRF 风险',
     recommendation: '验证并限制目标 URL',
@@ -240,6 +240,9 @@ const CODE_EXTENSIONS = new Set([
   '.rs',
   '.sh',
   '.bash',
+  '.pl',
+  '.pm',
+  '.ps1',
   '.yaml',
   '.yml',
   '.json',
@@ -322,8 +325,8 @@ function cppSource(content) {
   };
 }
 
-function scanSource(filePath, content) {
-  let ext = sourceExtension(filePath, content);
+function scanSource(filePath, content, pythonFile) {
+  let ext = pythonFile ? '.py' : sourceExtension(filePath, content);
   if (['.mjs', '.cjs', '.jsx'].includes(ext)) {
     ext = '.js';
   }
@@ -339,7 +342,13 @@ function scanSource(filePath, content) {
         lines: content.split('\n'),
         executable: executableLines(content, ext === '.py'),
       };
-  return { ...views, ext, cpp, testFile: testPattern.test(filePath.split(path.sep).join('/')) };
+  return {
+    ...views,
+    ext,
+    cpp,
+    importsGdb: ext === '.py' && views.executable.some((line) => /^\s*import\s+gdb\s*(?:[,;]|$)/u.test(line)),
+    testFile: testPattern.test(filePath.split(path.sep).join('/')),
+  };
 }
 
 function unboundedFormat(format) {
@@ -350,11 +359,26 @@ function unboundedFormat(format) {
   );
 }
 
-function matchRule(rule, line, code, cpp) {
+function matchRule(rule, line, code, source) {
+  const { cpp, importsGdb } = source;
   if (ruleLineIgnored(line, cpp)) {
     return null;
   }
-  const match = rule.pattern.exec(rule.codeOnly ? code : line);
+  const input = rule.codeOnly ? code : line;
+  let match = rule.pattern.exec(input);
+  if (rule.id === 'SQL_INJECTION_DYNAMIC' && importsGdb) {
+    while (
+      match &&
+      match[0].startsWith('execute') &&
+      /(?:^|[^\p{ID_Continue}.$])gdb\s*\.\s*$/u.test(code.slice(0, match.index))
+    ) {
+      const offset = match.index + match[0].length;
+      match = rule.pattern.exec(input.slice(offset));
+      if (match) {
+        match.index += offset;
+      }
+    }
+  }
   rule.pattern.lastIndex = 0;
   if (!match || ruleExcluded(rule, line)) {
     return null;
@@ -386,15 +410,15 @@ function securityFinding(rule, location, source, match) {
   };
 }
 
-function scanFile(filePath, rules, content = fs.readFileSync(filePath, 'utf-8')) {
+function scanFile(filePath, rules, content = fs.readFileSync(filePath, { encoding: 'utf-8' }), pythonFile = false) {
   const findings = [];
-  const source = scanSource(filePath, content);
+  const source = scanSource(filePath, content, pythonFile);
   for (const rule of rules) {
     if (!rule.extensions.includes('*') && !rule.extensions.includes(source.ext)) {
       continue;
     }
     for (const [index, line] of source.lines.entries()) {
-      const match = matchRule(rule, line, source.executable[index], source.cpp);
+      const match = matchRule(rule, line, source.executable[index], source);
       if (match) {
         findings.push(securityFinding(rule, { filePath, index }, source, match));
       }
@@ -411,18 +435,22 @@ const {
   runCli,
   collectSourceFiles,
   sourceExtension,
-} = require(path.join(__dirname, '..', '..', 'lib', 'shared.js'));
-const { compareBaseline } = require(path.join(__dirname, '..', '..', 'lib', 'git-baseline.js'));
+} = require('../../lib/shared.js');
+const { compareBaseline } = require('../../lib/git-baseline.js');
 
-function scanDirectory(targets, excludeDirs, base) {
-  const selected = collectSourceFiles(targets, CODE_EXTENSIONS, excludeDirs);
+function scanDirectory(targets, excludeDirs, base, pythonFile) {
+  const pythonTarget = pythonFile === undefined ? undefined : path.resolve(pythonFile);
+  if (pythonTarget !== undefined && !fs.statSync(pythonTarget).isFile()) {
+    throw new Error('--python-file requires a regular file');
+  }
+  const selected = collectSourceFiles(targets, CODE_EXTENSIONS, excludeDirs, pythonTarget);
   const findings = [];
   const contents = new Map();
   let filesScanned = 0;
   for (const target of selected.files) {
     try {
-      const content = fs.readFileSync(target, 'utf8');
-      findings.push(...scanFile(target, SECURITY_RULES, content));
+      const content = fs.readFileSync(target, { encoding: 'utf8' });
+      findings.push(...scanFile(target, SECURITY_RULES, content, target === pythonTarget));
       contents.set(target, content);
       filesScanned++;
     } catch (error) {
@@ -433,7 +461,8 @@ function scanDirectory(targets, excludeDirs, base) {
   const compared = compareBaseline(
     [...contents.keys()],
     findings,
-    (file, content) => scanFile(file, SECURITY_RULES, content),
+    (file, content, originalFile) =>
+      scanFile(file, SECURITY_RULES, content, pythonTarget !== undefined && originalFile === pythonTarget),
     base,
     contents
   );
@@ -441,7 +470,9 @@ function scanDirectory(targets, excludeDirs, base) {
   const complete = filesScanned > 0 && selected.errors.length === 0;
   const passed = complete && !findings.some((f) => f.severity === 'critical' || f.severity === 'high');
   return {
-    scan_path: selected.requested_paths.join(', '),
+    scan_path:
+      selected.requested_paths.length === 1 ? selected.requested_paths[0] : selected.requested_paths.length + ' 个目标',
+    python_file: pythonTarget ?? null,
     requested_paths: selected.requested_paths,
     coverage: selected.coverage,
     scan_errors: selected.errors,
@@ -457,10 +488,13 @@ function scanDirectory(targets, excludeDirs, base) {
 
 function formatReport(result, verbose) {
   const counts = countBySeverity(result.findings);
+  // 中文字段名和 Python 标签是文本报告的标题
+  //noinspection NonAsciiCharacters,JSNonASCIINames
   const fields = {
     扫描路径: result.scan_path,
     扫描文件: result.files_scanned,
     检查范围: '支持文件类型的模式规则',
+    ...(result.python_file ? { 'Python 模式文件': result.python_file } : {}),
     支持类型: result.supported_file_types.join(', '),
     比较基线: reportBaselines(result.baseline, result.requested_paths),
     分析完整性: result.complete ? '完整' : '未完成',
@@ -474,9 +508,11 @@ function formatReport(result, verbose) {
 }
 
 function main() {
-  const opts = parseCliArgs(process.argv, { exclude: [], base: undefined });
+  const opts = parseCliArgs(process.argv, { exclude: [], base: undefined, pythonFile: undefined });
   if (opts.help) {
-    console.log('Usage: security_scanner.js [paths...] [--base ref] [-v] [--json] [--exclude dirs...]');
+    console.log(
+      'Usage: security_scanner.js [paths...] [--python-file file] [--base ref] [-v] [--json] [--exclude dirs...]'
+    );
     return;
   }
   if (opts.mode) {
@@ -485,24 +521,25 @@ function main() {
   const verbose = opts.verbose;
   const jsonOut = opts.json;
   const excludeDirs = [...DEFAULT_EXCLUDES, ...opts.exclude];
-  const result = scanDirectory(opts.targets, excludeDirs, opts.base);
+  const result = scanDirectory(opts.targets, excludeDirs, opts.base, opts.pythonFile);
 
   if (jsonOut) {
     console.log(
       JSON.stringify(
         {
           scan_path: result.scan_path,
-          requested_paths: result.requested_paths,
-          coverage: result.coverage,
-          supported_file_types: result.supported_file_types,
-          scan_errors: result.scan_errors,
           complete: result.complete,
-          files_scanned: result.files_scanned,
           passed: result.passed,
+          files_scanned: result.files_scanned,
           counts: countBySeverity(result.findings),
-          baseline: result.baseline,
           origin_counts: result.origin_counts,
           findings: result.findings,
+          scan_errors: result.scan_errors,
+          python_file: result.python_file,
+          supported_file_types: result.supported_file_types,
+          baseline: result.baseline,
+          requested_paths: result.requested_paths,
+          coverage: result.coverage,
         },
         null,
         2
