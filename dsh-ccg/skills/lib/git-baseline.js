@@ -47,35 +47,38 @@ function baselineRepositories(files, base, result) {
   const roots = new Map(),
     groups = new Map();
   for (const file of files) {
+    let canonical;
+    let root;
     try {
-      const canonical = fs.realpathSync(file);
+      canonical = fs.realpathSync(file);
       const directory = path.dirname(canonical);
       if (!roots.has(directory)) {
         roots.set(directory, null);
         roots.set(directory, git(directory, 'rev-parse', '--show-toplevel').replace(/\n$/, ''));
       }
-      const root = roots.get(directory);
-      if (!root) {
-        throw new Error('Git repository is unavailable');
-      }
+      root = roots.get(directory);
+    } catch {
+      root = undefined;
+    }
+    if (root) {
       if (!groups.has(root)) {
         groups.set(root, []);
       }
       groups.get(root).push({ file, canonical, name: path.relative(root, canonical).split(path.sep).join('/') });
-    } catch {
-      result.baseline.push({
-        status: 'unavailable',
-        ref: base || 'HEAD',
+      continue;
+    }
+    result.baseline.push({
+      status: 'unavailable',
+      ref: base || 'HEAD',
+      path: file,
+      reason: 'Git repository is unavailable',
+    });
+    if (base !== undefined) {
+      result.errors.push({
         path: file,
-        reason: 'Git repository is unavailable',
+        code: 'BASELINE_UNAVAILABLE',
+        message: 'Explicit baseline requires a readable Git repository',
       });
-      if (base !== undefined) {
-        result.errors.push({
-          path: file,
-          code: 'BASELINE_UNAVAILABLE',
-          message: 'Explicit baseline requires a readable Git repository',
-        });
-      }
     }
   }
   return groups;
@@ -139,8 +142,8 @@ function compareBaselineEntry(entry, context) {
     return;
   }
   const content = baselineContent(object, context);
-  const previous = object ? context.analyze(path.join(context.root, previousName), content) : [];
-  const lines = (context.contents.get(entry.file) ?? fs.readFileSync(entry.file, 'utf8')).split('\n');
+  const previous = object ? context.analyze(path.join(context.root, previousName), content, entry.file) : [];
+  const lines = (context.contents.get(entry.file) ?? fs.readFileSync(entry.file, { encoding: 'utf8' })).split('\n');
   const ranges =
     current.some((issue) => issue.tool) && object ? changedLines(context.root, context.revision, entry.name) : [];
   compareCurrentIssues(current, { object, lines, ranges, counts: baselineCounts(previous, content) });
@@ -178,25 +181,36 @@ function git(root, ...args) {
 
 function targetRepositories(targets) {
   const groups = new Map();
+  const failures = [];
   for (const requested of targets) {
-    const { directory, target } = resolveTarget(requested);
-    const root = git(directory, 'rev-parse', '--show-toplevel').replace(/\n$/, '');
-    const relative = path.relative(root, target).split(path.sep).join('/');
-    if (relative === '..' || relative.startsWith('../') || path.isAbsolute(relative)) {
-      throw new Error('Target is outside the resolved repository: ' + requested);
+    try {
+      const { directory, target } = resolveTarget(requested);
+      const root = git(directory, 'rev-parse', '--show-toplevel').replace(/\n$/, '');
+      const relative = path.relative(root, target).split(path.sep).join('/');
+      if (relative === '..' || relative.startsWith('../') || path.isAbsolute(relative)) {
+        failures.push({
+          requested: [requested],
+          error: new Error('Target is outside the resolved repository: ' + requested),
+        });
+        continue;
+      }
+      if (!groups.has(root)) {
+        groups.set(root, { root, requested: [], paths: new Set() });
+      }
+      const group = groups.get(root);
+      group.requested.push(requested);
+      group.paths.add(relative);
+    } catch (error) {
+      failures.push({ requested: [requested], error });
     }
-    if (!groups.has(root)) {
-      groups.set(root, { root, requested: [], paths: new Set() });
-    }
-    const group = groups.get(root);
-    group.requested.push(requested);
-    group.paths.add(relative);
   }
-  return [...groups.values()].map((group) => ({
-    root: group.root,
-    requested: group.requested,
-    pathspecs: group.paths.has('') ? [] : [...group.paths],
-  }));
+  return [...groups.values()]
+    .map((group) => ({
+      root: group.root,
+      requested: group.requested,
+      pathspecs: group.paths.has('') ? [] : [...group.paths],
+    }))
+    .concat(failures);
 }
 
 function readNameStatus(root, args, pathspecs = []) {

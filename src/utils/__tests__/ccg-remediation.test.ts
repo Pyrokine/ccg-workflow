@@ -154,7 +154,11 @@ describe.each(distributions)('%s feedback regressions', (distribution) => {
     const result = run(distribution, 'change', [source], root)
     expect(result.output.changes).toContainEqual(expect.objectContaining({ has_test_changes: false, test_only: false }))
     expect(result.output.issues).toContainEqual(
-      expect.objectContaining({ message: expect.stringContaining('没有对应的测试更新') })
+      expect.objectContaining({
+        severity: 'warning',
+        message: expect.stringContaining('未包含测试变更'),
+        related_files: ['src/lib.rs'],
+      })
     )
   })
 

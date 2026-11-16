@@ -161,6 +161,7 @@ describe.each(distributions)('%s quality gates', (distribution) => {
   })
 
   describe('analysis regressions', () => {
+
     it('leaves normal CLI output to the project lint policy', () => {
       const root = fixture()
       const source = write(root, 'cli.ts', 'console.log("done")\n')
@@ -271,6 +272,57 @@ describe.each(distributions)('%s quality gates', (distribution) => {
   })
 
   describe('module analysis', () => {
+    it('recognizes C++ contract files as tests in module and change analysis', () => {
+      const root = repository()
+      const target = completeModule(root, 'cpp-module')
+      rmSync(join(target, 'tests'), { recursive: true })
+      write(target, 'src/source.cc', 'int value = 1;\n')
+      write(target, 'src/source_contract.cc', 'int main() { return 0; }\n')
+      const module = run(distribution, 'module', [target], root)
+      expect(module.output.issues?.some((issue) => issue.message.includes('未找到测试目录或测试文件'))).toBe(false)
+      const change = run(distribution, 'change', [target], root)
+      expect(change.output.changes).toContainEqual(
+        expect.objectContaining({ is_test: true, path: 'cpp-module/src/source_contract.cc' })
+      )
+    })
+
+    it('recognizes English command examples and shared validation rationale', () => {
+      const root = fixture()
+      const target = completeModule(root, 'catalog-validator')
+      write(
+        target,
+        'README.md',
+        '# Catalog validator\n\nRun from the repository root\n\n' +
+          '```sh\ngo run ./cmd/validate --file ./catalog.json\n```\n'
+      )
+      write(
+        target,
+        'DESIGN.md',
+        '# Catalog validation\n\nThe registry shares this validator with its catalog loader, ' +
+          'so local acceptance uses the same rules as publication.\n'
+      )
+      const result = run(distribution, 'module', [target], root)
+      expect(result.status).toBe(0)
+      expect(result.output.issues?.filter((issue) => issue.severity === 'info')).toEqual([])
+    })
+
+    it('retains documentation hints when usage and design rationale are absent', () => {
+      const root = fixture()
+      const target = completeModule(root, 'catalog-validator')
+      write(target, 'README.md', '# Runtime\n\nThis module validates local catalogs and reports invalid entries.\n')
+      write(
+        target,
+        'DESIGN.md',
+        '# Catalog validation\n\nThe module reads catalog files and reports invalid entries.\n'
+      )
+      const result = run(distribution, 'module', [target], root)
+      expect(result.status).toBe(0)
+      expect(result.output.issues?.filter((issue) => issue.severity === 'info')).toEqual([
+        expect.objectContaining({ message: 'README.md 建议添加使用说明或示例' }),
+        expect.objectContaining({ message: 'DESIGN.md 建议记录设计决策和权衡' }),
+      ])
+    })
+
     it.each([
       ['test attribute', '#[test]\nfn works() {}\n', true],
       ['test module', '#[cfg(test)]\nmod checks { fn works() {} }\n', true],

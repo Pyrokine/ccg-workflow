@@ -52,7 +52,7 @@ function inlineCurrent(change, mode, root, comparison) {
   }
   const file = path.join(root, change.path);
   if (mode === 'working') {
-    return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
+    return fs.existsSync(file) ? fs.readFileSync(file, { encoding: 'utf8' }) : '';
   }
   const current = mode === 'staged' ? '' : comparison.target;
   return git(root, 'show', `${current}:${change.path}`);

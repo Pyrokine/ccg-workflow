@@ -25,25 +25,41 @@ describe.each(distributions)('%s confirmed feedback repairs', (distribution) => 
     }
   )
 
-  it.each(['ignored.local.ts', 'build/nested.ts', 'build'])(
-    'reports an explicit ignored target as incomplete: %s',
+  it.each(['ignored.local.ts', 'build/nested.ts'])(
+    'includes an explicitly selected ignored file with a visible notice: %s',
     (target) => {
       const directory = repository()
       write(directory, '.gitignore', '*.local.ts\nbuild/\nsrc/clean.ts\n')
       write(directory, 'ignored.local.ts', 'const value = 1\n')
       write(directory, 'build/nested.ts', 'const value = 2\n')
       const result = run(distribution, 'change', [join(directory, target)], directory)
-      expect(result.status).toBe(2)
+      expect(result.status).toBe(0)
       expect(result.output).toMatchObject({
-        complete: false,
-        passed: false,
-        error: expect.stringContaining('ignored by Git'),
+        complete: true,
+        passed: true,
+        changes: [expect.objectContaining({ path: target, type: 'added', additions: 1, is_ignored: true })],
       })
+      expect(result.output.issues).toContainEqual(
+        expect.objectContaining({ severity: 'info', message: expect.stringContaining('显式指定的 Git 忽略文件') })
+      )
       const tracked = run(distribution, 'change', [join(directory, 'src/clean.ts')], directory)
       expect(tracked.status).toBe(0)
       expect(tracked.output).toMatchObject({ complete: true, passed: true, changes: [] })
     }
   )
+
+  it('reports an explicitly selected ignored directory as incomplete', () => {
+    const directory = repository()
+    write(directory, '.gitignore', 'build/\n')
+    write(directory, 'build/nested.ts', 'const value = 2\n')
+    const result = run(distribution, 'change', [join(directory, 'build')], directory)
+    expect(result.status).toBe(2)
+    expect(result.output).toMatchObject({
+      complete: false,
+      passed: false,
+      error: expect.stringContaining('ignored by Git'),
+    })
+  })
 
   it.each([
     'self, first, second=(22, 24, 22), third="x,y", fourth={"key": (1, 2)}, fifth=None',

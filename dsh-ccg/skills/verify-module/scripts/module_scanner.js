@@ -3,7 +3,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { parseCliArgs, runCli, buildReport, hasFatal } = require(path.join(__dirname, '..', '..', 'lib', 'shared.js'));
+const { parseCliArgs, runCli, buildReport, hasFatal } = require('../../lib/shared.js');
 const { rustTestLines } = require('../../lib/change-tests.js');
 
 const REQUIRED_FILES = { 'README.md': '模块说明文档', 'DESIGN.md': '设计决策文档' };
@@ -17,7 +17,25 @@ const ROOT_SCRIPT_FILES = new Set([
   'Dockerfile',
   'Makefile',
 ]);
-const CODE_EXTS = new Set(['.py', '.go', '.rs', '.ts', '.js', '.java', '.sh', '.ps1']);
+const CODE_EXTENSIONS = new Set([
+  '.py',
+  '.go',
+  '.rs',
+  '.ts',
+  '.js',
+  '.java',
+  '.sh',
+  '.ps1',
+  '.c',
+  '.cc',
+  '.cpp',
+  '.cxx',
+  '.h',
+  '.hpp',
+  '.cu',
+  '.cuh',
+  '.inc',
+]);
 const TEST_PATTERNS = ['test_', '_test.', '.test.', 'spec_', '_spec.'];
 
 function scanStructure(p, depth = 3) {
@@ -59,10 +77,16 @@ function rglob(dir, test) {
   return false;
 }
 
+/** @param {string} target */
 function scanModule(target) {
   const modulePath = path.resolve(target);
   const issues = [];
-  const add = (severity, message, p) => issues.push({ severity, message, path: p || null });
+  /**
+   * @param {'error' | 'warning' | 'info'} severity
+   * @param {string} message
+   * @param {string | null} [p]
+   */
+  const add = (severity, message, p = null) => issues.push({ severity, message, path: p || null });
 
   if (!fs.existsSync(modulePath)) {
     add('error', `路径不存在: ${modulePath}`);
@@ -89,7 +113,7 @@ function scanModule(target) {
   const entries = fs.readdirSync(modulePath);
   const stats = new Map(entries.map((name) => [name, fs.statSync(path.join(modulePath, name))]));
   let srcFound = ALT_SRC_DIRS.some((d) => stats.get(d)?.isDirectory());
-  const rootCode = entries.filter((n) => stats.get(n).isFile() && CODE_EXTS.has(path.extname(n)));
+  const rootCode = entries.filter((n) => stats.get(n).isFile() && CODE_EXTENSIONS.has(path.extname(n)));
   const rootScript = entries.filter((n) => stats.get(n).isFile() && ROOT_SCRIPT_FILES.has(n));
   if (rootCode.length || rootScript.length) {
     srcFound = true;
@@ -108,7 +132,8 @@ function scanModule(target) {
       modulePath,
       (name, full) =>
         TEST_PATTERNS.some((pattern) => name.includes(pattern)) ||
-        (name.endsWith('.rs') && rustTestLines(fs.readFileSync(full, 'utf8'), true).size > 0)
+        /_contract\.(?:cc|cpp|cxx)$/u.test(name) ||
+        (name.endsWith('.rs') && rustTestLines(fs.readFileSync(full, { encoding: 'utf8' }), true).size > 0)
     );
   }
   if (!testFound) {
@@ -118,19 +143,30 @@ function scanModule(target) {
   // doc quality
   const readme = path.join(modulePath, 'README.md');
   if (fs.existsSync(readme)) {
-    const c = fs.readFileSync(readme, 'utf-8');
+    const c = fs.readFileSync(readme, { encoding: 'utf-8' });
     if (!c.includes('#')) {
       add('warning', 'README.md 缺少标题', readme);
     }
     const docKeys = ['usage', 'install', '使用', '安装', 'example', '示例'];
-    if (!docKeys.some((k) => c.toLowerCase().includes(k))) {
+    if (!docKeys.some((k) => c.toLowerCase().includes(k)) && !/\b(?:run|commands?)\b/i.test(c)) {
       add('info', 'README.md 建议添加使用说明或示例', readme);
     }
   }
   const design = path.join(modulePath, 'DESIGN.md');
   if (fs.existsSync(design)) {
-    const c = fs.readFileSync(design, 'utf-8');
-    const designKeys = ['决策', 'decision', '选择', 'choice', '权衡', 'trade'];
+    const c = fs.readFileSync(design, { encoding: 'utf-8' });
+    const designKeys = [
+      '决策',
+      'decision',
+      '选择',
+      'choice',
+      '权衡',
+      'trade',
+      'rationale',
+      'because',
+      'reuse',
+      'same rules',
+    ];
     if (!designKeys.some((k) => c.toLowerCase().includes(k))) {
       add('info', 'DESIGN.md 建议记录设计决策和权衡', design);
     }
@@ -156,6 +192,8 @@ function formatReport(r, verbose) {
   const errs = r.issues.filter((i) => i.severity === 'error').length;
   const warns = r.issues.filter((i) => i.severity === 'warning').length;
   const passed = !hasFatal(r.issues);
+  // 中文字段名是文本报告的标题
+  //noinspection NonAsciiCharacters
   const fields = {
     模块路径: r.modulePath,
     扫描结果: passed ? '\u2713 通过' : '\u2717 未通过',

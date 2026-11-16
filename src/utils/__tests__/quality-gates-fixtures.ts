@@ -28,6 +28,7 @@ export interface Report {
   total_additions?: number
   total_deletions?: number
   repository_root?: string
+  requested_paths?: string[]
   scan_errors?: Array<{ path: string; code: string }>
   changes?: Change[]
   findings?: Array<{ severity: string; line_content: string; line_number: number; rule_id?: string; origin?: string }>

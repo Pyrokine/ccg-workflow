@@ -6,10 +6,18 @@ compatibility: node>=18
 user-invocable: true
 disable-model-invocation: false
 allowed-tools: Bash, Read, Grep
-argument-hint: [paths...] [--mode working|staged|committed] [--base ref --target-ref ref]
+argument-hint: [ paths... ] [ --mode working|staged|committed ] [ --base ref --target-ref ref ]
 ---
 
 # 变更校验
+
+## 验收时机与证据复用
+
+按完整功能阶段汇总触发条件，整批实施完成后集中验收，同一候选的多个触发条件合并为一次检查；保留复现问题或确认中间行为所需的定向检查
+
+候选、输入、工具链、参数、配置和覆盖仍适用时复用结果，修复后只复验受影响部分；独立检查继续完成，失败、超时、不可用、不支持和未完成状态分别保留
+
+回到当前源码与调用者确认 finding，在已授权修复范围内连续处理；只读审查交付发现，需要新范围或权限时请求决定，验收条件满足后结束
 
 ## 分析当前修改
 
@@ -24,10 +32,14 @@ node /path/to/verify-change/scripts/change_analyzer.js /path/to/project --mode c
 目标可以是文件、目录和已删除路径，相对调用时的工作目录解析，省略目标时使用当前目录；同仓库合并范围，不同仓库分别报告，pathspec
 使用字面路径
 
-显式目标被 Git 忽略且不属于所选变更时，返回退出码 2，并说明该目标未参与分析；已有跟踪文件和真实无变更的目标继续返回完整结果
+working 模式会纳入显式指定的 Git 忽略文件，按未跟踪内容的完整行数计为新增，`is_ignored: true` 和 info
+提示说明来源；与目录目标同时提供时仍只纳入指定文件，不展开其他被忽略的文件，也不修改 Git 跟踪状态
+
+目录扫描继续遵守 Git 忽略规则；显式指定整个忽略目录，或在 staged／committed 模式指定没有对应 Git 记录的文件时，返回退出码 2
+并说明未参与分析，已有跟踪文件和真实无变更的目标继续返回完整结果
 
 | 模式      | 输入                     | 行数                                           |
-|-----------|--------------------------|------------------------------------------------|
+| --------- | ------------------------ | ---------------------------------------------- |
 | working   | 暂存、未暂存和未跟踪文件 | 包含暂存与未暂存改动，未跟踪文件按实际内容计数 |
 | staged    | 暂存区                   | 仅统计暂存改动                                 |
 | committed | HEAD~1 与 HEAD           | 统计最近一次提交                               |
@@ -37,7 +49,8 @@ node /path/to/verify-change/scripts/change_analyzer.js /path/to/project --mode c
 ## 比较两个指定提交或分支
 
 ```bash
-node /path/to/verify-change/scripts/change_analyzer.js ./src --mode committed --base release/main --target-ref feature/topic --json
+node /path/to/verify-change/scripts/change_analyzer.js ./src --mode committed \
+  --base release/main --target-ref feature/topic --json
 ```
 
 `--base` 和 `--target-ref`
@@ -66,7 +79,7 @@ Markdown 说明，例如
 自然语言任务先转换为已核实的文件或目录，再作为独立路径参数调用脚本
 
 | 情况                                   | 提示    | 后续动作                                   |
-|----------------------------------------|---------|--------------------------------------------|
+| -------------------------------------- | ------- | ------------------------------------------ |
 | 实现变更超过 50 行，已有相关文档未更新 | warning | 核对接口、用法和设计说明是否变化           |
 | 实现变更超过 50 行，没有关联文档       | info    | 判断是否需要说明或现有说明是否位于其他位置 |
 | 实现变更超过 30 行，没有测试变更       | warning | 检查相关测试是否已有覆盖，并执行适用测试   |
@@ -79,13 +92,15 @@ Markdown 说明，例如
 
 内联测试按文本结构和 Git 差异识别，不计算测试覆盖率
 
+配置分类按文件名和扩展名识别，包含 `.editorconfig`、`.prettierrc` 及 JSON、YAML、TOML、INI 配置
+
 变更分析要求 Git 历史、暂存区或工作区作为比较来源；非 Git 附件返回退出码 2 和未完成，使用已有附件比较结果记录差异，质量与安全脚本可直接检查非
 Git 源码
 
 ## 结果与退出码
 
 | 退出码 | 结果                   | 判定                                                    |
-|--------|------------------------|---------------------------------------------------------|
+| ------ | ---------------------- | ------------------------------------------------------- |
 | 0      | 分析完成且没有阻断问题 | 无变更也返回成功和空 changes                            |
 | 1      | 分析完成且有 error     | 按发现处理                                              |
 | 2      | 分析未完成             | 非 Git 目标、目标不存在、无效模式、Git 失败或缺少父提交 |
@@ -93,5 +108,11 @@ Git 源码
 单仓库 JSON 保留
 `changes`、行数、`affected_modules`、`issues`、`doc_sync_status`，并提供仓库 root、请求目标、完成状态及文档详情；跨仓库结果使用
 `repositories` 数组
+
+目标解析或仓库分析失败时，继续分析其余仓库，整体返回 `complete: false`、`passed: false` 和退出码 2，`error` 保留原始失败信息；
+`repositories` 保留各仓库的结果，仓库外目标在 `coverage` 中报告失败
+
+失败响应的 `coverage` 按请求顺序列出每个目标的 `path`、`complete` 和 `passed`，已解析仓库的目标提供 `repository_root`
+，失败目标提供 `error`；文本报告在标准错误中列出失败路径，并在标准输出中保留完成的仓库报告
 
 修改前阅读相关模块已有说明和直接调用者，修改后核对真实接口、安装内容、文档与测试；将设计决策写入项目实际维护的文档

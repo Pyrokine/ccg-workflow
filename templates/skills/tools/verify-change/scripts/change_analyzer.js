@@ -4,7 +4,7 @@
 const path = require('path');
 const fs = require('fs');
 const { identifyInlineTests } = require('../../lib/change-tests.js');
-const { parseCliArgs, runCli, buildReport, DASH } = require(path.join(__dirname, '..', '..', 'lib', 'shared.js'));
+const { parseCliArgs, runCli, buildReport, DASH } = require('../../lib/shared.js');
 const { git, targetRepositories, readNameStatus, gitFileView } = require('../../lib/git-baseline.js');
 
 const CODE_EXT = new Set([
@@ -28,12 +28,18 @@ const CODE_EXT = new Set([
   '.hh',
   '.hpp',
   '.hxx',
+  '.cu',
+  '.cuh',
+  '.inc',
+  '.pl',
+  '.pm',
 ]);
 const DOC_EXT = new Set(['.md', '.rst', '.txt', '.adoc']);
 const TEST_PATTERNS = [
   /(?:^|\/)(?:tests?|__tests__|specs?)(?:\/|$)/,
   /(?:^|\/)(?:test|spec|smoke)[_.][^/]+$/,
   /[._](?:test|spec|smoke)\.[^/]+$/,
+  /_contract\.(?:cc|cpp|cxx)$/u,
 ];
 const CONFIG_FILES = new Set([
   'package.json',
@@ -43,6 +49,8 @@ const CONFIG_FILES = new Set([
   'pom.xml',
   'makefile',
   'dockerfile',
+  '.editorconfig',
+  '.prettierrc',
 ]);
 const CONFIG_EXT = new Set(['.yaml', '.yml', '.json', '.toml', '.ini']);
 
@@ -109,7 +117,7 @@ function readModuleDocuments(root, directory, docs, view) {
     const file = path.join(directory, entry.name);
     addDocument(root, docs, file, view);
     const name = path.relative(root, file).split(path.sep).join('/');
-    const content = view ? view.read(name) : fs.readFileSync(file, 'utf8');
+    const content = view ? view.read(name) : fs.readFileSync(file, { encoding: 'utf8' });
     for (const match of content.matchAll(/\[[^\]\n]*]\((?<target>[^\s)#?]+)(?:#[^\s)]*)?\)/g)) {
       if (!/^[\w+.-]+:|^\/\//.test(match[1]) && DOC_EXT.has(path.extname(match[1]).toLowerCase())) {
         addDocument(root, docs, path.resolve(directory, match[1]), view);
@@ -177,14 +185,16 @@ function assertRequestedChange(group, changes, requested, view) {
   }
   if (fs.existsSync(requested)) {
     if (relative) {
+      let ignored = false;
       try {
-        if (git(group.root, '--no-literal-pathspecs', 'check-ignore', '--', relative)) {
-          throw new Error('Target is ignored by Git and excluded from change analysis: ' + requested);
-        }
+        ignored = Boolean(git(group.root, '--no-literal-pathspecs', 'check-ignore', '--', relative));
       } catch (error) {
         if (error.status !== 1) {
           throw error;
         }
+      }
+      if (ignored) {
+        throw new Error('Target is ignored by Git and excluded from change analysis: ' + requested);
       }
     }
     return;
@@ -203,7 +213,7 @@ function commitComparison(root, refs) {
 
 function analyzeRepository(group, mode, refs) {
   const comparison = mode === 'committed' ? commitComparison(group.root, refs) : undefined;
-  const result = analyzeChanges(mode, group.root, group.pathspecs, comparison);
+  const result = analyzeChanges(mode, group.root, group.pathspecs, comparison, group.requested);
   for (const requested of group.requested) {
     assertRequestedChange(group, result.changes, requested, comparison?.view);
   }
@@ -320,12 +330,39 @@ function countFileLines(filePath) {
   if (stat.isDirectory()) {
     return 0;
   }
-  const content = stat.isSymbolicLink() ? fs.readlinkSync(filePath) : fs.readFileSync(filePath, 'utf8');
+  const content = stat.isSymbolicLink() ? fs.readlinkSync(filePath) : fs.readFileSync(filePath, { encoding: 'utf8' });
   if (!content) {
     return 0;
   }
   const newlines = (content.match(/\n/g) || []).length;
   return content.endsWith('\n') ? newlines : newlines + 1;
+}
+
+function explicitIgnoredChanges(root, requested) {
+  const files = [];
+  for (const file of requested) {
+    try {
+      if (fs.lstatSync(file).isFile()) {
+        files.push(path.relative(root, file).split(path.sep).join('/'));
+      }
+    } catch (error) {
+      if (!['ENOENT', 'ENOTDIR'].includes(error.code)) {
+        throw error;
+      }
+    }
+  }
+  if (!files.length) {
+    return [];
+  }
+  return git(root, 'ls-files', '--others', '--ignored', '--exclude-standard', '-z', '--', ...files)
+    .split('\0')
+    .filter(Boolean)
+    .map((file) => ({
+      ...classifyFile(file),
+      type: 'added',
+      additions: countFileLines(path.join(root, file)),
+      is_ignored: true,
+    }));
 }
 
 function getStagedChanges(root = process.cwd(), pathspecs = []) {
@@ -447,7 +484,11 @@ function checkDocSync(changes, modules, root = process.cwd(), mode = 'working', 
     }
     const docs = relatedDocuments(root, mod, modCode, comparison?.view);
     const docChanges = docs.length ? selectedChanges(mode, root, docs, comparison) : [];
-    const docPaths = new Set(docChanges.filter((change) => change.type !== 'deleted').map((change) => change.path));
+    const docPaths = new Set(
+      [...docChanges, ...changes.filter((change) => docs.includes(change.path))]
+        .filter((change) => change.type !== 'deleted')
+        .map((change) => change.path)
+    );
     for (const doc of docs) {
       docStatus[doc] = docPaths.has(doc);
       docSync[doc] = { exists: true, updated: docPaths.has(doc) };
@@ -469,10 +510,18 @@ function analyzeImpact(changes) {
     if (total > 30) {
       issues.push({
         severity: 'warning',
-        message: `代码变更 ${total} 行，但没有对应的测试更新`,
+        message: `本次检查范围内代码变更 ${total} 行，未包含测试变更；对应测试位于其他目录时，将测试目录加入检查范围`,
         related_files: code.map((c) => c.path),
       });
     }
+  }
+  const ignored = changes.filter((change) => change.is_ignored);
+  if (ignored.length) {
+    issues.push({
+      severity: 'info',
+      message: '显式指定的 Git 忽略文件已纳入工作区分析，未跟踪内容按当前完整文件计为新增行',
+      related_files: ignored.map((change) => change.path),
+    });
   }
   const configs = changes.filter((c) => c.is_config);
   if (configs.length) {
@@ -493,8 +542,20 @@ function analyzeImpact(changes) {
   return issues;
 }
 
-function analyzeChanges(mode, root, pathspecs, comparison) {
+function analyzeChanges(mode, root, pathspecs, comparison, requested) {
   const changes = selectedChanges(mode, root, pathspecs, comparison);
+  if (mode === 'working') {
+    for (const ignored of explicitIgnoredChanges(root, requested)) {
+      const existing = changes.find((change) => change.path === ignored.path);
+      if (existing) {
+        existing.additions += ignored.additions;
+        existing.type = 'modified';
+        existing.is_ignored = true;
+      } else {
+        changes.push(ignored);
+      }
+    }
+  }
   identifyInlineTests(changes, mode, root, comparison);
 
   const issues = [];
@@ -515,6 +576,8 @@ function analyzeChanges(mode, root, pathspecs, comparison) {
 }
 
 function formatReport(result, verbose) {
+  // 中文字段名是文本报告的标题
+  //noinspection NonAsciiCharacters
   const fields = {
     变更文件: result.changes.length,
     新增行数: '+' + result.totalAdd,
@@ -557,21 +620,54 @@ function main() {
   if (opts.base !== undefined && mode !== 'committed') {
     throw new Error('--base and --target-ref require --mode committed');
   }
-  const results = targetRepositories(opts.targets).map((group) => analyzeRepository(group, mode, opts));
-  const passed = results.every((result) => result.passed);
+  const results = targetRepositories(opts.targets).map((group) => {
+    let error = group.error;
+    if (!error) {
+      try {
+        return analyzeRepository(group, mode, opts);
+      } catch (failure) {
+        error = failure;
+      }
+    }
+    return {
+      repository_root: group.root,
+      requested_paths: group.requested,
+      complete: false,
+      passed: false,
+      error: error.message || String(error),
+    };
+  });
+  const complete = results.every((result) => result.complete);
+  const passed = complete && results.every((result) => result.passed);
   if (opts.json) {
-    const clean = results.map(({ report: _report, ...result }) => result);
-    console.log(
-      JSON.stringify(clean.length === 1 ? clean[0] : { passed, complete: true, repositories: clean }, null, 2)
-    );
+    const clean = results.filter((result) => result.repository_root).map(({ report: _report, ...result }) => result);
+    const output = complete && clean.length === 1 ? clean[0] : { passed, complete, repositories: clean };
+    if (!complete) {
+      output.error = results.find((result) => !result.complete).error;
+      output.coverage = opts.targets.map((requested) => {
+        const result = results.find((entry) => entry.requested_paths.includes(requested));
+        return {
+          path: requested,
+          repository_root: result.repository_root,
+          complete: result.complete,
+          passed: result.passed,
+          ...(result.error ? { error: result.error } : {}),
+        };
+      });
+    }
+    console.log(JSON.stringify(output, null, 2));
   } else {
-    console.log(
-      results
-        .map((result) => 'Repository: ' + result.repository_root + '\n' + formatReport(result.report, opts.verbose))
-        .join('\n\n')
-    );
+    for (const result of results) {
+      if (result.complete) {
+        console.log('Repository: ' + result.repository_root + '\n' + formatReport(result.report, opts.verbose));
+      } else {
+        console.error(
+          result.requested_paths.map((requested) => 'Target: ' + requested).join('\n') + '\n' + result.error
+        );
+      }
+    }
   }
-  process.exitCode = passed ? 0 : 1;
+  process.exitCode = complete ? (passed ? 0 : 1) : 2;
 }
 
 if (require.main === module) {
