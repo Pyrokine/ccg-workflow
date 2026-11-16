@@ -1,7 +1,10 @@
 ---
 name: clarify
-description: "Improve unclear UX copy, error messages, microcopy, labels, and instructions to make interfaces easier to understand. Use when the user mentions confusing text, unclear labels, bad error messages, hard-to-follow instructions, or wanting better UX writing."
-argument-hint: "[target]"
+description: >-
+  Improve unclear UX copy, error messages, microcopy, labels, and instructions to make interfaces
+  easier to understand. Use when the user mentions confusing text, unclear labels, bad error messages,
+  hard-to-follow instructions, or wanting better UX writing.
+argument-hint: '[target]'
 user-invocable: false
 ---
 
@@ -12,7 +15,7 @@ use.
 
 Use the `frontend-design` skill as the governing entry point and follow its design principles, anti-patterns, and
 **Context Gathering Protocol**. If design context is missing, ask only for the missing audience, use case, or brand
-direction. Additionally gather: audience technical level and users' mental state in context.
+direction. Also gather: audience technical level and users' mental state in context.
 
 ---
 
@@ -21,19 +24,19 @@ direction. Additionally gather: audience technical level and users' mental state
 Identify what makes the text unclear or ineffective:
 
 1. **Find clarity problems**:
-    - **Jargon**: Technical terms users won't understand
-    - **Ambiguity**: Multiple interpretations possible
-    - **Passive voice**: "Your file has been uploaded" vs "We uploaded your file"
-    - **Length**: Too wordy or too terse
-    - **Assumptions**: Assuming user knowledge they don't have
-    - **Missing context**: Users don't know what to do or why
-    - **Tone mismatch**: Too formal, too casual, or inappropriate for situation
+   - **Jargon**: Technical terms users won't understand
+   - **Ambiguity**: Multiple interpretations possible
+   - **Passive voice**: "Your file has been uploaded" vs "We uploaded your file"
+   - **Length**: Too wordy or too terse
+   - **Assumptions**: Assuming user knowledge they don't have
+   - **Missing context**: Users don't know what to do or why
+   - **Tone mismatch**: Too formal, too casual, or inappropriate for situation
 
 2. **Understand the context**:
-    - Who's the audience? (Technical? General? First-time users?)
-    - What's the user's mental state? (Stressed during error? Confident during success?)
-    - What's the action? (What do we want users to do?)
-    - What's the constraint? (Character limits? Space limitations?)
+   - Who's the audience? (Technical? General? First-time users?)
+   - What's the user's mental state? (Stressed during error? Confident during success?)
+   - What's the action? (What do we want users to do?)
+   - What's the constraint? (Character limits? Space limitations?)
 
 **CRITICAL**: Clear copy helps users succeed. Unclear copy creates frustration, errors, and support tickets.
 

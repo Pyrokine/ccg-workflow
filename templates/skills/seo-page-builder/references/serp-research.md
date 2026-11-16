@@ -1,6 +1,6 @@
 # SERP 研究
 
-[PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
+`[PROTOCOL]`: 变更时更新此头部，然后检查 AGENTS.md
 
 ## 深度
 

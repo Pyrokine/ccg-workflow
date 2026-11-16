@@ -152,11 +152,18 @@ GitHub Dorks:
 """IOC 批量查询"""
 import requests
 
+
 class IOCChecker:
-    def __init__(self, vt_api_key):
+    def __init__(
+            self,
+            vt_api_key
+    ):
         self.vt_key = vt_api_key
 
-    def check_hash(self, file_hash):
+    def check_hash(
+            self,
+            file_hash
+    ):
         """VirusTotal Hash 查询"""
         url = f"https://www.virustotal.com/api/v3/files/{file_hash}"
         headers = {"x-apikey": self.vt_key}
@@ -171,14 +178,20 @@ class IOCChecker:
             }
         return None
 
-    def check_ip(self, ip):
+    def check_ip(
+            self,
+            ip
+    ):
         """AbuseIPDB 查询"""
         url = "https://api.abuseipdb.com/api/v2/check"
         params = {"ipAddress": ip, "maxAgeInDays": 90}
         # 需要 API Key
         pass
 
-    def check_domain(self, domain):
+    def check_domain(
+            self,
+            domain
+    ):
         """域名信誉查询"""
         pass
 ```
@@ -191,7 +204,7 @@ class IOCChecker:
 # 攻击者画像
 APT_Profile:
   name: 'APT-XX'
-  aliases: [ 'Group A', 'Group B' ]
+  aliases: ['Group A', 'Group B']
   targets:
     - 金融行业
     - 政府机构
@@ -218,7 +231,9 @@ APT_Profile:
 
 ```python
 # 生成 ATT&CK Navigator 层
-def generate_navigator_layer(techniques):
+def generate_navigator_layer(
+        techniques
+):
     layer = {
         "name": "Threat Actor Coverage",
         "versions": {"attack": "13", "navigator": "4.8"},
@@ -275,13 +290,16 @@ SELECT timestamp, hostname, user, command_line
 FROM process_events
 WHERE process_name = 'powershell.exe'
   AND (command_line LIKE '%IEX%'
-       OR command_line LIKE '%DownloadString%'
-       OR command_line LIKE '%-enc%')
+   OR command_line LIKE '%DownloadString%'
+   OR command_line LIKE '%-enc%')
 
 -- 异常网络连接
 SELECT timestamp, process_name, remote_address, remote_port
 FROM network_events
-WHERE remote_port NOT IN (80, 443, 53, 22)
+WHERE remote_port NOT IN (80
+    , 443
+    , 53
+    , 22)
   AND remote_address NOT LIKE '10.%'
   AND remote_address NOT LIKE '192.168.%'
 
@@ -290,7 +308,9 @@ SELECT timestamp, process_name, file_path
 FROM file_events
 WHERE file_path LIKE '%\Temp\%'
   AND file_path LIKE '%.exe'
-  AND process_name IN ('powershell.exe', 'cmd.exe', 'wscript.exe')
+  AND process_name IN ('powershell.exe'
+    , 'cmd.exe'
+    , 'wscript.exe')
 ```
 
 ## 情报共享
@@ -323,7 +343,7 @@ misp.tag(event, 'misp-galaxy:mitre-attack-pattern="T1566"')
 ## 工具清单
 
 | 工具             | 用途         |
-|------------------|--------------|
+| ---------------- | ------------ |
 | MISP             | 威胁情报平台 |
 | OpenCTI          | 威胁情报管理 |
 | TheHive          | 事件响应平台 |
@@ -343,7 +363,7 @@ misp.tag(event, 'misp-galaxy:mitre-attack-pattern="T1566"')
 ### STRIDE 速查
 
 | 威胁            | 含义     | 缓解               |
-|-----------------|----------|--------------------|
+| --------------- | -------- | ------------------ |
 | Spoofing        | 身份伪造 | 强认证、MFA        |
 | Tampering       | 数据篡改 | 完整性校验、签名   |
 | Repudiation     | 否认操作 | 审计日志、数字签名 |
@@ -383,7 +403,7 @@ misp.tag(event, 'misp-galaxy:mitre-attack-pattern="T1566"')
 ### 工具
 
 | 工具                           | 特点              |
-|--------------------------------|-------------------|
+| ------------------------------ | ----------------- |
 | Microsoft Threat Modeling Tool | STRIDE 自动化     |
 | OWASP Threat Dragon            | 开源、DFD 支持    |
 | Threagile                      | CLI、代码化建模   |

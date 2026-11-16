@@ -1,7 +1,10 @@
 ---
 name: onboard
-description: "Designs and improves onboarding flows, empty states, and first-run experiences to help users reach value quickly. Use when the user mentions onboarding, first-time users, empty states, activation, getting started, or new user flows."
-argument-hint: "[target]"
+description: >-
+  Designs and improves onboarding flows, empty states, and first-run experiences to help users reach
+  value quickly. Use when the user mentions onboarding, first-time users, empty states, activation,
+  getting started, or new user flows.
+argument-hint: '[target]'
 user-invocable: false
 ---
 
@@ -9,7 +12,7 @@ user-invocable: false
 
 Use the `frontend-design` skill as the governing entry point and follow its design principles, anti-patterns, and
 **Context Gathering Protocol**. If design context is missing, ask only for the missing audience, use case, or brand
-direction. Additionally gather: the "aha moment" you want users to reach, and users' experience level.
+direction. Also gather: the "aha moment" you want users to reach, and users' experience level.
 
 ---
 
@@ -20,21 +23,21 @@ Create or improve onboarding experiences that help users understand, adopt, and 
 Understand what users need to learn and why:
 
 1. **Identify the challenge**:
-    - What are users trying to accomplish?
-    - What's confusing or unclear about current experience?
-    - Where do users get stuck or drop off?
-    - What's the "aha moment" we want users to reach?
+   - What are users trying to accomplish?
+   - What's confusing or unclear about current experience?
+   - Where do users get stuck or drop off?
+   - What's the "aha moment" we want users to reach?
 
 2. **Understand the users**:
-    - What's their experience level? (Beginners, power users, mixed?)
-    - What's their motivation? (Excited and exploring? Required by work?)
-    - What's their time commitment? (5 minutes? 30 minutes?)
-    - What alternatives do they know? (Coming from competitor? New to category?)
+   - What's their experience level? (Beginners, power users, mixed?)
+   - What's their motivation? (Excited and exploring? Required by work?)
+   - What's their time commitment? (5 minutes? 30 minutes?)
+   - What alternatives do they know? (Coming from competitor? New to category?)
 
 3. **Define success**:
-    - What's the minimum users need to learn to be successful?
-    - What's the key action we want them to take? (First project? First invite?)
-    - How do we know onboarding worked? (Completion rate? Time to value?)
+   - What's the minimum users need to learn to be successful?
+   - What's the key action we want them to take? (First project? First invite?)
+   - How do we know onboarding worked? (Completion rate? Time to value?)
 
 **CRITICAL**: Onboarding should get users to value as quickly as possible, not teach everything possible.
 
@@ -212,7 +215,7 @@ Every empty state needs:
 
 ### How to Get Started
 
-[Create project] or [Import from template]
+`[Create project]` or `[Import from template]`
 
 ### Visual Interest
 
@@ -220,7 +223,7 @@ Illustration or icon (not just text on blank page)
 
 ### Contextual Help
 
-"Need help getting started? [Watch 2-min tutorial]"
+"Need help getting started? `[Watch 2-min tutorial]`"
 
 **Empty state types**:
 

@@ -1,7 +1,10 @@
 ---
 name: adapt
-description: "Adapt designs to work across different screen sizes, devices, contexts, or platforms. Implements breakpoints, fluid layouts, and touch targets. Use when the user mentions responsive design, mobile layouts, breakpoints, viewport adaptation, or cross-device compatibility."
-argument-hint: "[target] [context (mobile, tablet, print...)]"
+description: >-
+  Adapt designs to work across different screen sizes, devices, contexts, or platforms. Implements
+  breakpoints, fluid layouts, and touch targets. Use when the user mentions responsive design, mobile
+  layouts, breakpoints, viewport adaptation, or cross-device compatibility.
+argument-hint: '[target] [context (mobile, tablet, print...)]'
 user-invocable: false
 ---
 
@@ -12,7 +15,7 @@ use cases.
 
 Use the `frontend-design` skill as the governing entry point and follow its design principles, anti-patterns, and
 **Context Gathering Protocol**. If design context is missing, ask only for the missing audience, use case, or brand
-direction. Additionally gather: target platforms/devices and usage contexts.
+direction. Also gather: target platforms/devices and usage contexts.
 
 ---
 
@@ -21,22 +24,22 @@ direction. Additionally gather: target platforms/devices and usage contexts.
 Understand what needs adaptation and why:
 
 1. **Identify the source context**:
-    - What was it designed for originally? (Desktop web? Mobile app?)
-    - What assumptions were made? (Large screen? Mouse input? Fast connection?)
-    - What works well in current context?
+   - What was it designed for originally? (Desktop web? Mobile app?)
+   - What assumptions were made? (Large screen? Mouse input? Fast connection?)
+   - What works well in current context?
 
 2. **Understand target context**:
-    - **Device**: Mobile, tablet, desktop, TV, watch, print?
-    - **Input method**: Touch, mouse, keyboard, voice, gamepad?
-    - **Screen constraints**: Size, resolution, orientation?
-    - **Connection**: Fast Wi-Fi, slow 3G, offline?
-    - **Usage context**: On-the-go vs desk, quick glance vs focused reading?
-    - **User expectations**: What do users expect on this platform?
+   - **Device**: Mobile, tablet, desktop, TV, watch, print?
+   - **Input method**: Touch, mouse, keyboard, voice, gamepad?
+   - **Screen constraints**: Size, resolution, orientation?
+   - **Connection**: Fast Wi-Fi, slow 3G, offline?
+   - **Usage context**: On-the-go vs desk, quick glance vs focused reading?
+   - **User expectations**: What do users expect on this platform?
 
 3. **Identify adaptation challenges**:
-    - What won't fit? (Content, navigation, features)
-    - What won't work? (Hover states on touch, tiny touch targets)
-    - What's inappropriate? (Desktop patterns on mobile, mobile patterns on desktop)
+   - What won't fit? (Content, navigation, features)
+   - What won't work? (Hover states on touch, tiny touch targets)
+   - What's inappropriate? (Desktop patterns on mobile, mobile patterns on desktop)
 
 **CRITICAL**: Adaptation is not just scaling - it's rethinking the experience for the new context.
 

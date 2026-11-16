@@ -12,7 +12,7 @@ description: 性能优化秘典。性能分析方法论、Profiling、火焰图�
 对每个资源检查三个维度：
 
 | 维度        | 含义             | 工具                              |
-|-------------|------------------|-----------------------------------|
+| ----------- | ---------------- | --------------------------------- |
 | Utilization | 资源繁忙时间占比 | `top`, `vmstat`, `iostat`         |
 | Saturation  | 排队等待的工作量 | `vmstat`(r列), `iostat`(avgqu-sz) |
 | Errors      | 错误事件计数     | `dmesg`, 应用日志                 |
@@ -40,7 +40,7 @@ netstat -s | grep -i error  # Errors
 面向服务的性能指标：
 
 | 维度     | 含义         | 示例        |
-|----------|--------------|-------------|
+| -------- | ------------ | ----------- |
 | Rate     | 每秒请求数   | QPS/RPS     |
 | Errors   | 每秒错误数   | 5xx/s       |
 | Duration | 请求延迟分布 | P50/P95/P99 |
@@ -59,7 +59,7 @@ histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m]))  # P99
 ### CPU Profiling
 
 | 语言    | 工具              | 命令                                                      |
-|---------|-------------------|-----------------------------------------------------------|
+| ------- | ----------------- | --------------------------------------------------------- |
 | Python  | cProfile / py-spy | `py-spy record -o profile.svg -- python app.py`           |
 | Go      | pprof             | `go tool pprof http://localhost:6060/debug/pprof/profile` |
 | Java    | async-profiler    | `./profiler.sh -d 30 -f flame.html <pid>`                 |
@@ -121,7 +121,7 @@ perf script | stackcollapse-perf.pl | flamegraph.pl > flame.svg
 ### 解读要点
 
 | 特征       | 含义                 | 行动           |
-|------------|----------------------|----------------|
+| ---------- | -------------------- | -------------- |
 | 宽平顶     | 该函数自身耗时大     | 优化该函数逻辑 |
 | 宽塔形     | 调用链深但每层都耗时 | 减少调用层级   |
 | 多个窄尖峰 | 多处小开销累积       | 关注热路径     |
@@ -150,7 +150,9 @@ k6 run --vus 100 --duration 30s script.js
 
 ```python
 # Python - pytest-benchmark
-def test_sort_benchmark(benchmark):
+def test_sort_benchmark(
+        benchmark
+):
     data = list(range(1000, 0, -1))
     benchmark(sorted, data)
 
@@ -160,9 +162,9 @@ Go（测试文件需导入 `sort`、`testing`，并提供 `generateData`）：
 
 ```go
 func BenchmarkSort(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		sort.Ints(generateData())
-	}
+        for i := 0; i < b.N; i++ {
+                sort.Ints(generateData())
+        }
 }
 ```
 
@@ -189,7 +191,7 @@ fn bench_sort(b: &mut Bencher) {
 ### CPU 密集型
 
 | 问题            | 优化                           |
-|-----------------|--------------------------------|
+| --------------- | ------------------------------ |
 | 热循环          | 算法优化、减少分支             |
 | 序列化/反序列化 | 换用高效格式(protobuf/msgpack) |
 | 正则表达式      | 预编译、简化模式               |
@@ -198,7 +200,7 @@ fn bench_sort(b: &mut Bencher) {
 ### I/O 密集型
 
 | 问题           | 优化                       |
-|----------------|----------------------------|
+| -------------- | -------------------------- |
 | 同步阻塞 I/O   | 异步 I/O (asyncio/epoll)   |
 | 频繁小文件读写 | 批量合并、缓冲区           |
 | 网络往返       | 连接池、批量请求、Pipeline |
@@ -207,7 +209,7 @@ fn bench_sort(b: &mut Bencher) {
 ### 内存相关
 
 | 问题       | 优化                      |
-|------------|---------------------------|
+| ---------- | ------------------------- |
 | 内存泄漏   | Profiling 定位 + 修复引用 |
 | GC 压力    | 减少分配、对象池          |
 | 缓存未命中 | 数据局部性、紧凑布局      |
@@ -221,22 +223,34 @@ fn bench_sort(b: &mut Bencher) {
 
 ```sql
 -- 1. EXPLAIN 分析
-EXPLAIN ANALYZE SELECT * FROM orders WHERE user_id = 123;
+EXPLAIN
+ANALYZE
+SELECT *
+FROM orders
+WHERE user_id = 123;
 
 -- 2. 索引优化
-CREATE INDEX idx_orders_user_id ON orders(user_id);
-CREATE INDEX idx_orders_composite ON orders(user_id, created_at DESC);
+CREATE INDEX idx_orders_user_id ON orders (user_id);
+CREATE INDEX idx_orders_composite ON orders (user_id, created_at DESC);
 
 -- 3. 避免 N+1
 -- 差：循环查询
 -- 好：JOIN 或 IN 批量查询
-SELECT o.*, u.name FROM orders o JOIN users u ON o.user_id = u.id;
+SELECT o.*, u.name
+FROM orders o
+         JOIN users u ON o.user_id = u.id;
 
 -- 4. 分页优化
 -- 差：OFFSET 大数值
-SELECT * FROM orders ORDER BY id LIMIT 20 OFFSET 100000;
+SELECT *
+FROM orders
+ORDER BY id LIMIT 20
+OFFSET 100000;
 -- 好：游标分页
-SELECT * FROM orders WHERE id > 100000 ORDER BY id LIMIT 20;
+SELECT *
+FROM orders
+WHERE id > 100000
+ORDER BY id LIMIT 20;
 ```
 
 ### 连接池配置
@@ -290,7 +304,7 @@ pool_size = (core_count * 2) + effective_spindle_count
 ### 测试类型
 
 | 类型     | 用户数   | 持续时间 | 目标         |
-|----------|----------|----------|--------------|
+| -------- | -------- | -------- | ------------ |
 | 负载测试 | 预期峰值 | 30min-2h | 验证性能指标 |
 | 压力测试 | 超出峰值 | 1-3h     | 找到崩溃点   |
 | 浸泡测试 | 正常负载 | 8-72h    | 检测内存泄漏 |
@@ -316,7 +330,7 @@ export const options = {
 ### 性能基准阈值
 
 | 场景     | P95响应时间 | 错误率 | 吞吐量    |
-|----------|-------------|--------|-----------|
+| -------- | ----------- | ------ | --------- |
 | API查询  | <200ms      | <0.1%  | >1000 RPS |
 | API写入  | <500ms      | <0.5%  | >500 RPS  |
 | 页面加载 | <2s         | <1%    | >100 RPS  |
@@ -324,7 +338,7 @@ export const options = {
 ### 工具选型
 
 | 工具    | 语言       | 适用场景                   |
-|---------|------------|----------------------------|
+| ------- | ---------- | -------------------------- |
 | k6      | JavaScript | 现代化、DevOps集成、云原生 |
 | JMeter  | Java/GUI   | 功能全面、插件丰富         |
 | Gatling | Scala      | 高性能、大规模测试         |

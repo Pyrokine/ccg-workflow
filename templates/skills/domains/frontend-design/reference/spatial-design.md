@@ -1,6 +1,12 @@
 # Spatial Design
 
-CSS examples reuse the target spacing scale’s `--space-md` token.
+The container-query example uses a 16px medium gap from the 4pt spacing scale:
+
+```css
+:root {
+  --space-md: 1rem;
+}
+```
 
 ## Spacing Systems
 
@@ -39,7 +45,7 @@ If everything looks the same weight blurred, you have a hierarchy problem.
 Don't rely on size alone. Combine:
 
 | Tool         | Strong Hierarchy          | Weak Hierarchy    |
-|--------------|---------------------------|-------------------|
+| ------------ | ------------------------- | ----------------- |
 | **Size**     | 3:1 ratio or more         | <2:1 ratio        |
 | **Weight**   | Bold vs Regular           | Medium vs Regular |
 | **Color**    | High contrast             | Similar tones     |

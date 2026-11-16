@@ -1,9 +1,11 @@
 ---
 name: seo-page-builder
-description: 用于创建、审计或优化 SEO 工具页、AI generator/remover/enhancer/converter/editor 功能页、feature page JSON、工具页 on-page SEO brief，以及 App Router/i18n 功能页路由。
+description: >-
+  用于创建、审计或优化 SEO 工具页、AI generator/remover/enhancer/converter/editor 功能页、feature page JSON、工具页 on-page
+  SEO brief，以及 App Router/i18n 功能页路由。
 user-invocable: true
 allowed-tools: Read, Write, Edit, Glob, Grep, Bash, WebFetch
-argument-hint: "[目标关键词 或 页面路径]"
+argument-hint: '[目标关键词 或 页面路径]'
 ---
 
 # SEO 工具页构建器
@@ -111,4 +113,4 @@ argument-hint: "[目标关键词 或 页面路径]"
 - `scripts/onpage-audit.py`：三个模式的量具，stdlib only，无需 key —— `--suggest` 取 Google autocomplete、`--benchmark`
   量竞品密度并提取其 FAQ、`--targets` 打分交付页。配置模板见 `scripts/targets.example.json`。
 
-[PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
+`[PROTOCOL]`: 变更时更新此头部，然后检查 AGENTS.md

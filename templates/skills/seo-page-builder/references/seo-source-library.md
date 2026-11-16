@@ -1,6 +1,6 @@
 # SEO 资料引用库
 
-[PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
+`[PROTOCOL]`: 变更时更新此头部，然后检查 AGENTS.md
 
 ## 使用方式
 
@@ -10,7 +10,7 @@ search/GEO 表达时，优先查本文件列出的资料。不要把资料内容
 ## Google 官方
 
 | 资料                                    | 地址                                                                              | 用途                                                                                                |
-|-----------------------------------------|-----------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------|
+| --------------------------------------- | --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | Helpful, reliable, people-first content | `https://developers.google.com/search/docs/fundamentals/creating-helpful-content` | 校准信息价值、E-E-A-T、Who/How/Why、AI/自动化披露、搜索引擎优先内容风险                             |
 | Spam policies                           | `https://developers.google.com/search/docs/essentials/spam-policies`              | 检查 scaled content、doorway、scraping abuse、misleading functionality、keyword stuffing、link spam |
 | SEO Starter Guide                       | `https://developers.google.com/search/docs/fundamentals/seo-starter-guide`        | 校准标题、meta、URL、图片、重复内容、可索引性、无固定字数等基础规则                                 |
@@ -22,7 +22,7 @@ search/GEO 表达时，优先查本文件列出的资料。不要把资料内容
 ## On-page 与 AI Search
 
 | 资料                              | 地址                                                                                                             | 用途                                                                                                                |
-|-----------------------------------|------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------|
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | Backlinko On-Page SEO             | `https://backlinko.com/on-page-seo`                                                                              | 校准 title/meta、信息增量、搜索意图、自然关键词、内链、图片 alt、LLM-friendly formatting                            |
 | Backlinko Internal Links          | `https://backlinko.com/hub/seo/internal-links/`                                                                  | 校准内链数量、锚文本自然性、从高权重页支持重点页                                                                    |
 | Backlinko Meta Descriptions       | `https://backlinko.com/hub/seo/meta-descriptions`                                                                | 校准 meta description 的 CTR 作用、唯一性、长度和价值表达                                                           |
@@ -38,7 +38,7 @@ search/GEO 表达时，优先查本文件列出的资料。不要把资料内容
 ## 实操案例
 
 | 资料                                        | 地址                                                                                                                 | 可借鉴点                                                                                                                          |
-|---------------------------------------------|----------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------|
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | SearchPilot: internal linking category test | `https://www.searchpilot.com/resources/case-studies/seo-split-test-lessons-increasing-internal-linking`              | 控制实验：给二级分类增加到三级分类的链接，二级和三级分类合计约 25% organic uplift；重点是更清晰的信息架构，不是乱加链接           |
 | SearchPilot: footer internal links test     | `https://www.searchpilot.com/resources/case-studies/adding-internal-links-to-home-page-footer`                       | 控制实验：首页 footer 增加相关内链整体约 5% uplift，桌面约 10%；只能作为行业/站点适配测试，不是 footer 链接越多越好               |
 | SearchPilot: AI-generated content test      | `https://www.searchpilot.com/resources/case-studies/ai-generated-content-improve-organic-traffic`                    | 控制实验：同一 AI 内容改动在美国市场约 +12.6% 预测 uplift，在澳洲不确定；用于提醒市场差异、人工审查和分组测试                     |
@@ -58,7 +58,7 @@ Firecrawl 可搜索 Reddit 结果，但当前不支持抓取 `reddit.com` 或 `o
 正文。Reddit 只作为实操线索，不作为规则真源；使用前必须人工打开核验上下文、时间、站点类型、是否有截图或 GSC 数据。
 
 | 线索                                         | 地址                                                                                                  | 用途                                                          |
-|----------------------------------------------|-------------------------------------------------------------------------------------------------------|---------------------------------------------------------------|
+| -------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
 | r/SEO: SaaS organic traffic case             | `https://www.reddit.com/r/SEO/comments/s3ry25/seo_case_study_0_to_200000_monthly_organic/`            | 找无主动外链、内容和 on-page 驱动增长的社区讨论线索           |
 | r/bigseo: internal linking only case         | `https://www.reddit.com/r/bigseo/comments/1t0hdnn/fixed_8_page2_rankings_with_internal_linking_only/` | 找只改内链、page 2 到 page 1 的实操讨论线索；需核验正文和数据 |
 | r/SEO: internal linking strategy discussions | `https://www.reddit.com/r/SEO/search/?q=internal%20linking%20case%20study&restrict_sr=1`              | 搜索近期内链经验、失败案例和反例                              |
@@ -67,7 +67,7 @@ Firecrawl 可搜索 Reddit 结果，但当前不支持抓取 `reddit.com` 或 `o
 ## 算法解读
 
 | 资料                                                   | 地址                                                                                               | 用途                                                                |
-|--------------------------------------------------------|----------------------------------------------------------------------------------------------------|---------------------------------------------------------------------|
+| ------------------------------------------------------ | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
 | Search Engine Land: March 2026 core update complete    | `https://searchengineland.com/google-march-2026-core-update-rollout-is-now-complete-473883`        | 核对 2026 年 3 月 core update 时间线和 Google 未给新技巧的结论      |
 | Search Engine Land: March 2026 volatility analysis     | `https://searchengineland.com/march-2026-google-core-update-what-changed-474397`                   | 作为第三方观察：官方/专业/品牌/数据丰富来源增强，聚合与薄比较页承压 |
 | Search Engine Journal: March 2026 core update complete | `https://www.searchenginejournal.com/google-confirms-march-2026-core-update-is-complete/571459/`   | 交叉确认 core update 时间线、无新增官方指导、仍回到 helpful content |

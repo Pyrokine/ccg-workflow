@@ -1,6 +1,8 @@
 ---
 name: claymorphism
-description: Claymorphism design system skill. Use when building soft, puffy, clay-like UI components with large radii, dual inner shadows, and offset outer shadows.
+description: >-
+  Claymorphism design system skill. Use when building soft, puffy, clay-like UI components with large
+  radii, dual inner shadows, and offset outer shadows.
 license: MIT
 user-invocable: false
 disable-model-invocation: false
@@ -56,9 +58,11 @@ Reference: [references/tokens.css](references/tokens.css)
   cursor: pointer;
   transition: box-shadow 0.2s;
 }
+
 .clay-btn:hover {
   box-shadow: var(--clay-shadow-elevated);
 }
+
 .clay-btn:active {
   box-shadow: var(--clay-shadow-pressed);
 }
@@ -75,6 +79,7 @@ Reference: [references/tokens.css](references/tokens.css)
   padding: 0.75rem 1rem;
   color: var(--clay-text);
 }
+
 .clay-input:focus {
   outline: 2px solid var(--clay-accent);
   outline-offset: 2px;
@@ -91,6 +96,7 @@ Reference: [references/tokens.css](references/tokens.css)
   border-radius: var(--clay-radius-pill);
   box-shadow: var(--clay-shadow-pressed);
 }
+
 .clay-toggle-knob {
   width: 24px;
   height: 24px;

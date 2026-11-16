@@ -1,6 +1,9 @@
 ---
 name: liquid-glass
-description: Apple Liquid Glass design system. Use when building UI with translucent, depth-aware glass morphism following Apple's design language. Provides CSS tokens, component patterns, dark/light mode, and animation specs.
+description: >-
+  Apple Liquid Glass design system. Use when building UI with translucent, depth-aware glass morphism
+  following Apple's design language. Provides CSS tokens, component patterns, dark/light mode, and
+  animation specs.
 license: MIT
 user-invocable: false
 disable-model-invocation: false
@@ -31,7 +34,7 @@ Import the token file in your CSS:
 All tokens are defined in `references/tokens.css`. Key categories:
 
 | Category          | Prefix            | Example                |
-|-------------------|-------------------|------------------------|
+| ----------------- | ----------------- | ---------------------- |
 | Glass backgrounds | `--lg-bg-*`       | `--lg-bg-primary`      |
 | Blur              | `--lg-blur-*`     | `--lg-blur-md`         |
 | Borders           | `--lg-border-*`   | `--lg-border-color`    |
@@ -114,6 +117,7 @@ higher blur to maintain readability.
 .light-glass {
   color-scheme: light;
 }
+
 .dark-glass {
   color-scheme: dark;
 }

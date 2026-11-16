@@ -1,7 +1,10 @@
 ---
 name: audit
-description: "Run technical quality checks across accessibility, performance, theming, responsive design, and anti-patterns. Generates a scored report with P0-P3 severity ratings and actionable plan. Use when the user wants an accessibility check, performance audit, or technical quality review."
-argument-hint: "[area (feature, page, component...)]"
+description: >-
+  Run technical quality checks across accessibility, performance, theming, responsive design, and
+  anti-patterns. Generates a scored report with P0-P3 severity ratings and actionable plan. Use when
+  the user wants an accessibility check, performance audit, or technical quality review.
+argument-hint: '[area (feature, page, component...)]'
 user-invocable: false
 ---
 
@@ -90,14 +93,14 @@ clean (subtle issues only), 4=No AI tells (distinctive, intentional design)
 
 ### Audit Health Score
 
-| #         | Dimension         | Score     | Key Finding                        |
-|-----------|-------------------|-----------|------------------------------------|
-| 1         | Accessibility     | ?         | [most critical a11y issue or "--"] |
-| 2         | Performance       | ?         |                                    |
-| 3         | Responsive Design | ?         |                                    |
-| 4         | Theming           | ?         |                                    |
-| 5         | Anti-Patterns     | ?         |                                    |
-| **Total** |                   | **??/20** | **[Rating band]**                  |
+| #         | Dimension         | Score     | Key Finding                          |
+| --------- | ----------------- | --------- | ------------------------------------ |
+| 1         | Accessibility     | ?         | `[most critical a11y issue or "--"]` |
+| 2         | Performance       | ?         |                                      |
+| 3         | Responsive Design | ?         |                                      |
+| 4         | Theming           | ?         |                                      |
+| 5         | Anti-Patterns     | ?         |                                      |
+| **Total** |                   | **??/20** | **`[Rating band]`**                  |
 
 **Rating bands**: 18-20 Excellent (minor polish), 14-17 Good (address weak dimensions), 10-13 Acceptable (significant
 work needed), 6-9 Poor (major overhaul), 0-5 Critical (fundamental issues)
@@ -108,7 +111,7 @@ work needed), 6-9 Poor (major overhaul), 0-5 Critical (fundamental issues)
 
 ### Executive Summary
 
-- Audit Health Score: **??/20** ([rating band])
+- Audit Health Score: **??/20** (`[rating band]`)
 - Total issues found (count by severity: P0/P1/P2/P3)
 - Top 3-5 critical issues
 - Recommended next steps
@@ -124,7 +127,7 @@ Tag every issue with **P0-P3 severity**:
 
 For each issue, document:
 
-- **[P?] Issue name**
+- **`[P?]` Issue name**
 - **Location**: Component, file, line
 - **Category**: Accessibility / Performance / Theming / Responsive / Anti-Pattern
 - **Impact**: How it affects users
@@ -149,8 +152,8 @@ Note what's working well — good practices to maintain and replicate.
 
 List recommended playbooks in priority order (P0 first, then P1, then P2):
 
-1. **[P?] `playbook-name`** — Brief description (specific context from audit findings)
-2. **[P?] `playbook-name`** — Brief description (specific context)
+1. **`[P?]` `playbook-name`** — Brief description (specific context from audit findings)
+2. **`[P?]` `playbook-name`** — Brief description (specific context)
 
 Only recommend playbooks listed by the `frontend-design` skill. Map findings to the most appropriate playbook and end
 with `polish` when fixes were recommended.

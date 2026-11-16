@@ -1,7 +1,10 @@
 ---
 name: bolder
-description: "Amplify safe or boring designs to make them more visually interesting and stimulating. Increases impact while maintaining usability. Use when the user says the design looks bland, generic, too safe, lacks personality, or wants more visual impact and character."
-argument-hint: "[target]"
+description: >-
+  Amplify safe or boring designs to make them more visually interesting and stimulating. Increases
+  impact while maintaining usability. Use when the user says the design looks bland, generic, too
+  safe, lacks personality, or wants more visual impact and character.
+argument-hint: '[target]'
 user-invocable: false
 ---
 
@@ -21,18 +24,18 @@ direction.
 Analyze what makes the design feel too safe or boring:
 
 1. **Identify weakness sources**:
-    - **Generic choices**: System fonts, basic colors, standard layouts
-    - **Timid scale**: Everything is medium-sized with no drama
-    - **Low contrast**: Everything has similar visual weight
-    - **Static**: No motion, no energy, no life
-    - **Predictable**: Standard patterns with no surprises
-    - **Flat hierarchy**: Nothing stands out or commands attention
+   - **Generic choices**: System fonts, basic colors, standard layouts
+   - **Timid scale**: Everything is medium-sized with no drama
+   - **Low contrast**: Everything has similar visual weight
+   - **Static**: No motion, no energy, no life
+   - **Predictable**: Standard patterns with no surprises
+   - **Flat hierarchy**: Nothing stands out or commands attention
 
 2. **Understand the context**:
-    - What's the brand personality? (How far can we push?)
-    - What's the purpose? (Marketing can be bolder than financial dashboards)
-    - Who's the audience? (What will resonate?)
-    - What are the constraints? (Brand guidelines, accessibility, performance)
+   - What's the brand personality? (How far can we push?)
+   - What's the purpose? (Marketing can be bolder than financial dashboards)
+   - Who's the audience? (What will resonate?)
+   - What are the constraints? (Brand guidelines, accessibility, performance)
 
 If any of these are unclear from the codebase, Ask the user using AskUserQuestion.
 

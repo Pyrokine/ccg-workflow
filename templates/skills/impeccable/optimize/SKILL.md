@@ -1,7 +1,10 @@
 ---
 name: optimize
-description: "Diagnoses and fixes UI performance across loading speed, rendering, animations, images, and bundle size. Use when the user mentions slow, laggy, janky, performance, bundle size, load time, or wants a faster, smoother experience."
-argument-hint: "[target]"
+description: >-
+  Diagnoses and fixes UI performance across loading speed, rendering, animations, images, and bundle
+  size. Use when the user mentions slow, laggy, janky, performance, bundle size, load time, or wants a
+  faster, smoother experience.
+argument-hint: '[target]'
 user-invocable: false
 ---
 
@@ -14,17 +17,17 @@ Font-loading snippets require the target project’s `/fonts/custom.woff2` asset
 Understand current performance and identify problems:
 
 1. **Measure current state**:
-    - **Core Web Vitals**: LCP, FID/INP, CLS scores
-    - **Load time**: Time to interactive, first contentful paint
-    - **Bundle size**: JavaScript, CSS, image sizes
-    - **Runtime performance**: Frame rate, memory usage, CPU usage
-    - **Network**: Request count, payload sizes, waterfall
+   - **Core Web Vitals**: LCP, FID/INP, CLS scores
+   - **Load time**: Time to interactive, first contentful paint
+   - **Bundle size**: JavaScript, CSS, image sizes
+   - **Runtime performance**: Frame rate, memory usage, CPU usage
+   - **Network**: Request count, payload sizes, waterfall
 
 2. **Identify bottlenecks**:
-    - What's slow? (Initial load? Interactions? Animations?)
-    - What's causing it? (Large images? Expensive JavaScript? Layout thrashing?)
-    - How bad is it? (Perceivable? Annoying? Blocking?)
-    - Who's affected? (All users? Mobile only? Slow connections?)
+   - What's slow? (Initial load? Interactions? Animations?)
+   - What's causing it? (Large images? Expensive JavaScript? Layout thrashing?)
+   - How bad is it? (Perceivable? Annoying? Blocking?)
+   - Who's affected? (All users? Mobile only? Slow connections?)
 
 **CRITICAL**: Measure before and after. Premature optimization wastes time. Optimize what actually matters.
 
@@ -80,6 +83,8 @@ const HeavyChart = lazy(() => import('./HeavyChart'))
 - Preload critical fonts
 - Use system fonts when appropriate
 - Limit font weights loaded
+
+Serve the project's Basic Latin WOFF2 subset at `/fonts/custom.woff2` before using this loading rule:
 
 ```css
 @font-face {
@@ -252,7 +257,7 @@ const observer = new IntersectionObserver((entries) => {
 - WebPageTest
 - Core Web Vitals (Chrome UX Report)
 - Bundle analyzers (webpack-bundle-analyzer)
-- Performance monitoring (Sentry, DataDog, New Relic)
+- Performance monitoring (Sentry, Datadog, New Relic)
 
 **Key metrics**:
 

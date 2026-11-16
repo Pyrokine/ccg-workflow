@@ -121,7 +121,8 @@ v3.0 从底层重写。一个命令替代 29 个。
 
 - `/ccg:go` — 用自然语言描述任务，引擎自动分析意图、选择策略、执行到底。
 - **Hook 引擎**
-  — 用户消息只注入限长任务摘要；startup、resume、clear 和 compact 恢复当前 session 的完整任务契约、artifact 与精确关联的 spec
+  — 用户消息只注入限长任务摘要；startup、resume、clear 和 compact 恢复当前 session 的完整任务契约、artifact 与精确关联的
+  spec
   section；fork 使用新的未绑定 session identity。
 - **Task 持久化** — 每个 worktree 保存共享 task 和 opaque per-session binding。durable status 仍为
   `open`、`completed`、`cancelled`；当前 session 认领的 open task 对外显示
@@ -260,7 +261,8 @@ section 都有大小限制；任务状态无效、权威上下文缺失或超限
 Hook 返回 `permissionDecision: "deny"`，拒绝此次 Agent 或 wrapper 启动
 
 内部 `task-state-*.js`
-模块分别处理事务存储、任务生命周期、迁移恢复和孤立数据管理，Claude 与 Codex 从同一文件清单安装完整运行时，doctor 逐项检查依赖，所有模块通过现有控制器入口加载，Hook 注册保持不变
+模块分别处理事务存储、任务生命周期、迁移恢复和孤立数据管理，Claude 与 Codex 从同一文件清单安装完整运行时，doctor
+逐项检查依赖，所有模块通过现有控制器入口加载，Hook 注册保持不变
 
 ## Task 系统
 
@@ -289,7 +291,8 @@ Hook 返回 `permissionDecision: "deny"`，拒绝此次 Agent 或 wrapper 启动
 Task 文件只持久化 `open`、`completed` 或 `cancelled`。当前 session binding 指向 open task 时，resolver 返回 effective
 `in_progress`；其他 open task 显示 `suspended`。一个 open task 默认只由一个 session 认领，其 open `returnToTaskId`
 链也属于同一 claim。选择已占用任务返回
-`TASK_CLAIMED`，只有显式 takeover 才转移 binding。完成或恢复任务只修改调用 session 的 binding。state、binding、task 三层 compare-and-swap
+`TASK_CLAIMED`，只有显式 takeover 才转移 binding。完成或恢复任务只修改调用 session 的 binding。state、binding、task 三层
+compare-and-swap
 revision 拒绝过期写入；多文件修改会保留可重放的 transaction marker，直到全部原子替换完成。
 
 当前 session 没有 binding 但仍有 open task 时，控制器只返回候选元数据并要求显式选择。它不返回其他 session
@@ -297,7 +300,8 @@ key，也不向当前 session 注入其他任务的 requirements、spec 或 arti
 
 Schema v1 state、legacy task、有证据的无效状态和 orphan directory 分别使用显式迁移、修复与 quarantine 操作。旧 global
 pointer 只保留为重新认领提示，不自动分配。unfinished legacy task 保持 open；orphan
-directory 仅做 rename，不读取内容或推断 lifecycle。运行态父路径必须是 worktree 内的普通目录，symlink 会被拒绝。分支名和目录时间只用于诊断，不能选择任务。
+directory 仅做 rename，不读取内容或推断 lifecycle。运行态父路径必须是 worktree 内的普通目录，symlink
+会被拒绝。分支名和目录时间只用于诊断，不能选择任务。
 
 ## 规范权威
 
@@ -318,7 +322,8 @@ block 之外的唯一精确 heading、完整且限长的 section、全部关联�
 `.ccg/spec/` 模板。
 
 当前明确用户请求决定执行范围；精确关联的 spec section 与 `requirements.md`
-保存任务约束，计划、进度、compact 摘要和外部模型输出作为参考材料；新请求与任务记录冲突时，先更新任务范围再继续；compact/resume 和外部模型返回后，Lead 重新 resolve，并核对实体、版本、依赖方向、排除项和验收标准
+保存任务约束，计划、进度、compact 摘要和外部模型输出作为参考材料；新请求与任务记录冲突时，先更新任务范围再继续；compact/resume
+和外部模型返回后，Lead 重新 resolve，并核对实体、版本、依赖方向、排除项和验收标准
 
 ## 本地与共享上下文
 
@@ -366,7 +371,8 @@ s，报告提供执行阶段耗时；报告声明支持的文件类型，TOML �
 
 质量与安全报告默认对照 Git `HEAD`，可用 `--base`
 指定其他比较点；内置规则区分新增和既有问题，外部诊断没有同工具基线时保留来源未判定，既有阻断问题仍参与结果；变更分析使用最近模块已有的文档，纯测试变更不触发实现文档提醒；比较两个提交时使用
-`verify-change <paths...> --mode committed --base <A> --target-ref <B>`，差异、模块边界、关联文档和 Rust 内联测试取自所选提交，支持当前工作区中已不存在的历史路径
+`verify-change <paths...> --mode committed --base <A> --target-ref <B>`，差异、模块边界、关联文档和 Rust
+内联测试取自所选提交，支持当前工作区中已不存在的历史路径
 
 兼容安装和 Claude Code plugin 提供以下直接入口：
 
@@ -452,16 +458,64 @@ node bin/ccg.mjs uninstall  # 需要时移除当前 fork 的已安装工作流
 <!-- readme: contributors -start -->
 <table>
 <tr>
-    <td align="center"><a href="https://github.com/fengshao1227"><img src="https://avatars.githubusercontent.com/fengshao1227?v=4&s=100" width="100;" alt="fengshao1227"/><br /><sub><b>fengshao1227</b></sub></a></td>
-    <td align="center"><a href="https://github.com/SXP-Simon"><img src="https://avatars.githubusercontent.com/SXP-Simon?v=4&s=100" width="100;" alt="SXP-Simon"/><br /><sub><b>SXP-Simon</b></sub></a></td>
-    <td align="center"><a href="https://github.com/RebornQ"><img src="https://avatars.githubusercontent.com/RebornQ?v=4&s=100" width="100;" alt="RebornQ"/><br /><sub><b>RebornQ</b></sub></a></td>
-    <td align="center"><a href="https://github.com/Sakuranda"><img src="https://avatars.githubusercontent.com/Sakuranda?v=4&s=100" width="100;" alt="Sakuranda"/><br /><sub><b>Sakuranda</b></sub></a></td>
-    <td align="center"><a href="https://github.com/Mriris"><img src="https://avatars.githubusercontent.com/Mriris?v=4&s=100" width="100;" alt="Mriris"/><br /><sub><b>Mriris</b></sub></a></td>
-    <td align="center"><a href="https://github.com/23q3"><img src="https://avatars.githubusercontent.com/23q3?v=4&s=100" width="100;" alt="23q3"/><br /><sub><b>23q3</b></sub></a></td>
-    <td align="center"><a href="https://github.com/MrNine-666"><img src="https://avatars.githubusercontent.com/MrNine-666?v=4&s=100" width="100;" alt="MrNine-666"/><br /><sub><b>MrNine-666</b></sub></a></td>
+    <td align="center">
+      <a href="https://github.com/fengshao1227">
+        <img src="https://avatars.githubusercontent.com/fengshao1227?v=4&s=100"
+          width="100" alt="fengshao1227" /><br />
+        <sub><b>fengshao1227</b></sub>
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/SXP-Simon">
+        <img src="https://avatars.githubusercontent.com/SXP-Simon?v=4&s=100"
+          width="100" alt="SXP-Simon" /><br />
+        <sub><b>SXP-Simon</b></sub>
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/RebornQ">
+        <img src="https://avatars.githubusercontent.com/RebornQ?v=4&s=100"
+          width="100" alt="RebornQ" /><br />
+        <sub><b>RebornQ</b></sub>
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/Sakuranda">
+        <img src="https://avatars.githubusercontent.com/Sakuranda?v=4&s=100"
+          width="100" alt="Sakuranda" /><br />
+        <sub><b>Sakuranda</b></sub>
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/Mriris">
+        <img src="https://avatars.githubusercontent.com/Mriris?v=4&s=100"
+          width="100" alt="Mriris" /><br />
+        <sub><b>Mriris</b></sub>
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/23q3">
+        <img src="https://avatars.githubusercontent.com/23q3?v=4&s=100"
+          width="100" alt="23q3" /><br />
+        <sub><b>23q3</b></sub>
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/MrNine-666">
+        <img src="https://avatars.githubusercontent.com/MrNine-666?v=4&s=100"
+          width="100" alt="MrNine-666" /><br />
+        <sub><b>MrNine-666</b></sub>
+      </a>
+    </td>
 </tr>
 <tr>
-    <td align="center"><a href="https://github.com/GGzili"><img src="https://avatars.githubusercontent.com/GGzili?v=4&s=100" width="100;" alt="GGzili"/><br /><sub><b>GGzili</b></sub></a></td>
+    <td align="center">
+      <a href="https://github.com/GGzili">
+        <img src="https://avatars.githubusercontent.com/GGzili?v=4&s=100"
+          width="100" alt="GGzili" /><br />
+        <sub><b>GGzili</b></sub>
+      </a>
+    </td>
 </tr>
 </table>
 <!-- readme: contributors -end -->

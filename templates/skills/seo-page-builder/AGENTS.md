@@ -6,7 +6,7 @@
 SEO 工具页构建器入口，只处理工具型 SEO 页面，保留触发边界、工具类型判断、最短流程、输出契约与质量栏。references/:
 SEO 工具页参考库，承载 Firecrawl 流程、SERP 研究唯一真源、工具页模块信息价值 QA、资料引用库与 Google 标准校准。scripts/:
 可执行量具，stdlib
-only。`onpage-audit.py` 三模式（autocomplete 收词 / 竞品密度基准与 FAQ 提取 / 交付页打分），`targets.example.json`
+only。`onpage-audit.py` 的三种模式（autocomplete 收词 / 竞品密度基准与 FAQ 提取 / 交付页打分），`targets.example.json`
 为配置模板。
 
 架构决策 `seo-page-builder/`
@@ -42,4 +42,4 @@ generator 功能页流程揉入本技能，后续已收窄为单一工具页入�
 `references/firecrawl-workflow.md` 并更新 SERP 研究失败处理。2026-05-05: 从 `f321240^` 恢复历史 `seo-landing-page/`
 技能目录，并补齐 GEB 目录地图。
 
-[PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
+`[PROTOCOL]`: 变更时更新此头部，然后检查 AGENTS.md

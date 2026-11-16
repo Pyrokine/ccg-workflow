@@ -1,6 +1,8 @@
 ---
 name: frontend-engineering
-description: 前端工程化。性能优化（Web Vitals、懒加载、虚拟滚动）、测试（Vitest、Playwright、MSW）、构建工具（Vite、Webpack、esbuild）。当用户提到性能优化、前端测试、构建工具、代码分割时使用。
+description: >-
+  前端工程化。性能优化（Web
+  Vitals、懒加载、虚拟滚动）、测试（Vitest、Playwright、MSW）、构建工具（Vite、Webpack、esbuild）。当用户提到性能优化、前端测试、构建工具、代码分割时使用。
 ---
 
 # 前端工程化 · Frontend Engineering
@@ -10,7 +12,7 @@ description: 前端工程化。性能优化（Web Vitals、懒加载、虚拟滚
 ### Core Web Vitals
 
 | 指标 | 含义                     | 目标值  |
-|------|--------------------------|---------|
+| ---- | ------------------------ | ------- |
 | LCP  | Largest Contentful Paint | < 2.5s  |
 | FID  | First Input Delay        | < 100ms |
 | CLS  | Cumulative Layout Shift  | < 0.1   |
@@ -90,6 +92,7 @@ startTransition(() => setResults(heavySearch(query)))
 
 ```typescript
 import { onCLS, onFID, onLCP } from 'web-vitals'
+
 onCLS(sendToAnalytics)
 onFID(sendToAnalytics)
 onLCP(sendToAnalytics)
@@ -177,6 +180,7 @@ export default defineConfig({
 // Page Object 模式
 class LoginPage {
   constructor(private page: Page) {}
+
   async login(email: string, password: string) {
     await this.page.fill('[name="email"]', email)
     await this.page.fill('[name="password"]', password)
@@ -206,7 +210,7 @@ class LoginPage {
 ### 工具对比
 
 | 工具      | 冷启动 | HMR     | 生产构建 | 生态   |
-|-----------|--------|---------|----------|--------|
+| --------- | ------ | ------- | -------- | ------ |
 | Vite      | < 1s   | < 100ms | 10-30s   | 成熟   |
 | Webpack   | 10-30s | 1-3s    | 30-60s   | 最丰富 |
 | Turbopack | < 1s   | < 100ms | 10-20s   | 新兴   |
@@ -276,7 +280,7 @@ export default {
 ## 工具速查
 
 | 类别        | 推荐工具                                           |
-|-------------|----------------------------------------------------|
+| ----------- | -------------------------------------------------- |
 | 构建        | Vite (新项目) / Webpack (复杂项目)                 |
 | 单元测试    | Vitest                                             |
 | 组件测试    | Testing Library                                    |

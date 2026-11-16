@@ -140,8 +140,12 @@ function findCodexSessionJsonl() {
 
 // ─── JSONL 解析与回写 ─────────────────────────────────────
 
+/**
+ * @param {string} filePath
+ * @returns {string[]}
+ */
 function readJsonlLines(filePath) {
-  const content = fs.readFileSync(filePath, 'utf8');
+  const content = fs.readFileSync(filePath, { encoding: 'utf8' });
   return content.split('\n').filter((line) => line.trim() !== '');
 }
 

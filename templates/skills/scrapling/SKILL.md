@@ -1,9 +1,11 @@
 ---
 name: scrapling
-description: "使用 scrapling 进行网页抓取和数据提取。自动选择 Fetcher，支持 Cloudflare/WAF 绕过、Session 登录、HTML 解析。当用户提到 scrape/crawl/fetch page/extract data/爬取/抓取/绕过Cloudflare/解析HTML/批量采集 时触发。"
+description: >-
+  使用 scrapling 进行网页抓取和数据提取。自动选择 Fetcher，支持 Cloudflare/WAF 绕过、Session 登录、HTML 解析。当用户提到
+  scrape/crawl/fetch page/extract data/爬取/抓取/绕过Cloudflare/解析HTML/批量采集 时触发。
 user-invocable: true
 allowed-tools: Read, Bash
-argument-hint: "[URL or scraping task description]"
+argument-hint: '[URL or scraping task description]'
 license: MIT
 ---
 
@@ -65,7 +67,7 @@ pip show scrapling
 ## Cookie 格式速查
 
 | Fetcher 类型                     | Cookie 格式  | 示例                                                                |
-|----------------------------------|--------------|---------------------------------------------------------------------|
+| -------------------------------- | ------------ | ------------------------------------------------------------------- |
 | Fetcher / FetcherSession         | `dict`       | `{'name': 'value', 'token': 'abc'}`                                 |
 | StealthyFetcher / DynamicFetcher | `list[dict]` | `[{'name': 'n', 'value': 'v', 'domain': '.site.com', 'path': '/'}]` |
 
@@ -74,14 +76,14 @@ pip show scrapling
 ## 超时单位速查
 
 | Fetcher 类型                     | 超时单位 | 示例            |
-|----------------------------------|----------|-----------------|
+| -------------------------------- | -------- | --------------- |
 | Fetcher / FetcherSession         | 秒       | `timeout=30`    |
 | StealthyFetcher / DynamicFetcher | 毫秒     | `timeout=60000` |
 
 ## 模板索引
 
 | 模板            | 文件                              | 何时读取                       |
-|-----------------|-----------------------------------|--------------------------------|
+| --------------- | --------------------------------- | ------------------------------ |
 | 基础 HTTP 抓取  | `templates/basic_fetch.py`        | 目标为静态页面，无反爬         |
 | Cloudflare 绕过 | `templates/stealth_cloudflare.py` | 目标有 CF/WAF 保护             |
 | Session 登录    | `templates/session_login.py`      | 需 HTTP 表单登录后抓取         |
@@ -90,7 +92,7 @@ pip show scrapling
 ## References 索引
 
 | 文件                            | 何时读取                                              |
-|---------------------------------|-------------------------------------------------------|
+| ------------------------------- | ----------------------------------------------------- |
 | `references/site-patterns.md`   | **每次抓取前先查阅** — 检查目标站点是否有已记录的模式 |
 | `references/api-quick-ref.md`   | 生成脚本时查阅 — Fetcher/Selector 方法签名和参数      |
 | `references/troubleshooting.md` | 执行报错时查阅 — 按错误信息查找原因和解决方案         |

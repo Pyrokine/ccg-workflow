@@ -1,7 +1,10 @@
 ---
 name: polish
-description: "Performs a final quality pass fixing alignment, spacing, consistency, and micro-detail issues before shipping. Use when the user mentions polish, finishing touches, pre-launch review, something looks off, or wants to go from good to great."
-argument-hint: "[target]"
+description: >-
+  Performs a final quality pass fixing alignment, spacing, consistency, and micro-detail issues before
+  shipping. Use when the user mentions polish, finishing touches, pre-launch review, something looks
+  off, or wants to go from good to great.
+argument-hint: '[target]'
 user-invocable: false
 ---
 
@@ -9,7 +12,7 @@ user-invocable: false
 
 Use the `frontend-design` skill as the governing entry point and follow its design principles, anti-patterns, and
 **Context Gathering Protocol**. If design context is missing, ask only for the missing audience, use case, or brand
-direction. Additionally gather: quality bar (MVP vs flagship).
+direction. Also gather: quality bar (MVP vs flagship).
 
 ---
 
@@ -21,18 +24,18 @@ between shipped and polished.
 Understand the current state and goals:
 
 1. **Review completeness**:
-    - Is it functionally complete?
-    - Are there known issues to preserve (mark with TODOs)?
-    - What's the quality bar? (MVP vs flagship feature?)
-    - When does it ship? (How much time for polish?)
+   - Is it functionally complete?
+   - Are there known issues to preserve (mark with TODOs)?
+   - What's the quality bar? (MVP vs flagship feature?)
+   - When does it ship? (How much time for polish?)
 
 2. **Identify polish areas**:
-    - Visual inconsistencies
-    - Spacing and alignment issues
-    - Interaction state gaps
-    - Copy inconsistencies
-    - Edge cases and error states
-    - Loading and transition smoothness
+   - Visual inconsistencies
+   - Spacing and alignment issues
+   - Interaction state gaps
+   - Copy inconsistencies
+   - Edge cases and error states
+   - Loading and transition smoothness
 
 **CRITICAL**: Polish is the last step, not the first. Don't polish work that's not functionally complete.
 

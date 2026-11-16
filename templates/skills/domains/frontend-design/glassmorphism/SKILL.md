@@ -1,6 +1,8 @@
 ---
 name: glassmorphism
-description: Glassmorphism design system skill. Use when building frosted-glass UI components with blur, transparency, and layered depth effects.
+description: >-
+  Glassmorphism design system skill. Use when building frosted-glass UI components with blur,
+  transparency, and layered depth effects.
 license: MIT
 user-invocable: false
 disable-model-invocation: false
@@ -72,6 +74,7 @@ Use CSS custom properties from `tokens.css` for consistent theming:
   background: rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(4px);
 }
+
 .glass-modal {
   background: var(--glass-bg-heavy);
   backdrop-filter: var(--glass-blur-strong);
@@ -93,6 +96,7 @@ Use CSS custom properties from `tokens.css` for consistent theming:
   border-radius: var(--glass-radius);
   transition: background 0.2s;
 }
+
 .glass-btn:hover {
   background: var(--glass-bg);
 }
@@ -101,7 +105,7 @@ Use CSS custom properties from `tokens.css` for consistent theming:
 ## Browser Compatibility
 
 | Feature              | Chrome | Firefox | Safari          | Edge |
-|----------------------|--------|---------|-----------------|------|
+| -------------------- | ------ | ------- | --------------- | ---- |
 | `backdrop-filter`    | 76+    | 103+    | 9+ (`-webkit-`) | 79+  |
 | `rgba()` backgrounds | All    | All     | All             | All  |
 
@@ -113,6 +117,7 @@ Use CSS custom properties from `tokens.css` for consistent theming:
 .glass-card {
   background: rgba(255, 255, 255, 0.85); /* fallback */
 }
+
 @supports (backdrop-filter: blur(1px)) {
   .glass-card {
     background: var(--glass-bg);
@@ -135,6 +140,7 @@ Use CSS custom properties from `tokens.css` for consistent theming:
     backdrop-filter: none;
   }
 }
+
 @media (prefers-contrast: more) {
   .glass-card {
     background: rgba(255, 255, 255, 0.85);

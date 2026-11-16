@@ -1,6 +1,13 @@
 # UX 原则
 
-以下 CSS 片段复用目标项目的主题令牌，需提供 `--shadow-4` 和 `--primary-dark`
+以下 CSS 片段使用 UI 美学示例的深主色与弹出层阴影，目标项目可按主题调整这些令牌
+
+```css
+:root {
+  --primary-dark: hsl(220 90% 40%);
+  --shadow-4: 0 16px 24px rgba(0, 0, 0, 0.16);
+}
+```
 
 ## 可用性
 
@@ -84,6 +91,7 @@ element.setAttribute('tabindex', '0')
   background-size: 200% 100%;
   animation: loading 1.5s ease-in-out infinite;
 }
+
 @keyframes loading {
   0% {
     background-position: 200% 0;
@@ -116,6 +124,7 @@ element.setAttribute('tabindex', '0')
   box-shadow: var(--shadow-4);
   animation: slideInRight 0.3s ease;
 }
+
 @keyframes slideInRight {
   from {
     transform: translateX(100%);
@@ -143,6 +152,7 @@ element.setAttribute('tabindex', '0')
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
 }
+
 @media (hover: hover) {
   .btn-touch:hover {
     background: var(--primary-dark);

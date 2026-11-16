@@ -1,7 +1,10 @@
 ---
 name: harden
-description: "Improve interface resilience through better error handling, i18n support, text overflow handling, and edge case management. Makes interfaces robust and production-ready. Use when the user asks to harden, make production-ready, handle edge cases, add error states, or fix overflow and i18n issues."
-argument-hint: "[target]"
+description: >-
+  Improve interface resilience through better error handling, i18n support, text overflow handling,
+  and edge case management. Makes interfaces robust and production-ready. Use when the user asks to
+  harden, make production-ready, handle edge cases, add error states, or fix overflow and i18n issues.
+argument-hint: '[target]'
 user-invocable: false
 ---
 
@@ -13,28 +16,28 @@ idealized designs.
 Identify weaknesses and edge cases:
 
 1. **Test with extreme inputs**:
-    - Very long text (names, descriptions, titles)
-    - Very short text (empty, single character)
-    - Special characters (emoji, RTL text, accents)
-    - Large numbers (millions, billions)
-    - Many items (1000+ list items, 50+ options)
-    - No data (empty states)
+   - Very long text (names, descriptions, titles)
+   - Very short text (empty, single character)
+   - Special characters (emoji, RTL text, accents)
+   - Large numbers (millions, billions)
+   - Many items (1000+ list items, 50+ options)
+   - No data (empty states)
 
 2. **Test error scenarios**:
-    - Network failures (offline, slow, timeout)
-    - API errors (400, 401, 403, 404, 500)
-    - Validation errors
-    - Permission errors
-    - Rate limiting
-    - Concurrent operations
+   - Network failures (offline, slow, timeout)
+   - API errors (400, 401, 403, 404, 500)
+   - Validation errors
+   - Permission errors
+   - Rate limiting
+   - Concurrent operations
 
 3. **Test internationalization**:
-    - Long translations (German is often 30% longer than English)
-    - RTL languages (Arabic, Hebrew)
-    - Character sets (Chinese, Japanese, Korean, emoji)
-    - Date/time formats
-    - Number formats (1,000 vs 1.000)
-    - Currency symbols
+   - Long translations (German is often 30% longer than English)
+   - RTL languages (Arabic, Hebrew)
+   - Character sets (Chinese, Japanese, Korean, emoji)
+   - Date/time formats
+   - Number formats (1,000 vs 1.000)
+   - Currency symbols
 
 **CRITICAL**: Designs that only work with perfect data aren't production-ready. Harden against reality.
 
@@ -168,12 +171,14 @@ t('items', { count }) // Handles complex plural rules
 
 ```jsx
 // Error states with recovery
-{error && (
-  <ErrorMessage>
-    <p>Failed to load data. {error.message}</p>
-    <button onClick={retry}>Try again</button>
-  </ErrorMessage>
-)}
+{
+  error && (
+    <ErrorMessage>
+      <p>Failed to load data. {error.message}</p>
+      <button onClick={retry}>Try again</button>
+    </ErrorMessage>
+  )
+}
 ```
 
 **Form validation errors**:
@@ -187,12 +192,12 @@ t('items', { count }) // Handles complex plural rules
 **API errors**:
 
 - Handle each status code appropriately
-    - 400: Show validation errors
-    - 401: Redirect to login
-    - 403: Show permission error
-    - 404: Show not found state
-    - 429: Show rate limit message
-    - 500: Show generic error, offer support
+  - 400: Show validation errors
+  - 401: Redirect to login
+  - 403: Show permission error
+  - 404: Show not found state
+  - 429: Show rate limit message
+  - 500: Show generic error, offer support
 
 **Graceful degradation**:
 

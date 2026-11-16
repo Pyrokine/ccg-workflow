@@ -1,13 +1,19 @@
 # Interaction Design
 
-CSS examples reuse the target theme’s `--color-accent` token.
+The focus-ring example uses the blue accent from the color palette example. Adjust it to the target theme:
+
+```css
+:root {
+  --color-accent: oklch(60% 0.15 250);
+}
+```
 
 ## The Eight Interactive States
 
 Every interactive element needs these states designed:
 
 | State        | When                        | Visual Treatment            |
-|--------------|-----------------------------|-----------------------------|
+| ------------ | --------------------------- | --------------------------- |
 | **Default**  | At rest                     | Base styling                |
 | **Hover**    | Pointer over (not touch)    | Subtle lift, color shift    |
 | **Focus**    | Keyboard/programmatic focus | Visible ring (see below)    |
@@ -165,8 +171,8 @@ For browsers without anchor positioning support, `position: fixed` with manual c
 }
 ```
 
-Check viewport boundaries before rendering. If the dropdown would overflow the bottom edge, flip it above the trigger.
-If it would overflow the right edge, align it to the trigger's right side instead.
+Check viewport boundaries before rendering. If the dropdown overflows the bottom edge, flip it above the trigger.
+If it overflows the right edge, align it to the trigger's right side instead.
 
 ### Anti-Patterns
 

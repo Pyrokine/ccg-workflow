@@ -1,6 +1,10 @@
 ---
 name: frontend-design
-description: 'Frontend design skill fused from Impeccable + custom extensions. Covers design philosophy, anti-AI-slop patterns, typography, color (OKLCH), spatial design, motion, interaction, responsive, UX writing, state management, engineering, and 4 style variants. Includes 20 technique playbooks for focused design work.'
+description: >-
+  Frontend design skill fused from Impeccable + custom extensions. Covers design philosophy,
+  anti-AI-slop patterns, typography, color (OKLCH), spatial design, motion, interaction, responsive,
+  UX writing, state management, engineering, and 4 style variants. Includes 20 technique playbooks for
+  focused design work.
 license: 'Apache 2.0 (Impeccable) + MIT (custom extensions)'
 user-invocable: true
 disable-model-invocation: false
@@ -145,7 +149,7 @@ Review the DON'T guidelines above — they are the fingerprints of AI-generated 
 Deep-dive reference documents for each design dimension:
 
 | Reference                                             | Covers                                                                          |
-|-------------------------------------------------------|---------------------------------------------------------------------------------|
+| ----------------------------------------------------- | ------------------------------------------------------------------------------- |
 | [typography](reference/typography.md)                 | Type systems, font pairing, modular scales, OpenType, web font loading          |
 | [color-and-contrast](reference/color-and-contrast.md) | OKLCH, tinted neutrals, dark mode, accessibility, 60-30-10                      |
 | [spatial-design](reference/spatial-design.md)         | 4pt spacing, grids, visual hierarchy, container queries, optical adjustments    |
@@ -157,7 +161,7 @@ Deep-dive reference documents for each design dimension:
 ## Extended Knowledge (Original)
 
 | Topic                | Document                                       | Covers                                                                      |
-|----------------------|------------------------------------------------|-----------------------------------------------------------------------------|
+| -------------------- | ---------------------------------------------- | --------------------------------------------------------------------------- |
 | UI Aesthetics        | [ui-aesthetics.md](ui-aesthetics.md)           | HSL color tokens, 8px grid CSS snippets, shadow scales, dark mode CSS       |
 | Component Patterns   | [component-patterns.md](component-patterns.md) | CSS Grid/Flexbox layouts, responsive nav, glass card, Framer Motion         |
 | UX Principles        | [ux-principles.md](ux-principles.md)           | Nielsen 10 heuristics, WCAG, ARIA, keyboard, loading patterns               |
@@ -169,7 +173,7 @@ Deep-dive reference documents for each design dimension:
 Specific style variant specs with CSS tokens and component patterns:
 
 | Style         | Document                                         | Aesthetic                                                            |
-|---------------|--------------------------------------------------|----------------------------------------------------------------------|
+| ------------- | ------------------------------------------------ | -------------------------------------------------------------------- |
 | Claymorphism  | [claymorphism/SKILL.md](claymorphism/SKILL.md)   | Soft clay, large radii, dual inner shadows, offset outer shadows     |
 | Glassmorphism | [glassmorphism/SKILL.md](glassmorphism/SKILL.md) | Frosted glass, backdrop-filter, translucency, blur layers            |
 | Neubrutalism  | [neubrutalism/SKILL.md](neubrutalism/SKILL.md)   | Thick borders, offset solid shadows, high saturation, minimal radius |
@@ -185,7 +189,7 @@ standalone slash commands.
 ### Quality and audit
 
 | Playbook           | What it does                                                                                   |
-|--------------------|------------------------------------------------------------------------------------------------|
+| ------------------ | ---------------------------------------------------------------------------------------------- |
 | `audit`            | Technical quality checks (a11y, performance, responsive, theming, anti-patterns) — scored 0-20 |
 | `critique`         | UX design review with Nielsen heuristics scoring (0-40), persona testing, cognitive load       |
 | `teach-impeccable` | Gather reusable design context and save it to `.impeccable.md`                                 |
@@ -193,7 +197,7 @@ standalone slash commands.
 ### Fix and align
 
 | Playbook    | What it does                                      |
-|-------------|---------------------------------------------------|
+| ----------- | ------------------------------------------------- |
 | `normalize` | Align with design system standards                |
 | `polish`    | Final pass before shipping — 20-item checklist    |
 | `distill`   | Strip to essence, remove unnecessary complexity   |
@@ -204,7 +208,7 @@ standalone slash commands.
 ### Style and expression
 
 | Playbook   | What it does                                            |
-|------------|---------------------------------------------------------|
+| ---------- | ------------------------------------------------------- |
 | `animate`  | Add purposeful motion and micro-interactions            |
 | `colorize` | Introduce strategic color to monochromatic designs      |
 | `bolder`   | Amplify boring designs with distinctive impact          |
@@ -214,7 +218,7 @@ standalone slash commands.
 ### Structure and components
 
 | Playbook    | What it does                                                        |
-|-------------|---------------------------------------------------------------------|
+| ----------- | ------------------------------------------------------------------- |
 | `extract`   | Pull into reusable components and design tokens                     |
 | `adapt`     | Adapt for different devices and contexts                            |
 | `onboard`   | Design onboarding flows and empty states                            |

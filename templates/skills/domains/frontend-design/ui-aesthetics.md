@@ -1,6 +1,6 @@
 # UI 美学
 
-以下语义令牌示例依赖目标主题定义的 `--color-blue-600`
+以下示例展示主色、间距、语义令牌与阴影的定义
 
 ## 色彩理论
 
@@ -31,6 +31,7 @@
   --fs-h1: clamp(2rem, 1.5rem + 2vw, 3rem);
   --fs-h2: clamp(1.5rem, 1.2rem + 1.5vw, 2.25rem);
 }
+
 body {
   font-size: var(--fs-base);
   line-height: 1.6;
@@ -54,9 +55,11 @@ body {
   --sp-12: 3rem;
   --sp-16: 4rem;
 }
+
 .stack-sm > * + * {
   margin-top: var(--sp-2);
 }
+
 .stack-md > * + * {
   margin-top: var(--sp-4);
 }
@@ -64,7 +67,7 @@ body {
 
 ## 视觉层次
 
-### 视觉层次四原则
+### 视觉层次四项原则
 
 1. 对比：大小/粗细/颜色差异
 2. 对齐：统一对齐建立秩序
@@ -81,6 +84,7 @@ body {
 :root {
   --color-gray-50: #f9fafb;
   --color-gray-900: #111827;
+  --color-blue-600: hsl(220 90% 40%);
   --color-primary: var(--color-blue-600);
   --text-primary: var(--color-gray-900);
   --bg-surface: white;
@@ -99,16 +103,19 @@ body {
   --bg: white;
   --text: #111;
 }
+
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #121212;
     --text: #e0e0e0;
   }
 }
+
 [data-theme='dark'] {
   --bg: #121212;
   --text: #e0e0e0;
 }
+
 body {
   background: var(--bg);
   color: var(--text);

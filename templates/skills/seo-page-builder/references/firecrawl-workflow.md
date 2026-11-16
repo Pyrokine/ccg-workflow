@@ -1,6 +1,6 @@
 # Firecrawl 工作流
 
-[PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
+`[PROTOCOL]`: 变更时更新此头部，然后检查 AGENTS.md
 
 ## ⚠️ 本机现状：Firecrawl 不可用，走等价替代链
 
@@ -19,7 +19,7 @@
 `model: 'grok-chat-expert'`。
 
 | 任务         | Firecrawl            | 本机替代                                                                                                          |
-|--------------|----------------------|-------------------------------------------------------------------------------------------------------------------|
+| ------------ | -------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | 搜索 SERP    | `firecrawl_search`   | `mcp__exa__web_search_exa`（首选，返回带正文摘要）；`mcp__grok-search__web_search`；`mcp__open-websearch__search` |
 | 抓取页面正文 | `firecrawl_scrape`   | `mcp__exa__web_fetch_exa`；`mcp__grok-search__web_fetch`；`mcp__open-websearch__fetchWebContent`                  |
 | 发现站内 URL | `firecrawl_map`      | `mcp__grok-search__web_map`（直接对应）；退而求其次抓 `/sitemap.xml`                                              |
@@ -36,7 +36,7 @@
 默认使用 Firecrawl MCP。CLI 只作为 MCP 不可用、需要本地调试或用户明确要求时的后备。
 
 | 任务         | MCP                  | CLI                                                                         |
-|--------------|----------------------|-----------------------------------------------------------------------------|
+| ------------ | -------------------- | --------------------------------------------------------------------------- |
 | 搜索 SERP    | `firecrawl_search`   | `firecrawl search "关键词" --limit 10 --pretty`                             |
 | 抓取页面正文 | `firecrawl_scrape`   | `firecrawl scrape URL --only-main-content --format markdown,links --pretty` |
 | 发现站内 URL | `firecrawl_map`      | `firecrawl map URL --search "主题" --json --pretty`                         |

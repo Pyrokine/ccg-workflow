@@ -1,7 +1,10 @@
 ---
 name: normalize
-description: "Audits and realigns UI to match design system standards, spacing, tokens, and patterns. Use when the user mentions consistency, design drift, mismatched styles, tokens, or wants to bring a feature back in line with the system."
-argument-hint: "[feature (page, route, component...)]"
+description: >-
+  Audits and realigns UI to match design system standards, spacing, tokens, and patterns. Use when the
+  user mentions consistency, design drift, mismatched styles, tokens, or wants to bring a feature back
+  in line with the system.
+argument-hint: '[feature (page, route, component...)]'
 user-invocable: false
 ---
 
@@ -21,22 +24,22 @@ Before making changes, deeply understand the context:
 
 1. **Discover the design system**: Search for design system documentation, UI guidelines, component libraries, or style
    guides (grep for "design system", "ui guide", "style guide", etc.). Study it thoroughly until you understand:
-    - Core design principles and aesthetic direction
-    - Target audience and personas
-    - Component patterns and conventions
-    - Design tokens (colors, typography, spacing)
+   - Core design principles and aesthetic direction
+   - Target audience and personas
+   - Component patterns and conventions
+   - Design tokens (colors, typography, spacing)
 
    **CRITICAL**: If something isn't clear, ask. Don't guess at design system principles.
 
 2. **Analyze the current feature**: Assess what works and what doesn't:
-    - Where does it deviate from design system patterns?
-    - Which inconsistencies are cosmetic vs. functional?
-    - What's the root cause—missing tokens, one-off implementations, or conceptual misalignment?
+   - Where does it deviate from design system patterns?
+   - Which inconsistencies are cosmetic vs. functional?
+   - What's the root cause—missing tokens, one-off implementations, or conceptual misalignment?
 
 3. **Create a normalization plan**: Define specific changes that will align the feature with the design system:
-    - Which components can be replaced with design system equivalents?
-    - Which styles need to use design tokens instead of hard-coded values?
-    - How can UX patterns match established user flows?
+   - Which components can be replaced with design system equivalents?
+   - Which styles need to use design tokens instead of hard-coded values?
+   - How can UX patterns match established user flows?
 
    **IMPORTANT**: Great design is effective design. Prioritize UX consistency and usability over visual polish alone.
    Think through the best possible experience for your use case and personas first.

@@ -1,6 +1,10 @@
 ---
 name: ccg-workflow
-description: How to run a non-trivial change end to end with the CCG role tools (ccg_analyze / ccg_design / ccg_build / ccg_debug / ccg_optimize / ccg_review / ccg_test) and the verify-* quality gates. Use when a task is a whole feature, a refactor, a bug whose cause is not yet known, or any change large enough that one straight-through attempt would be a guess.
+description: >-
+  How to run a non-trivial change end to end with the CCG role tools (ccg_analyze / ccg_design /
+  ccg_build / ccg_debug / ccg_optimize / ccg_review / ccg_test) and the verify-* quality gates. Use
+  when a task is a whole feature, a refactor, a bug whose cause is not yet known, or any change large
+  enough that one straight-through attempt would be a guess.
 ---
 
 # CCG workflow
@@ -18,7 +22,7 @@ Four modes. The user should not have to name one: read what they asked for, pick
 for anything past Direct — say what it costs and wait for a yes. They are paying per model call.
 
 | Mode         | For                                                                                           | Runs                                                                |
-|--------------|-----------------------------------------------------------------------------------------------|---------------------------------------------------------------------|
+| ------------ | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
 | **Direct**   | a one-line fix, a rename, a question you can answer by reading                                | you, alone                                                          |
 | **Standard** | an ordinary feature, a bug with a known cause, a contained refactor                           | design → build → review                                             |
 | **Deep**     | a design with real alternatives, an unclear bug, a migration, anything expensive to get wrong | analyze → design → build → test → review                            |
@@ -36,7 +40,7 @@ Team to build it.
 ## The loop
 
 | Phase         | Tool                     | Ends when                                                           |
-|---------------|--------------------------|---------------------------------------------------------------------|
+| ------------- | ------------------------ | ------------------------------------------------------------------- |
 | 1. Understand | `ccg_analyze`            | you can state the constraints and the options with their trade-offs |
 | 2. Design     | `ccg_design`             | the interfaces and the boundaries are settled                       |
 | 3. Build      | `ccg_build`              | the code exists and its verify command passes                       |
@@ -67,7 +71,7 @@ ranked hypotheses with the minimal test that would confirm each."_
 Bundled beside this skill, each runnable through the shell and each documenting its own arguments:
 
 | Gate              | Use it after                                                             |
-|-------------------|--------------------------------------------------------------------------|
+| ----------------- | ------------------------------------------------------------------------ |
 | `verify-change`   | any change — analyses the diff and flags docs that drifted               |
 | `verify-quality`  | a complex or refactored module — complexity, duplication, naming, length |
 | `verify-security` | new modules, auth/crypto/input handling, anything touching secrets       |
@@ -135,7 +139,7 @@ review the assembled result. No teammate can see the seam it was built against.
 the moment something is settled that would otherwise be re-argued:
 
 | Kind         | Write it when                                                                                                            |
-|--------------|--------------------------------------------------------------------------------------------------------------------------|
+| ------------ | ------------------------------------------------------------------------------------------------------------------------ |
 | `decision`   | you chose between real alternatives — record the reason and what you rejected, or it can only be obeyed, never revisited |
 | `contract`   | two parts must agree: a signature, a schema, an event name, a file format                                                |
 | `convention` | this project does something in a way a newcomer would guess wrong                                                        |

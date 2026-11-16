@@ -23,16 +23,22 @@ garish. A light blue at 85% lightness needs ~0.08 chroma, not the 0.15 of your b
 
 **Pure gray is dead.** Add a subtle hint of your brand hue to all neutrals:
 
+Select one neutral palette with a `data-palette` attribute on the root element:
+
 ```css
-:root {
+:root[data-palette='neutral'] {
   /* Dead grays */
   --gray-100: oklch(95% 0 0); /* No personality */
   --gray-900: oklch(15% 0 0);
+}
 
+:root[data-palette='warm'] {
   /* Warm-tinted grays (add brand warmth) */
   --gray-100: oklch(95% 0.01 60); /* Hint of warmth */
   --gray-900: oklch(15% 0.01 60);
+}
 
+:root[data-palette='cool'] {
   /* Cool-tinted grays (tech, professional) */
   --gray-100: oklch(95% 0.01 250); /* Hint of blue */
   --gray-900: oklch(15% 0.01 250);
@@ -46,7 +52,7 @@ The chroma is tiny (0.01) but perceptible. It creates subconscious cohesion betw
 A complete system needs:
 
 | Role         | Purpose                       | Example                   |
-|--------------|-------------------------------|---------------------------|
+| ------------ | ----------------------------- | ------------------------- |
 | **Primary**  | Brand, CTAs, key actions      | 1 color, 3-5 shades       |
 | **Neutral**  | Text, backgrounds, borders    | 9-11 shade scale          |
 | **Semantic** | Success, error, warning, info | 4 colors, 2-3 shades each |
@@ -71,7 +77,7 @@ they're rare. Overuse kills their power.
 ### WCAG Requirements
 
 | Content Type                    | AA Minimum | AAA Target |
-|---------------------------------|------------|------------|
+| ------------------------------- | ---------- | ---------- |
 | Body text                       | 4.5:1      | 7:1        |
 | Large text (18px+ or 14px bold) | 3:1        | 4.5:1      |
 | UI components, icons            | 3:1        | 4.5:1      |
@@ -112,7 +118,7 @@ Don't trust your eyes. Use tools:
 You can't just swap colors. Dark mode requires different design decisions:
 
 | Light Mode         | Dark Mode                                     |
-|--------------------|-----------------------------------------------|
+| ------------------ | --------------------------------------------- |
 | Shadows for depth  | Lighter surfaces for depth (no shadows)       |
 | Dark text on light | Light text on dark (reduce font weight)       |
 | Vibrant accents    | Desaturate accents slightly                   |

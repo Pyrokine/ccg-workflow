@@ -7,9 +7,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
-## [Unreleased]
+## \[Unreleased]
 
-## [3.7.4-aug.1] - 2026-11-05
+## \[3.7.4-aug.1] - 2026-11-05
 
 ### Fixed
 
@@ -36,7 +36,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - Update GitHub Actions and use Go 1.27.3 in CI while retaining the Go 1.26.0 source requirement.
 - Apply explicit statement blocks, named regular-expression captures, and consistent source and Markdown formatting.
 
-## [3.7.3-aug.2] - 2026-10-29
+## \[3.7.3-aug.2] - 2026-10-29
 
 ### Added
 
@@ -65,7 +65,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - Existing seven-file Codex ownership records can upgrade to the complete runtime and uninstall while preserving
   original file records and user-owned content.
 
-## [3.7.3-aug.1] - 2026-10-27
+## \[3.7.3-aug.1] - 2026-10-27
 
 ### Added
 
@@ -121,7 +121,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - Contributor updates use one README path per job. Forks retain the upstream contributor table instead of replacing it
   with fork-only history.
 
-## [3.6.7-aug.1] - 2026-09-16
+## \[3.6.7-aug.1] - 2026-09-16
 
 ### Added
 
@@ -186,7 +186,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   lookup. CI uses current Node 24-based action releases and disables the unused Go module cache for the
   standard-library-only wrapper.
 
-## [3.6.4-aug.1] - 2026-09-05
+## \[3.6.4-aug.1] - 2026-09-05
 
 ### Added
 
@@ -258,7 +258,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - The `bt-panel` CLI now validates TLS certificates by default. An explicit `--insecure` flag is required for
   self-signed panels.
 
-## [3.4.0-aug.1] - 2026-08-14
+## \[3.4.0-aug.1] - 2026-08-14
 
 ### Added
 
@@ -284,7 +284,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   configurations from producing empty reviewer arguments.
 - Package version is v3.4.0-aug.1. The expected codeagent-wrapper binary version is v5.14.0-aug.1.
 
-## [3.1.6-aug.2] - 2026-06-23
+## \[3.1.6-aug.2] - 2026-06-23
 
 ### Fixes
 
@@ -293,7 +293,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   Linux/macOS. Binary v5.11.1-aug.2
 - Package and installer metadata now expect wrapper v5.11.1-aug.2 so installs refresh the binary after this fix
 
-## [3.1.6-aug.1] - 2026-06-20
+## \[3.1.6-aug.1] - 2026-06-20
 
 ### Fixes
 
@@ -319,7 +319,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - Node engine floor is now `^20.19.0 || ^22.13.0 || >=24`, with CI updated to Node 20.19.0 / 22.13.0 / 24
 - Go wrapper build/test toolchain metadata is raised to Go 1.26.0
 
-## [3.1.0] - 2026-05-20
+## \[3.1.0] - 2026-05-20
 
 ### ✨ New Features
 
@@ -359,7 +359,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
-## [3.0.10] - 2026-05-19
+## \[3.0.10] - 2026-05-19
 
 ### 🐛 Fixes
 
@@ -371,7 +371,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
-## [3.0.9] - 2026-05-19
+## \[3.0.9] - 2026-05-19
 
 ### 🐛 Fixes
 
@@ -382,7 +382,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
-## [3.0.8] - 2026-05-18
+## \[3.0.8] - 2026-05-18
 
 ### 🐛 Fixes
 
@@ -398,7 +398,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
-## [3.0.7] - 2026-05-18
+## \[3.0.7] - 2026-05-18
 
 ### 🐛 Fixes
 
@@ -408,7 +408,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
-## [3.0.6] - 2026-05-18
+## \[3.0.6] - 2026-05-18
 
 ### 🐛 Fixes
 
@@ -418,7 +418,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
-## [3.0.5] - 2026-05-18
+## \[3.0.5] - 2026-05-18
 
 ### 🐛 Fixes
 
@@ -428,7 +428,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
-## [3.0.4] - 2026-05-17
+## \[3.0.4] - 2026-05-17
 
 ### ✨ New Features
 
@@ -436,7 +436,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   review tasks to Gemini and Claude via codeagent-wrapper. Installed separately via menu option `X. Codex Mode`.
   - `~/.codex/AGENTS.md` — Adaptive decision framework (not rigid workflow): auto-assesses complexity/risk, scales
     effort accordingly
-  - `~/.codex/hooks/ccg-workflow.py` — Intelligent guardrail hook: tracks progress per-turn, injects adaptive reminders
+  - `~/.codex/hooks/ccg-workflow.py` — Intelligent guardrail hook: tracks progress per-turn, injects adaptive
+    reminders
     based on what Codex has/hasn't done
   - `~/.codex/config.toml` — Multi-agent v2 enabled with 8-min timeout for external model calls
   - `~/.codex/agents/ccg-implement.toml` / `ccg-review.toml` / `ccg-research.toml` — Native sub-agent definitions
@@ -458,7 +459,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
-## [3.0.3] - 2026-05-17
+## \[3.0.3] - 2026-05-17
 
 ### ✨ New Features
 
@@ -467,8 +468,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   while Claude remains the orchestrator: monitoring progress, reviewing `git diff`, and running quality gates afterward.
 - **New role: `codex/builder.md`** — Implementation-focused role prompt with full write permissions. Follows plan
   exactly, validates after each task, outputs structured Execution Report.
-- **Execution mode selection at HARD STOP** — `full-collaborate` offers [Agent Teams / Codex], `guided-develop` offers
-  [Claude / Codex]. Codex failure auto-degrades to the other option.
+- **Execution mode selection at HARD STOP** — `full-collaborate` offers \[Agent Teams / Codex], `guided-develop` offers
+  \[Claude / Codex]. Codex failure auto-degrades to the other option.
 
 ### 🔄 Changes
 
@@ -479,7 +480,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
-## [3.0.2] - 2026-05-17
+## \[3.0.2] - 2026-05-17
 
 ### ✨ New Features (Trellis-inspired)
 
@@ -508,7 +509,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
-## [3.0.1] - 2026-05-16
+## \[3.0.1] - 2026-05-16
 
 - Task archival: completed tasks move to `.ccg/tasks/archive/YYYY-MM/` with auto-commit
 - task.json adds `branch` and `scope` fields for git/PR integration
@@ -518,7 +519,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
-## [3.0.0] - 2026-05-16
+## \[3.0.0] - 2026-05-16
 
 Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks, task persistence, and Agent Teams.
 
@@ -529,7 +530,8 @@ Ground-up rewrite. From 29 static commands to an intent-driven engine with hooks
 - **Hook engine** — 4 hooks registered in settings.json:
   - `workflow-state.js` (UserPromptSubmit) — per-turn task state breadcrumb injection
   - `session-start.js` (SessionStart) — full project context on session start/clear/compact
-  - `subagent-context.js` (PreToolUse Bash|Agent) — spec + task context injection into codeagent-wrapper and Team spawns
+  - `subagent-context.js` (PreToolUse Bash|Agent) — spec + task context injection into codeagent-wrapper and Team
+    spawns
   - `skill-router.js` (UserPromptSubmit) — auto-inject domain knowledge on keyword detection
 - **Task persistence** — `.ccg/tasks/{name}/` with task.json, requirements.md, plan.md, context.jsonl, review.md,
   research/
@@ -578,16 +580,18 @@ Critical findings block delivery.
 
 ---
 
-## [2.1.16] - 2026-04-10
+## \[2.1.16] - 2026-04-10
 
 ### ✨ 新功能
 
 - **Init 交互状态机**：`init`
-  流程重构为状态机模式，支持在每步中途返回上一步，解决"填错一个 URL/KEY 就要 Ctrl+C 全部重来" 的痛点。每个 Step 的首个 list 选项末尾内嵌
+  流程重构为状态机模式，支持在每步中途返回上一步，解决"填错一个 URL/KEY 就要 Ctrl+C 全部重来" 的痛点。每个 Step 的首个 list
+  选项末尾内嵌
   `← 返回上一步` 和 `× 取消安装` 哨兵（Step 1 只有取消）。Step
   3（MCP）因原首 prompt 是 checkbox 多选，加入前导 list 守门支持返回。
 - **摘要页跳回菜单**：最终确认页从 `confirm: yes/no`
-  改为 list 菜单，支持"确认安装 / 改 API 配置 / 改模型路由 / 改 MCP 工具 / 改性能模式 / 取消安装"。选"改 XXX"跳回对应 Step 重跑一次后直接回到摘要页，不用再走一遍后续步骤。
+  改为 list 菜单，支持"确认安装 / 改 API 配置 / 改模型路由 / 改 MCP 工具 / 改性能模式 / 取消安装"。选"改 XXX"跳回对应 Step
+  重跑一次后直接回到摘要页，不用再走一遍后续步骤。
 - **API 跳过选项**：Step 1/4 API 提供方菜单新增第 4 个选项
   `○ 跳过 — 我已通过 cc-switch / 其他工具自行配置`。选它后 CCG 不会写入 `settings.json` 的
   `ANTHROPIC_BASE_URL/AUTH_TOKEN`，适用于已通过其他工具配好 API 的用户。
@@ -602,7 +606,7 @@ Critical findings block delivery.
 
 ---
 
-## [2.1.15] - 2026-04-10
+## \[2.1.15] - 2026-04-10
 
 ### 🐛 修复
 
@@ -616,7 +620,7 @@ Critical findings block delivery.
 
 ---
 
-## [2.1.14] - 2026-04-07
+## \[2.1.14] - 2026-04-07
 
 ### 🐛 修复
 
@@ -626,7 +630,7 @@ Critical findings block delivery.
 
 ---
 
-## [2.1.13] - 2026-04-05
+## \[2.1.13] - 2026-04-05
 
 ### 🐛 修复
 
@@ -636,7 +640,7 @@ Critical findings block delivery.
 
 ---
 
-## [2.1.12] - 2026-04-03
+## \[2.1.12] - 2026-04-03
 
 ### ✨ 新功能
 
@@ -645,7 +649,7 @@ Critical findings block delivery.
 
 ---
 
-## [2.1.11] - 2026-03-31
+## \[2.1.11] - 2026-03-31
 
 ### 🐛 修复
 
@@ -661,7 +665,7 @@ Critical findings block delivery.
 
 ---
 
-## [2.1.1] - 2026-03-31
+## \[2.1.1] - 2026-03-31
 
 ### 🐛 修复
 
@@ -670,7 +674,7 @@ Critical findings block delivery.
 
 ---
 
-## [2.1.0] - 2026-03-31
+## \[2.1.0] - 2026-03-31
 
 ### ✨ 新功能
 
@@ -688,7 +692,7 @@ Critical findings block delivery.
 
 ---
 
-## [2.0.0] - 2026-03-31
+## \[2.0.0] - 2026-03-31
 
 ### ✨ 新功能
 
@@ -696,7 +700,8 @@ Critical findings block delivery.
   command
 - **域知识秘典全量导入**：10 大领域 61 个知识文件（安全 7 + 架构 6 + DevOps 8 + AI
   5 + 开发 9 + 前端设计 25 + 基础设施 + 移动端 + 数据工程 + 编排）
-- **Impeccable 工具集**：20 个 UI/UX 精打磨技能（polish/audit/harden/clarify/critique/animate/colorize 等），全部 user-invocable
+- **Impeccable 工具集**：20 个 UI/UX 精打磨技能（polish/audit/harden/clarify/critique/animate/colorize 等），全部
+  user-invocable
 - **Override-Refusal 工具**：`/hi` 命令，会话级反拒绝覆写器（refusal_rewriter.js）
 - **Scrapling 技能**：网页抓取与数据提取，支持 Cloudflare/WAF 绕过
 - **3 个新输出风格**：冷刃简报（abyss-concise）、铁律军令（abyss-command）、祭仪长卷（abyss-ritual），输出风格总数达 8 种
@@ -710,7 +715,7 @@ Critical findings block delivery.
 
 ---
 
-## [1.8.3] - 2026-03-30
+## \[1.8.3] - 2026-03-30
 
 ### ✨ 新功能
 
@@ -724,7 +729,7 @@ Critical findings block delivery.
 
 ---
 
-## [1.8.2] - 2026-03-27
+## \[1.8.2] - 2026-03-27
 
 ### 🐛 修复
 
@@ -733,7 +738,7 @@ Critical findings block delivery.
 
 ---
 
-## [1.8.1] - 2026-03-27
+## \[1.8.1] - 2026-03-27
 
 ### 🐛 修复
 
@@ -744,7 +749,7 @@ Critical findings block delivery.
 
 ---
 
-## [1.8.0] - 2026-03-26
+## \[1.8.0] - 2026-03-26
 
 ### 🐛 修复
 
@@ -760,7 +765,7 @@ Critical findings block delivery.
 
 ---
 
-## [1.7.98] - 2026-03-26
+## \[1.7.98] - 2026-03-26
 
 ### 🐛 修复
 
@@ -769,7 +774,7 @@ Critical findings block delivery.
 
 ---
 
-## [1.7.97] - 2026-03-26
+## \[1.7.97] - 2026-03-26
 
 ### 🐛 修复
 
@@ -783,7 +788,7 @@ Critical findings block delivery.
 
 ---
 
-## [1.7.92] - 2026-03-25
+## \[1.7.92] - 2026-03-25
 
 ### ✨ 新功能
 
@@ -802,7 +807,7 @@ Critical findings block delivery.
 
 ---
 
-## [1.7.91] - 2026-03-25
+## \[1.7.91] - 2026-03-25
 
 ### 🐛 修复
 
@@ -812,7 +817,7 @@ Critical findings block delivery.
 
 ---
 
-## [1.7.90] - 2026-03-23
+## \[1.7.90] - 2026-03-23
 
 ### ✨ 新功能
 
@@ -828,7 +833,7 @@ Critical findings block delivery.
 
 ---
 
-## [1.7.89] - 2026-03-20
+## \[1.7.89] - 2026-03-20
 
 ### 🐛 修复
 
@@ -842,7 +847,7 @@ Critical findings block delivery.
 
 ---
 
-## [1.7.88] - 2026-03-19
+## \[1.7.88] - 2026-03-19
 
 ### 🐛 修复
 
@@ -855,7 +860,7 @@ Critical findings block delivery.
 
 ---
 
-## [1.7.87] - 2026-03-19
+## \[1.7.87] - 2026-03-19
 
 ### 🐛 修复
 
@@ -866,7 +871,7 @@ Critical findings block delivery.
 
 ---
 
-## [1.7.86] - 2026-03-18
+## \[1.7.86] - 2026-03-18
 
 ### 🐛 修复
 
@@ -875,7 +880,7 @@ Critical findings block delivery.
 
 ---
 
-## [1.7.85] - 2026-03-17
+## \[1.7.85] - 2026-03-17
 
 ### ✨ 新功能
 
@@ -895,7 +900,7 @@ Critical findings block delivery.
 
 ---
 
-## [1.7.83] - 2026-03-12
+## \[1.7.83] - 2026-03-12
 
 ### 🔄 变更
 
@@ -912,7 +917,7 @@ Critical findings block delivery.
 
 ---
 
-## [1.7.82] - 2026-03-12
+## \[1.7.82] - 2026-03-12
 
 ### ✨ 新功能
 
@@ -928,7 +933,7 @@ Critical findings block delivery.
 
 ---
 
-## [1.7.81] - 2026-03-11
+## \[1.7.81] - 2026-03-11
 
 ### 🔄 变更
 
@@ -939,7 +944,7 @@ Critical findings block delivery.
 
 ---
 
-## [1.7.80] - 2026-03-11
+## \[1.7.80] - 2026-03-11
 
 ### ✨ 新功能
 
@@ -961,7 +966,7 @@ Critical findings block delivery.
 
 ---
 
-## [1.7.79] - 2026-03-11
+## \[1.7.79] - 2026-03-11
 
 ### 🐛 修复
 
@@ -975,7 +980,7 @@ Critical findings block delivery.
 
 ---
 
-## [1.7.78] - 2026-03-11
+## \[1.7.78] - 2026-03-11
 
 ### 🐛 修复
 
@@ -985,7 +990,7 @@ Critical findings block delivery.
 
 ---
 
-## [1.7.77] - 2026-03-10
+## \[1.7.77] - 2026-03-10
 
 ### 🏗 架构
 
@@ -998,7 +1003,7 @@ Critical findings block delivery.
 
 ---
 
-## [1.7.76] - 2026-03-10
+## \[1.7.76] - 2026-03-10
 
 ### 📝 文档
 
@@ -1009,7 +1014,7 @@ Critical findings block delivery.
 
 ---
 
-## [1.7.75] - 2026-03-10
+## \[1.7.75] - 2026-03-10
 
 ### 🐛 修复
 
@@ -1019,7 +1024,7 @@ Critical findings block delivery.
 
 ---
 
-## [1.7.74] - 2026-03-09
+## \[1.7.74] - 2026-03-09
 
 ### 🔄 变更
 
@@ -1036,7 +1041,7 @@ Critical findings block delivery.
 
 ---
 
-## [1.7.73] - 2026-03-09
+## \[1.7.73] - 2026-03-09
 
 ### ✨ 新功能
 
@@ -1059,7 +1064,7 @@ Critical findings block delivery.
 
 ---
 
-## [1.7.72] - 2026-03-09
+## \[1.7.72] - 2026-03-09
 
 ### 🔄 变更
 
@@ -1069,7 +1074,7 @@ Critical findings block delivery.
 
 ---
 
-## [1.7.71] - 2026-03-09
+## \[1.7.71] - 2026-03-09
 
 ### ✨ 新功能
 
@@ -1084,7 +1089,7 @@ Critical findings block delivery.
 
 ---
 
-## [1.7.70] - 2026-03-09
+## \[1.7.70] - 2026-03-09
 
 ### ✨ 新功能
 
@@ -1106,7 +1111,7 @@ Critical findings block delivery.
 
 ---
 
-## [1.7.69] - 2026-03-09
+## \[1.7.69] - 2026-03-09
 
 ### ✨ 新功能
 
@@ -1122,7 +1127,7 @@ Critical findings block delivery.
 
 ---
 
-## [1.7.68] - 2026-03-09
+## \[1.7.68] - 2026-03-09
 
 ### 🐛 修复
 
@@ -1140,7 +1145,7 @@ Critical findings block delivery.
 
 ---
 
-## [1.7.67] - 2026-03-07
+## \[1.7.67] - 2026-03-07
 
 ### 🐛 修复
 
@@ -1156,7 +1161,7 @@ Critical findings block delivery.
 
 ---
 
-## [1.7.66] - 2026-03-06
+## \[1.7.66] - 2026-03-06
 
 ### 🐛 修复
 
@@ -1165,7 +1170,7 @@ Critical findings block delivery.
 
 ---
 
-## [1.7.65] - 2026-03-01
+## \[1.7.65] - 2026-03-01
 
 ### 🐛 修复
 
@@ -1179,7 +1184,7 @@ Critical findings block delivery.
 
 ---
 
-## [1.7.64] - 2026-03-01
+## \[1.7.64] - 2026-03-01
 
 ### 🔄 变更
 
@@ -1188,7 +1193,7 @@ Critical findings block delivery.
 
 ---
 
-## [1.7.63] - 2026-03-01
+## \[1.7.63] - 2026-03-01
 
 ### 🔄 变更
 
@@ -1199,7 +1204,7 @@ Critical findings block delivery.
 
 ---
 
-## [1.7.62] - 2026-02-27
+## \[1.7.62] - 2026-02-27
 
 ### 🔄 变更
 
@@ -1207,7 +1212,7 @@ Critical findings block delivery.
 
 ---
 
-## [1.7.61] - 2026-02-10
+## \[1.7.61] - 2026-02-10
 
 ### 🐛 修复
 
@@ -1215,7 +1220,7 @@ Critical findings block delivery.
 
 ---
 
-## [1.7.60] - 2026-02-10
+## \[1.7.60] - 2026-02-10
 
 ### ✨ 新功能
 
@@ -1242,7 +1247,7 @@ Critical findings block delivery.
 
 ---
 
-## [1.7.59] - 2026-02-09
+## \[1.7.59] - 2026-02-09
 
 ### ✨ 新功能
 
@@ -1250,7 +1255,7 @@ Critical findings block delivery.
 
 ---
 
-## [1.7.57] - 2026-02-08
+## \[1.7.57] - 2026-02-08
 
 ### ✨ 新功能
 
@@ -1285,7 +1290,7 @@ Critical findings block delivery.
 
 ---
 
-## [1.7.56] - 2026-02-01
+## \[1.7.56] - 2026-02-01
 
 ### 🐛 重要修复：OpenSpec CLI 集成
 
@@ -1341,7 +1346,7 @@ Critical findings block delivery.
 
 ---
 
-## [1.7.54] - 2026-01-26
+## \[1.7.54] - 2026-01-26
 
 ### 🐛 紧急修复
 
@@ -1365,7 +1370,7 @@ Critical findings block delivery.
 
 ---
 
-## [1.7.53] - 2026-01-26
+## \[1.7.53] - 2026-01-26
 
 ### 🔧 修复
 
@@ -1392,7 +1397,7 @@ Critical findings block delivery.
 
 ---
 
-## [1.7.52] - 2026-01-26
+## \[1.7.52] - 2026-01-26
 
 ### 🚀 架构升级
 
@@ -1427,7 +1432,7 @@ Critical findings block delivery.
 
 ---
 
-## [1.7.51] - 2026-01-25
+## \[1.7.51] - 2026-01-25
 
 ### 🐛 修复
 
@@ -1444,7 +1449,7 @@ Critical findings block delivery.
 
 ---
 
-## [1.7.48] - 2026-01-23
+## \[1.7.48] - 2026-01-23
 
 ### ✨ 新功能
 
@@ -1473,7 +1478,7 @@ Critical findings block delivery.
 
 ---
 
-## [1.7.47] - 2026-01-21
+## \[1.7.47] - 2026-01-21
 
 ### 🐛 Bug 修复
 
@@ -1509,7 +1514,7 @@ VSCode 插件启动的子进程不会继承终端环境变量，必须通过 `se
 
 ---
 
-## [1.7.44] - 2026-01-18
+## \[1.7.44] - 2026-01-18
 
 ### 🐛 Bug 修复
 
@@ -1532,7 +1537,7 @@ VSCode 插件启动的子进程不会继承终端环境变量，必须通过 `se
 
 ---
 
-## [1.7.41] - 2026-01-18
+## \[1.7.41] - 2026-01-18
 
 ### 🐛 Bug 修复
 
@@ -1553,7 +1558,7 @@ VSCode 插件启动的子进程不会继承终端环境变量，必须通过 `se
 
 ---
 
-## [1.7.39] - 2026-01-16
+## \[1.7.39] - 2026-01-16
 
 ### ✨ 新功能
 
@@ -1604,7 +1609,7 @@ VSCode 插件启动的子进程不会继承终端环境变量，必须通过 `se
 
 ---
 
-## [1.7.38] - 2026-01-16
+## \[1.7.38] - 2026-01-16
 
 ### 🐛 Bug 修复
 
@@ -1690,7 +1695,7 @@ npm install -g ccg-workflow@latest
 
 ---
 
-## [1.7.37] - 2026-01-16
+## \[1.7.37] - 2026-01-16
 
 ### ✨ 新功能
 
@@ -1713,6 +1718,7 @@ npm install -g ccg-workflow@latest
 
 ```typescript
 export declare function installAceToolRs(config: AceToolConfig): Promise<unknown>
+
 // 使用 npx ace-tool-rs 命令
 // 添加 RUST_LOG=info 环境变量
 ```
@@ -1812,7 +1818,7 @@ npx ccg-workflow config mcp
 
 ---
 
-## [1.7.36] - 2026-01-16
+## \[1.7.36] - 2026-01-16
 
 ### 🐛 Bug 修复
 
@@ -1870,7 +1876,7 @@ if !envFlagEnabled("CODEX_REQUIRE_APPROVAL") {
 
 ---
 
-## [1.7.22] - 2026-01-13
+## \[1.7.22] - 2026-01-13
 
 ### 🐛 Bug 修复
 
@@ -1926,7 +1932,7 @@ case <-messageTimerCh:
 
 ---
 
-## [1.7.21] - 2026-01-13
+## \[1.7.21] - 2026-01-13
 
 ### 🐛 Bug 修复
 
@@ -2006,7 +2012,7 @@ case <-messageTimerCh:
 
 ---
 
-## [1.7.20] - 2026-01-13
+## \[1.7.20] - 2026-01-13
 
 ### 🐛 Bug 修复
 
@@ -2031,7 +2037,7 @@ v1.7.19 的表格格式精简过度，导致 Claude 无法理解需要发起并�
 
 ---
 
-## [1.7.19] - 2026-01-13
+## \[1.7.19] - 2026-01-13
 
 ### 📝 文档优化
 
@@ -2055,7 +2061,7 @@ v1.7.19 的表格格式精简过度，导致 Claude 无法理解需要发起并�
 
 ---
 
-## [1.7.18] - 2026-01-13
+## \[1.7.18] - 2026-01-13
 
 ### 🐛 Bug 修复
 
@@ -2118,7 +2124,7 @@ if isWindows() {
 
 ---
 
-## [1.7.17] - 2026-01-12
+## \[1.7.17] - 2026-01-12
 
 ### 🐛 Bug 修复
 
@@ -2172,7 +2178,7 @@ if isWindows() {
 
 ---
 
-## [1.7.16] - 2026-01-10
+## \[1.7.16] - 2026-01-10
 
 ### 🐛 Bug 修复
 
@@ -2211,7 +2217,7 @@ Binary not found in package: codeagent-wrapper-windows-amd64.exe
 
 ---
 
-## [1.7.15] - 2026-01-10
+## \[1.7.15] - 2026-01-10
 
 ### 🐛 Bug 修复
 
@@ -2296,7 +2302,7 @@ if isWindows() {
 
 ---
 
-## [1.7.13] - 2026-01-09
+## \[1.7.13] - 2026-01-09
 
 ### 🐛 Bug 修复
 
@@ -2351,7 +2357,7 @@ if isWindows() {
 
 ---
 
-## [1.7.12] - 2026-01-09
+## \[1.7.12] - 2026-01-09
 
 ### 🐛 Bug 修复
 
@@ -2377,7 +2383,7 @@ Windows 用户使用 PowerShell 执行命令时，路径格式不兼容：
 
 ---
 
-## [1.7.11] - 2026-01-09
+## \[1.7.11] - 2026-01-09
 
 ### 🐛 Bug 修复
 
@@ -2458,7 +2464,7 @@ Windows 用户使用 PowerShell 执行命令时，路径格式不兼容：
 
 ---
 
-## [1.7.10] - 2026-01-09
+## \[1.7.10] - 2026-01-09
 
 ### 🐛 Bug 修复
 
@@ -2507,7 +2513,7 @@ Windows 用户使用 PowerShell 执行命令时，路径格式不兼容：
 
 ---
 
-## [1.6.0] - 2026-01-07
+## \[1.6.0] - 2026-01-07
 
 ### ✨ 功能增强
 
@@ -2638,7 +2644,7 @@ Windows 用户使用 PowerShell 执行命令时，路径格式不兼容：
 
 ---
 
-## [1.5.1] - 2026-01-07
+## \[1.5.1] - 2026-01-07
 
 ### 🐛 修复
 
@@ -2670,7 +2676,7 @@ Windows 用户使用 PowerShell 执行命令时，路径格式不兼容：
 
 ---
 
-## [1.5.0] - 2026-01-06
+## \[1.5.0] - 2026-01-06
 
 ### ✨ 功能增强
 
@@ -2757,7 +2763,7 @@ Windows 用户使用 PowerShell 执行命令时，路径格式不兼容：
 
 ---
 
-## [1.4.4] - 2026-01-06
+## \[1.4.4] - 2026-01-06
 
 ### 🐛 修复
 
@@ -2827,7 +2833,7 @@ C:\Users\USER> npx ccg init
 
 ---
 
-## [1.4.2] - 2026-01-06
+## \[1.4.2] - 2026-01-06
 
 ### ✨ 新特性
 
@@ -2907,7 +2913,7 @@ After（自动修复）：
 
 ---
 
-## [1.4.1] - 2026-01-06
+## \[1.4.1] - 2026-01-06
 
 ### 🐛 Bug Fixes
 
@@ -2945,7 +2951,7 @@ npx ccg-workflow@latest init
 
 ---
 
-## [1.4.0] - 2026-01-06 ⚡ BREAKING CHANGES
+## \[1.4.0] - 2026-01-06 ⚡ BREAKING CHANGES
 
 ### 🏗️ 目录结构重构
 
@@ -3059,7 +3065,7 @@ ls -la ~/.claude/.ccg/prompts/
 
 ---
 
-## [1.3.7] - 2026-01-06 🐛
+## \[1.3.7] - 2026-01-06 🐛
 
 ### 修复 1：ace-tool MCP 配置兼容性问题
 
@@ -3158,7 +3164,7 @@ const agentsDestDir = join(installDir, 'agents', 'ccg')
 
 ---
 
-## [1.3.3] - 2026-01-05 🔒
+## \[1.3.3] - 2026-01-05 🔒
 
 ### 安全修复：Windows PATH 配置方法
 
@@ -3179,7 +3185,7 @@ const agentsDestDir = join(installDir, 'agents', 'ccg')
 ```typescript
 console.log(
   ansis.gray(
-    `     [System.Environment]::SetEnvironmentVariable('PATH', "$env:PATH;${result.binPath.replace(/\//g, '\\')}", 'User')`
+    `[System.Environment]::SetEnvironmentVariable('PATH', "$env:PATH;${result.binPath.replace(/\//g, '\\')}", 'User')`
   )
 )
 ```
@@ -3213,7 +3219,7 @@ console.log(ansis.gray(`     }`))
 
 ---
 
-## [1.3.2] - 2026-01-05 🐛
+## \[1.3.2] - 2026-01-05 🐛
 
 ### 关键 Bug 修复：MCP 配置缺失
 
@@ -3277,7 +3283,7 @@ console.log(ansis.gray(`     }`))
 
 ---
 
-## [1.3.1] - 2026-01-05
+## \[1.3.1] - 2026-01-05
 
 ### 命令模板修正
 
@@ -3289,7 +3295,7 @@ console.log(ansis.gray(`     }`))
 
 ---
 
-## [1.3.0] - 2026-01-05 ⭐
+## \[1.3.0] - 2026-01-05 ⭐
 
 ### 重大更新：MCP 动态选择系统
 
@@ -3369,7 +3375,7 @@ console.log(ansis.gray(`     }`))
 
 ---
 
-## [1.2.3] - 2026-01-05
+## \[1.2.3] - 2026-01-05
 
 ### 新增
 
@@ -3387,7 +3393,7 @@ console.log(ansis.gray(`     }`))
 
 ---
 
-## [1.2.2] - 2026-01-05
+## \[1.2.2] - 2026-01-05
 
 ### 优化
 
@@ -3398,7 +3404,7 @@ console.log(ansis.gray(`     }`))
 
 ---
 
-## [1.2.1] - 2026-01-05
+## \[1.2.1] - 2026-01-05
 
 ### 修复
 
@@ -3408,7 +3414,7 @@ console.log(ansis.gray(`     }`))
 
 ---
 
-## [1.2.0] - 2026-01-05 ⭐
+## \[1.2.0] - 2026-01-05 ⭐
 
 ### 重大更新：ROLE_FILE 动态注入
 
@@ -3458,7 +3464,7 @@ EOF
 
 ---
 
-## [1.1.3] - 2026-01-05
+## \[1.1.3] - 2026-01-05
 
 ### 新增功能
 
@@ -3481,7 +3487,7 @@ EOF
 
 ---
 
-## [1.1.2] - 2026-01-05
+## \[1.1.2] - 2026-01-05
 
 ### 新增功能
 
@@ -3504,7 +3510,7 @@ EOF
 
 ---
 
-## [1.1.1] - 2026-01-05
+## \[1.1.1] - 2026-01-05
 
 ### 文档更新
 
@@ -3515,7 +3521,7 @@ EOF
 
 ---
 
-## [1.1.0] - 2026-01-05
+## \[1.1.0] - 2026-01-05
 
 ### 新增功能
 
@@ -3552,7 +3558,7 @@ EOF
 
 ---
 
-## [1.0.6] - 2026-01-05
+## \[1.0.6] - 2026-01-05
 
 ### 修复
 
@@ -3563,7 +3569,7 @@ EOF
 
 ---
 
-## [1.0.5] - 2026-01-05
+## \[1.0.5] - 2026-01-05
 
 ### 修复
 
@@ -3573,7 +3579,7 @@ EOF
 
 ---
 
-## [1.0.4] - 2026-01-05
+## \[1.0.4] - 2026-01-05
 
 ### 新增
 
@@ -3583,7 +3589,7 @@ EOF
 
 ---
 
-## [1.0.3] - 2026-01-05
+## \[1.0.3] - 2026-01-05
 
 ### 新增
 
@@ -3592,7 +3598,7 @@ EOF
 
 ---
 
-## [1.0.2] - 2026-01-05
+## \[1.0.2] - 2026-01-05
 
 ### 优化
 
@@ -3601,7 +3607,7 @@ EOF
 
 ---
 
-## [1.0.1] - 2026-01-05
+## \[1.0.1] - 2026-01-05
 
 ### 修复
 
@@ -3610,7 +3616,7 @@ EOF
 
 ---
 
-## [1.0.0] - 2026-01-05
+## \[1.0.0] - 2026-01-05
 
 ### 重大更新：npm 首次发布
 
@@ -3700,7 +3706,7 @@ EOF
 
 ---
 
-## [Pre-1.0.0] - Python 版本
+## \[Pre-1.0.0] - Python 版本
 
 ### Python 安装脚本时代（已弃用）
 

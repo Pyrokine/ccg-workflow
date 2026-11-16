@@ -16,6 +16,7 @@ Fetcher（curl_cffi）无法通过 Cloudflare 验证 **解决方案**: 换用 St
 
 ```python
 from scrapling.fetchers import StealthyFetcher
+
 page = StealthyFetcher.fetch(url, headless=True, solve_cloudflare=True, timeout=60000)
 ```
 

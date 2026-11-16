@@ -1,7 +1,10 @@
 ---
 name: delight
-description: "Add moments of joy, personality, and unexpected touches that make interfaces memorable and enjoyable to use. Elevates functional to delightful. Use when the user asks to add polish, personality, animations, micro-interactions, delight, or make an interface feel fun or memorable."
-argument-hint: "[target]"
+description: >-
+  Add moments of joy, personality, and unexpected touches that make interfaces memorable and enjoyable
+  to use. Elevates functional to delightful. Use when the user asks to add polish, personality,
+  animations, micro-interactions, delight, or make an interface feel fun or memorable.
+argument-hint: '[target]'
 user-invocable: false
 ---
 
@@ -12,7 +15,7 @@ into delightful experiences.
 
 Use the `frontend-design` skill as the governing entry point and follow its design principles, anti-patterns, and
 **Context Gathering Protocol**. If design context is missing, ask only for the missing audience, use case, or brand
-direction. Additionally gather: what's appropriate for the domain (playful vs professional vs quirky vs elegant).
+direction. Also gather: what's appropriate for the domain (playful vs professional vs quirky vs elegant).
 
 ---
 
@@ -21,25 +24,25 @@ direction. Additionally gather: what's appropriate for the domain (playful vs pr
 Identify where delight would enhance (not distract from) the experience:
 
 1. **Find natural delight moments**:
-    - **Success states**: Completed actions (save, send, publish)
-    - **Empty states**: First-time experiences, onboarding
-    - **Loading states**: Waiting periods that could be entertaining
-    - **Achievements**: Milestones, streaks, completions
-    - **Interactions**: Hover states, clicks, drags
-    - **Errors**: Softening frustrating moments
-    - **Easter eggs**: Hidden discoveries for curious users
+   - **Success states**: Completed actions (save, send, publish)
+   - **Empty states**: First-time experiences, onboarding
+   - **Loading states**: Waiting periods that could be entertaining
+   - **Achievements**: Milestones, streaks, completions
+   - **Interactions**: Hover states, clicks, drags
+   - **Errors**: Softening frustrating moments
+   - **Easter eggs**: Hidden discoveries for curious users
 
 2. **Understand the context**:
-    - What's the brand personality? (Playful? Professional? Quirky? Elegant?)
-    - Who's the audience? (Tech-savvy? Creative? Corporate?)
-    - What's the emotional context? (Accomplishment? Exploration? Frustration?)
-    - What's appropriate? (Banking app ≠ gaming app)
+   - What's the brand personality? (Playful? Professional? Quirky? Elegant?)
+   - Who's the audience? (Tech-savvy? Creative? Corporate?)
+   - What's the emotional context? (Accomplishment? Exploration? Frustration?)
+   - What's appropriate? (Banking app ≠ gaming app)
 
 3. **Define delight strategy**:
-    - **Subtle sophistication**: Refined micro-interactions (luxury brands)
-    - **Playful personality**: Whimsical illustrations and copy (consumer apps)
-    - **Helpful surprises**: Anticipating needs before users ask (productivity tools)
-    - **Sensory richness**: Satisfying sounds, smooth animations (creative tools)
+   - **Subtle sophistication**: Refined micro-interactions (luxury brands)
+   - **Playful personality**: Whimsical illustrations and copy (consumer apps)
+   - **Helpful surprises**: Anticipating needs before users ask (productivity tools)
+   - **Sensory richness**: Satisfying sounds, smooth animations (creative tools)
 
 If any of these are unclear from the codebase, Ask the user using AskUserQuestion.
 
@@ -93,6 +96,7 @@ Add personality and joy through these methods:
     transform 0.1s,
     box-shadow 0.1s;
 }
+
 .button:active {
   transform: translateY(2px);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
@@ -192,7 +196,7 @@ Add personality and joy through these methods:
 - Lift effect on drag (shadow, scale)
 - Snap animation when dropped
 - Satisfying placement sound
-- Undo toast ("Dropped in wrong place? [Undo]")
+- Undo toast ("Dropped in wrong place? `[Undo]`")
 
 **Toggle switches**:
 

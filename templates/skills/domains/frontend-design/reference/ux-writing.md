@@ -5,7 +5,7 @@
 **Never use "OK", "Submit", or "Yes/No".** These are lazy and ambiguous. Use specific verb + object patterns:
 
 | Bad        | Good           | Why                           |
-|------------|----------------|-------------------------------|
+| ---------- | -------------- | ----------------------------- |
 | OK         | Save changes   | Says what will happen         |
 | Submit     | Create account | Outcome-focused               |
 | Yes        | Delete message | Confirms the action           |
@@ -24,13 +24,13 @@ Please include an @ symbol." not "Invalid input".
 
 ### Error Message Templates
 
-| Situation             | Template                                                                       |
-|-----------------------|--------------------------------------------------------------------------------|
-| **Format error**      | "[Field] needs to be [format]. Example: [example]"                             |
-| **Missing required**  | "Please enter [what's missing]"                                                |
-| **Permission denied** | "You don't have access to [thing]. [What to do instead]"                       |
-| **Network error**     | "We couldn't reach [thing]. Check your connection and [action]."               |
-| **Server error**      | "Something went wrong on our end. We're looking into it. [Alternative action]" |
+| Situation             | Template                                                                         |
+| --------------------- | -------------------------------------------------------------------------------- |
+| **Format error**      | "`[Field]` needs to be `[format]`. Example: `[example]`"                         |
+| **Missing required**  | "Please enter `[what's missing]`"                                                |
+| **Permission denied** | "You don't have access to `[thing]`. `[What to do instead]`"                     |
+| **Network error**     | "We couldn't reach `[thing]`. Check your connection and `[action]`."             |
+| **Server error**      | "Something went wrong on our end. We're looking into it. `[Alternative action]`" |
 
 ### Don't Blame the User
 
@@ -46,7 +46,7 @@ action. "No projects yet. Create your first one to get started." not just "No it
 **Voice** is your brand's personality—consistent everywhere. **Tone** adapts to the moment.
 
 | Moment              | Tone Shift                                                     |
-|---------------------|----------------------------------------------------------------|
+| ------------------- | -------------------------------------------------------------- |
 | Success             | Celebratory, brief: "Done! Your changes are live."             |
 | Error               | Empathetic, helpful: "That didn't work. Here's what to try..." |
 | Loading             | Reassuring: "Saving your work..."                              |
@@ -67,7 +67,7 @@ not the image—"Revenue increased 40% in Q4" not "Chart". Use `alt=""` for deco
 German text is ~30% longer than English. Allocate space:
 
 | Language | Expansion                          |
-|----------|------------------------------------|
+| -------- | ---------------------------------- |
 | German   | +30%                               |
 | French   | +20%                               |
 | Finnish  | +30-40%                            |
@@ -84,7 +84,7 @@ strings appear.
 Pick one term and stick with it:
 
 | Inconsistent                     | Consistent |
-|----------------------------------|------------|
+| -------------------------------- | ---------- |
 | Delete / Remove / Trash          | Delete     |
 | Settings / Preferences / Options | Settings   |
 | Sign in / Log in / Enter         | Sign in    |

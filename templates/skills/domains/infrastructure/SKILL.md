@@ -1,6 +1,8 @@
 ---
 name: infrastructure
-description: 云原生基础设施。Kubernetes、Helm、Kustomize、Operator、CRD、GitOps、ArgoCD、Flux、IaC、Terraform、Pulumi、CDK。当用户提到 K8s、Helm、GitOps、IaC 时路由到此。
+description: >-
+  云原生基础设施。Kubernetes、Helm、Kustomize、Operator、CRD、GitOps、ArgoCD、Flux、IaC、Terraform、Pulumi、CDK。当用户提到
+  K8s、Helm、GitOps、IaC 时路由到此。
 license: MIT
 user-invocable: false
 disable-model-invocation: false
@@ -66,7 +68,7 @@ disable-model-invocation: false
 ### 部署策略
 
 | 策略     | 实现方式                                         | 适用场景     |
-|----------|--------------------------------------------------|--------------|
+| -------- | ------------------------------------------------ | ------------ |
 | 滚动更新 | `strategy.rollingUpdate` maxSurge/maxUnavailable | 默认策略     |
 | 蓝绿部署 | 两个 Deployment + Service selector 切换          | 零停机切换   |
 | 金丝雀   | stable(9) + canary(1) 共享 Service               | 渐进式验证   |
@@ -90,7 +92,7 @@ disable-model-invocation: false
 ### ArgoCD vs Flux
 
 | 特性         | ArgoCD           | Flux                    |
-|--------------|------------------|-------------------------|
+| ------------ | ---------------- | ----------------------- |
 | Web UI       | 功能强大         | 无（可用 Weave GitOps） |
 | 多租户       | Projects + RBAC  | 需额外配置              |
 | 多集群       | 原生支持         | 原生支持                |
@@ -145,7 +147,7 @@ fleet-infra/
 ### 工具对比
 
 | 工具      | 语言         | 状态管理           | 云支持 | 学习曲线 |
-|-----------|--------------|--------------------|--------|----------|
+| --------- | ------------ | ------------------ | ------ | -------- |
 | Terraform | HCL          | 显式(S3/TF Cloud)  | 全平台 | 中等     |
 | Pulumi    | Python/TS/Go | 自动(Pulumi Cloud) | 全平台 | 较低     |
 | AWS CDK   | Python/TS    | CloudFormation     | AWS    | 中等     |
@@ -191,7 +193,7 @@ fleet-infra/
 ## 最佳实践
 
 | 层级     | 工具选择             | 原则              |
-|----------|----------------------|-------------------|
+| -------- | -------------------- | ----------------- |
 | 应用部署 | Helm + Kustomize     | 模板化 + 环境差异 |
 | 持续交付 | ArgoCD / Flux        | Git 为唯一真相源  |
 | 基础设施 | Terraform / Pulumi   | 声明式 + 状态管理 |

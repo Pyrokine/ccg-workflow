@@ -1,6 +1,8 @@
 ---
 name: teach-impeccable
-description: One-time setup that gathers design context for your project and saves it to your AI config file. Run once to establish persistent design guidelines.
+description: >-
+  One-time setup that gathers design context for your project and saves it to your AI config file. Run
+  once to establish persistent design guidelines.
 user-invocable: false
 ---
 
@@ -57,19 +59,19 @@ Synthesize your findings and the user's answers into a `## Design Context` secti
 
 ### Users
 
-[Who they are, their context, the job to be done]
+`[Who they are, their context, the job to be done]`
 
 ### Brand Personality
 
-[Voice, tone, 3-word personality, emotional goals]
+`[Voice, tone, 3-word personality, emotional goals]`
 
 ### Aesthetic Direction
 
-[Visual tone, references, anti-references, theme]
+`[Visual tone, references, anti-references, theme]`
 
 ### Design Principles
 
-[3-5 principles derived from the conversation that should guide all design decisions]
+`[3-5 principles derived from the conversation that should guide all design decisions]`
 ```
 
 Write this section to `.impeccable.md` in the project root. If the file already exists, update the Design Context

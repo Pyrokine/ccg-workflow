@@ -208,7 +208,10 @@ P4 - Low (24小时响应):
 
 ```python
 class AlertMetrics:
-    def calculate(self, alerts):
+    def calculate(
+            self,
+            alerts
+    ):
         total = len(alerts)
         tp = sum(1 for a in alerts if a['verified'] == 'true_positive')
         fp = sum(1 for a in alerts if a['verified'] == 'false_positive')
@@ -378,7 +381,7 @@ WHERE command LIKE '%powershell%'
 ## 工具清单
 
 | 工具           | 用途         |
-|----------------|--------------|
+| -------------- | ------------ |
 | Sigma          | 通用检测规则 |
 | YARA           | 恶意软件检测 |
 | Splunk/Elastic | SIEM 平台    |
@@ -399,7 +402,7 @@ WHERE command LIKE '%powershell%'
 ### 核心工具
 
 | 工具                | 类型   | 特点                         |
-|---------------------|--------|------------------------------|
+| ------------------- | ------ | ---------------------------- |
 | HashiCorp Vault     | 平台   | 动态密钥、AppRole、多后端    |
 | AWS KMS             | 云服务 | 托管密钥、信封加密、自动轮转 |
 | AWS Secrets Manager | 云服务 | 自动轮转、Lambda集成         |
@@ -448,7 +451,7 @@ vault write auth/approle/login role_id="<id>" secret_id="<id>"
 ### 密钥分类策略
 
 | 级别 | 类型           | 轮转周期 | 存储            |
-|------|----------------|----------|-----------------|
+| ---- | -------------- | -------- | --------------- |
 | P0   | 根密钥、主密钥 | 年度     | HSM             |
 | P1   | 数据加密密钥   | 季度     | Vault           |
 | P2   | API 密钥       | 月度     | Secrets Manager |

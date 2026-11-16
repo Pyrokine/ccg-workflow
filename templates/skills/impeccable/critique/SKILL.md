@@ -1,7 +1,11 @@
 ---
 name: critique
-description: "Evaluate design from a UX perspective, assessing visual hierarchy, information architecture, emotional resonance, cognitive load, and overall quality with quantitative scoring, persona-based testing, and actionable feedback. Use when the user asks to review, critique, evaluate, or give feedback on a design or component."
-argument-hint: "[area (feature, page, component...)]"
+description: >-
+  Evaluate design from a UX perspective, assessing visual hierarchy, information architecture,
+  emotional resonance, cognitive load, and overall quality with quantitative scoring, persona-based
+  testing, and actionable feedback. Use when the user asks to review, critique, evaluate, or give
+  feedback on a design or component.
+argument-hint: '[area (feature, page, component...)]'
 user-invocable: false
 ---
 
@@ -9,7 +13,7 @@ user-invocable: false
 
 Use the `frontend-design` skill as the governing entry point and follow its design principles, anti-patterns, and
 **Context Gathering Protocol**. If design context is missing, ask only for the missing audience, use case, or brand
-direction. Additionally gather: what the interface is trying to accomplish.
+direction. Also gather: what the interface is trying to accomplish.
 
 ---
 
@@ -115,19 +119,19 @@ Structure your feedback as a design director would:
 
 Score each of Nielsen's 10 heuristics 0–4. Present as a table:
 
-| #         | Heuristic                       | Score     | Key Issue                          |
-|-----------|---------------------------------|-----------|------------------------------------|
-| 1         | Visibility of System Status     | ?         | [specific finding or "—" if solid] |
-| 2         | Match System / Real World       | ?         |                                    |
-| 3         | User Control and Freedom        | ?         |                                    |
-| 4         | Consistency and Standards       | ?         |                                    |
-| 5         | Error Prevention                | ?         |                                    |
-| 6         | Recognition Rather Than Recall  | ?         |                                    |
-| 7         | Flexibility and Efficiency      | ?         |                                    |
-| 8         | Aesthetic and Minimalist Design | ?         |                                    |
-| 9         | Error Recovery                  | ?         |                                    |
-| 10        | Help and Documentation          | ?         |                                    |
-| **Total** |                                 | **??/40** | **[Rating band]**                  |
+| #         | Heuristic                       | Score     | Key Issue                            |
+| --------- | ------------------------------- | --------- | ------------------------------------ |
+| 1         | Visibility of System Status     | ?         | `[specific finding or "—" if solid]` |
+| 2         | Match System / Real World       | ?         |                                      |
+| 3         | User Control and Freedom        | ?         |                                      |
+| 4         | Consistency and Standards       | ?         |                                      |
+| 5         | Error Prevention                | ?         |                                      |
+| 6         | Recognition Rather Than Recall  | ?         |                                      |
+| 7         | Flexibility and Efficiency      | ?         |                                      |
+| 8         | Aesthetic and Minimalist Design | ?         |                                      |
+| 9         | Error Recovery                  | ?         |                                      |
+| 10        | Help and Documentation          | ?         |                                      |
+| **Total** |                                 | **??/40** | **`[Rating band]`**                  |
 
 Be honest with scores. A 4 means genuinely excellent. Most real interfaces score 20–32.
 
@@ -151,7 +155,7 @@ The 3–5 most impactful design problems, ordered by importance.
 For each issue, tag with **P0–P3 severity** (consult [heuristics-scoring](reference/heuristics-scoring.md) for severity
 definitions):
 
-- **[P?] What**: Name the problem clearly
+- **`[P?]` What**: Name the problem clearly
 - **Why it matters**: How this hurts users or undermines goals
 - **Fix**: What to do about it (be concrete)
 - **Suggested playbook**: Which focused playbook could address this (`audit`, `critique`, `normalize`, `polish`,

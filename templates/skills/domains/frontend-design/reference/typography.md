@@ -18,7 +18,7 @@ hierarchy.
 **Use fewer sizes with more contrast.** A 5-size system covers most needs:
 
 | Role | Typical Ratio | Use Case               |
-|------|---------------|------------------------|
+| ---- | ------------- | ---------------------- |
 | xs   | 0.75rem       | Captions, legal        |
 | sm   | 0.875rem      | Secondary UI, metadata |
 | base | 1rem          | Body text              |
@@ -71,6 +71,9 @@ without clear hierarchy.
 ### Web Font Loading
 
 The layout shift problem: fonts load late, text reflows, and users see content jump. Here's the fix:
+
+Provide the project's WOFF2 font beside this stylesheet as `font.woff2`. Measure the fallback metrics for that font;
+the percentages below illustrate those settings.
 
 ```css
 /* 1. Use font-display: swap for visibility */

@@ -3,7 +3,7 @@
 ## 安装层级
 
 | 安装命令                            | 包含内容                                                                    |
-|-------------------------------------|-----------------------------------------------------------------------------|
+| ----------------------------------- | --------------------------------------------------------------------------- |
 | `pip install scrapling`             | 仅核心解析器（Selector），无网络抓取能力                                    |
 | `pip install "scrapling[fetchers]"` | + Fetcher/StealthyFetcher/DynamicFetcher（curl_cffi, Playwright, Camoufox） |
 | `pip install "scrapling[ai]"`       | + AI 功能（transformers）                                                   |
@@ -62,16 +62,19 @@ print(f"scrapling version: {scrapling.__version__}")
 
 # 1. Fetcher (curl_cffi)
 from scrapling.fetchers import Fetcher
+
 page = Fetcher.get("https://httpbin.org/get", impersonate='chrome', timeout=15)
 print(f"Fetcher: status={page.status}")
 
 # 2. StealthyFetcher (Camoufox)
 from scrapling.fetchers import StealthyFetcher
+
 page = StealthyFetcher.fetch("https://httpbin.org/get", headless=True, timeout=30000)
 print(f"StealthyFetcher: status={page.status}")
 
 # 3. DynamicFetcher (Playwright)
 from scrapling.fetchers import DynamicFetcher
+
 page = DynamicFetcher.fetch("https://httpbin.org/get", headless=True, timeout=30000)
 print(f"DynamicFetcher: status={page.status}")
 

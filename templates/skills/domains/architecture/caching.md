@@ -22,7 +22,7 @@ CDN 缓存 (边缘节点)
 ```
 
 | 层级          | 延迟      | 容量 | 一致性     |
-|---------------|-----------|------|------------|
+| ------------- | --------- | ---- | ---------- |
 | L1 本地内存   | ~ns       | MB级 | 进程内一致 |
 | L2 分布式缓存 | ~ms       | GB级 | 最终一致   |
 | L3 CDN        | ~10ms     | TB级 | TTL控制    |
@@ -45,7 +45,9 @@ CDN 缓存 (边缘节点)
 ```
 
 ```python
-def get_user(user_id: str) -> dict:
+def get_user(
+        user_id: str
+) -> dict:
     # 1. 查缓存
     cached = redis.get(f"user:{user_id}")
     if cached:
@@ -58,7 +60,11 @@ def get_user(user_id: str) -> dict:
     redis.setex(f"user:{user_id}", 3600, json.dumps(user))
     return user
 
-def update_user(user_id: str, data: dict):
+
+def update_user(
+        user_id: str,
+        data: dict
+):
     db.execute("UPDATE users SET ... WHERE id = %s", user_id)
     redis.delete(f"user:{user_id}")  # 删除而非更新
 ```
@@ -107,7 +113,7 @@ def update_user(user_id: str, data: dict):
 ### 数据结构选型
 
 | 结构       | 场景             | 示例               |
-|------------|------------------|--------------------|
+| ---------- | ---------------- | ------------------ |
 | String     | 简单KV、计数器   | 用户信息、页面PV   |
 | Hash       | 对象属性         | 用户Profile各字段  |
 | List       | 队列、最新列表   | 消息队列、最新动态 |
@@ -136,13 +142,23 @@ def update_user(user_id: str, data: dict):
 import redis
 import uuid
 
-def acquire_lock(conn: redis.Redis, lock_name: str, timeout: int = 10) -> str:
+
+def acquire_lock(
+        conn: redis.Redis,
+        lock_name: str,
+        timeout: int = 10
+) -> str:
     token = str(uuid.uuid4())
     if conn.set(f"lock:{lock_name}", token, nx=True, ex=timeout):
         return token
     return None
 
-def release_lock(conn: redis.Redis, lock_name: str, token: str) -> bool:
+
+def release_lock(
+        conn: redis.Redis,
+        lock_name: str,
+        token: str
+) -> bool:
     # Lua 脚本保证原子性
     script = """
     if redis.call("get", KEYS[1]) == ARGV[1] then
@@ -267,7 +283,7 @@ aws cloudfront create-invalidation \
 ### 一致性级别选择
 
 | 级别           | 方案               | 延迟 | 复杂度 |
-|----------------|--------------------|------|--------|
+| -------------- | ------------------ | ---- | ------ |
 | 强一致         | Write-Through      | 高   | 中     |
 | 最终一致       | Cache-Aside + 删除 | 低   | 低     |
 | 最终一致(可靠) | Binlog 订阅        | 中   | 高     |

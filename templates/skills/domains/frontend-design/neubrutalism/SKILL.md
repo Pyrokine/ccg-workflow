@@ -1,6 +1,8 @@
 ---
 name: neubrutalism
-description: Neubrutalism design system skill. Use when building bold UI with thick borders, offset solid shadows, high saturation colors, and minimal border radius.
+description: >-
+  Neubrutalism design system skill. Use when building bold UI with thick borders, offset solid
+  shadows, high saturation colors, and minimal border radius.
 license: MIT
 user-invocable: false
 disable-model-invocation: false
@@ -54,17 +56,19 @@ Reference: [references/tokens.css](references/tokens.css)
   border-radius: var(--nb-radius);
   box-shadow: var(--nb-shadow-sm);
   padding: 0.6rem 1.4rem;
-  font-family: var(--nb-font);
+  font-family: var(--nb-font), sans-serif;
   font-weight: var(--nb-font-weight);
   cursor: pointer;
   transition:
     transform 0.1s,
     box-shadow 0.1s;
 }
+
 .nb-btn:hover {
   transform: translate(-2px, -2px);
   box-shadow: var(--nb-shadow);
 }
+
 .nb-btn:active {
   transform: translate(3px, 3px);
   box-shadow: none;
@@ -93,9 +97,10 @@ Reference: [references/tokens.css](references/tokens.css)
   border-radius: var(--nb-radius);
   box-shadow: var(--nb-shadow-sm);
   padding: 0.6rem 1rem;
-  font-family: var(--nb-font);
+  font-family: var(--nb-font), sans-serif;
   font-weight: var(--nb-font-weight-body);
 }
+
 .nb-input:focus {
   outline: none;
   box-shadow: var(--nb-shadow);
@@ -110,7 +115,7 @@ Reference: [references/tokens.css](references/tokens.css)
   border: var(--nb-border);
   border-radius: var(--nb-radius);
   padding: 0.2rem 0.8rem;
-  font-family: var(--nb-font);
+  font-family: var(--nb-font), sans-serif;
   font-weight: var(--nb-font-weight);
   font-size: 0.85rem;
 }
@@ -127,12 +132,13 @@ Reference: [references/tokens.css](references/tokens.css)
 h1,
 h2,
 h3 {
-  font-family: var(--nb-font-heading);
+  font-family: var(--nb-font-heading), sans-serif;
   font-weight: var(--nb-font-weight);
   letter-spacing: var(--nb-letter-spacing);
 }
+
 body {
-  font-family: var(--nb-font);
+  font-family: var(--nb-font), sans-serif;
   font-weight: var(--nb-font-weight-body);
 }
 ```

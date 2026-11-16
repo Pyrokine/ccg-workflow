@@ -1,7 +1,10 @@
 ---
 name: distill
-description: "Strip designs to their essence by removing unnecessary complexity. Great design is simple, powerful, and clean. Use when the user asks to simplify, declutter, reduce noise, remove elements, or make a UI cleaner and more focused."
-argument-hint: "[target]"
+description: >-
+  Strip designs to their essence by removing unnecessary complexity. Great design is simple, powerful,
+  and clean. Use when the user asks to simplify, declutter, reduce noise, remove elements, or make a
+  UI cleaner and more focused.
+argument-hint: '[target]'
 user-invocable: false
 ---
 
@@ -21,18 +24,18 @@ direction.
 Analyze what makes the design feel complex or cluttered:
 
 1. **Identify complexity sources**:
-    - **Too many elements**: Competing buttons, redundant information, visual clutter
-    - **Excessive variation**: Too many colors, fonts, sizes, styles without purpose
-    - **Information overload**: Everything visible at once, no progressive disclosure
-    - **Visual noise**: Unnecessary borders, shadows, backgrounds, decorations
-    - **Confusing hierarchy**: Unclear what matters most
-    - **Feature creep**: Too many options, actions, or paths forward
+   - **Too many elements**: Competing buttons, redundant information, visual clutter
+   - **Excessive variation**: Too many colors, fonts, sizes, styles without purpose
+   - **Information overload**: Everything visible at once, no progressive disclosure
+   - **Visual noise**: Unnecessary borders, shadows, backgrounds, decorations
+   - **Confusing hierarchy**: Unclear what matters most
+   - **Feature creep**: Too many options, actions, or paths forward
 
 2. **Find the essence**:
-    - What's the primary user goal? (There should be ONE)
-    - What's actually necessary vs nice-to-have?
-    - What can be removed, hidden, or combined?
-    - What's the 20% that delivers 80% of value?
+   - What's the primary user goal? (There should be ONE)
+   - What's actually necessary vs nice-to-have?
+   - What can be removed, hidden, or combined?
+   - What's the 20% that delivers 80% of value?
 
 If any of these are unclear from the codebase, Ask the user using AskUserQuestion.
 

@@ -1,6 +1,8 @@
 ---
 name: bt-panel
-description: 通过宝塔 (aaPanel/BT Panel) API 远程管理服务器 — 部署项目、更新已有站点、上传/下载/读写文件、执行 shell、操作 MySQL 数据库。当用户提到宝塔、更新线上、部署到服务器、`/www/wwwroot`、或给出宝塔面板地址 + API 密钥时触发。
+description: >-
+  通过宝塔 (aaPanel/BT Panel) API 远程管理服务器 — 部署项目、更新已有站点、上传/下载/读写文件、执行 shell、操作 MySQL
+  数据库。当用户提到宝塔、更新线上、部署到服务器、`/www/wwwroot`、或给出宝塔面板地址 + API 密钥时触发。
 license: MIT
 user-invocable: true
 disable-model-invocation: false
@@ -32,7 +34,7 @@ disable-model-invocation: false
 `client.panel_info`，后续所有方法都据此选择接口。
 
 | 面板                        | `panel_info` 识别                  | 状态        | 说明                                                                              |
-|-----------------------------|------------------------------------|-------------|-----------------------------------------------------------------------------------|
+| --------------------------- | ---------------------------------- | ----------- | --------------------------------------------------------------------------------- |
 | 宝塔 Linux **v11+**         | `{os:linux, variant:bt, major:11}` | ✅ 已实测   | Debian 12 + v11.6.0，主验证环境                                                   |
 | 宝塔 Linux **v7/v8/v9/v10** | `{major:7-10}`                     | ✅ 支持     | `exec_shell` 自动走老接口 `ExecShellMsg`；`sql_execute` 先试面板 `SqlExecute` API |
 | **aaPanel**（英文国际版）   | `{os:linux, variant:aapanel}`      | ✅ 支持     | API 与宝塔 Linux 完全一致，仅错误消息是英文；`write_file` 兜底已识别中英双语      |
@@ -148,15 +150,16 @@ python3 bt_deploy.py --local DIR --remote DIR ...     # 无别名
 ```python
 import os
 import sys
+
 sys.path.insert(0, os.path.expanduser('~/.claude/skills/ccg/bt-panel'))
 from bt_client import BtClient
 
 c = BtClient('https://1.2.3.4:8888', 'API_KEY')
-c.test()                                        # 系统信息
-c.get_sites()                                   # 站点
-c.exec_shell('pm2 restart all', cwd='/root')    # 远程执行
-c.sql_execute('mydb', 'UPDATE users SET ...')   # SQL
-c.upload('./dist.tar.gz', '/tmp/')              # 上传
+c.test()  # 系统信息
+c.get_sites()  # 站点
+c.exec_shell('pm2 restart all', cwd='/root')  # 远程执行
+c.sql_execute('mydb', 'UPDATE users SET ...')  # SQL
+c.upload('./dist.tar.gz', '/tmp/')  # 上传
 c.write_file('/www/wwwroot/app/.env', 'KEY=1')  # 写文件
 ```
 
@@ -168,11 +171,11 @@ c.write_file('/www/wwwroot/app/.env', 'KEY=1')  # 写文件
 2. **连通** — 先 `bt_client.py test` 确认密钥有效、面板可达
 3. **盘点** — `bt_client.py sites` 列出站点、`ls /www/wwwroot` 找到目标
 4. **决策** — 判断用户想要的是：
-    - **更新静态前端** → 直接 `bt_deploy.py --clean`（前端资源需要完整替换）
-    - **更新 Node/PHP 后端** → `bt_deploy.py` + 重启服务
-    - **改一两个文件** → 直接 `bt_client.py put` 或 `write`
-    - **执行数据迁移** → `bt_client.py sql ... --from-file`
-    - **重启服务** → `bt_client.py exec "pm2 restart xxx"`
+   - **更新静态前端** → 直接 `bt_deploy.py --clean`（前端资源需要完整替换）
+   - **更新 Node/PHP 后端** → `bt_deploy.py` + 重启服务
+   - **改一两个文件** → 直接 `bt_client.py put` 或 `write`
+   - **执行数据迁移** → `bt_client.py sql ... --from-file`
+   - **重启服务** → `bt_client.py exec "pm2 restart xxx"`
 5. **执行** — 优先 `--dry-run` 预览给魔尊确认，无歧义直接干
 6. **核验** — 执行后 `exec 'curl -I <url>'` 或 `cat .env` 之类读回确认
 7. **上报** — 精简报告：目标、改动范围、服务状态

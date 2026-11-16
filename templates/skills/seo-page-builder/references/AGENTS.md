@@ -43,4 +43,4 @@ readiness 与反误导检查。2026-05-05: 将 `on-page-checklist.md` 的核心�
 的功能页流程揉入本技能，新增 `feature-page-seo.md` 作为内置模式参考。2026-05-05: 新增
 `firecrawl-workflow.md`，将 SERP 研究从 Playwright 点击流替换为 Firecrawl 搜索、抓取、map 与 interact 流。
 
-[PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
+`[PROTOCOL]`: 变更时更新此头部，然后检查 AGENTS.md

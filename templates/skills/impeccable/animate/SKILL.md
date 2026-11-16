@@ -1,7 +1,10 @@
 ---
 name: animate
-description: "Review a feature and enhance it with purposeful animations, micro-interactions, and motion effects that improve usability and delight. Use when the user mentions adding animation, transitions, micro-interactions, motion design, hover effects, or making the UI feel more alive."
-argument-hint: "[target]"
+description: >-
+  Review a feature and enhance it with purposeful animations, micro-interactions, and motion effects
+  that improve usability and delight. Use when the user mentions adding animation, transitions,
+  micro-interactions, motion design, hover effects, or making the UI feel more alive.
+argument-hint: '[target]'
 user-invocable: false
 ---
 
@@ -12,7 +15,7 @@ and create delight.
 
 Use the `frontend-design` skill as the governing entry point and follow its design principles, anti-patterns, and
 **Context Gathering Protocol**. If design context is missing, ask only for the missing audience, use case, or brand
-direction. Additionally gather: performance constraints.
+direction. Also gather: performance constraints.
 
 ---
 
@@ -21,17 +24,17 @@ direction. Additionally gather: performance constraints.
 Analyze where motion would improve the experience:
 
 1. **Identify static areas**:
-    - **Missing feedback**: Actions without visual acknowledgment (button clicks, form submission, etc.)
-    - **Jarring transitions**: Instant state changes that feel abrupt (show/hide, page loads, route changes)
-    - **Unclear relationships**: Spatial or hierarchical relationships that aren't obvious
-    - **Lack of delight**: Functional but joyless interactions
-    - **Missed guidance**: Opportunities to direct attention or explain behavior
+   - **Missing feedback**: Actions without visual acknowledgment (button clicks, form submission, etc.)
+   - **Jarring transitions**: Instant state changes that feel abrupt (show/hide, page loads, route changes)
+   - **Unclear relationships**: Spatial or hierarchical relationships that aren't obvious
+   - **Lack of delight**: Functional but joyless interactions
+   - **Missed guidance**: Opportunities to direct attention or explain behavior
 
 2. **Understand the context**:
-    - What's the personality? (Playful vs serious, energetic vs calm)
-    - What's the performance budget? (Mobile-first? Complex page?)
-    - Who's the audience? (Motion-sensitive users? Power users who want speed?)
-    - What matters most? (One hero animation vs many micro-interactions?)
+   - What's the personality? (Playful vs serious, energetic vs calm)
+   - What's the performance budget? (Mobile-first? Complex page?)
+   - Who's the audience? (Motion-sensitive users? Power users who want speed?)
+   - What matters most? (One hero animation vs many micro-interactions?)
 
 If any of these are unclear from the codebase, Ask the user using AskUserQuestion.
 
@@ -62,12 +65,12 @@ Add motion systematically across these categories:
 ### Micro-interactions
 
 - **Button feedback**:
-    - Hover: Subtle scale (1.02-1.05), color shift, shadow increase
-    - Click: Quick scale down then up (0.95 → 1), ripple effect
-    - Loading: Spinner or pulse state
+  - Hover: Subtle scale (1.02-1.05), color shift, shadow increase
+  - Click: Quick scale down then up (0.95 → 1), ripple effect
+  - Loading: Spinner or pulse state
 - **Form interactions**:
-    - Input focus: Border color transition, slight scale or glow
-    - Validation: Shake on error, check mark on success, smooth color transitions
+  - Input focus: Border color transition, slight scale or glow
+  - Validation: Shake on error, check mark on success, smooth color transitions
 - **Toggle switches**: Smooth slide + color transition (200-300ms)
 - **Checkboxes/radio**: Check mark animation, ripple effect
 - **Like/favorite**: Scale + rotation, particle effects, color transition

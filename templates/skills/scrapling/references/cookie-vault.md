@@ -40,7 +40,11 @@ cookies = [
 
 ### Playwright 格式
 
-\```python cookies = [ {'name': 'field1', 'value': '...', 'domain': '.example.com', 'path': '/'}, ] \```
+```python
+cookies = [
+    {'name': 'field1', 'value': '...', 'domain': '.example.com', 'path': '/'},
+]
+```
 
 ### 备注
 

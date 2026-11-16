@@ -1,6 +1,8 @@
 ---
 name: prompt-and-eval
-description: Prompt 工程与模型评估。Prompt 模式（Zero-shot、Few-shot、CoT、ReAct、ToT）、模板设计、RAGAS、LLM-as-Judge、基准测试、A/B 测试、持续监控。当用户提到 Prompt 工程、Few-shot、CoT、模型评估、RAGAS、LLM-as-Judge、基准测试时使用。
+description: >-
+  Prompt 工程与模型评估。Prompt 模式（Zero-shot、Few-shot、CoT、ReAct、ToT）、模板设计、RAGAS、LLM-as-Judge、基准测试、A/B
+  测试、持续监控。当用户提到 Prompt 工程、Few-shot、CoT、模型评估、RAGAS、LLM-as-Judge、基准测试时使用。
 ---
 
 # Prompt 工程与模型评估
@@ -10,7 +12,7 @@ description: Prompt 工程与模型评估。Prompt 模式（Zero-shot、Few-shot
 ### 模式对比
 
 | 模式             | 复杂度 | 准确性 | Token 消耗 | 适用场景           |
-|------------------|--------|--------|------------|--------------------|
+| ---------------- | ------ | ------ | ---------- | ------------------ |
 | Zero-shot        | 低     | 中     | 低         | 简单任务、通用问题 |
 | Few-shot         | 中     | 高     | 中         | 格式化输出、分类   |
 | CoT              | 中     | 高     | 中         | 推理、数学、逻辑   |
@@ -79,10 +81,14 @@ Action: Finish[330 米]
 ```python
 # 生成多条思路 → 评估打分 → Beam Search 选最优 → 递归扩展
 class TreeOfThoughts:
-    def solve(self, problem):
+    def solve(
+            self,
+            problem
+    ):
         thoughts = self._generate(problem, n=3)
         scored = self._evaluate(problem, thoughts)
-        best = sorted(scored, key=lambda x: x[1], reverse=True)[:self.beam_width]
+        best = sorted(scored, key=lambda
+                x: x[1], reverse=True)[:self.beam_width]
         # 递归深入最佳路径
 ```
 
@@ -100,7 +106,7 @@ messages = [
 ### 优化原则
 
 | 原则     | 做                   | 不做       |
-|----------|----------------------|------------|
+| -------- | -------------------- | ---------- |
 | 清晰性   | 具体、可执行、有约束 | 模糊指令   |
 | 结构化   | 分隔符、编号、格式   | 大段文字   |
 | 示例驱动 | 2-5 个高质量示例     | 无示例     |
@@ -133,7 +139,7 @@ NL2SQL: '将自然语言转 SQL: {query}。表结构: {schema}'
 ### 评估维度
 
 | 维度   | 指标                             | 适用场景  |
-|--------|----------------------------------|-----------|
+| ------ | -------------------------------- | --------- |
 | 准确性 | Accuracy, F1, Precision, Recall  | 分类、NER |
 | 相关性 | Relevance, Context Precision     | RAG、检索 |
 | 忠实性 | Faithfulness, Hallucination Rate | 生成任务  |
@@ -153,10 +159,10 @@ dataset = Dataset.from_dict({
 })
 
 result = evaluate(dataset, metrics=[
-    faithfulness,        # 答案是否基于上下文（0-1）
-    answer_relevancy,    # 答案与问题相关度（0-1）
-    context_precision,   # 检索上下文中相关信息比例（0-1）
-    context_recall,      # 上下文是否包含所需全部信息（0-1）
+    faithfulness,  # 答案是否基于上下文（0-1）
+    answer_relevancy,  # 答案与问题相关度（0-1）
+    context_precision,  # 检索上下文中相关信息比例（0-1）
+    context_recall,  # 上下文是否包含所需全部信息（0-1）
 ])
 ```
 
@@ -164,7 +170,12 @@ result = evaluate(dataset, metrics=[
 
 ```python
 class LLMJudge:
-    def evaluate(self, question, answer, criteria):
+    def evaluate(
+            self,
+            question,
+            answer,
+            criteria
+    ):
         prompt = f"""
 评估答案质量（1-5 分）:
 问题: {question}
@@ -175,8 +186,13 @@ class LLMJudge:
 """
         return json.loads(self.llm.predict(prompt))
 
+
 # 成对比较 + ELO 排名
-def pairwise(q, a, b):
+def pairwise(
+        q,
+        a,
+        b
+):
     # 返回 {"winner": "A"|"B", "confidence": 0-1}
     ...
 ```
@@ -184,7 +200,7 @@ def pairwise(q, a, b):
 ### 基准测试速查
 
 | 基准      | 评估能力       | 核心指标        |
-|-----------|----------------|-----------------|
+| --------- | -------------- | --------------- |
 | MMLU      | 多任务语言理解 | Accuracy        |
 | HumanEval | 代码生成       | Pass@k          |
 | GSM8K     | 数学推理       | Accuracy (CoT)  |
@@ -211,6 +227,7 @@ def evaluate_retrieval(
 # ROUGE: 摘要质量（rouge-1, rouge-2, rouge-l）
 # BLEU: 翻译质量
 from rouge import Rouge
+
 rouge_scores = Rouge().get_scores(predictions, references, avg=True)
 ```
 
@@ -253,9 +270,13 @@ request_count = Counter('llm_requests_total', 'Total', ['model', 'status'])
 latency = Histogram('llm_latency_seconds', 'Latency', ['model'])
 quality = Gauge('llm_quality_score', 'Quality', ['model'])
 
+
 # 异常检测: Z-score > 2.0 触发告警
 class AnomalyDetector:
-    def check(self, value):
+    def check(
+            self,
+            value
+    ):
         z = abs((value - mean(self.window)) / std(self.window))
         return z > self.threshold
 ```
@@ -282,7 +303,7 @@ class AnomalyDetector:
 ## 工具速查
 
 | 工具         | 用途            |
-|--------------|-----------------|
+| ------------ | --------------- |
 | RAGAS        | RAG 专用评估    |
 | LangSmith    | LLM 应用监控    |
 | Phoenix      | 可观测性平台    |

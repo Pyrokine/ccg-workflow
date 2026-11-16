@@ -206,9 +206,9 @@ cursor.fetchone()
 ```python
 # 示例：追踪污点传播
 user_input = request.args.get('id')  # Source
-processed = user_input.strip()        # 传播
+processed = user_input.strip()  # 传播
 query = f"SELECT * FROM users WHERE id = {processed}"  # 传播
-cursor.execute(query)                  # Sink!
+cursor.execute(query)  # Sink!
 ```
 
 ## 快速扫描命令
@@ -233,7 +233,7 @@ grep -rn "execute.*+\|execute.*f\"\|Query.*+" --include="*.py" --include="*.java
 ## 漏洞报告格式
 
 ````markdown
-## [漏洞类型] - [严重程度: Critical/High/Medium/Low]
+## `[漏洞类型]` - `[严重程度: Critical/High/Medium/Low]`
 
 **文件:** `path/to/file.py:行号`
 
