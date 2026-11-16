@@ -2,7 +2,13 @@ import fs from 'fs-extra'
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { getAllCommandIds, getWorkflowById, getWorkflowConfigs, injectConfigVariables } from '../installer'
+import {
+  getAllCommandIds,
+  getWorkflowById,
+  getWorkflowConfigs,
+  getWorkflowPreset,
+  injectConfigVariables,
+} from '../installer'
 
 // Helper: find package root
 function findPackageRoot(): string {
@@ -26,6 +32,14 @@ const LEGACY_TEMPLATES_DIR = join(PACKAGE_ROOT, 'templates', 'commands-legacy')
 // A. Workflow registry consistency
 // ─────────────────────────────────────────────────────────────
 describe('workflow registry', () => {
+  it('returns independent arrays for the compatibility preset', () => {
+    const selected = getWorkflowPreset('full')
+    expect(selected).toEqual(getAllCommandIds())
+    selected.pop()
+    expect(getWorkflowPreset('full')).toEqual(getAllCommandIds())
+    expect(getWorkflowPreset('full')).not.toBe(selected)
+  })
+
   it('getAllCommandIds returns at least 20 commands', () => {
     const ids = getAllCommandIds()
     expect(ids.length).toBeGreaterThanOrEqual(20)

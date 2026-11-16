@@ -205,6 +205,7 @@ export async function installCodexMode(): Promise<{ success: boolean; message: s
 
   const codexHome = join(homedir(), '.codex')
   let backup: CodexBackup | undefined
+  let failure: unknown
   try {
     const config = await createCodexInstallConfig()
     const plan = await prepareCodexInstall(codexTemplateDir, codexHome, config)
@@ -216,36 +217,34 @@ export async function installCodexMode(): Promise<{ success: boolean; message: s
     }
 
     const sponsorApis = await configureAllSponsorsForCodex()
-    if (!sponsorApis.success) {
-      throw new Error(sponsorApis.message)
+    if (sponsorApis.success) {
+      const manifest = await buildCodexModeManifest(plan, backup, sponsorApis.results)
+      await writeCodexFileAtomic(join(codexHome, CODEX_MODE_MANIFEST), `${JSON.stringify(manifest, null, 2)}\n`, 0o600)
+      await verifyCodexInstall(codexHome, plan, manifest)
+      return { success: true, message: codexInstallMessage(backup) }
     }
-    const manifest = await buildCodexModeManifest(plan, backup, sponsorApis.results)
-    await writeCodexFileAtomic(join(codexHome, CODEX_MODE_MANIFEST), `${JSON.stringify(manifest, null, 2)}\n`, 0o600)
-    await verifyCodexInstall(codexHome, plan, manifest)
-
-    return {
-      success: true,
-      message: codexInstallMessage(backup),
-    }
+    failure = new Error(sponsorApis.message)
   } catch (error) {
-    if (!backup) {
-      return { success: false, message: `Failed to install Codex mode: ${error}` }
+    failure = error
+  }
+
+  if (!backup) {
+    return { success: false, message: `Failed to install Codex mode: ${failure}` }
+  }
+  try {
+    await restoreCodexBackup(codexHome, backup)
+    return {
+      success: false,
+      message:
+        `Failed to install Codex mode: ${failure}. ` +
+        `Original files restored from ${backup.path.replace(homedir(), '~')}`,
     }
-    try {
-      await restoreCodexBackup(codexHome, backup)
-      return {
-        success: false,
-        message:
-          `Failed to install Codex mode: ${error}. ` +
-          `Original files restored from ${backup.path.replace(homedir(), '~')}`,
-      }
-    } catch (restoreError) {
-      return {
-        success: false,
-        message:
-          `Failed to install Codex mode: ${error}. Restore also failed: ${restoreError}. ` +
-          `Backup: ${backup.path.replace(homedir(), '~')}`,
-      }
+  } catch (restoreError) {
+    return {
+      success: false,
+      message:
+        `Failed to install Codex mode: ${failure}. Restore also failed: ${restoreError}. ` +
+        `Backup: ${backup.path.replace(homedir(), '~')}`,
     }
   }
 }

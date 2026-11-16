@@ -167,22 +167,13 @@ export async function stagePlugin(target: string, dshHome: string, source: strin
 
     const currentTarget = await lstatIfExists(target)
     if (currentTarget) {
-      if (!currentTarget.isDirectory() || currentTarget.isSymbolicLink()) {
-        throw new Error(`DSH plugin target must be a non-symlink directory: ${target}`)
-      }
+      await requirePlainDirectory(target, 'DSH plugin target')
       await requireContainedPath(dshHome, target, 'DSH plugin target')
       await fs.rename(target, backup)
       originalMoved = true
     }
 
-    try {
-      await fs.rename(staged, target)
-    } catch (error) {
-      if (originalMoved) {
-        await fs.rename(backup, target)
-      }
-      throw error
-    }
+    await fs.rename(staged, target)
 
     if (originalMoved) {
       try {

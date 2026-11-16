@@ -291,10 +291,7 @@ export function getAllCommandIds(): string[] {
   return WORKFLOW_CONFIGS.map((w) => w.id)
 }
 
-/**
- * @deprecated Use getCoreCommandIds() or getAllCommandIds() instead.
- */
-export const WORKFLOW_PRESETS = {
+const workflowPresets = {
   full: {
     name: '完整',
     nameEn: 'Full',
@@ -304,8 +301,13 @@ export const WORKFLOW_PRESETS = {
   },
 }
 
-export type WorkflowPreset = keyof typeof WORKFLOW_PRESETS
+/**
+ * @deprecated Use getCoreCommandIds() or getAllCommandIds() instead.
+ */
+export const WORKFLOW_PRESETS = workflowPresets
+
+export type WorkflowPreset = keyof typeof workflowPresets
 
 export function getWorkflowPreset(preset: WorkflowPreset): string[] {
-  return [...WORKFLOW_PRESETS[preset].workflows]
+  return [...workflowPresets[preset].workflows]
 }

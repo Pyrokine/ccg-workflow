@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'pathe'
 import { i18n } from '../i18n'
 
-import { getSponsor, promptSponsorMenuKey, sponsorInquirerChoices } from '../utils/installer'
+import { getSponsor, promptSponsorMenuKey, sponsorInquirerChoices } from '../utils/sponsors'
 import type { ClaudeSettings } from './command-settings'
 import { configureApiDefaults } from './command-settings'
 

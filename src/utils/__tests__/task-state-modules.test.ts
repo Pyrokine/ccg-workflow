@@ -2,7 +2,7 @@ import fs from 'fs-extra'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { TASK_STATE_RUNTIME_FILES } from '../installer-codex-files'
+import { TASK_STATE_RUNTIME_FILES } from '../installer-data'
 import { cleanupPaths, createProject, DEFAULT_SESSION_KEY, hooksDir, runScript } from './task-state-fixtures'
 
 const require = createRequire(import.meta.url)

@@ -230,7 +230,8 @@ export async function installRuleFiles(ctx: InstallContext): Promise<void> {
     if (ctx.config.skillsProfile !== undefined) {
       const notes = await activateNativeSkills({ installDir: ctx.installDir, names: ctx.config.skillsProfile })
       if (notes.length) {
-        throw new Error(notes.join('\n'))
+        ctx.result.errors.push(`Failed to install rules: Error: ${notes.join('\n')}`)
+        return
       }
       ctx.result.installedRules = true
       return

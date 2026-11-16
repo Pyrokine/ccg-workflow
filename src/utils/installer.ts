@@ -30,8 +30,9 @@ export {
   getWorkflowById,
   getWorkflowConfigs,
   getWorkflowPreset,
-  WORKFLOW_PRESETS,
 } from './installer-data'
+// noinspection JSDeprecatedSymbols
+export { WORKFLOW_PRESETS } from './installer-data'
 export type { WorkflowPreset } from './installer-data'
 
 export { injectConfigVariables } from './installer-template'

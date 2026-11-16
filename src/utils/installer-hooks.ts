@@ -39,7 +39,11 @@ export async function installHookScripts(ctx: InstallContext): Promise<boolean> 
     const current = await lstatOptional(boundary)
     if (current) {
       if (!current.isFile() || current.isSymbolicLink()) {
-        throw new Error('Hook package metadata is not a regular file; preserved')
+        ctx.result.errors.push(
+          'Failed to install hook scripts: Error: Hook package metadata is not a regular file; preserved'
+        )
+        ctx.result.success = false
+        return false
       }
       metadata = parseJsonRecord(await fs.readFile(boundary, 'utf-8'), 'Hook package metadata')
     }
@@ -47,7 +51,9 @@ export async function installHookScripts(ctx: InstallContext): Promise<boolean> 
     for (const file of HOOK_FILES) {
       const src = join(hooksSrcDir, file)
       if (!(await fs.pathExists(src))) {
-        throw new Error(`Required hook runtime file not found: ${src}`)
+        ctx.result.errors.push(`Failed to install hook scripts: Error: Required hook runtime file not found: ${src}`)
+        ctx.result.success = false
+        return false
       }
       if (file === 'package.json') {
         continue

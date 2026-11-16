@@ -292,7 +292,9 @@ env_key = "USER_API_KEY"
     const result = await configureAllSponsorsForCodex()
 
     expect(result.success).toBe(false)
-    expect(result.results.every((item) => item.success === false && item.status === 'failed')).toBe(true)
+    for (const item of result.results) {
+      expect(item).toMatchObject({ success: false, status: 'failed' })
+    }
     expect(await fs.readFile(configPath, 'utf-8')).toBe('[broken')
   })
 })
@@ -423,7 +425,9 @@ base_url = "https://example.test/v1"
     const result = await removeAllSponsorsFromCodex()
 
     expect(result.success).toBe(false)
-    expect(result.results.every((item) => item.success === false && item.status === 'failed')).toBe(true)
+    for (const item of result.results) {
+      expect(item).toMatchObject({ success: false, status: 'failed' })
+    }
     expect(await fs.readFile(configPath, 'utf-8')).toBe('[broken')
   })
 })
