@@ -10,6 +10,7 @@
 
 import fs from 'fs-extra'
 import { join, relative, sep } from 'pathe'
+import { parse } from 'yaml'
 
 // ═══════════════════════════════════════════════════════
 // Types
@@ -69,7 +70,9 @@ export function parseFrontmatter(content: string): Record<string, string> | null
   }
 
   const meta: Record<string, string> = Object.create(null)
-  for (const rawLine of match[1].split(/\r?\n/)) {
+  const lines = match[1].split(/\r?\n/)
+  for (let index = 0; index < lines.length; index++) {
+    const rawLine = lines[index]
     const line = rawLine.trim()
     if (!line || line.startsWith('#')) {
       continue
@@ -81,7 +84,16 @@ export function parseFrontmatter(content: string): Record<string, string> | null
     } // Skip malformed lines instead of throwing
 
     if (!UNSAFE_KEYS.has(m[1])) {
-      meta[m[1]] = m[2].trim().replace(/^["']|["']$/g, '')
+      const value = m[2].trim()
+      if (value === '>-') {
+        const scalar = [value]
+        while (index + 1 < lines.length && (/^[ \t]/.test(lines[index + 1]) || !lines[index + 1].trim())) {
+          scalar.push(lines[++index])
+        }
+        meta[m[1]] = parse(`${scalar.join('\n')}\n`) as string
+      } else {
+        meta[m[1]] = value.replace(/^["']|["']$/g, '')
+      }
     }
   }
   return Object.keys(meta).length > 0 ? meta : null
@@ -374,7 +386,7 @@ export function generateCommandContent(skill: SkillMeta, skillsInstallDir: strin
  * @param skillsTemplateDir - Path to templates/skills/ (source)
  * @param skillsInstallDir - Path to ~/.claude/skills/ccg/ (installed destination)
  * @param commandsDir - Path to ~/.claude/commands/ccg/ (command output)
- * @param existingCommandNames - Set of command names already defined in installer-data.ts (to avoid conflicts)
+ * @param existingCommandNames - Existing command names from installer-data.ts
  * @param skipCategories - Skill categories excluded from command generation
  * @returns List of generated command names
  */

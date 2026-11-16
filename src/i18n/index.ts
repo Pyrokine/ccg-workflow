@@ -11,6 +11,7 @@ export async function initI18n(lang: SupportedLang = 'zh-CN'): Promise<void> {
       showSupportNotice: false,
       lng: lang,
       fallbackLng: 'en',
+      returnEmptyString: true,
       resources: {
         'zh-CN': { translation: zhCN, ...zhCN },
         en: { translation: en, ...en },

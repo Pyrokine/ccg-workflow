@@ -32,6 +32,9 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      - name: CSS lint
+        run: pnpm lint:css
+
       - name: Format check
         run: pnpm format:check
 

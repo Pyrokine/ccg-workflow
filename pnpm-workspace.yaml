@@ -1,6 +1,9 @@
 allowBuilds:
   esbuild: true
 
+minimumReleaseAgeExclude:
+  - i18next@27.1.3
+
 peerDependencyRules:
   allowedVersions:
-    "unbuild>typescript": "^6.0.0"
+    'unbuild>typescript': '^6.0.0'

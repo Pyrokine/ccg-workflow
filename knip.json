@@ -1,0 +1,20 @@
+{
+  "$schema": "https://unpkg.com/knip/schema.json",
+  "workspaces": {
+    ".": {
+      "entry": [
+        "src/{index,cli}.ts",
+        "src/utils/installer.ts",
+        "docs/.vitepress/config.mts",
+        "templates/hooks/{session-start,skill-router,subagent-context,workflow-state,task-state}.js",
+        "templates/skills/run_skill.js",
+        "templates/skills/tools/*/scripts/*.js"
+      ],
+      "project": ["src/**/*.ts", "templates/**/*.js", "docs/.vitepress/*.mts"]
+    },
+    "dsh-ccg": {
+      "entry": ["src/{index,client,roles}.js", "skills/*/scripts/*.js", "test/*.test.mjs"],
+      "project": ["src/**/*.{js,ts}", "skills/**/*.js", "test/**/*.mjs"]
+    }
+  }
+}
