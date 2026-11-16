@@ -18,6 +18,19 @@ interface Check {
   project_root?: string
   diagnostics?: number
   reason?: string
+  cache?: { mode: 'persistent' | 'temporary'; path: string; reason: string }
+  execution?: {
+    command: string
+    args: string[]
+    exit_code: number | null
+    signal: string | null
+    stderr: string
+    stderr_redacted: boolean
+    timeout_ms: number
+    duration_ms: number
+    error_code?: string
+  }
+  timing?: { budget_ms: number; elapsed_ms: number; phase: string; cleanup_ms: number }
 }
 interface Issue {
   severity: string
@@ -32,7 +45,13 @@ interface Result {
   issues: Issue[]
   uncovered: Array<{ path: string; reason: string }>
 }
-export type Analyze = (files: string[], thresholds: typeof limits, targetVersion?: string) => Result
+export type Analyze = (
+  files: string[],
+  thresholds: typeof limits,
+  targetVersion?: string,
+  eslintConfig?: string,
+  compilationDatabase?: string
+) => Result
 const cleanup = new Set<string>()
 
 export function fixture(): string {

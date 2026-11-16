@@ -39,7 +39,7 @@ one-line question it just answers — asking permission for that wastes more of 
 Four things you can then do without learning any commands:
 
 | You want               | Say                                    | What happens                                                                                |
-|------------------------|----------------------------------------|---------------------------------------------------------------------------------------------|
+| ---------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------- |
 | a specialist's opinion | _"review this diff"_                   | one child on the reviewer's model, with CCG's reviewer instructions                         |
 | several opinions       | _"I want to be sure about this"_       | give a role two models in the card — they answer the same brief independently, side by side |
 | parallel work          | _"implement these four modules"_       | `ccg_team` hires a colleague per part, each owning its own files                            |
@@ -53,10 +53,15 @@ round trip. The plugin says so in its own prompt until you set them.
 own work end to end will ask a few times. That is the harness's policy, not this plugin's; widen the default permission
 mode in Settings if you would rather not be asked.
 
-**What it writes to disk.** Exactly two things. `.ccg/memory.md` in the workspace — meant to be committed, since it is
-your project's decisions and your teammates read it; delete any line that stops being true. And
-`~/.dsh/storages/ccg_team.json`, the ownership map, which stays outside your repo because it is machine state, not
-knowledge. Nothing else: no cache, no lockfile, no dotfile in your home.
+**What it writes to disk.** Project decisions are stored in `.ccg/memory.md` in the workspace; teammates read this
+file, and you can remove decisions that no longer apply. The ownership map is stored outside the repository in
+`~/.dsh/storages/ccg_team.json`.
+
+Native Go quality checks also reuse a CCG-private build cache at `ccg/go-build` under the operating system's user cache
+directory. Go manages cache validity, concurrent access, and cleanup. Module resources and workspace copies remain
+isolated, and the original GOCACHE stays unchanged. If the private cache cannot be used safely, the report states the
+reason and the check uses a temporary build cache. Collect applicable quality gates after the complete feature stage;
+reuse valid evidence and rerun only checks affected by a repair.
 
 ---
 
@@ -70,7 +75,7 @@ every call.
 On dsh that layer disappears. This plugin gives the agent seven delegation tools:
 
 | Tool           | Role      | Default tier | What the child does                                                      |
-|----------------|-----------|--------------|--------------------------------------------------------------------------|
+| -------------- | --------- | ------------ | ------------------------------------------------------------------------ |
 | `ccg_analyze`  | analyzer  | strong       | read-only analysis: options, trade-offs, a ranked recommendation         |
 | `ccg_design`   | architect | strong       | blueprint: boundaries, interface contracts, migration path               |
 | `ccg_build`    | builder   | worker       | implement an agreed plan, complete and runnable, plus its verify command |
@@ -290,7 +295,7 @@ The package also publishes six skills through the official filesystem provider, 
 existing skill roots keep theirs:
 
 | Skill             | Purpose                                              | Execution                                        |
-|-------------------|------------------------------------------------------|--------------------------------------------------|
+| ----------------- | ---------------------------------------------------- | ------------------------------------------------ |
 | `ccg-workflow`    | Phase, role and delegation guidance                  | Planning and coordination                        |
 | `verify-change`   | Diff, related documentation and test-change checks   | Read-only Git analysis                           |
 | `verify-quality`  | Project lint, types, AST thresholds and text metrics | `--language-checks` with available project tools |
@@ -403,7 +408,7 @@ roles:
 ```
 
 | Key                 | Default    | Meaning                                                                                                                                                                                                         |
-|---------------------|------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| ------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `strong` / `worker` | unset      | The two model tiers. Unset → children use the deployment default model.                                                                                                                                         |
 | `roles.<name>`      | —          | Per-role `enabled`, `tier`, `provider`, `model`, `maxTokens`, `toolName`.                                                                                                                                       |
 | `subagentProvider`  | `spawn`    | The `ctx.subagents` provider to delegate through. `spawn` runs children in-process, which is what supports per-child personas.                                                                                  |

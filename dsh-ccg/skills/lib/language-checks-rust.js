@@ -4,6 +4,12 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { AnalysisError, canonical, checked, issue, runNative } = require('./language-checks-runtime.js');
 
+/**
+ * @param {{level: string, code?: {code: string} | null, spans: Array<{
+ *   is_primary: boolean, file_name: string, line_start: number
+ * }>}} diagnostic
+ * @param {string} root
+ */
 function rustDiagnostic(diagnostic, root) {
   if (!diagnostic || !Array.isArray(diagnostic.spans)) {
     throw new Error();
@@ -101,7 +107,7 @@ function rustInventory(target, root, checkDeadline) {
       if (entry.isDirectory()) {
         visit(file);
       } else if (entry.isFile() && entry.name.endsWith('.d')) {
-        for (const source of depInfoSources(fs.readFileSync(file, 'utf8'), root)) {
+        for (const source of depInfoSources(fs.readFileSync(file, { encoding: 'utf8' }), root)) {
           files.add(source);
         }
       }

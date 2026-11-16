@@ -1,9 +1,10 @@
 import { spawnSync } from 'node:child_process'
-import { symlinkSync } from 'node:fs'
+import { mkdirSync, readFileSync, symlinkSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { distributions, fixture, lintProject, packageRoot, run, scripts, write } from './quality-gates-fixtures'
+import { fakeExecutable } from './language-checks-fixtures'
+import { deny, distributions, fixture, lintProject, packageRoot, run, scripts, write } from './quality-gates-fixtures'
 
 describe.each(distributions)('%s quality gates', (distribution) => {
   describe('language mode integration', () => {
@@ -23,6 +24,229 @@ describe.each(distributions)('%s quality gates', (distribution) => {
         expect.objectContaining({ rule_id: 'no-debugger', origin: 'unclassified' })
       )
     })
+
+    it('keeps Python parse failures separate while Ruff checks every readable file', () => {
+      const root = fixture()
+      const invalid = write(root, 'legacy.py', '# legacy signature\ndef legacy((left, right)):\n    pass\n')
+      const clean = write(root, 'clean.py', 'answer = 42\n')
+      const unreadable = write(root, 'unreadable.py', 'answer = 42\n')
+      const diagnostics = [{ filename: invalid, location: { row: 2 }, code: 'invalid-syntax' }]
+      fakeExecutable(
+        root,
+        'ruff',
+        `if (process.argv.includes('--show-files')) {
+        console.log(process.argv.slice(process.argv.indexOf('--') + 1).join('\\n'));
+      } else { console.log(JSON.stringify(${JSON.stringify(diagnostics)})); process.exit(1); }`
+      )
+      const result = run(
+        distribution,
+        'quality',
+        [invalid, clean, unreadable, '--language-checks'],
+        root,
+        deny(root, 'readFileSync', unreadable)
+      )
+      expect(result.status).toBe(2)
+      expect(result.output).toMatchObject({ complete: false, passed: false, files_scanned: 1 })
+      expect(result.output.scan_errors).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: invalid,
+            code: 'PARSE_FAILED',
+            message: expect.stringContaining('legacy at line 2'),
+          }),
+          expect.objectContaining({ path: unreadable, code: 'EACCES' }),
+        ])
+      )
+      expect(result.output.checks).toContainEqual(
+        expect.objectContaining({ tool: 'ruff', status: 'failed', files: [invalid, clean] })
+      )
+      expect(result.output.issues).toContainEqual(
+        expect.objectContaining({ rule_id: 'invalid-syntax', severity: 'error' })
+      )
+    })
+
+    it.each([false, true])('passes an external compilation database through the public CLI, equals=%s', (equals) => {
+      const root = fixture()
+      const source = write(root, 'source.cpp', 'int value = 1;\n')
+      const missing = write(root, 'header.hpp', '// Header\n')
+      write(root, 'compile_commands.json', '{invalid nearest database')
+      const external = fixture()
+      const database = write(
+        external,
+        'compile_commands.json',
+        JSON.stringify([{ directory: root, file: 'source.cpp', command: 'c++ -c source.cpp' }])
+      )
+      const capture = join(root, 'argv.json')
+      fakeExecutable(
+        root,
+        'clang-tidy',
+        `require('node:fs').writeFileSync(${JSON.stringify(capture)}, JSON.stringify(process.argv.slice(2)));`
+      )
+      const args = equals ? ['--compilation-database=' + database] : ['--compilation-database', database]
+      const result = run(distribution, 'quality', [source, missing, '--language-checks', ...args], root)
+      expect(result.status).toBe(2)
+      expect(result.output.checks).toContainEqual(
+        expect.objectContaining({ tool: 'clang-tidy', status: 'passed', files: [source] })
+      )
+      expect(result.output.uncovered).toContainEqual(expect.objectContaining({ path: missing }))
+      expect(JSON.parse(readFileSync(capture, 'utf8'))).toEqual(['-p', external, '--quiet', source])
+    })
+
+    it('keeps an unreadable explicit compilation database incomplete without using the nearest database', () => {
+      const root = fixture()
+      const source = write(root, 'source.cpp', 'int value = 1;\n')
+      const entry = JSON.stringify([{ directory: root, file: source, command: 'c++ -c source.cpp' }])
+      write(root, 'compile_commands.json', entry)
+      const external = fixture()
+      const database = write(external, 'compile_commands.json', entry)
+      fakeExecutable(root, 'clang-tidy', 'throw new Error("unexpected clang-tidy invocation");')
+      const result = run(
+        distribution,
+        'quality',
+        [source, '--language-checks', '--compilation-database', database],
+        root,
+        deny(root, 'readFileSync', database)
+      )
+      expect(result.status).toBe(2)
+      expect(result.output).toMatchObject({ complete: false, passed: false })
+      expect(result.output.checks).toContainEqual(
+        expect.objectContaining({
+          tool: 'clang-tidy',
+          status: 'unavailable',
+          reason: 'Compilation database could not be read or parsed',
+        })
+      )
+      expect(result.output.uncovered).toContainEqual(expect.objectContaining({ path: source }))
+    })
+
+    it.each(['missing', 'directory', 'basename', 'duplicate', 'no-value', 'no-language-checks'])(
+      'rejects an invalid compilation database CLI option: %s',
+      (kind) => {
+        const root = fixture()
+        const source = write(root, 'source.cpp', 'int value = 1;\n')
+        const database = write(root, 'compile_commands.json', '[]')
+        if (kind === 'directory') {
+          mkdirSync(join(root, 'directory/compile_commands.json'), { recursive: true })
+        }
+        const selected =
+          kind === 'missing'
+            ? join(root, 'missing/compile_commands.json')
+            : kind === 'directory'
+              ? join(root, 'directory/compile_commands.json')
+              : kind === 'basename'
+                ? write(root, 'custom.json', '[]')
+                : database
+        const args = [source, ...(kind === 'no-language-checks' ? [] : ['--language-checks']), '--compilation-database']
+        if (kind !== 'no-value') {
+          args.push(selected)
+        }
+        if (kind === 'duplicate') {
+          args.push('--compilation-database', database)
+        }
+        const result = run(distribution, 'quality', args, root)
+        expect(result.status).toBe(2)
+        expect(result.output).toMatchObject({ complete: false, passed: false })
+        expect(result.output.error).toBeTruthy()
+      }
+    )
+
+    it('summarizes multiple targets and puts JSON results before the full path inventory', () => {
+      const root = fixture()
+      const sources = ['one.py', 'nested/two.py', 'nested/three.py'].map((name) => write(root, name, 'value = 1\n'))
+      const result = run(distribution, 'quality', sources, root)
+      expect(result.status).toBe(0)
+      expect(result.output).toMatchObject({ scan_path: '3 个目标', requested_paths: sources })
+      for (const key of ['complete', 'passed', 'issues', 'scan_errors']) {
+        expect(result.stdout.indexOf('"' + key + '"')).toBeLessThan(result.stdout.indexOf('"requested_paths"'))
+      }
+      expect(run(distribution, 'quality', [sources[0]], root).output).toMatchObject({ scan_path: sources[0] })
+    })
+
+    it.each(['passed', 'failed', 'unavailable'] as const)(
+      'separates %s Ruff execution from missing phase timings',
+      (status) => {
+        const root = fixture()
+        const source = write(root, 'source.py', 'print(1)\n')
+        const exitCode = { passed: 0, failed: 1, unavailable: 2 }[status]
+        const diagnostics = status === 'failed' ? [{ filename: source, location: { row: 1 }, code: 'F821' }] : []
+        fakeExecutable(
+          root,
+          'ruff',
+          `if (${exitCode} === 2) { process.exit(2); }
+          if (process.argv.includes('--show-files')) {
+            console.log(${JSON.stringify(source)});
+          } else {
+            console.log(JSON.stringify(${JSON.stringify(diagnostics)}));
+            process.exit(${exitCode});
+          }`
+        )
+        const text = spawnSync(
+          process.execPath,
+          [join(packageRoot, distribution, scripts.quality), source, '--language-checks'],
+          { cwd: root, encoding: 'utf8' }
+        )
+        expect(text.error).toBeUndefined()
+        expect(text.status).toBe(exitCode)
+        expect(text.stdout).toContain(`ruff (${root}): ${status}`)
+        expect(text.stdout).toMatch(/阶段耗时:\s+未记录/u)
+        expect(text.stdout).not.toContain('未执行原生工具')
+      }
+    )
+
+    it('uses an explicit ESLint config across sibling directories without changing default boundaries', () => {
+      const common = fixture()
+      const project = join(common, 'workbench')
+      write(project, 'package.json', '{"type":"module"}\n')
+      const config = write(
+        project,
+        'eslint.config.cjs',
+        'module.exports=[{files:["**/*.js"],rules:{"no-debugger":"error"}}];\n'
+      )
+      write(project, 'node_modules/.marker', '')
+      symlinkSync(join(packageRoot, 'node_modules', 'eslint'), join(project, 'node_modules', 'eslint'), 'junction')
+      const inside = write(project, 'scripts/driver.js', 'export const value = 1;\n')
+      const outside = write(common, 'docs/atlas/world.js', 'debugger;\n')
+      const defaults = run(distribution, 'quality', [inside, outside, '--language-checks'], common)
+      expect(defaults.status).toBe(2)
+      expect(defaults.output.uncovered).toContainEqual(expect.objectContaining({ path: outside }))
+      const explicit = run(
+        distribution,
+        'quality',
+        [inside, outside, '--language-checks', '--eslint-config', config],
+        common
+      )
+      expect(explicit.status).toBe(1)
+      expect(explicit.output).toMatchObject({ complete: true, passed: false, uncovered: [] })
+      expect(explicit.output.checks).toContainEqual(
+        expect.objectContaining({ tool: 'eslint', files: [inside, outside] })
+      )
+      expect(explicit.output.issues).toContainEqual(expect.objectContaining({ rule_id: 'no-debugger' }))
+      write(common, 'docs/atlas/world.js', 'export const value = 2;\n')
+      expect(
+        run(distribution, 'quality', [inside, outside, '--language-checks', '--eslint-config=' + config], common).status
+      ).toBe(0)
+      expect(run(distribution, 'quality', [outside, '--language-checks'], common).status).toBe(2)
+    })
+
+    it.each(['missing', 'directory', 'duplicate', 'no-language-checks'])(
+      'keeps an invalid explicit ESLint request incomplete: %s',
+      (kind) => {
+        const root = lintProject()
+        const source = write(root, 'source.js')
+        const config = join(root, 'eslint.config.cjs')
+        const selected = kind === 'missing' ? join(root, 'missing.cjs') : kind === 'directory' ? root : config
+        const args = [
+          source,
+          ...(kind === 'no-language-checks' ? [] : ['--language-checks']),
+          '--eslint-config',
+          selected,
+        ]
+        if (kind === 'duplicate') {
+          args.push('--eslint-config', config)
+        }
+        expect(run(distribution, 'quality', args, root).output).toMatchObject({ complete: false, passed: false })
+      }
+    )
 
     it('reports every error and rule in default output while keeping JSON complete', () => {
       const root = lintProject()

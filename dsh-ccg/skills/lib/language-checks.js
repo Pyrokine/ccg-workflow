@@ -16,13 +16,14 @@ const {
   checked,
   nativeConfig,
 } = require('./language-checks-runtime.js');
-const { ruff, clangTidy } = require('./language-checks-native.js');
+const { ruff, clangTidy, shellSyntax, powershellSyntax, jsonSyntax } = require('./language-checks-native.js');
+const { sourceExtension } = require('./shared.js');
 const { goVet } = require('./language-checks-go.js');
 const { clippy } = require('./language-checks-rust.js');
 const { typescriptWorker, typescriptCli } = require('./language-checks-typescript.js');
 
 const JS = new Set(['.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx', '.mts', '.cts']);
-const CPP = new Set(['.c', '.cc', '.cpp', '.cxx', '.h', '.hh', '.hpp', '.hxx']);
+const CPP = new Set(['.c', '.cc', '.cpp', '.cxx', '.h', '.hh', '.hpp', '.hxx', '.cu', '.cuh', '.inc']);
 
 function runWorker(job) {
   const deadline = Date.now() + TIMEOUT;
@@ -39,7 +40,7 @@ function runWorker(job) {
       return typescriptCli(job, deadline);
     }
     if (!output || !Array.isArray(output.checks) || !Array.isArray(output.issues) || !Array.isArray(output.uncovered)) {
-      throw new Error();
+      return unavailable(job.tool, job.root, job.files, 'Analysis returned invalid output');
     }
     return output;
   } catch {
@@ -230,6 +231,15 @@ function languageTool(extension) {
   if (extension === '.py' || extension === '.pyi') {
     return 'ruff';
   }
+  if (extension === '.sh' || extension === '.bash') {
+    return 'shell-syntax';
+  }
+  if (extension === '.ps1') {
+    return 'powershell-syntax';
+  }
+  if (extension === '.json') {
+    return 'json-syntax';
+  }
   if (extension === '.go') {
     return 'go-vet';
   }
@@ -239,9 +249,9 @@ function languageTool(extension) {
   return CPP.has(extension) ? 'clang-tidy' : 'unsupported';
 }
 
-function javascriptJobs(file, add, append) {
-  const config = eslintConfig(file);
-  const root = config ? path.dirname(config) : projectRoot(file);
+function javascriptJobs(file, add, append, explicitConfig) {
+  const config = explicitConfig || eslintConfig(file);
+  const root = explicitConfig ? process.cwd() : config ? path.dirname(config) : projectRoot(file);
   add('eslint', root, file, config);
   const tsconfig = nearest(file, ['tsconfig.json']);
   if (tsconfig) {
@@ -260,19 +270,25 @@ function nativeJob(file, tool, add, append) {
   return append(unavailable(tool, path.dirname(file), [file], 'No native project manifest was found'));
 }
 
-function languageJobs(file, tool, add, append) {
+function languageJobs(file, tool, add, append, explicitConfig, compilationDatabase) {
   if (tool === 'go-vet' || tool === 'clippy') {
     return nativeJob(file, tool, add, append);
   }
   if (tool === 'eslint') {
-    return javascriptJobs(file, add, append);
+    return javascriptJobs(file, add, append, explicitConfig);
+  }
+  if (tool === 'shell-syntax' || tool === 'powershell-syntax' || tool === 'json-syntax') {
+    return add(tool, projectRoot(file), file);
   }
   if (tool === 'ruff') {
     const config = nearest(file, ['.ruff.toml', 'ruff.toml', 'pyproject.toml']);
     return add('ruff', config ? path.dirname(config) : projectRoot(file), file, config);
   }
   if (tool === 'clang-tidy') {
-    const database = nearest(file, ['compile_commands.json', 'build/compile_commands.json']);
+    const database =
+      compilationDatabase !== undefined
+        ? path.resolve(compilationDatabase)
+        : nearest(file, ['compile_commands.json', 'build/compile_commands.json']);
     if (database) {
       return add('clang-tidy', path.dirname(database), file, database);
     }
@@ -287,7 +303,7 @@ function unmanagedJavaScript(job) {
     return false;
   }
   return job.configs.every((config) => {
-    const raw = JSON.parse(fs.readFileSync(config, 'utf8'));
+    const raw = JSON.parse(fs.readFileSync(config, { encoding: 'utf8' }));
     return raw.compilerOptions?.allowJs === false || (!raw.extends && !raw.compilerOptions?.allowJs);
   });
 }
@@ -302,6 +318,15 @@ function languageJob(job) {
   if (job.tool === 'ruff') {
     return ruff(job.root, job.files, job.targetVersion);
   }
+  if (job.tool === 'shell-syntax') {
+    return shellSyntax(job.root, job.files);
+  }
+  if (job.tool === 'powershell-syntax') {
+    return powershellSyntax(job.root, job.files);
+  }
+  if (job.tool === 'json-syntax') {
+    return jsonSyntax(job.root, job.files);
+  }
   if (job.tool === 'clang-tidy') {
     return clangTidy(job.config, job.files);
   }
@@ -313,7 +338,7 @@ function languageJob(job) {
     : unavailable(job.tool, job.root, job.files, 'Project-local tool dependency was not found');
 }
 
-function runLanguageChecks(files, limits, targetVersion) {
+function runLanguageChecks(files, limits, targetVersion, explicitConfig, compilationDatabase) {
   const output = { checks: [], issues: [], uncovered: [] };
   const groups = new Map();
   const append = (result) => {
@@ -322,7 +347,11 @@ function runLanguageChecks(files, limits, targetVersion) {
     output.uncovered.push(...result.uncovered);
   };
   const add = (tool, root, file, config) => {
-    const modulePath = tool === 'eslint' || tool === 'typescript' ? localModule(file, tool, root) : undefined;
+    const explicitEslint = tool === 'eslint' && explicitConfig;
+    const modulePath =
+      tool === 'eslint' || tool === 'typescript'
+        ? localModule(explicitEslint || file, tool, explicitEslint ? path.dirname(explicitConfig) : root)
+        : undefined;
     const key = `${tool}\0${modulePath || root}\0${tool === 'typescript' ? '' : config || root}`;
     if (!groups.has(key)) {
       groups.set(key, { tool, root, files: [], configs: [], config, modulePath, limits, targetVersion });
@@ -342,8 +371,8 @@ function runLanguageChecks(files, limits, targetVersion) {
         continue;
       }
       seen.add(real);
-      tool = languageTool(path.extname(file).toLowerCase());
-      languageJobs(file, tool, add, append);
+      tool = languageTool(sourceExtension(file));
+      languageJobs(file, tool, add, append, explicitConfig, compilationDatabase);
     } catch {
       append(unavailable(tool, path.dirname(file), [file], 'Language analysis could not inspect the requested path'));
     }
@@ -367,7 +396,7 @@ if (require.main === module && process.argv[2] === '--language-check-worker') {
   let job;
   Promise.resolve()
     .then(async () => {
-      job = JSON.parse(fs.readFileSync(0, 'utf8'));
+      job = JSON.parse(fs.readFileSync(0, { encoding: 'utf8' }));
       return job.tool === 'eslint' ? await eslintWorker(job) : typescriptWorker(job);
     })
     .catch(() =>

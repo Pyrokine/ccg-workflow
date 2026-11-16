@@ -141,6 +141,49 @@ describe.each(distributions)('%s Cargo and Clippy analysis', (distribution) => {
     expect(result.issues[0]).toMatchObject({ severity: 'error', rule_id: 'E0308' })
   })
 
+  it('keeps Cargo failure categories while redacting unquoted values and source text', () => {
+    const directory = rustProject()
+    const source = write(directory, 'src/lib.rs', 'pub fn work() {}\n')
+    const secrets = ['synthetic-cargo-credential', `ghp_${'x'.repeat(36)}`, `AKIA${'X'.repeat(16)}`]
+    const stderr = [
+      `error: failed to download privateDependency ${secrets.join(' ')} from https://example.test/private-url`,
+      'Caused by:',
+      `  failed to read privateFile: token=${secrets[0]}`,
+      `error: could not compile privateCrate: const internalValue = 42`,
+      ...secrets,
+      'unknown private text',
+    ].join('\n')
+    fakeCargo(directory, [source], `process.stderr.write(${JSON.stringify(stderr)}); process.exit(101);`)
+    const result = runLanguageChecks([source], limits)
+    expect(result.checks[0]).toMatchObject({
+      status: 'unavailable',
+      execution: {
+        exit_code: 101,
+        stderr: [
+          'error: failed to download [redacted] [redacted-url]',
+          'Caused by:',
+          'failed to read [redacted]',
+          'error: could not compile [redacted]',
+          ...secrets.map(() => '[redacted]'),
+          '[redacted]',
+        ].join('\n'),
+        stderr_redacted: true,
+      },
+    })
+    expect(result.uncovered).toContainEqual(expect.objectContaining({ path: source }))
+    for (const value of [
+      ...secrets,
+      'privateDependency',
+      'privateFile',
+      'privateCrate',
+      'internalValue',
+      'private-url',
+      'unknown private text',
+    ]) {
+      expect(JSON.stringify(result)).not.toContain(value)
+    }
+  })
+
   it('requires the existing workspace lockfile before executing Clippy', () => {
     const directory = rustProject()
     const source = write(directory, 'src/lib.rs', 'pub fn work() {}\n')

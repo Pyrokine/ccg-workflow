@@ -139,7 +139,7 @@ function typescriptCliExecutable(modulePath) {
   const root = ancestors(path.dirname(modulePath)).find((directory) =>
     fs.existsSync(path.join(directory, 'package.json'))
   );
-  const manifest = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+  const manifest = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), { encoding: 'utf8' }));
   if (typeof manifest.bin?.tsc !== 'string') {
     return {
       reason: 'Project-local TypeScript package provides neither the compiler API nor bin.tsc',

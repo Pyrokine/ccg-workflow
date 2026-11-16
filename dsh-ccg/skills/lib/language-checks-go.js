@@ -2,6 +2,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const os = require('node:os');
 const { AnalysisError, canonical, checked, runNative } = require('./language-checks-runtime.js');
 
 function copyCacheEntry(entry, directory, destination, download, checkDeadline) {
@@ -124,8 +125,120 @@ function seedModuleCache(source, target, checkDeadline) {
   copyCacheDirectory(source, target, false, checkDeadline);
 }
 
+function validateCacheParent(stat, creatingChild) {
+  if (stat.isSymbolicLink() || !stat.isDirectory()) {
+    throw new AnalysisError('Go cache path contains a symlink or non-directory');
+  }
+  if ((stat.mode & 0o022) !== 0 && (stat.mode & 0o1000) === 0) {
+    throw new AnalysisError('Go cache parent directory is writable by other users');
+  }
+  if (creatingChild && stat.uid === process.geteuid() && (stat.mode & 0o300) !== 0o300) {
+    throw new AnalysisError('Go cache parent directory is not writable and searchable by its owner');
+  }
+}
+
+function checkCacheParents(directory) {
+  let missing = false;
+  for (let current = directory; ; current = path.dirname(current)) {
+    let stat;
+    try {
+      stat = fs.lstatSync(current);
+    } catch (error) {
+      if (error.code !== 'ENOENT') {
+        throw error;
+      }
+      missing = true;
+    }
+    if (stat) {
+      validateCacheParent(stat, missing);
+      missing = false;
+    }
+    if (path.dirname(current) === current) {
+      return;
+    }
+  }
+}
+
+function prepareCacheDirectory(directory, privateDirectory) {
+  try {
+    fs.mkdirSync(directory, { recursive: !privateDirectory, mode: 0o700 });
+  } catch (error) {
+    if (error.code !== 'EEXIST') {
+      throw error;
+    }
+  }
+  const stat = fs.lstatSync(directory);
+  if (stat.isSymbolicLink() || !stat.isDirectory()) {
+    throw new AnalysisError('Go cache directory is a symlink or non-directory');
+  }
+  if (stat.uid !== process.geteuid()) {
+    throw new AnalysisError('Go cache directory belongs to another user');
+  }
+  if ((stat.mode & (privateDirectory ? 0o077 : 0o022)) !== 0) {
+    throw new AnalysisError('Go cache directory permissions are not private');
+  }
+  if ((stat.mode & 0o700) !== 0o700) {
+    throw new AnalysisError('Go cache directory is not readable, writable and searchable by its owner');
+  }
+  fs.accessSync(directory, fs.constants.R_OK | fs.constants.W_OK | fs.constants.X_OK);
+}
+
+function buildCacheLocation(env) {
+  if (process.platform === 'win32' || typeof process.geteuid !== 'function') {
+    throw new AnalysisError('Private Go cache ownership checks are unavailable on this platform');
+  }
+  const root =
+    process.platform === 'darwin'
+      ? path.join(os.homedir(), 'Library', 'Caches')
+      : env.XDG_CACHE_HOME || path.join(os.homedir(), '.cache');
+  if (!path.isAbsolute(root)) {
+    throw new AnalysisError('Go user cache location must be absolute');
+  }
+  return { root, directory: path.join(root, 'ccg', 'go-build') };
+}
+
+function checkBuildCacheOverlap(directory, original) {
+  if (!original || original === 'off') {
+    return;
+  }
+  const inherited = fs.existsSync(original) ? canonical(original) : path.resolve(original);
+  const relativePaths = [path.relative(inherited, directory), path.relative(directory, inherited)];
+  if (
+    relativePaths.some(
+      (relative) =>
+        !relative || (!relative.startsWith('..' + path.sep) && relative !== '..' && !path.isAbsolute(relative))
+    )
+  ) {
+    throw new AnalysisError('CCG Go cache would overlap the original GOCACHE');
+  }
+}
+
+function configureBuildCache(context) {
+  const { env, temporary } = context;
+  context.phase('build-cache');
+  context.goCache = { mode: 'temporary', path: path.join(temporary, 'cache'), reason: '' };
+  try {
+    const { root, directory } = buildCacheLocation(env);
+    checkBuildCacheOverlap(directory, env.GOCACHE);
+    checkCacheParents(directory);
+    prepareCacheDirectory(root, false);
+    prepareCacheDirectory(path.dirname(directory), true);
+    prepareCacheDirectory(directory, true);
+    context.goCache = { mode: 'persistent', path: directory, reason: 'CCG-private build artifacts managed by Go' };
+  } catch (error) {
+    context.goCache.reason =
+      error instanceof AnalysisError
+        ? error.message
+        : 'Private Go cache preparation failed: ' + (error.code || 'I/O error');
+    fs.mkdirSync(context.goCache.path, { mode: 0o700 });
+  }
+  env.GOCACHE = context.goCache.path;
+  context.checkDeadline();
+}
+
 function configureGo(context) {
   const { env, temporary } = context;
+  configureBuildCache(context);
   Object.assign(env, {
     GOPROXY: 'off',
     GONOPROXY: 'none',
@@ -133,7 +246,7 @@ function configureGo(context) {
     GOVCS: '*:off',
     GOTOOLCHAIN: 'local',
     GOTELEMETRY: 'off',
-    GOCACHE: path.join(temporary, 'cache'),
+    GOCACHEPROG: '',
     GOTMPDIR: path.join(temporary, 'tmp'),
   });
   fs.mkdirSync(env.GOTMPDIR);
@@ -227,7 +340,7 @@ function goOverlay(flags, root) {
     }
     return new Map();
   }
-  const parsed = JSON.parse(fs.readFileSync(path.resolve(root, flag.slice(9)), 'utf8'));
+  const parsed = JSON.parse(fs.readFileSync(path.resolve(root, flag.slice(9)), { encoding: 'utf8' }));
   if (!parsed.Replace || typeof parsed.Replace !== 'object' || Array.isArray(parsed.Replace)) {
     throw new AnalysisError('Go overlay mappings are invalid');
   }

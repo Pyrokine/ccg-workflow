@@ -68,13 +68,15 @@ function canonical(file) {
 
 function workspacePatterns(directory) {
   const manifest = path.join(directory, 'package.json');
-  const workspace = fs.existsSync(manifest) ? JSON.parse(fs.readFileSync(manifest, 'utf8')).workspaces : undefined;
+  const workspace = fs.existsSync(manifest)
+    ? JSON.parse(fs.readFileSync(manifest, { encoding: 'utf8' })).workspaces
+    : undefined;
   const patterns = Array.isArray(workspace) ? workspace : workspace?.packages;
   const pnpm = path.join(directory, 'pnpm-workspace.yaml');
   if (!fs.existsSync(pnpm)) {
     return patterns;
   }
-  const block = /^packages:\s*\n(?<packages>(?:[ \t]+[^\n]*\n?)*)/mu.exec(fs.readFileSync(pnpm, 'utf8'));
+  const block = /^packages:\s*\n(?<packages>(?:[ \t]+[^\n]*\n?)*)/mu.exec(fs.readFileSync(pnpm, { encoding: 'utf8' }));
   return block
     ? [...block[1].matchAll(/^\s*-\s*['"]?(?<pattern>[^'"\n]+?)['"]?\s*$/gmu)].map((match) => match[1])
     : patterns;
@@ -159,7 +161,7 @@ function eslintConfig(file) {
       }
     }
     const manifest = path.join(directory, 'package.json');
-    if (fs.existsSync(manifest) && JSON.parse(fs.readFileSync(manifest, 'utf8')).eslintConfig) {
+    if (fs.existsSync(manifest) && JSON.parse(fs.readFileSync(manifest, { encoding: 'utf8' })).eslintConfig) {
       return manifest;
     }
   }
@@ -317,23 +319,57 @@ function nativeConfig(file, names) {
 }
 
 const NATIVE_ERROR_PREFIX = new RegExp(
-  '^\\s*(?:(?:error(?:\\[E\\d+\\])?:\\s*)?' +
-    "(?:failed to|could not|couldn't|no matching package|no such command|unable to|the lock file|manifest path)" +
-    '|Caused by:\\s*$|go:\\s+|(?:[A-Za-z]:)?[^:\\r\\n]+\\.(?:go|mod|work):\\d+(?::\\d+)?:\\s*)',
+  '^\\s*(?<category>(?:error(?:\\[E\\d+\\])?:\\s*)?' +
+    "(?:(?:failed to|could not|couldn't|unable to) " +
+    '(?:download|read|parse|load|get|run|execute|resolve|select|find|update|fetch|open|build|compile|import)' +
+    '|no matching package|no such command|the lock file|manifest path))\\b',
+  'iu'
+);
+const GO_ERROR_CATEGORY = new RegExp(
+  '^(?:errors parsing go\\.(?:mod|work):|' +
+    '(?:syntax error|expected|undefined|cannot use|cannot convert|cannot assign|cannot find package|could not import|' +
+    'no required module provides package|missing go.sum entry|invalid go version|invalid go directive|' +
+    'module lookup disabled|updates to go.mod needed|inconsistent vendoring|typechecking failed|' +
+    'not enough arguments|too many arguments|assignment mismatch|redeclared|import cycle not allowed)\\b)',
   'iu'
 );
 
-function nativeStderr(stderr) {
+function nativeStderr(stderr, tool) {
   return String(stderr || '')
     .split(/\r?\n/u)
     .filter((line) => line.trim())
     .slice(0, 20)
     .map((line) => {
-      if (!NATIVE_ERROR_PREFIX.test(line)) {
+      if (tool === 'clang-tidy') {
+        const category = [
+          [/^(?:error:\s*)?no checks enabled\b/iu, 'no checks enabled'],
+          [/^Could not auto-detect compilation database\b/iu, 'compilation database could not be detected'],
+          [/^LLVM ERROR\b/iu, 'LLVM error'],
+          [/^unable to handle compilation\b/iu, 'compilation could not be handled'],
+        ].find(([pattern]) => pattern.test(line.trim()));
+        if (category) {
+          return category[1] + ' [redacted]';
+        }
+      }
+      if (/^\s*#\s+/u.test(line)) {
+        return '# [redacted-package]';
+      }
+      if (/^\s*Caused by:\s*$/u.test(line)) {
+        return 'Caused by:';
+      }
+      const context = new RegExp(
+        String.raw`^\s*(?<prefix>(?:vet:\s*)?(?:[A-Za-z]:)?[^:\r\n]+\.(?:go|mod|work):\d+(?::\d+)?:|` +
+          String.raw`(?:go|vet):)\s*(?<diagnostic>.*)$`,
+        'iu'
+      ).exec(line);
+      const category = context
+        ? GO_ERROR_CATEGORY.exec(context.groups.diagnostic)?.[0]
+        : NATIVE_ERROR_PREFIX.exec(line)?.groups.category;
+      if (!context && !category) {
         return '[redacted]';
       }
-      return line
-        .replace(/^(?<position>\s*(?:[A-Za-z]:)?[^:\r\n]+\.go:\d+(?::\d+)?:).*$/iu, '$1 [redacted]')
+      const summary = (context ? context.groups.prefix + ' ' : '') + (category ? category + ' ' : '') + '[redacted]';
+      return (summary + (/https?:\/\/\S+/iu.test(line) ? ' [redacted-url]' : ''))
         .replace(/https?:\/\/\S+/giu, '[redacted-url]')
         .replace(/'[^'\r\n]*'|"[^"\r\n]*"|`[^`\r\n]*`/gu, '[redacted]')
         .replace(/\b(?:authorization|cookie|token|password|secret|api[_-]?key)\s*[:=].*/giu, '[redacted]')
@@ -401,7 +437,7 @@ function nativeContext(job, command, temporary) {
         args: [...args],
         exit_code: result.status ?? null,
         signal: result.signal ?? null,
-        stderr: nativeStderr(result.stderr),
+        stderr: nativeStderr(result.stderr, job.tool),
         stderr_redacted: true,
         timeout_ms: timeout,
         duration_ms: Date.now() - started,
@@ -441,15 +477,24 @@ function runNative(job, name, analyze) {
     fs.rmSync(temporary, { recursive: true, force: true });
     timing.cleanup_ms = Date.now() - cleanupStarted;
   }
+  const cacheNote = context.goCache ? `; Go build cache: ${context.goCache.mode}; ${context.goCache.reason}` : '';
   for (const check of result.checks) {
     check.timing = timing;
+    if (context.goCache) {
+      check.cache = context.goCache;
+      check.reason += cacheNote;
+    }
+  }
+  if (cacheNote) {
+    for (const entry of result.uncovered) {
+      entry.reason += cacheNote;
+    }
   }
   return result;
 }
 
 module.exports = {
   TIMEOUT,
-  MAX_OUTPUT,
   FLAT_CONFIGS,
   AnalysisError,
   nativeConfig,

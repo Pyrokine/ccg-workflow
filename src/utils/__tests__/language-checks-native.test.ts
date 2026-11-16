@@ -1,10 +1,11 @@
-import { spawnSync } from 'node:child_process'
-import { readFileSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import childProcess, { spawnSync } from 'node:child_process'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { dirname, join, relative } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import type { Analyze } from './language-checks-fixtures'
 import {
   distributions,
+  fakeEslint,
   fakeExecutable,
   files,
   fixture,
@@ -154,6 +155,165 @@ describe.each(distributions)('%s language tool execution', (distribution) => {
     expect(JSON.stringify(result)).not.toContain(secret)
     expect(JSON.parse(readFileSync(database, 'utf8'))[0].arguments).toContain('-DFIXTURE=1')
   })
+
+  it('uses an external compilation database with relative directories and keeps the ESLint fourth argument', () => {
+    const directory = fixture()
+    fakeEslint(directory)
+    const source = write(directory, 'src/source.cpp', 'int value = 1;\n')
+    const missing = write(directory, 'src/header.hpp', '// Header\n')
+    const javascript = write(directory, 'src/source.js', 'const value = 1;\n')
+    write(directory, 'compile_commands.json', '{invalid nearest database')
+    const external = fixture()
+    const database = write(
+      external,
+      'compile_commands.json',
+      JSON.stringify([
+        { directory: relative(external, dirname(source)), file: 'source.cpp', command: 'c++ -c source.cpp' },
+      ])
+    )
+    const capture = join(directory, 'external-argv.json')
+    fakeExecutable(
+      directory,
+      'clang-tidy',
+      `require('node:fs').writeFileSync(${JSON.stringify(capture)},
+      JSON.stringify({ args: process.argv.slice(2), cwd: process.cwd() }));`
+    )
+    const result = runLanguageChecks(
+      [source, missing, javascript],
+      limits,
+      undefined,
+      join(directory, 'eslint.config.cjs'),
+      database
+    )
+    expect(result.checks).toContainEqual(
+      expect.objectContaining({ tool: 'eslint', status: 'passed', files: [javascript] })
+    )
+    expect(result.checks).toContainEqual(
+      expect.objectContaining({
+        tool: 'clang-tidy',
+        status: 'passed',
+        files: [source],
+        skipped_files: [missing],
+        project_root: external,
+      })
+    )
+    expect(JSON.parse(readFileSync(capture, 'utf8'))).toEqual({
+      args: ['-p', external, '--quiet', source],
+      cwd: external,
+    })
+    expect(result.uncovered).toContainEqual(expect.objectContaining({ path: missing }))
+  })
+
+  it.each(['exit', 'signal', 'timeout', 'overflow', 'invalid-output', 'no-checks'])(
+    'retains clang-tidy %s execution evidence with redacted diagnostics',
+    (failure) => {
+      const directory = fixture()
+      const source = write(directory, 'source.cpp', 'int value = 1;\n')
+      write(
+        directory,
+        'compile_commands.json',
+        JSON.stringify([{ directory, file: source, command: 'c++ -c source.cpp' }])
+      )
+      const secret = 'synthetic_credential_clang_failure_123456'
+      const message = `no checks enabled: token=${secret} https://example.invalid/${secret}`
+      const script =
+        failure === 'signal'
+          ? "process.kill(process.pid, 'SIGTERM');"
+          : failure === 'overflow'
+            ? `process.stdout.write(${JSON.stringify(secret)}.repeat(400000));`
+            : failure === 'no-checks'
+              ? `console.error(${JSON.stringify(message)}); process.exit(1);`
+              : failure === 'invalid-output'
+                ? `console.log(${JSON.stringify(secret)});`
+                : `console.error(${JSON.stringify(secret)}); process.exit(2);`
+      fakeExecutable(directory, 'clang-tidy', script)
+      if (failure === 'timeout') {
+        vi.spyOn(childProcess, 'spawnSync').mockImplementationOnce(() => ({
+          pid: 0,
+          output: [null, '', secret],
+          stdout: '',
+          stderr: secret,
+          status: null,
+          signal: 'SIGKILL',
+          error: Object.assign(new Error('timed out'), { code: 'ETIMEDOUT' }),
+        }))
+      }
+      const result = runLanguageChecks([source], limits)
+      const check = result.checks[0]
+      expect(check).toMatchObject({
+        tool: 'clang-tidy',
+        status: 'unavailable',
+        files: [],
+        execution: {
+          command: join(directory, 'bin/clang-tidy'),
+          args: ['-p', directory, '--quiet', source],
+          stderr_redacted: true,
+        },
+        timing: { budget_ms: 30000 },
+      })
+      expect(check.execution?.timeout_ms).toBeGreaterThan(0)
+      expect(check.execution?.timeout_ms).toBeLessThanOrEqual(30000)
+      expect(check.execution?.duration_ms).toBeGreaterThanOrEqual(0)
+      if (failure === 'signal') {
+        expect(check.execution).toMatchObject({ exit_code: null, signal: 'SIGTERM' })
+      }
+      if (failure === 'timeout') {
+        expect(check.execution).toMatchObject({ error_code: 'ETIMEDOUT', signal: 'SIGKILL' })
+      }
+      if (failure === 'exit') {
+        expect(check.execution).toMatchObject({ exit_code: 2, signal: null })
+      }
+      if (failure === 'overflow') {
+        expect(check.execution?.error_code).toBe('ENOBUFS')
+      }
+      if (failure === 'no-checks') {
+        expect(check.execution?.stderr).toContain('no checks enabled')
+      }
+      expect(result.issues).toEqual([])
+      expect(result.uncovered).toContainEqual(expect.objectContaining({ path: source }))
+      expect(JSON.stringify(result)).not.toContain(secret)
+      expect(JSON.stringify(result)).not.toContain('https://example.invalid')
+    }
+  )
+
+  it.each(['missing', 'directory', 'basename', 'json', 'no-entry'])(
+    'keeps invalid explicit compilation database %s requests uncovered without using the nearest database',
+    (kind) => {
+      const directory = fixture()
+      const source = write(directory, 'source.cpp', '')
+      write(
+        directory,
+        'compile_commands.json',
+        JSON.stringify([{ directory, file: source, command: 'c++ -c source.cpp' }])
+      )
+      const external = fixture()
+      if (kind === 'directory') {
+        mkdirSync(join(external, 'compile_commands.json'))
+      }
+      const database =
+        kind === 'missing' || kind === 'directory'
+          ? join(external, 'compile_commands.json')
+          : write(
+              external,
+              kind === 'basename' ? 'custom.json' : 'compile_commands.json',
+              kind === 'json' ? '{invalid' : '[]'
+            )
+      const capture = join(directory, 'unexpected-call')
+      fakeExecutable(directory, 'clang-tidy', `require('node:fs').writeFileSync(${JSON.stringify(capture)}, 'called');`)
+      const result = runLanguageChecks([source], limits, undefined, undefined, database)
+      expect(result.checks[0]).toMatchObject({ status: 'unavailable', files: [] })
+      const reasons: Record<string, string> = {
+        missing: 'Compilation database could not be read or parsed',
+        directory: 'Compilation database must be a regular file',
+        basename: 'Compilation database must be named compile_commands.json',
+        json: 'Compilation database could not be read or parsed',
+        'no-entry': 'No requested file has a compilation database entry',
+      }
+      expect(result.checks[0].reason).toBe(reasons[kind])
+      expect(result.uncovered).toContainEqual(expect.objectContaining({ path: source }))
+      expect(files(directory)).not.toContain('unexpected-call')
+    }
+  )
 
   it.each(['database', 'missing-entry', 'invalid-output', 'error', 'warnings-as-errors'])(
     'handles clang-tidy %s states',

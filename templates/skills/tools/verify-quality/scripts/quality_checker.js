@@ -3,11 +3,15 @@
 
 const fs = require('fs');
 const path = require('path');
-const { parseCliArgs, runCli, collectSourceFiles, buildReport, reportBaselines, hasFatal } = require(
-  path.join(__dirname, '..', '..', 'lib', 'shared.js')
-);
-
-const { compareBaseline } = require(path.join(__dirname, '..', '..', 'lib', 'git-baseline.js'));
+const {
+  parseCliArgs,
+  runCli,
+  collectSourceFiles,
+  buildReport,
+  reportBaselines,
+  hasFatal,
+} = require('../../lib/shared.js');
+const { compareBaseline } = require('../../lib/git-baseline.js');
 
 // 质量规则配置
 const MAX_LINE_LENGTH = 120;
@@ -52,6 +56,13 @@ const CODE_EXTENSIONS = new Set([
   '.hh',
   '.hpp',
   '.hxx',
+  '.cu',
+  '.cuh',
+  '.inc',
+  '.sh',
+  '.bash',
+  '.ps1',
+  '.json',
 ]);
 
 const COMMENT_PREFIXES = {
@@ -62,6 +73,8 @@ const COMMENT_PREFIXES = {
   '.c': '//',
   '.cpp': '//',
   '.rs': '//',
+  '.sh': '#',
+  '.bash': '#',
 };
 
 // --- Analysis ---
@@ -355,7 +368,7 @@ function pythonClasses(filePath, content) {
   const classes = [...content.matchAll(/^(?<indent> *)class\s+(?<name>\w+)/gm)];
   const issues = [];
   for (const match of classes) {
-    if (!/^[A-Z][a-zA-Z0-9]*$/u.test(match[2])) {
+    if (!/^_*[A-Z][a-zA-Z0-9]*$/u.test(match[2])) {
       issues.push({
         severity: 'warning',
         category: '命名',
@@ -374,9 +387,9 @@ function scanSelectedFiles(files, result) {
   const contents = new Map();
   for (const file of files) {
     try {
-      const content = fs.readFileSync(file, 'utf8');
-      const { metrics, issues } = analyzeFile(file, content);
+      const content = fs.readFileSync(file, { encoding: 'utf8' });
       contents.set(file, content);
+      const { metrics, issues } = analyzeFile(file, content);
       result.files_scanned++;
       result.file_metrics.push(metrics);
       result.issues.push(...issues);
@@ -389,12 +402,14 @@ function scanSelectedFiles(files, result) {
   return contents;
 }
 
-function analyzeLanguages(files, result, targetVersion) {
-  const { runLanguageChecks } = require(path.join(__dirname, '..', '..', 'lib', 'language-checks.js'));
+function analyzeLanguages(files, result, targetVersion, explicitConfig, compilationDatabase) {
+  const { runLanguageChecks } = require('../../lib/language-checks.js');
   const language = runLanguageChecks(
     files,
     { maxComplexity: MAX_COMPLEXITY, maxFunctionLength: MAX_FUNCTION_LENGTH, maxParameters: MAX_PARAMETERS },
-    targetVersion
+    targetVersion,
+    explicitConfig,
+    compilationDatabase
   );
   result.checks = language.checks;
   result.uncovered = language.uncovered;
@@ -409,7 +424,11 @@ function languageComplete(result) {
   );
 }
 
-function analyzeGenericFile(filePath, content = fs.readFileSync(filePath, 'utf-8')) {
+/**
+ * @param {string} filePath
+ * @param {string} [content]
+ */
+function analyzeGenericFile(filePath, content = fs.readFileSync(filePath, { encoding: 'utf-8' })) {
   const lines = content.split('\n');
   const metrics = sourceMetrics(filePath, lines);
   const prefix = COMMENT_PREFIXES[path.extname(filePath).toLowerCase()] || '//';
@@ -426,7 +445,11 @@ function analyzeGenericFile(filePath, content = fs.readFileSync(filePath, 'utf-8
   return { metrics, issues: metricIssues(filePath, metrics, lines) };
 }
 
-function analyzePythonFile(filePath, content = fs.readFileSync(filePath, 'utf-8')) {
+/**
+ * @param {string} filePath
+ * @param {string} [content]
+ */
+function analyzePythonFile(filePath, content = fs.readFileSync(filePath, { encoding: 'utf-8' })) {
   const lines = content.split('\n');
   const metrics = sourceMetrics(filePath, lines);
   measurePythonLines(lines, metrics);
@@ -436,9 +459,16 @@ function analyzePythonFile(filePath, content = fs.readFileSync(filePath, 'utf-8'
   const pattern = /^(?<indent>[ \t]*)(?:async\s+)?def\s+(?<name>[_\p{ID_Start}][_\p{ID_Continue}]*)\s*\(/gmu;
   let match;
   while ((match = pattern.exec(content))) {
-    const signature = pythonSignature(content, pattern.lastIndex);
-    functions.push(pythonFunction(match, content, lines, signature));
-    pattern.lastIndex = signature.end;
+    try {
+      const signature = pythonSignature(content, pattern.lastIndex);
+      functions.push(pythonFunction(match, content, lines, signature));
+      pattern.lastIndex = signature.end;
+    } catch (error) {
+      const line = content.substring(0, match.index).split('\n').length;
+      error.code = 'PARSE_FAILED';
+      error.message = `Python function ${match.groups.name} at line ${line}: ${error.message}`;
+      throw error;
+    }
   }
   for (const fn of functions) {
     metrics.max_complexity = Math.max(metrics.max_complexity, fn.complexity);
@@ -465,7 +495,8 @@ function analyzeFile(file, content) {
 function scanDirectory(targets, excludeDirs, options = {}) {
   const selected = collectSourceFiles(targets, CODE_EXTENSIONS, excludeDirs);
   const result = {
-    scan_path: selected.requested_paths.join(', '),
+    scan_path:
+      selected.requested_paths.length === 1 ? selected.requested_paths[0] : `${selected.requested_paths.length} 个目标`,
     requested_paths: selected.requested_paths,
     coverage: selected.coverage,
     scan_errors: selected.errors,
@@ -483,7 +514,7 @@ function scanDirectory(targets, excludeDirs, options = {}) {
   const contents = scanSelectedFiles(selected.files, result);
   const files = [...contents.keys()];
   if (options.languageChecks && files.length) {
-    analyzeLanguages(files, result, options.targetVersion);
+    analyzeLanguages(files, result, options.targetVersion, options.eslintConfig, options.compilationDatabase);
   }
   const compared = compareBaseline(
     files,
@@ -524,18 +555,20 @@ function reportUncovered(result) {
 function formatReport(result, verbose) {
   const errs = result.issues.filter((i) => i.severity === 'error').length;
   const warns = result.issues.filter((i) => i.severity === 'warning').length;
+  // 中文字段名是文本报告的标题
+  //noinspection NonAsciiCharacters
   const fields = {
     扫描路径: result.scan_path,
     扫描文件: result.files_scanned,
     检查范围: result.analysis_mode === 'language' ? '文本规则与语言工具' : '文本规则（未请求语言检查）',
     支持类型: result.supported_file_types.join(', '),
-    执行阶段:
+    阶段耗时:
       result.checks
         .filter((check) => check.timing)
         .map(
           (check) => `${check.tool}: ${check.timing.phase}，${check.timing.elapsed_ms} / ${check.timing.budget_ms} ms`
         )
-        .join('\n') || '未执行原生工具',
+        .join('\n') || '未记录',
     语言工具:
       [
         ...new Set(
@@ -576,10 +609,17 @@ function formatReport(result, verbose) {
 // --- CLI ---
 
 function main() {
-  const opts = parseCliArgs(process.argv, { languageChecks: false, base: undefined, targetVersion: undefined });
+  const opts = parseCliArgs(process.argv, {
+    languageChecks: false,
+    base: undefined,
+    targetVersion: undefined,
+    eslintConfig: undefined,
+    compilationDatabase: undefined,
+  });
   if (opts.help) {
     console.log(
       'Usage: quality_checker.js [paths...] [--language-checks] [--target-version py38] ' +
+        '[--eslint-config file] [--compilation-database compile_commands.json] ' +
         '[--base ref] [-v] [--json] [--exclude dirs...]'
     );
     return;
@@ -587,16 +627,40 @@ function main() {
   if (opts.mode) {
     throw new Error('--mode is only supported by verify-change');
   }
+  if (opts.eslintConfig !== undefined) {
+    if (!opts.languageChecks) {
+      throw new Error('--eslint-config requires --language-checks');
+    }
+    opts.eslintConfig = path.resolve(opts.eslintConfig);
+    if (!fs.statSync(opts.eslintConfig).isFile()) {
+      throw new Error('--eslint-config must name a regular configuration file');
+    }
+  }
+  if (opts.compilationDatabase !== undefined) {
+    if (!opts.languageChecks) {
+      throw new Error('--compilation-database requires --language-checks');
+    }
+    opts.compilationDatabase = path.resolve(opts.compilationDatabase);
+    if (path.basename(opts.compilationDatabase) !== 'compile_commands.json') {
+      throw new Error('--compilation-database must be named compile_commands.json');
+    }
+    if (!fs.statSync(opts.compilationDatabase).isFile()) {
+      throw new Error('--compilation-database must name a regular file');
+    }
+  }
   const result = scanDirectory(opts.targets, new Set([...EXCLUDE_DIRS, ...(opts.exclude || [])]), opts);
 
   if (opts.json) {
     const output = {
-      ...result,
-      file_metrics: undefined,
+      complete: result.complete,
       passed: passed(result),
+      analysis_mode: result.analysis_mode,
       error_count: result.issues.filter((i) => i.severity === 'error').length,
       warning_count: result.issues.filter((i) => i.severity === 'warning').length,
       issues: result.issues,
+      scan_errors: result.scan_errors,
+      ...result,
+      file_metrics: undefined,
     };
     console.log(JSON.stringify(output, null, 2));
   } else {

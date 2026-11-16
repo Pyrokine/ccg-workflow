@@ -82,6 +82,22 @@ describe.each(distributions)('%s quality gates', (distribution) => {
       expect(result.output.scan_errors).toContainEqual(expect.objectContaining({ path: target, code: 'EACCES' }))
     })
 
+    it.each(['pl', 'pm', 'cu', 'cuh', 'inc'])('reports coverage for %s source inside directories', (ext) => {
+      const root = fixture()
+      write(root, 'src/clean.ts')
+      const unsupported = write(root, `src/fragment.${ext}`, 'SOURCE_FRAGMENT\n')
+      const result = run(distribution, gate, [join(root, 'src')], root)
+      if (gate === 'quality' && ['pl', 'pm'].includes(ext)) {
+        expect(result.status).toBe(2)
+        expect(result.output.scan_errors).toContainEqual(
+          expect.objectContaining({ path: unsupported, code: 'UNSUPPORTED_TYPE' })
+        )
+      } else {
+        expect(result.status).toBe(0)
+        expect(result.output).toMatchObject({ complete: true, passed: true, files_scanned: 2, scan_errors: [] })
+      }
+    })
+
     it('preserves partial results when one file cannot be read', () => {
       const root = fixture()
       write(root, 'src/clean.ts')
@@ -161,6 +177,46 @@ describe.each(distributions)('%s quality gates', (distribution) => {
   })
 
   describe('analysis regressions', () => {
+    it('classifies Python signature failures with function and line instead of a read error', () => {
+      const root = fixture()
+      const source = write(root, 'legacy.py', 'value = 1\ndef legacy((left, right)):\n    pass\n')
+      const result = run(distribution, 'quality', [source], root)
+      expect(result.status).toBe(2)
+      expect(result.output.scan_errors).toContainEqual(
+        expect.objectContaining({
+          path: source,
+          code: 'PARSE_FAILED',
+          message: expect.stringContaining('legacy at line 2'),
+        })
+      )
+    })
+
+    it('counts nested Python defaults without treating their commas as parameters', () => {
+      const root = fixture()
+      const source = write(
+        root,
+        'defaults.py',
+        'def example(value=(1, 2, 3, 4, 5, 6), callback=lambda a, b: (a, b)):\n    return value\n'
+      )
+      const result = run(distribution, 'quality', [source], root)
+      expect(result.output.complete).toBe(true)
+      expect(result.output.issues?.filter((issue) => issue.rule_id === 'FUNCTION_PARAMETERS')).toEqual([])
+    })
+
+    it.each(['sh', 'bash', 'json'])('checks %s syntax without executing inputs', (ext) => {
+      const root = fixture()
+      const valid = ext === 'json' ? '{"answer":42}\n' : '#!/bin/bash\nexit 97\n'
+      const source = write(root, `source.${ext}`, valid)
+      const args = [source, '--language-checks']
+      const clean = run(distribution, 'quality', args, root)
+      expect(clean.status).toBe(0)
+      expect(clean.output).toMatchObject({ complete: true, passed: true })
+      write(root, `source.${ext}`, ext === 'json' ? '{broken\n' : '#!/bin/bash\nif then\n')
+      const invalid = run(distribution, 'quality', args, root)
+      expect(invalid.status).toBe(1)
+      expect(invalid.output).toMatchObject({ complete: true, passed: false })
+      expect(invalid.output.issues).toContainEqual(expect.objectContaining({ rule_id: 'syntax-error' }))
+    })
 
     it.each(['pl', 'pm', 'ps1', 'inc'])('scans credentials in %s files without disclosing their value', (ext) => {
       const root = fixture()
@@ -169,6 +225,40 @@ describe.each(distributions)('%s quality gates', (distribution) => {
       expect(result.status).toBe(1)
       expect(result.output.findings).toContainEqual(expect.objectContaining({ rule_id: 'HARDCODED_SECRET' }))
       expect(result.stdout).not.toContain('synthetic-credential-12345')
+    })
+
+    it('recognizes PowerShell input and reports its actual syntax analyzer coverage', () => {
+      const root = fixture()
+      const source = write(root, 'source.ps1', 'exit 97\n')
+      const text = run(distribution, 'quality', [source], root)
+      expect(text.status).toBe(0)
+      const result = run(distribution, 'quality', [source, '--language-checks'], root)
+      expect(result.output.scan_errors).toEqual([])
+      expect(result.output.checks).toContainEqual(expect.objectContaining({ tool: 'powershell-syntax' }))
+    })
+
+    it('routes an include fragment to C++ language coverage', () => {
+      const root = fixture()
+      const source = write(root, 'catalog.inc', 'CATALOG_ENTRY(example)\n')
+      const result = run(distribution, 'quality', [source, '--language-checks'], root)
+      expect(result.status).toBe(2)
+      expect(result.output.scan_errors).toEqual([])
+      expect(result.output.checks).toContainEqual(
+        expect.objectContaining({ tool: 'clang-tidy', status: 'unavailable' })
+      )
+    })
+
+    it('accepts private PascalCase Python classes and still reports malformed names', () => {
+      const root = fixture()
+      const names = ['ChainObj', '_ChainObj', '__ChainObj', 'badName', '_bad', 'Bad_Name', '_']
+      const source = write(root, 'classes.py', names.map((name) => `class ${name}:\n    pass\n`).join('\n'))
+      const result = run(distribution, 'quality', [source], root)
+      expect(result.status).toBe(0)
+      const findings = result.output.issues?.filter((issue) => issue.rule_id === 'CLASS_NAME_STYLE')
+      expect(findings).toHaveLength(4)
+      for (const name of names.slice(3)) {
+        expect(findings).toContainEqual(expect.objectContaining({ message: expect.stringContaining(`'${name}'`) }))
+      }
     })
 
     it('distinguishes GDB debugger commands from dynamic SQL calls', () => {
