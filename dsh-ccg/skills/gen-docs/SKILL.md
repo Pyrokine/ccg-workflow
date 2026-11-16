@@ -32,8 +32,8 @@ node scripts/doc_generator.js <模块路径> --readme-only  # 仅生成 README.m
 node scripts/doc_generator.js <模块路径> --design-only  # 仅生成 DESIGN.md
 ```
 
-`--readme-only` 与 `--design-only` 选择一项，均未指定时生成两份文档读取或写入失败时返回非零退出码，`--json` 报告在
-`messages` 中保留失败原因
+`--readme-only` 与 `--design-only` 选择一项，均未指定时生成两份文档；已有文档默认保留，`--force` 仅覆盖选中的文档
+读取或写入失败时返回非零退出码，`--json` 报告在 `messages` 中保留失败原因
 
 ## 生成内容
 
@@ -44,10 +44,14 @@ node scripts/doc_generator.js <模块路径> --design-only  # 仅生成 DESIGN.m
 - **模块名称** — 从目录名提取
 - **描述** — 从代码文档字符串提取（如有）
 - **特性列表** — 待填充
-- **依赖** — 从 requirements.txt/pyproject.toml 提取
-- **使用方法** — 基础模板
-- **API 概览** — 从代码提取类和函数列表
+- **依赖** — 从 Python requirements.txt 提取
+- **使用方法** — 已发现的 Python 脚本入口及待填写的调用示例
+- **API 概览** — 从代码提取类和函数列表，标明源文件
 - **目录结构** — 自动扫描生成
+
+Python 入口按 main.py、**main**.py、cli.py、app.py 或顶层 `if __name__ == "__main__":` 识别，注释和字符串中的定义不参与识别
+运行说明引用发现的脚本相对路径，按 shell 规则引用含空格、连字符或单引号的名称；命令作为待填写参数的骨架，使用前按入口要求完善
+生成过程只读取源码；没有识别到入口的模块和 Go、Rust、JavaScript、TypeScript 模块保留 API 清单，调用示例由使用者根据实际导入路径、参数和返回值填写
 
 ### DESIGN.md 骨架
 
@@ -67,7 +71,7 @@ node scripts/doc_generator.js <模块路径> --design-only  # 仅生成 DESIGN.m
 ### 支持的语言
 
 | 语言           | 分析能力                   |
-|----------------|----------------------------|
+| -------------- | -------------------------- |
 | **Python**     | 类、函数、文档字符串、依赖 |
 | **Go**         | 目录结构、依赖             |
 | **TypeScript** | 目录结构、依赖             |
@@ -87,7 +91,7 @@ node scripts/doc_generator.js <模块路径> --design-only  # 仅生成 DESIGN.m
 ## 自动触发时机
 
 | 场景     | 触发条件             |
-|----------|----------------------|
+| -------- | -------------------- |
 | 新建模块 | 模块创建开始时       |
 | 缺失文档 | 检测到模块缺少文档时 |
 

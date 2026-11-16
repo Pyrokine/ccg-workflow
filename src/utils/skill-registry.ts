@@ -341,6 +341,8 @@ export function generateCommandContent(skill: SkillMeta, skillsInstallDir: strin
       '',
       `## 执行`,
       '',
+      '参数为自然语言时，先读取本 Skill 的说明，核实实际文件或目录，再将范围转换为独立路径参数；代码块中的参数仅接受路径与已支持选项',
+      '',
       '执行以下命令：',
       '',
       '```bash',

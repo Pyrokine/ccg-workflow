@@ -19,7 +19,7 @@ function parseGitignore(modPath) {
   // 解析 .gitignore
   try {
     const gitignorePath = path.join(modPath, '.gitignore');
-    const content = fs.readFileSync(gitignorePath, 'utf8');
+    const content = fs.readFileSync(gitignorePath, { encoding: 'utf8' });
     content.split('\n').forEach((line) => {
       line = line.trim();
       if (line && !line.startsWith('#')) {
@@ -103,20 +103,20 @@ const LANG_MAP = {
 };
 
 function detectLanguage(modPath) {
-  const exts = {};
+  const extensions = {};
   try {
     for (const f of rglob(modPath)) {
       const ext = path.extname(f).toLowerCase();
       if (ext) {
-        exts[ext] = (exts[ext] || 0) + 1;
+        extensions[ext] = (extensions[ext] || 0) + 1;
       }
     }
   } catch (error) {
     throw new Error(`Cannot inspect module ${modPath}: ${error.message}`, { cause: error });
   }
-  const codeExts = Object.entries(exts).filter(([k]) => k in LANG_MAP);
-  if (codeExts.length) {
-    const best = codeExts.reduce((a, b) => (b[1] > a[1] ? b : a));
+  const codeExtensions = Object.entries(extensions).filter(([k]) => k in LANG_MAP);
+  if (codeExtensions.length) {
+    const best = codeExtensions.reduce((a, b) => (b[1] > a[1] ? b : a));
     return LANG_MAP[best[0]] || 'Unknown';
   }
   return 'Unknown';
@@ -136,9 +136,9 @@ function analyzePythonModule(modPath) {
     }
     let content;
     try {
-      content = fs.readFileSync(pyFile, 'utf-8');
+      content = fs.readFileSync(pyFile, { encoding: 'utf-8' });
     } catch (error) {
-      throw new Error(`Cannot read source ${pyFile}`, { cause: error });
+      throw new Error(`Cannot read source ${pyFile}: ${error.message}`, { cause: error });
     }
 
     // Module docstring (triple-quoted at top)
@@ -147,23 +147,34 @@ function analyzePythonModule(modPath) {
         /^(?:#[^\n]*\n)*\s*(?:"""(?<doubleQuoted>[\s\S]*?)"""|'''(?<singleQuoted>[\s\S]*?)''')/
       );
       if (docM) {
-        info.description = (docM[1] || docM[2]).split('\n')[0].trim();
+        info.description = (docM[1] ?? docM[2]).split('\n')[0].trim();
       }
     }
 
     const rel = path.relative(modPath, pyFile);
+    const code = content.replace(
+      new RegExp(
+        String.raw`#[^\r\n]*|"""(?:\\[\s\S]|(?!""")[\s\S])*"""|'''(?:\\[\s\S]|(?!''')[\s\S])*'''` +
+          String.raw`|"(?:\\[\s\S]|[^"\\])*"|'(?:\\[\s\S]|[^'\\])*'`,
+        'g'
+      ),
+      (token) => token.replace(/[^\r\n]/g, ' ')
+    );
 
     // Functions
-    for (const m of content.matchAll(/^def\s+(?<name>[A-Za-z]\w*)\s*\(/gm)) {
+    for (const m of code.matchAll(/^(?:async\s+)?def\s+(?<name>[A-Za-z]\w*)\s*\(/gm)) {
       info.functions.push({ name: m[1], file: rel, doc: '' });
     }
     // Classes
-    for (const m of content.matchAll(/^class\s+(?<name>[A-Za-z]\w*)\s*[:(]/gm)) {
+    for (const m of code.matchAll(/^class\s+(?<name>[A-Za-z]\w*)\s*[:(]/gm)) {
       info.classes.push({ name: m[1], file: rel, doc: '' });
     }
 
     // Entry points
-    if (['main.py', '__main__.py', 'cli.py', 'app.py'].includes(basename)) {
+    const hasMainGuard = [
+      ...content.matchAll(/^if[ \t]+__name__[ \t]*==[ \t]*(?<quote>['"])__main__\k<quote>[ \t]*:/gm),
+    ].some((match) => code.startsWith('if', match.index));
+    if (['main.py', '__main__.py', 'cli.py', 'app.py'].includes(basename) || hasMainGuard) {
       info.entry_points.push(rel);
     }
   }
@@ -171,7 +182,7 @@ function analyzePythonModule(modPath) {
   // Dependencies
   const reqPath = path.join(modPath, 'requirements.txt');
   try {
-    const content = fs.readFileSync(reqPath, 'utf-8');
+    const content = fs.readFileSync(reqPath, { encoding: 'utf-8' });
     for (const line of content.split('\n')) {
       const trimmed = line.trim();
       if (trimmed && !trimmed.startsWith('#')) {
@@ -202,7 +213,7 @@ const LANG_PATTERNS = {
   C: [/^\s*(?:\w+\s+)+(?<name>\w+)\s*\([^;]*$/, null],
 };
 
-const CODE_EXTS = new Set(['.py', '.go', '.rs', '.ts', '.js', '.java', '.c', '.cpp']);
+const CODE_EXTENSIONS = new Set(['.py', '.go', '.rs', '.ts', '.js', '.java', '.c', '.cpp']);
 
 function analyzeModule(modPath) {
   const language = detectLanguage(modPath);
@@ -215,7 +226,7 @@ function analyzeModule(modPath) {
 
   try {
     for (const f of rglob(modPath)) {
-      if (!CODE_EXTS.has(path.extname(f).toLowerCase())) {
+      if (!CODE_EXTENSIONS.has(path.extname(f).toLowerCase())) {
         continue;
       }
       const rel = path.relative(modPath, f);
@@ -224,7 +235,7 @@ function analyzeModule(modPath) {
       if (!funcPat && !clsPat) {
         continue;
       }
-      const content = fs.readFileSync(f, 'utf-8');
+      const content = fs.readFileSync(f, { encoding: 'utf-8' });
       for (const line of content.split('\n')) {
         if (funcPat) {
           const m = line.match(funcPat);
@@ -288,62 +299,31 @@ function generateReadme(info) {
   }
 
   L.push('## 使用方法', '');
-  if (info.entry_points.length) {
-    L.push('### 运行', '', '```bash');
-    const cmds = {
-      Python: `python -m ${info.name}`,
-      Go: 'go run ./cmd/main.go',
-      Rust: 'cargo run',
-      TypeScript: 'npm start',
-      JavaScript: 'npm start',
-    };
-    L.push(cmds[info.language] || `# 请根据 ${info.language} 项目结构添加运行命令`);
+  if (info.language === 'Python' && info.entry_points.length) {
+    L.push('### 运行', '', '在模块目录使用以下命令骨架，执行前请按入口要求填写参数', '', '```bash');
+    for (const entry of info.entry_points) {
+      const script = './' + entry.split(path.sep).join('/');
+      L.push(`python '${script.replace(/'/g, "'\\''")}'`);
+    }
     L.push('```', '');
   }
 
-  L.push('### 示例', '');
-  const EXAMPLES = {
-    Python:
-      `from ${info.name.toLowerCase()} import main\n\n` +
-      `# 初始化\nobj = main()\n\n# 执行操作\nresult = obj.process()\nprint(result)`,
-    Go:
-      `package main\n\nimport "${info.name.toLowerCase()}"\n\nfunc main() {\n` +
-      `    // 初始化\n    obj := ${info.name.toLowerCase()}.New()\n` +
-      `\n    // 执行操作\n    result := obj.Process()\n    println(result)\n}`,
-    Rust:
-      `use ${info.name.toLowerCase().replace(/-/g, '_')}::*;\n\nfn main() {\n` +
-      `    // 初始化\n    let obj = Object::new();\n\n` +
-      `    // 执行操作\n    let result = obj.process();\n` +
-      `    println!("{}", result);\n}`,
-    TypeScript:
-      `import { main } from "./${info.name.toLowerCase()}";\n\n` +
-      `// 初始化\nconst obj = new main();\n\n` +
-      `// 执行操作\nconst result = obj.process();\nconsole.log(result);`,
-    JavaScript:
-      `const { main } = require("./${info.name.toLowerCase()}");\n\n` +
-      `// 初始化\nconst obj = new main();\n\n` +
-      `// 执行操作\nconst result = obj.process();\nconsole.log(result);`,
-  };
-  if (EXAMPLES[info.language]) {
-    L.push('```' + info.language.toLowerCase(), EXAMPLES[info.language], '```');
-  } else {
-    L.push('```' + info.language.toLowerCase());
-    L.push(`<!-- 请根据 ${info.language} 语言特性提供使用示例 -->`);
-    L.push(`<!-- 示例应包含：初始化、基本操作、结果处理 -->`);
-    L.push('```');
-  }
-  L.push('');
+  L.push('### 示例', '', '请根据源码中的 API 填写调用示例，注明导入路径、所需参数和返回值', '');
 
   if (info.classes.length || info.functions.length) {
     L.push('## API 概览', '');
     if (info.classes.length) {
-      L.push('### 类', '', '| 类名 | 描述 |', '|------|------|');
-      info.classes.slice(0, 10).forEach((c) => L.push(`| \`${c.name}\` | ${c.doc || '请补充此类的功能描述'} |`));
+      L.push('### 类', '', '| 类名 | 源文件 | 描述 |', '|------|--------|------|');
+      info.classes
+        .slice(0, 10)
+        .forEach((c) => L.push(`| \`${c.name}\` | \`${c.file}\` | ${c.doc || '请补充此类的功能描述'} |`));
       L.push('');
     }
     if (info.functions.length) {
-      L.push('### 函数', '', '| 函数 | 描述 |', '|------|------|');
-      info.functions.slice(0, 10).forEach((f) => L.push(`| \`${f.name}()\` | ${f.doc || '请补充此函数的功能描述'} |`));
+      L.push('### 函数', '', '| 函数 | 源文件 | 描述 |', '|------|--------|------|');
+      info.functions
+        .slice(0, 10)
+        .forEach((f) => L.push(`| \`${f.name}()\` | \`${f.file}\` | ${f.doc || '请补充此函数的功能描述'} |`));
       L.push('');
     }
   }

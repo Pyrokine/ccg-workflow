@@ -3,7 +3,30 @@ import { chmodSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
 import { collectInvocableSkills, generateCommandContent } from '../skill-registry'
-import { distributions, lintProject, packageRoot, repository, scripts, write } from './quality-gates-fixtures'
+import {
+  completeModule,
+  distributions,
+  fixture,
+  lintProject,
+  packageRoot,
+  repository,
+  scripts,
+  write,
+} from './quality-gates-fixtures'
+
+const bundledResources = [
+  'lib/shared.js',
+  'lib/git-baseline.js',
+  'lib/language-checks.js',
+  'lib/language-checks-runtime.js',
+  'lib/language-checks-native.js',
+  'lib/language-checks-go.js',
+  'lib/language-checks-rust.js',
+  'lib/language-checks-typescript.js',
+  'lib/change-tests.js',
+  'gen-docs/scripts/doc_generator.js',
+  ...Object.values(scripts),
+]
 
 it('executes language checks through the generated command and runner', () => {
   const root = lintProject()
@@ -15,6 +38,7 @@ it('executes language checks through the generated command and runner', () => {
     throw new Error('Quality skill is missing')
   }
   const text = generateCommandContent(quality, skills)
+  expect(text).toContain('范围转换为独立路径参数')
   const command = /```bash\n(?<command>[\s\S]*?)\n```/m.exec(text)?.[1]
   if (!command) {
     throw new Error('Generated quality command is missing')
@@ -85,21 +109,30 @@ it('executes change analysis through the generated command and runner with share
   })
 })
 
-it('ships the same shared libraries and four scanners in both distributions', () => {
-  const libraries = [
-    'lib/shared.js',
-    'lib/git-baseline.js',
-    'lib/language-checks.js',
-    'lib/language-checks-runtime.js',
-    'lib/language-checks-native.js',
-    'lib/language-checks-go.js',
-    'lib/language-checks-rust.js',
-    'lib/language-checks-typescript.js',
-    'lib/change-tests.js',
-  ]
-  for (const file of [...libraries, ...Object.values(scripts)]) {
+it('ships the same shared libraries, scanners and document generator in both distributions', () => {
+  for (const file of bundledResources) {
     expect(readFileSync(join(packageRoot, distributions[0], file), 'utf8')).toBe(
       readFileSync(join(packageRoot, distributions[1], file), 'utf8')
+    )
+  }
+})
+
+it.each(distributions)('executes %s resources from an independent installation', (distribution) => {
+  const installed = fixture()
+  write(installed, 'package.json', '{"type":"commonjs"}\n')
+  for (const file of bundledResources) {
+    write(installed, file, readFileSync(join(packageRoot, distribution, file), 'utf8'))
+  }
+  const input = completeModule(repository(), 'module')
+  for (const file of bundledResources.filter((resource) => resource.includes('/scripts/'))) {
+    const result = spawnSync(process.execPath, [join(installed, file), input, '--json'], {
+      cwd: input,
+      encoding: 'utf8',
+    })
+    expect(result.error).toBeUndefined()
+    expect(result.status, result.stderr).toBe(0)
+    expect(JSON.parse(result.stdout)).toMatchObject(
+      file.startsWith('gen-docs/') ? { status: 'success' } : { complete: true, passed: true }
     )
   }
 })

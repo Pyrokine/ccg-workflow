@@ -272,9 +272,9 @@ describe.each(distributions)('%s feedback regressions', (distribution) => {
   })
 })
 
-it.each([tools, 'dsh-ccg/skills'])('normalizes Rust crate identifiers through %s doc generation', (distribution) => {
+it.each([tools, 'dsh-ccg/skills'])('documents discovered Rust APIs through %s doc generation', (distribution) => {
   const root = fixture()
-  const target = join(root, 'europium-terminal')
+  const target = join(root, 'script-module')
   write(target, 'src/lib.rs', 'pub fn work() {}\n')
   const result = spawnSync(
     process.execPath,
@@ -282,7 +282,9 @@ it.each([tools, 'dsh-ccg/skills'])('normalizes Rust crate identifiers through %s
     { cwd: root, encoding: 'utf8' }
   )
   expect(result.status).toBe(0)
-  expect(readFileSync(join(target, 'README.md'), 'utf8')).toContain('use europium_terminal::*;')
+  const readme = readFileSync(join(target, 'README.md'), 'utf8')
+  expect(readme).toContain('`work()`')
+  expect(readme).not.toMatch(/use .*::|Object::new|\.process\(/)
 })
 
 it('keeps orchestration optional, bounded, leaf-only by default and commits user-authorized', () => {
