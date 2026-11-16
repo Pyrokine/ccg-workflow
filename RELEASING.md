@@ -161,7 +161,9 @@ require separate YAML changes. The following manual checks govern current use; t
 
 1. Finish the candidate and local evidence, record the final full SHA, and obtain approval for the exact remote scope.
    Treat a push that triggers `preset` or Pages as a publication action when obtaining approval.
-2. Obtain required CI results on that exact candidate before a publishing trigger. For approved pull-request checks,
+2. Push the reviewed candidate to an approved `release/**` ref first. CI and DSH compatibility checks run there with
+   read permissions; binary and Pages publication retain their main-branch triggers. Obtain required CI results on that
+   exact candidate before a publishing trigger. For approved pull-request checks,
    verify both the run SHA and tested checkout; default merge-preview results qualify only when that tested commit is
    the final candidate. Complete applicable binary and documentation preflight before the trigger. If required same-SHA
    evidence is unavailable with current triggers, pause the affected publication and arrange an approved validation

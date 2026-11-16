@@ -59,6 +59,7 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           tag_name: preset
+          target_commitish: ${{ github.sha }}
           name: 'Pre-built Binaries (codeagent-wrapper)'
           body: |
             Pre-compiled `codeagent-wrapper` binaries for all supported platforms.

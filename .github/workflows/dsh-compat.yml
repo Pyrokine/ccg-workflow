@@ -7,7 +7,7 @@ on:
       - 'dsh-ccg/**'
       - '.github/workflows/dsh-compat.yml'
   push:
-    branches: [main]
+    branches: [main, 'release/**']
     paths:
       - 'dsh-ccg/**'
       - '.github/workflows/dsh-compat.yml'
