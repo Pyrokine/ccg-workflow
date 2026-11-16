@@ -183,6 +183,16 @@ function main() {
       process.stdout.write(
         [
           'Usage: task-state.js <operation> [--root path] --session-key key [--mode mode] [--role role]',
+          'Session key: use the SessionStart export CCG_SESSION_KEY; a raw session UUID is invalid',
+          'Example: node task-state.js resolve --root /path/to/project --session-key "$CCG_SESSION_KEY"',
+          'Without the export: require("./task-utils.js").deriveSessionKey("claude", sessionId)',
+          'Text limits: currentPhase 64 UTF-8 bytes; nextAction 1024 UTF-8 bytes; ' +
+            'progress 262144 UTF-8 bytes including the final newline; requirements 8192 bytes including XML escaping',
+          'Phase: use a short phase label and keep the full description in progress',
+          'Archive history: write-artifact with kind=research, a new name and content; ' +
+            'then update-requirements with current requirements',
+          'Progress: archive existing progress as bounded research records; resolve again, ' +
+            'then checkpoint a current summary with archive links',
           'Read-only operations (no stdin): resolve, snapshot, list, preflight-legacy',
           'JSON request on stdin: start (create), activate, takeover, update-requirements, checkpoint,',
           '  write-artifact, link-spec, unlink-spec, set-spec-evolution, finish, recover, migrate-state,',
@@ -233,9 +243,6 @@ module.exports = {
   TaskStateError,
   parseArgs,
   execute,
-  operationResolve,
-  operationSnapshot,
-  operationList,
   operationStart,
   operationActivate,
   operationTakeover,
@@ -253,5 +260,4 @@ module.exports = {
   operationRepairStatus,
   operationQuarantineOrphans,
   operationRestoreOrphans,
-  operationRecordTurn,
 };

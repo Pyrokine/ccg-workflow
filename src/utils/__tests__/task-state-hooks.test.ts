@@ -365,6 +365,50 @@ describe('persistent task state controller', () => {
     expect(resolve(root).taskRevision).toBe((updated.task as TaskValue).revision)
   })
 
+  it('reports normalized UTF-8 sizes and preserves revisions when next actions exceed their budget', async () => {
+    const root = await createProject()
+    startTask(root, 'next-budget')
+    const expected = currentExpected(root, true)
+    const failure = expectFailure(
+      runController(root, 'checkpoint', {
+        expected,
+        currentPhase: 'implementation',
+        nextAction: '界'.repeat(342),
+        gate: null,
+      }),
+      'INVALID_REQUEST'
+    )
+    expect(failure.message).toContain('nextAction exceeds 1024 bytes (actual: 1026 UTF-8 bytes)')
+    expect(failure.message).toContain('complete requirements in the contract')
+    expect(currentExpected(root, true)).toEqual(expected)
+    const exact = '界'.repeat(341) + 'a'
+    expectSuccess(
+      runController(root, 'checkpoint', {
+        expected,
+        currentPhase: 'implementation',
+        nextAction: exact,
+        gate: null,
+      })
+    )
+    expect((resolve(root).task as JsonObject).nextAction).toBe(exact)
+  })
+
+  it('validates the XML-escaped requirement budget before creating state', async () => {
+    const root = await createProject()
+    const exact = '&'.repeat(1638) + 'a'
+    const request = {
+      expected: { stateId: null, stateRevision: 0, bindingRevision: 0, activeTaskId: null },
+      mode: 'activate',
+      task: taskInput('xml-budget'),
+      requirements: exact + 'b',
+    }
+    const failure = expectFailure(runController(root, 'start', request), 'INVALID_REQUEST')
+    expect(failure.message).toContain('XML-escaped content exceeds 8192 bytes (actual: 8193 UTF-8 bytes)')
+    expect(await fs.pathExists(join(root, '.ccg', 'state.json'))).toBe(false)
+    expectSuccess(runController(root, 'start', { ...request, requirements: exact }))
+    expect(await fs.readFile(join(root, '.ccg', 'tasks', 'xml-budget', 'requirements.md'), 'utf8')).toBe(exact + '\n')
+  })
+
   it('rejects stale mutations after state identity is recreated', async () => {
     const root = await createProject()
     startTask(root, 'first-task')

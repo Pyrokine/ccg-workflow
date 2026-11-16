@@ -1,7 +1,7 @@
 'use strict';
 
 const path = require('path');
-const { findProjectRoot, isValidSessionKey, readStdinBounded, isValidTaskId } = require('./task-utils.js');
+const { findProjectRoot, isValidSessionKey, readStdinBounded, isValidTaskId, escapeXml } = require('./task-utils.js');
 const fs = require('fs');
 
 const REQUEST_LIMIT = 1024 * 1024;
@@ -102,8 +102,14 @@ function requireString(object, key, maxBytes) {
     fail('INVALID_REQUEST', `${key} must be a non-empty string`);
   }
   const normalized = value.trim();
-  if (Buffer.byteLength(normalized, 'utf-8') > maxBytes) {
-    fail('INVALID_REQUEST', `${key} exceeds ${maxBytes} bytes`);
+  const bytes = Buffer.byteLength(normalized, 'utf-8');
+  if (bytes > maxBytes) {
+    const guidance =
+      {
+        nextAction: '; shorten the next action and keep complete requirements in the contract',
+        currentPhase: '; use a short phase label and keep the full description in progress',
+      }[key] || '';
+    fail('INVALID_REQUEST', `${key} exceeds ${maxBytes} bytes (actual: ${bytes} UTF-8 bytes)${guidance}`);
   }
   return normalized;
 }
@@ -152,8 +158,31 @@ function validateTextContent(value, key, maxBytes, required) {
     fail('INVALID_REQUEST', `${key} must not be empty`);
   }
   const content = value.endsWith('\n') ? value : `${value}\n`;
-  if (Buffer.byteLength(content, 'utf-8') > maxBytes) {
-    fail('INVALID_REQUEST', `${key} exceeds ${maxBytes} bytes`);
+  const bytes = Buffer.byteLength(content, 'utf-8');
+  if (bytes > maxBytes) {
+    fail(
+      'INVALID_REQUEST',
+      `${key} exceeds ${maxBytes} bytes (actual: ${bytes} UTF-8 bytes including the final newline)` +
+        (maxBytes === REQUIREMENTS_LIMIT
+          ? '; keep current requirements; archive history with write-artifact kind=research before update-requirements'
+          : key === 'progress'
+            ? '; archive existing progress with write-artifact kind=research using a new name within 262144 bytes; ' +
+              'resolve again, then checkpoint a current summary with archive links'
+            : '')
+    );
+  }
+  return content;
+}
+
+function validateRequirementsContent(value, key) {
+  const content = validateTextContent(value, key, REQUIREMENTS_LIMIT, true);
+  const escapedBytes = Buffer.byteLength(escapeXml(content), 'utf-8');
+  if (escapedBytes > REQUIREMENTS_LIMIT) {
+    fail(
+      'INVALID_REQUEST',
+      `${key} XML-escaped content exceeds ${REQUIREMENTS_LIMIT} bytes (actual: ${escapedBytes} UTF-8 bytes); ` +
+        'keep current requirements in the contract and move historical details to a research artifact'
+    );
   }
   return content;
 }
@@ -234,6 +263,7 @@ module.exports = {
   requireSafeRevision,
   requireExpected,
   validateTextContent,
+  validateRequirementsContent,
   truncateUtf8ToBytes,
   validateTaskInput,
 };

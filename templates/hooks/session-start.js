@@ -13,6 +13,7 @@ const {
   deriveSessionKey,
   buildTaskSnapshot,
   renderTaskSnapshot,
+  renderAuthorityUpdate,
   detectTechStack,
   getGitInfo,
   outputHook,
@@ -27,15 +28,16 @@ function renderSession(sections) {
 }
 
 function openEnvironmentFile(envPath) {
+  let stat;
   try {
-    const stat = fs.lstatSync(envPath);
-    if (stat.isSymbolicLink() || !stat.isFile()) {
-      throw new Error('Invalid environment file');
-    }
+    stat = fs.lstatSync(envPath);
   } catch (error) {
     if (error?.code !== 'ENOENT') {
       throw Object.assign(new Error('Invalid environment file'), { code: 'CLAUDE_ENV_FILE_INVALID' });
     }
+  }
+  if (stat && (stat.isSymbolicLink() || !stat.isFile())) {
+    throw Object.assign(new Error('Invalid environment file'), { code: 'CLAUDE_ENV_FILE_INVALID' });
   }
   const flags =
     fs.constants.O_RDWR |
@@ -44,21 +46,24 @@ function openEnvironmentFile(envPath) {
     (fs.constants.O_NOFOLLOW || 0) |
     (fs.constants.O_NONBLOCK || 0);
   const descriptor = fs.openSync(envPath, flags, 0o600);
+  let opened;
   try {
-    if (!fs.fstatSync(descriptor).isFile()) {
-      throw Object.assign(new Error('Invalid environment file'), { code: 'CLAUDE_ENV_FILE_INVALID' });
-    }
-    return descriptor;
+    opened = fs.fstatSync(descriptor);
   } catch (error) {
     fs.closeSync(descriptor);
     throw error;
   }
+  if (!opened.isFile()) {
+    fs.closeSync(descriptor);
+    throw Object.assign(new Error('Invalid environment file'), { code: 'CLAUDE_ENV_FILE_INVALID' });
+  }
+  return descriptor;
 }
 
 function appendSessionKey(envPath, sessionKey) {
   const descriptor = openEnvironmentFile(envPath);
   try {
-    const content = fs.readFileSync(descriptor, 'utf8');
+    const content = fs.readFileSync(descriptor, { encoding: 'utf8' });
     const assignment = `export CCG_SESSION_KEY='${sessionKey}'`;
     const previous = content
       .split(/\r?\n/u)
@@ -158,6 +163,7 @@ All /ccg:* commands available. Use /ccg:go for intelligent routing.
 </commands>`);
 
   const snapshot = buildTaskSnapshot(root, { mode: 'session', role: 'all', sessionKey });
+  renderAuthorityUpdate(root, snapshot, sessionKey, true);
   const sections = [renderTaskSnapshot(snapshot, 'session', 'all', SESSION_TASK_CONTEXT_LIMIT)];
   for (const section of supplemental) {
     if (Buffer.byteLength(renderSession([...sections, section]), 'utf-8') <= SESSION_CONTEXT_LIMIT) {

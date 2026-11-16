@@ -8,7 +8,7 @@ const {
   readHookInput,
   deriveSessionKey,
   buildTaskSnapshot,
-  renderTaskSnapshot,
+  renderAuthorityUpdate,
   outputHook,
   findCodeagentWrapperCalls,
   truncateUtf8,
@@ -98,7 +98,7 @@ function main() {
     return;
   }
 
-  const context = renderTaskSnapshot(snapshot, 'authority', 'all', AUTHORITY_CONTEXT_LIMIT);
+  const context = renderAuthorityUpdate(root, snapshot, sessionKey, true);
 
   outputHook(outputEventName, context);
 }

@@ -195,11 +195,82 @@ describe('session and sub-agent Hooks', () => {
         tool_input: { command },
       })
       const output = hookOutput(result)
-      expect(output.additionalContext).toContain('<ccg-authority>')
-      expect(output.additionalContext).toContain('Complete wrapper-argument-task')
+      expect(output.additionalContext).toMatch(/<ccg-(?:authority|state)>/)
+      expect(output.additionalContext).toContain('wrapper-argument-task')
       expect(output.updatedInput).toBeUndefined()
       expect(output.permissionDecision).toBeUndefined()
     }
+  })
+
+  it.each([
+    "python3 <<'PY'\ncodeagent-wrapper\n$(codeagent-wrapper --version)\nPY",
+    'cat <<"EOF"\ncodeagent-wrapper\nEOF',
+    'cat <<\\EOF\ncodeagent-wrapper\nEOF',
+    'cat <<E"OF"\ncodeagent-wrapper\nEOF',
+    "cat <<''\ncodeagent-wrapper\n\n",
+    'cat <<EOF\n$(# example; codeagent-wrapper --version\ntrue)\nEOF',
+    "cat <<-'EOF'\r\n\tcodeagent-wrapper\r\n\tEOF\r\n",
+    "cat <<'ONE' <<'TWO'\ncodeagent-wrapper\nONE\ncodeagent-wrapper\nTWO",
+    'cat <<EOF\ncodeagent-wrapper\nEOF',
+    "cat <<'codeagent-wrapper'\nplain text\ncodeagent-wrapper",
+    '# quoted example; codeagent-wrapper --version\nprintf done',
+    'cat <<< "codeagent-wrapper"',
+    'printf "%s" "$((codeagent-wrapper))"',
+  ])('keeps shell data containing wrapper names unchanged: %s', async (command) => {
+    const root = await createProject()
+    startTask(root, 'heredoc-data')
+    const output = hookOutput(
+      runHook(root, 'subagent-context.js', {
+        cwd: root,
+        tool_name: 'Bash',
+        tool_input: { command },
+      })
+    )
+    expect(output.updatedInput).toBeUndefined()
+    expect(output.permissionDecision).toBeUndefined()
+    expect(output.additionalContext).toContain('Complete heredoc-data')
+  })
+
+  it.each([
+    'cat <<EOF\n$(codeagent-wrapper --version)\nEOF',
+    'cat <<EOF\n`codeagent-wrapper --version`\nEOF',
+    'printf "%s" "$(codeagent-wrapper --version)"',
+    'printf "%s" `codeagent-wrapper --version`',
+    'cat <<< "$(codeagent-wrapper --version)"',
+    'cat <<EOF\n"$(codeagent-wrapper --version)"\nEOF',
+    'printf "%s" "$((16 << 2))"\ncodeagent-wrapper --version',
+    "cat <<''\nexample\n\ncodeagent-wrapper --version",
+    "cat <<'EOF'\nexample\nEOF\ncodeagent-wrapper --version",
+  ])('continues protecting executable wrapper substitutions and later commands: %s', async (command) => {
+    const root = await createProject()
+    startTask(root, 'wrapper-expansion')
+    const output = hookOutput(
+      runHook(root, 'subagent-context.js', {
+        cwd: root,
+        tool_name: 'Bash',
+        tool_input: { command },
+      })
+    )
+    expect(output.permissionDecision).toBe('deny')
+    expect(output.permissionDecisionReason).toContain('CONTEXT_NOT_INJECTED')
+  })
+
+  it('injects a real wrapper without interpreting sample heredocs inside its quoted request', async () => {
+    const root = await createProject()
+    startTask(root, 'wrapper-sample')
+    const command =
+      "codeagent-wrapper --backend codex - <<'REQUEST'\n" +
+      "Explain this example: cat <<'SAMPLE'\ncodeagent-wrapper --version\nSAMPLE\nREQUEST"
+    const output = hookOutput(
+      runHook(root, 'subagent-context.js', {
+        cwd: root,
+        tool_name: 'Bash',
+        tool_input: { command },
+      })
+    )
+    expect(output.permissionDecision).toBeUndefined()
+    expect((output.updatedInput as JsonObject).command).toContain('<ccg-injected-context>')
+    expect((output.updatedInput as JsonObject).command).toContain("cat <<'SAMPLE'")
   })
 
   it('changes a colliding heredoc delimiter and rejects ambiguous shell structures', async () => {

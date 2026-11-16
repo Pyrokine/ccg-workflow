@@ -88,10 +88,6 @@ function normalizeLegacyTaskStatus(status) {
   return null;
 }
 
-function normalizeTaskStatus(status) {
-  return normalizeLegacyTaskStatus(status);
-}
-
 function isTerminalStatus(status) {
   return status === 'completed' || status === 'cancelled';
 }
@@ -317,11 +313,6 @@ function readJsonDetailed(filePath, maxBytes) {
   } catch (error) {
     return { ok: false, code: 'INVALID_JSON', filePath, raw: source.content, error };
   }
-}
-
-function readJsonSafe(filePath) {
-  const result = readJsonDetailed(filePath);
-  return result.ok && result.exists ? result.data : null;
 }
 
 function isSessionBindingTarget(target) {
@@ -785,6 +776,7 @@ function readTask(projectRoot, taskId, options) {
     return { ok: false, code: 'TASK_INVALID', message: `task.json is invalid: ${taskId}` };
   }
 
+  /** @type {Record<string, any>} */
   const rawTask = parsed.data;
   const legacy = rawTask.schemaVersion === undefined;
   if (legacy && !opts.allowLegacy) {
@@ -1378,11 +1370,6 @@ function resolveTaskState(projectRoot, sessionKey) {
   };
 }
 
-function getActiveTask(projectRoot, sessionKey) {
-  const resolution = resolveTaskState(projectRoot, sessionKey);
-  return resolution.kind === 'active' ? resolution.task : null;
-}
-
 function readStdinBounded(maxBytes) {
   if (process.stdin.isTTY) {
     return '';
@@ -1430,18 +1417,16 @@ function readHookInput(maxBytes) {
   if (!raw.trim()) {
     return {};
   }
+  let parsed;
   try {
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      throw new Error('HOOK_INPUT_INVALID');
-    }
-    return parsed;
+    parsed = JSON.parse(raw);
   } catch (error) {
-    if (error && error.message === 'HOOK_INPUT_INVALID') {
-      throw error;
-    }
     throw new Error('HOOK_INPUT_INVALID', { cause: error });
   }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('HOOK_INPUT_INVALID');
+  }
+  return parsed;
 }
 
 function normalizeRelativeProjectPath(relativePath) {
@@ -2052,24 +2037,76 @@ function renderBreadcrumb(snapshot) {
   }
   const task = snapshot.task;
   const lines = [
-    '<ccg-state>',
-    `Task: ${escapeXml(task.title)} [${escapeXml(task.id)}]`,
-    `Status: in_progress`,
-    `Strategy: ${escapeXml(task.strategy)}`,
-    `Phase: ${escapeXml(task.currentPhase)}`,
-    `Next: ${escapeXml(task.nextAction)}`,
+    `Task: ${escapeXml(task.id)}`,
+    `State: ${escapeXml(snapshot.resolution.stateId)}`,
     `Revision: state=${snapshot.resolution.stateRevision}, ` +
       `binding=${snapshot.resolution.bindingRevision}, task=${task.revision}`,
+    `Dir: ${escapeXml(task.dir)}`,
+    'Status: in_progress',
+    `Phase: ${escapeXml(task.currentPhase)}`,
+    ...(task.gate ? [`Gate: ${escapeXml(task.gate)}`] : []),
+    ...(snapshot.diagnostics || []).map((diagnostic) => `Diagnostic: ${escapeXml(diagnostic)}`),
+    `Strategy: ${escapeXml(task.strategy)}`,
+    `Title: ${escapeXml(task.title)}`,
+    `Next: ${escapeXml(task.nextAction)}`,
   ];
-  if (task.gate) {
-    lines.push(`Gate: ${escapeXml(task.gate)}`);
+  let context = '<ccg-state>\n';
+  const closing = '</ccg-state>';
+  for (const line of lines) {
+    if (byteLength(context + line + '\n' + closing) <= BREADCRUMB_CONTEXT_LIMIT) {
+      context += line + '\n';
+    }
   }
-  for (const diagnostic of snapshot.diagnostics || []) {
-    lines.push(`Diagnostic: ${escapeXml(diagnostic)}`);
+  return context + closing;
+}
+
+function readAuthorityReceipt(projectRoot, sessionKey) {
+  const location = validateRuntimePath(projectRoot, `.ccg/context/${sessionKey}.json`, {
+    allowMissing: true,
+    kind: 'file',
+  });
+  if (!location.ok) {
+    throw new Error(location.code);
   }
-  lines.push(`Dir: ${escapeXml(task.dir)}`);
-  lines.push('</ccg-state>');
-  return truncateUtf8(lines.join('\n'), BREADCRUMB_CONTEXT_LIMIT);
+  if (location.exists && process.platform !== 'win32') {
+    const stat = fs.lstatSync(location.path);
+    if ((stat.mode & 0o077) !== 0 || (typeof process.getuid === 'function' && stat.uid !== process.getuid())) {
+      throw new Error('AUTHORITY_RECEIPT_PERMISSIONS');
+    }
+  }
+  const previous = readJsonDetailed(location.path, 4 * AUTHORITY_CONTEXT_LIMIT);
+  if (previous.exists && typeof previous.data?.context !== 'string') {
+    previous.ok = false;
+  }
+  return { location, previous };
+}
+
+function renderAuthorityUpdate(projectRoot, snapshot, sessionKey, force) {
+  const fullContext = () => renderTaskSnapshot(snapshot, 'authority', 'all');
+  if (snapshot.kind !== 'ok' || snapshot.resolution.kind !== 'active' || !isValidSessionKey(sessionKey)) {
+    return fullContext();
+  }
+  const context = JSON.stringify([
+    snapshot.resolution.stateId,
+    snapshot.resolution.bindingRevision,
+    snapshot.task.id,
+    snapshot.documents.requirements,
+    snapshot.specs,
+  ]);
+  try {
+    const { location, previous } = readAuthorityReceipt(projectRoot, sessionKey);
+    const valid = previous.ok && (!previous.exists || previous.data?.schemaVersion === 1);
+    if (!valid) {
+      snapshot.diagnostics = [...(snapshot.diagnostics || []), 'AUTHORITY_RECEIPT_INVALID'];
+    }
+    if (!force && valid && previous.exists && previous.data.context === context) {
+      return renderBreadcrumb(snapshot);
+    }
+    atomicWriteJson(location.path, { schemaVersion: 1, context });
+  } catch {
+    snapshot.diagnostics = [...(snapshot.diagnostics || []), 'AUTHORITY_RECEIPT_UNAVAILABLE'];
+  }
+  return fullContext();
 }
 
 function renderTaskHeader(snapshot, mode, role) {
@@ -2618,46 +2655,200 @@ function consumePrefixOptions(words, index, prefix) {
   return index;
 }
 
-function isWrapperCommandPosition(command, start) {
-  let commandStart = 0;
-  let quote = null;
-  let escaped = false;
-  for (let index = 0; index < start; index += 1) {
-    const character = command[index];
-    if (escaped) {
-      escaped = false;
-      continue;
+function readHeredocWord(command, start) {
+  const match = new RegExp(
+    String.raw`^<<(?<tabs>-)?[ \t]*(?<word>(?:\\[^\r\n]|'[^']*'|"(?:\\[^\r\n]|[^"\\])*"|` +
+      String.raw`[^\s;&|()<>'"\\])+)(?=$|[\s;&|()<>])`,
+    'u'
+  ).exec(command.slice(start));
+  if (!match) {
+    return null;
+  }
+  const words = splitShellWords(match.groups.word);
+  if (!words) {
+    return null;
+  }
+  return {
+    delimiter: words[0] ?? '',
+    stripTabs: Boolean(match.groups.tabs),
+    quoted: /['"\\]/u.test(match.groups.word),
+    end: start + match[0].length,
+  };
+}
+
+function shellQuoteStep(command, index, state) {
+  const character = command[index];
+  if (state.quote === "'") {
+    if (character === state.quote) {
+      state.quote = null;
     }
-    if (quote === "'") {
-      if (character === "'") {
-        quote = null;
-      }
-      continue;
-    }
-    if (character === '"') {
-      quote = quote === '"' ? null : quote || '"';
-      continue;
-    }
-    if (character === '\\') {
-      escaped = true;
-      continue;
-    }
-    if (quote === '"') {
-      continue;
-    }
-    if (character === "'") {
-      quote = "'";
-      continue;
-    }
-    if ('\r\n;&|()'.includes(character)) {
-      commandStart = index + 1;
+    return index;
+  }
+  if (character === '\\') {
+    return index + 1;
+  }
+  if (character === '"' || (!state.quote && character === "'")) {
+    state.quote = state.quote === character ? null : character;
+    return index;
+  }
+  return null;
+}
+
+function shellExpansionStep(command, index, state) {
+  const character = command[index];
+  if (character === '$' && command[index + 1] === '(') {
+    const arithmetic = command[index + 2] === '(';
+    const length = arithmetic ? 3 : 2;
+    state.frames.push({ quote: state.quote, commandStart: state.commandStart, depth: length - 1, arithmetic });
+    state.quote = null;
+    state.commandStart = index + length;
+    return index + length - 1;
+  }
+  if (character !== '`') {
+    return null;
+  }
+  if (state.frames.at(-1)?.backtick && !state.quote) {
+    const frame = state.frames.pop();
+    state.quote = frame.quote;
+    state.commandStart = frame.commandStart;
+  } else {
+    state.frames.push({ quote: state.quote, commandStart: state.commandStart, backtick: true });
+    state.quote = null;
+    state.commandStart = index + 1;
+  }
+  return index;
+}
+
+function shellBoundary(character, index, state) {
+  const frame = state.frames.at(-1);
+  if (frame && !frame.backtick && ['(', ')'].includes(character)) {
+    frame.depth += character === '(' ? 1 : -1;
+    if (frame.depth === 0) {
+      state.frames.pop();
+      state.quote = frame.quote;
+      state.commandStart = frame.commandStart;
+      return;
     }
   }
-  if (quote || escaped) {
+  if ('\r\n;&|()'.includes(character)) {
+    state.commandStart = index + 1;
+  }
+}
+
+function advanceShellSyntax(command, index, state) {
+  const commentEnd = shellCommentEnd(command, index, state.quote);
+  if (commentEnd !== null) {
+    return commentEnd - 1;
+  }
+  const quoted = shellQuoteStep(command, index, state);
+  if (quoted !== null) {
+    return quoted;
+  }
+  const expansion = shellExpansionStep(command, index, state);
+  if (expansion !== null) {
+    return expansion;
+  }
+  if (!state.quote) {
+    shellBoundary(command[index], index, state);
+  }
+  return index;
+}
+
+function shellCommentEnd(command, index, quote) {
+  if (quote || command[index] !== '#' || (index > 0 && !/[\s;&|()]/u.test(command[index - 1]))) {
+    return null;
+  }
+  const end = command.indexOf('\n', index);
+  return end < 0 ? command.length : end;
+}
+
+function isHeredocOperator(command, index, state) {
+  return (
+    !state.quote &&
+    !state.frames.at(-1)?.arithmetic &&
+    command.startsWith('<<', index) &&
+    command[index + 2] !== '<' &&
+    command[index - 1] !== '<'
+  );
+}
+
+function consumeHeredocBodies(command, pending, start, mask) {
+  const documents = [];
+  let cursor = start;
+  for (const document of pending.splice(0)) {
+    const bodyStart = cursor;
+    let bodyEnd = command.length;
+    while (cursor < command.length) {
+      const newline = command.indexOf('\n', cursor);
+      const lineEnd = newline < 0 ? command.length : newline;
+      const line = command.slice(cursor, lineEnd).replace(/\r$/, '');
+      if ((document.stripTabs ? line.replace(/^\t*/, '') : line) === document.delimiter) {
+        bodyEnd = cursor;
+        cursor = newline < 0 ? command.length : newline + 1;
+        break;
+      }
+      cursor = newline < 0 ? command.length : newline + 1;
+    }
+    documents.push({ ...document, start: bodyStart, end: cursor, bodyEnd });
+    mask(bodyStart, cursor);
+  }
+  return { documents, end: cursor };
+}
+
+function shellHeredocSource(command) {
+  const characters = command.split('');
+  const documents = [];
+  const pending = [];
+  const state = { frames: [], quote: null, commandStart: 0 };
+  const mask = (start, end) => {
+    for (let index = start; index < end; index += 1) {
+      if (characters[index] !== '\n' && characters[index] !== '\r') {
+        characters[index] = ' ';
+      }
+    }
+  };
+  for (let index = 0; index < command.length; index += 1) {
+    const commentEnd = shellCommentEnd(command, index, state.quote);
+    if (commentEnd !== null) {
+      mask(index, commentEnd);
+      index = commentEnd - 1;
+    } else if (isHeredocOperator(command, index, state)) {
+      const word = readHeredocWord(command, index);
+      if (word) {
+        pending.push({ ...word, openerStart: index });
+        index = word.end - 1;
+      }
+    } else if (!state.quote && command[index] === '\n') {
+      const consumed = consumeHeredocBodies(command, pending, index + 1, mask);
+      documents.push(...consumed.documents);
+      index = consumed.end - 1;
+    } else {
+      index = advanceShellSyntax(command, index, state);
+    }
+  }
+  return { command: characters.join(''), documents };
+}
+
+function isWrapperCommandPosition(command, start, heredocStart) {
+  const state = { commandStart: heredocStart ?? 0, quote: null, frames: [] };
+  let cursor = state.commandStart;
+  for (; cursor < start; cursor += 1) {
+    if (heredocStart !== undefined && state.frames.length === 0) {
+      cursor = command[cursor] === '\\' ? cursor + 1 : (shellExpansionStep(command, cursor, state) ?? cursor);
+    } else {
+      cursor = advanceShellSyntax(command, cursor, state);
+    }
+  }
+  if (
+    state.quote ||
+    cursor > start ||
+    state.frames.at(-1)?.arithmetic ||
+    (heredocStart !== undefined && state.frames.length === 0)
+  ) {
     return false;
   }
 
-  const words = splitShellWords(command.slice(commandStart, start));
+  const words = splitShellWords(command.slice(state.commandStart, start));
   if (!words) {
     return false;
   }
@@ -2687,14 +2878,27 @@ function findCodeagentWrapperCalls(command) {
     return [];
   }
   const calls = [];
-  const pattern =
-    /(?:^|[\s;&|()])(?:(?<quote>['"])(?<quotedPath>(?:[^'"\r\n]*[/\\])?codeagent-wrapper(?:\.exe)?)\k<quote>|(?<barePath>(?:[^\s"';&|()]*[/\\])?codeagent-wrapper(?:\.exe)?))(?=[\s;&|()]|$)/g;
+  const source = shellHeredocSource(command);
+  const pattern = new RegExp(
+    String.raw`(?:^|[\s;&|()\x60])(?:(?<quote>['"])(?<quotedPath>(?:[^'"\r\n]*[/\\])?` +
+      String.raw`codeagent-wrapper(?:\.exe)?)\k<quote>|(?<barePath>(?:[^\s"';&|()\x60]*[/\\])?` +
+      String.raw`codeagent-wrapper(?:\.exe)?))(?=[\s;&|()\x60]|$)`,
+    'g'
+  );
   let match;
   while ((match = pattern.exec(command)) !== null) {
     const token = match[2] || match[3];
     const rawToken = match[1] ? `${match[1]}${token}${match[1]}` : token;
     const start = match.index + match[0].lastIndexOf(rawToken);
-    if (!isWrapperCommandPosition(command, start)) {
+    const document = source.documents.find((entry) => start >= entry.start && start < entry.end);
+    if (document) {
+      if (document.quoted || start >= document.bodyEnd || !isWrapperCommandPosition(command, start, document.start)) {
+        continue;
+      }
+    } else if (
+      source.command.slice(start, start + rawToken.length) !== rawToken ||
+      !isWrapperCommandPosition(source.command, start)
+    ) {
       continue;
     }
     calls.push({ start, end: start + rawToken.length, token });
@@ -2753,9 +2957,10 @@ function injectIntoQuotedHeredoc(command, context, options) {
   if (wrapperCalls.length !== 1) {
     return { ok: false, code: 'CONTEXT_NOT_INJECTED', message: 'Expected exactly one codeagent-wrapper invocation' };
   }
+  const source = shellHeredocSource(command);
   const matches = [
     ...command.matchAll(/<<(?<stripTabs>-)?\s*(?<quote>['"])(?<delimiter>[A-Za-z_][A-Za-z0-9_]*)\k<quote>/g),
-  ];
+  ].filter((match) => source.documents.some((document) => document.openerStart === match.index));
   if (matches.length !== 1) {
     return { ok: false, code: 'CONTEXT_NOT_INJECTED', message: 'Expected exactly one quoted heredoc' };
   }
@@ -2775,8 +2980,12 @@ function injectIntoQuotedHeredoc(command, context, options) {
     return { ok: false, code: 'CONTEXT_NOT_INJECTED', message: 'Heredoc body is missing' };
   }
   const oldDelimiter = match[3];
-  const closingPattern = new RegExp(`^(${match[1] ? '\\t*' : ''})${escapeRegExp(oldDelimiter)}(\\r?)$`, 'gm');
+  const closingPattern = new RegExp(
+    `^(?<indent>${match[1] ? '\\t*' : ''})${escapeRegExp(oldDelimiter)}(?<carriageReturn>\\r?)$`,
+    'gm'
+  );
   closingPattern.lastIndex = firstNewline + 1;
+  /** @type {Array<RegExpExecArray & {groups: {indent: string, carriageReturn: string}}>} */
   const closings = [];
   let closing;
   while ((closing = closingPattern.exec(command)) !== null) {
@@ -2805,7 +3014,7 @@ function injectIntoQuotedHeredoc(command, context, options) {
     delimiter = chooseHeredocDelimiter(command, body, context);
   }
   const newOpener = `${match[0].slice(0, match[0].indexOf(match[2]))}${match[2]}${delimiter}${match[2]}`;
-  const closingLine = `${closings[0][1]}${delimiter}${closings[0][2]}`;
+  const closingLine = `${closings[0].groups.indent}${delimiter}${closings[0].groups.carriageReturn}`;
   return {
     ok: true,
     command:
@@ -2823,35 +3032,23 @@ module.exports = {
   STATE_SCHEMA_VERSION,
   BINDING_SCHEMA_VERSION,
   TASK_SCHEMA_VERSION,
-  HOOK_INPUT_LIMIT,
   STATE_FILE_LIMIT,
-  TASK_FILE_LIMIT,
   TRANSACTION_FILE_LIMIT,
-  LEGACY_CONTEXT_LIMIT,
   SESSION_CONTEXT_LIMIT,
   SESSION_TASK_CONTEXT_LIMIT,
-  BREADCRUMB_CONTEXT_LIMIT,
   AUTHORITY_CONTEXT_LIMIT,
-  AGENT_CONTEXT_LIMIT,
-  VALID_ROLES,
   findProjectRoot,
-  normalizeTaskStatus,
   normalizeLegacyTaskStatus,
-  isTerminalStatus,
   isValidTaskId,
   isValidSessionKey,
   deriveSessionKey,
   getStatePath,
-  getSessionsDir,
   getBindingPath,
-  getTasksDir,
-  getTaskDir,
   getTaskPath,
   validateRuntimePath,
   readFileBounded,
   readFileSafe,
   readJsonDetailed,
-  readJsonSafe,
   readPendingTransaction,
   readState,
   readBinding,
@@ -2859,23 +3056,17 @@ module.exports = {
   readTask,
   validateCanonicalTask,
   listTasks,
-  listOpenTasks,
-  taskIdsReservedByTask,
   claimOwnersForTask,
   collectTaskClaims,
   resolveTaskState,
-  getActiveTask,
   readStdinBounded,
   readHookInput,
-  normalizeRelativeProjectPath,
-  resolveProjectFile,
-  extractMarkdownSection,
   validateSpecRef,
   collectSpecContext,
   readContextJsonl,
   buildTaskSnapshot,
   renderResolution,
-  renderBreadcrumb,
+  renderAuthorityUpdate,
   renderTaskSnapshot,
   escapeXml,
   truncateUtf8,
@@ -2885,7 +3076,6 @@ module.exports = {
   fsyncDirectory,
   atomicWriteFile,
   atomicWriteJson,
-  readTurns,
   trackTurn,
   detectLoop,
   ensureLocalCcgExclude,

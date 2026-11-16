@@ -7,7 +7,7 @@ const {
   fail,
   validateTaskInput,
   validateTextContent,
-  REQUIREMENTS_LIMIT,
+  validateRequirementsContent,
   ARTIFACT_LIMIT,
 } = require('./task-state-core.js');
 const {
@@ -60,7 +60,7 @@ function operationStart(projectRoot, sessionKey, request) {
     fail('INVALID_REQUEST', 'mode must be activate, interrupt, replace, or inactive');
   }
   const taskInput = validateTaskInput(request.task);
-  const requirements = validateTextContent(request.requirements, 'requirements', REQUIREMENTS_LIMIT, true);
+  const requirements = validateRequirementsContent(request.requirements, 'requirements');
   return withStateLock(projectRoot, () => {
     ensureTaskRuntimeIgnored(projectRoot);
     const { stateResult, bindingResult } = readStartState(projectRoot, sessionKey, expected);

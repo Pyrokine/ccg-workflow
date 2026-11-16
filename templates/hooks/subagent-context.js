@@ -10,6 +10,7 @@ const {
   deriveSessionKey,
   buildTaskSnapshot,
   renderTaskSnapshot,
+  renderAuthorityUpdate,
   renderResolution,
   findCodeagentWrapperCalls,
   injectIntoQuotedHeredoc,
@@ -84,7 +85,7 @@ function injectOrdinaryContext(input) {
   if (snapshot.resolution.kind === 'none') {
     return;
   }
-  outputHook('PreToolUse', renderTaskSnapshot(snapshot, 'authority', 'all'));
+  outputHook('PreToolUse', renderAuthorityUpdate(root, snapshot, sessionKey, false));
 }
 
 function main() {

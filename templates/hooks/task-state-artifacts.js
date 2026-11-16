@@ -4,7 +4,7 @@ const {
   requireString,
   validateTextContent,
   ARTIFACT_LIMIT,
-  REQUIREMENTS_LIMIT,
+  validateRequirementsContent,
   fail,
   TaskStateError,
   VALID_ARTIFACTS,
@@ -37,7 +37,7 @@ function operationCheckpoint(projectRoot, sessionKey, request) {
 }
 
 function operationUpdateRequirements(projectRoot, sessionKey, request) {
-  const content = validateTextContent(request.content, 'content', REQUIREMENTS_LIMIT, true);
+  const content = validateRequirementsContent(request.content, 'content');
   return withStateLock(projectRoot, () => {
     const { state, binding, task } = assertActiveMutation(projectRoot, sessionKey, request);
     const nextTask = bumpTask(task, {});

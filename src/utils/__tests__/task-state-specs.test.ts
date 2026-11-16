@@ -301,12 +301,18 @@ describe('spec references and snapshots', () => {
   it('rejects a task contract that cannot fit after XML escaping', async () => {
     const root = await createProject()
     startTask(root, 'escaped-contract-budget-task')
-    expectSuccess(
-      runController(root, 'update-requirements', {
-        expected: currentExpected(root, true),
-        content: `# Requirements\n\n${'&'.repeat(2000)}\n`,
-      })
+    const expected = currentExpected(root, true)
+    const requirements = join(root, '.ccg', 'tasks', 'escaped-contract-budget-task', 'requirements.md')
+    const original = await fs.readFile(requirements, 'utf8')
+    const oversized = `# Requirements\n\n${'&'.repeat(2000)}\n`
+    const failure = expectFailure(
+      runController(root, 'update-requirements', { expected, content: oversized }),
+      'INVALID_REQUEST'
     )
+    expect(failure.message).toContain('XML-escaped content exceeds 8192 bytes')
+    expect(await fs.readFile(requirements, 'utf8')).toBe(original)
+    expect(currentExpected(root, true)).toEqual(expected)
+    await fs.writeFile(requirements, oversized)
 
     const snapshot = expectSuccess(
       runController(root, 'snapshot', undefined, ['--mode', 'agent', '--role', 'implement'])

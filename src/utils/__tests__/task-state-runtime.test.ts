@@ -104,12 +104,79 @@ describe('persistent task state controller', () => {
       expect(stderr).toBe('')
       if (help) {
         expect(stdout).toContain('Usage: task-state.js')
+        expect(stdout).toContain('currentPhase 64 UTF-8 bytes')
+        expect(stdout).toContain('progress 262144 UTF-8 bytes')
+        expect(stdout).toContain('archive existing progress')
       } else {
         expect(JSON.parse(stdout)).toMatchObject({ ok: true, operation })
       }
       expect(await Promise.all([statePath, taskPath, bindingPath].map((file) => fs.readFile(file, 'utf8')))).toEqual(
         before
       )
+    }
+  )
+
+  it.each(['phase', 'progress'] as const)(
+    'preserves rejected %s checkpoints and continues through bounded research records',
+    async (kind) => {
+      const root = await createProject()
+      const taskId = 'progress-continuation-task'
+      startTask(root, taskId)
+      const history = '# History\n\n' + 'item\n'.repeat(46000)
+      const taskDir = join(root, '.ccg', 'tasks', taskId)
+      const requirements = await fs.readFile(join(taskDir, 'requirements.md'), 'utf8')
+      const checkpoint = {
+        currentPhase: '阶'.repeat(21) + 'a',
+        nextAction: 'Continue the current task',
+        gate: null,
+        progress: history,
+      }
+      expectSuccess(runController(root, 'checkpoint', { expected: currentExpected(root, true), ...checkpoint }))
+      const preserved = [
+        join(root, '.ccg', 'state.json'),
+        join(root, '.ccg', 'sessions', `${DEFAULT_SESSION_KEY}.json`),
+        join(taskDir, 'task.json'),
+        join(taskDir, 'progress.md'),
+      ]
+      const before = await Promise.all(preserved.map((file) => fs.readFile(file, 'utf8')))
+      const rejected = runController(root, 'checkpoint', {
+        ...checkpoint,
+        expected: currentExpected(root, true),
+        ...(kind === 'phase' ? { currentPhase: '阶'.repeat(22) } : { progress: history + 'x'.repeat(32768) }),
+      })
+      expectFailure(rejected, 'INVALID_REQUEST')
+      if (kind === 'phase') {
+        expect(rejected.output.message).toContain('actual: 66 UTF-8 bytes')
+        expect(rejected.output.message).toContain('use a short phase label')
+      } else {
+        expect(rejected.output.message).toContain('progress exceeds 262144 bytes')
+        expect(rejected.output.message).toContain('archive existing progress')
+        expect(rejected.output.message).toContain('write-artifact kind=research')
+        expect(rejected.output.message).toContain('resolve')
+      }
+      expect(await Promise.all(preserved.map((file) => fs.readFile(file, 'utf8')))).toEqual(before)
+      expectSuccess(
+        runController(root, 'write-artifact', {
+          expected: currentExpected(root, true),
+          kind: 'research',
+          name: 'progress-001.md',
+          content: history,
+        })
+      )
+      const summary = '# Progress\n\nCurrent work continues\nHistory: research/progress-001.md\n'
+      expectSuccess(
+        runController(root, 'checkpoint', {
+          expected: currentExpected(root, true),
+          currentPhase: '4-development',
+          nextAction: 'Continue using the saved evidence',
+          gate: null,
+          progress: summary,
+        })
+      )
+      expect(await fs.readFile(join(taskDir, 'research', 'progress-001.md'), 'utf8')).toBe(history)
+      expect(await fs.readFile(join(taskDir, 'progress.md'), 'utf8')).toBe(summary)
+      expect(await fs.readFile(join(taskDir, 'requirements.md'), 'utf8')).toBe(requirements)
+      expect(resolve(root)).toMatchObject({ activeTaskId: taskId, task: { currentPhase: '4-development' } })
     }
   )
 
