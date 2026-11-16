@@ -1,11 +1,11 @@
-# dsh-ccg
+# dsh-ccg 0.5.2
 
 **把 CCG 的多模型角色矩阵搬进 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)
 —— 七个角色委派工具，各自跑在自己的模型上，不依赖任何外部
 CLI，任一角色都能挂多个模型同时作答，也能被雇成有自己文件的常驻队友，所有权与项目决策都是持久的**
 
-[English](./README.md) · MIT · 支持 dsh `0.2.0-rc.2` / `0.2.1-alpha.2` / `0.2.1-rc.2` / `0.2.2-rc.1` · 隶属
-[CCG](https://github.com/Pyrokine/ccg-workflow)
+[English](./README.md) · MIT · 支持 dsh `0.2.0-rc.2` / `0.2.1-alpha.2` / `0.2.1-rc.2` / `0.2.2-rc.1` /
+`0.2.2-rc.3` · 隶属 [CCG](https://github.com/Pyrokine/ccg-workflow)
 
 ---
 

@@ -9,6 +9,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## \[Unreleased]
 
+## \[3.7.4-aug.2] - 2026-11-17
+
+### Added
+
+- Reuse bounded task authority and context across turns while preserving scope, revision checks and interrupted-task
+  recovery
+- Discover documentation entrypoints and verify bundled quality tools from independent installations
+- Validate release candidates on the release branch before publication and bind the preset tag to its build SHA
+
+### Fixed
+
+- Keep explicit Git file selections and readable partial results when another requested file fails
+- Preserve dynamic SQL findings beside GDB commands and apply Python mode to the requested files
+- Respect project language-tool configuration, report excluded coverage, and reuse private Go build caches
+- Preserve installation errors, backup recovery, compatibility exports and independent preset arrays
+- Parse folded YAML Skill descriptions through discovery, command generation and native installation
+- Correct source references, callback signatures, command examples, Markdown links, CSS examples and font fallbacks
+- Let fake backend fixtures consume explicit stdin before returning their result
+
+### Changed
+
+- Use the main session for routine work and delegate independent tasks when parallel execution helps
+- Run quality gates for complete feature stages and reuse applicable evidence after targeted repairs
+- Upgrade i18next to 27.1.3, Vitest to 5.1.0, pnpm to 12.21.0, and compatible ESLint, Prettier and typescript-eslint
+  versions
+- Ship codeagent-wrapper 5.16.0-aug.2 and dsh-ccg 0.5.2 with DeepSeek Harness 0.2.2-rc.3 alongside the four existing
+  official-runtime combinations
+- Retain Node.js 22.13.0 and 24.19.0 support and the Go 1.26.0 source requirement
+- Keep both package manifests private and distribute this fork from GitHub source
+
 ## \[3.7.4-aug.1] - 2026-11-05
 
 ### Fixed

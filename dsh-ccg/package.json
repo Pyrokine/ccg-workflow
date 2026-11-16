@@ -1,6 +1,6 @@
 {
   "name": "dsh-ccg",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "type": "module",
   "description": "Multi-model delegation, panels, live teammates and project memory for DeepSeek Harness, via APIs.",
   "keywords": [

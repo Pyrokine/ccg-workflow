@@ -64,11 +64,21 @@ See [`dsh-ccg/README.md`](./dsh-ccg/README.md) for its role tools, model panels,
 
 ---
 
-CCG is a workflow engine for Claude Code. Its default frontend, backend, and review routes use independent Claude Code
-Agents. Codex, Antigravity, Grok, Kimi Code, OpenCode, and GPT/Grok external review run only when explicitly requested.
+CCG is a workflow engine for Claude Code. Routine work stays in the main session; independent tasks use Claude Code
+Agents when parallel execution helps. Codex, Antigravity, Grok, Kimi Code, OpenCode, and GPT/Grok external review run only
+when explicitly requested.
 
 Gemini CLI is disabled because consumer OAuth requests stopped being processed after 2026-06-18. Legacy Gemini routes
 migrate to Grok; `agy` remains an Antigravity alias.
+
+## What's new in v3.7.4-aug.2
+
+- Keep routine work in the main session, reuse bounded task context, and run quality gates for complete feature stages
+- Preserve explicit Git scopes, partial results, project language-tool configuration, and private Go build caches
+- Retain dynamic SQL findings beside GDB commands and generate documentation for discovered entrypoints
+- Parse folded Skill descriptions through discovery and native installation, while preserving installation recovery
+- Upgrade compatible dependencies and add DeepSeek Harness 0.2.2-rc.3 alongside the existing runtime combinations
+- Ship codeagent-wrapper 5.16.0-aug.2 and dsh-ccg 0.5.2, retaining the supported Node and Go source requirements
 
 ## What's new in v3.7.4-aug.1
 
@@ -578,5 +588,5 @@ MIT
 
 ---
 
-v3.7.4-aug.1 | [Issues](https://github.com/Pyrokine/ccg-workflow/issues) | [Contributing](./CONTRIBUTING.md) |
+v3.7.4-aug.2 | [Issues](https://github.com/Pyrokine/ccg-workflow/issues) | [Contributing](./CONTRIBUTING.md) |
 [Releasing](./RELEASING.md)

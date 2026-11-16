@@ -17,7 +17,7 @@ async function setup() {
   directories.push(root)
   await fs.ensureDir(join(root, 'bin'))
   const binary = join(root, 'bin', 'codeagent-wrapper')
-  await fs.writeFile(binary, '#!/usr/bin/env node\nconsole.log("codeagent-wrapper version 5.16.0-aug.1")\n', {
+  await fs.writeFile(binary, '#!/usr/bin/env node\nconsole.log("codeagent-wrapper version 5.16.0-aug.2")\n', {
     mode: 0o755,
   })
   return root

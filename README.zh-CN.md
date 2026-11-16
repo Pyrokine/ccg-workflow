@@ -62,10 +62,20 @@ node bin/ccg.mjs dsh uninstall
 
 ---
 
-CCG 是 Claude Code 的工作流引擎。默认前端、后端和审查都使用独立 Claude Code Agent。Codex、Antigravity、Grok、Kimi
-Code、OpenCode 与 GPT/Grok 外部审查只在用户明确请求时运行。
+CCG 是 Claude Code 的工作流引擎，常规工作由主会话直接完成，独立任务按并行收益交给 Claude Code Agent
+
+Codex、Antigravity、Grok、Kimi Code、OpenCode 与 GPT/Grok 外部审查只在用户明确请求时运行
 
 Gemini CLI 已禁用：2026-06-18 后 consumer OAuth 请求不再处理。旧 Gemini 路由迁移为 Grok，`agy` 保留为 Antigravity 别名。
+
+## v3.7.4-aug.2 更新
+
+- 常规工作由主会话完成，跨轮次复用有界任务上下文，按完整功能阶段执行质量检查
+- 保留 Git 显式范围、可读部分结果、工程语言工具配置和 Go 私有构建缓存
+- 在 GDB 命令旁保留真实动态 SQL 告警，按发现的入口生成文档
+- 折叠 Skill 描述从发现到原生安装保持原值，安装失败继续执行既有恢复流程
+- 更新兼容依赖，增加 DeepSeek Harness 0.2.2-rc.3 并保留已有运行时组合
+- 分发 codeagent-wrapper 5.16.0-aug.2 与 dsh-ccg 0.5.2，保持 Node 与 Go 源码支持条件
 
 ## v3.7.4-aug.1 更新
 
@@ -532,5 +542,5 @@ MIT
 
 ---
 
-v3.7.4-aug.1 | [Issues](https://github.com/Pyrokine/ccg-workflow/issues) | [Contributing](./CONTRIBUTING.md) |
+v3.7.4-aug.2 | [Issues](https://github.com/Pyrokine/ccg-workflow/issues) | [Contributing](./CONTRIBUTING.md) |
 [Releasing](./RELEASING.md)

@@ -42,7 +42,8 @@ describe('plugin manifests — native marketplace install', () => {
   })
 
   it('keeps the private package and plugin versions in sync', () => {
-    expect(pkg.version).toBe('3.7.4-aug.1')
+    expect(pkg.version).toBe('3.7.4-aug.2')
+    expect(dshPackage.version).toBe('0.5.2')
     expect(pkg.private).toBe(true)
     expect(plugin.version).toBe(pkg.version)
     expect(marketplace.metadata.version).toBe(pkg.version)

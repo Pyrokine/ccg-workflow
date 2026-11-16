@@ -74,7 +74,7 @@ async function createInstalledFixture(): Promise<void> {
     join(installDir, '.ccg', 'config.toml'),
     [
       '[general]',
-      'version = "3.7.4-aug.1"',
+      'version = "3.7.4-aug.2"',
       'language = "zh-CN"',
       '',
       '[routing.frontend]',
@@ -136,7 +136,7 @@ beforeEach(async () => {
   await fs.ensureDir(projectRoot)
   delete process.env.CCG_SESSION_KEY
   execFileSyncMock.mockReset()
-  execFileSyncMock.mockReturnValue(Buffer.from('codeagent-wrapper version 5.16.0-aug.1\n'))
+  execFileSyncMock.mockReturnValue(Buffer.from('codeagent-wrapper version 5.16.0-aug.2\n'))
 })
 
 afterEach(() => {
@@ -156,7 +156,7 @@ describe('doctor', () => {
 
     const output = await captureConsole(doctor)
 
-    expect(output).toContain('CCG Doctor v3.7.4-aug.1')
+    expect(output).toContain('CCG Doctor v3.7.4-aug.2')
     expect(output).toContain(`${hookScripts.length}/${hookScripts.length} scripts`)
     expect(output).toContain('5/5 events')
     expect(output).toContain('No failures;')
@@ -302,9 +302,9 @@ describe('status', () => {
 
     const output = await captureConsole(status)
 
-    expect(output).toContain('3.7.4-aug.1')
+    expect(output).toContain('3.7.4-aug.2')
     expect(output).toContain('(matches)')
-    expect(output).toContain('v5.16.0-aug.1')
+    expect(output).toContain('v5.16.0-aug.2')
     expect(output).toContain('schema=v2, open=1, bindings=1')
     expect(output).not.toContain('Active task')
   })
@@ -323,7 +323,7 @@ describe('status', () => {
       if (String(command) === process.execPath && Array.isArray(args) && args.includes('resolve')) {
         return Buffer.from(`${JSON.stringify({ ok: true, kind: 'active', activeTaskId: 'session-task' })}\n`)
       }
-      return Buffer.from('codeagent-wrapper version 5.16.0-aug.1\n')
+      return Buffer.from('codeagent-wrapper version 5.16.0-aug.2\n')
     })
     process.chdir(projectRoot)
 

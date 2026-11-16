@@ -1,11 +1,11 @@
-# dsh-ccg
+# dsh-ccg 0.5.2
 
 **CCG's multi-model role matrix for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) — seven
 role-pinned delegation tools, each on its own model, with no external CLI. Any role can answer as a panel of models, or
 be hired as a live teammate with files of its own. Ownership and project decisions are durable.**
 
-[中文](./README.zh-CN.md) · MIT · supports dsh `0.2.0-rc.2` / `0.2.1-alpha.2` / `0.2.1-rc.2` / `0.2.2-rc.1` · part of
-[CCG](https://github.com/Pyrokine/ccg-workflow)
+[中文](./README.zh-CN.md) · MIT · supports dsh `0.2.0-rc.2` / `0.2.1-alpha.2` / `0.2.1-rc.2` / `0.2.2-rc.1` /
+`0.2.2-rc.3` · part of [CCG](https://github.com/Pyrokine/ccg-workflow)
 
 ---
 
